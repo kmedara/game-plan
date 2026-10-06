@@ -6,12 +6,41 @@ import { Injectable, signal } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import type {
+  AcceptedInvite,
+  ApprovedJoinRequest,
+  ApproveJoinRequestBody,
+  ChatList,
   ChatMessage,
-  ChatSummary,
-  RolePermissions,
-  ScheduleOccurrence,
-  TeamDirectoryHit,
+  CompleteProfileBody,
+  CreateEventBody,
+  CreateInviteBody,
+  CreateTeamBody,
+  DeviceRegistration,
+  EventResponse,
+  InvitePreview,
+  JoinRequestCreated,
+  JoinRequestList,
+  LoginBody,
+  MessagePage,
+  PresignDownloadResponse,
+  PresignUploadBody,
+  PresignUploadResponse,
+  RegisterBody,
+  RegisterDeviceBody,
+  RolePermissionsResponse,
+  RsvpBody,
+  RsvpResponse,
+  ScheduleList,
+  SearchTeamDirectoryQuery,
+  SendMessageBody,
+  TeamDirectoryPage,
+  TeamInvite,
+  TeamInviteList,
+  TeamList,
+  TeamMemberList,
   TeamSummary,
+  UpdatePositionsBody,
+  UpdateProfileBody,
   UpdateTeamBody,
   UserProfile,
 } from '@gameplan/types';
@@ -21,15 +50,6 @@ import {
   WebRefreshStore,
 } from './session-bridge';
 import { environment } from '../../environments/environment';
-
-export type {
-  ChatMessage,
-  ChatSummary,
-  RolePermissions,
-  ScheduleOccurrence,
-  TeamDirectoryHit,
-  TeamSummary,
-};
 
 /**
  * Session + product API client used by the Angular screens.
@@ -60,14 +80,51 @@ export class ApiClient {
     return this.session.isAuthenticated();
   }
 
+  /** Preferences key for the team whose colors and schedule stay selected. */
+  private readonly selectedTeamKey = 'selected-team-id';
+
   /** Currently selected team id for schedule and admin screens. */
   getTeamId(): string | undefined {
+    return this.selectedTeamId;
+  }
+
+  /**
+   * Reads the last selected team after a reload.
+   *
+   * @returns The stored id, or `undefined` when none has been saved.
+   */
+  async restoreTeamId(): Promise<string | undefined> {
+    if (this.selectedTeamId !== undefined) return this.selectedTeamId;
+    try {
+      const { value } = await Preferences.get({ key: this.selectedTeamKey });
+      if (value !== null && value.length > 0) this.selectedTeamId = value;
+    } catch {
+      // The in-memory id stays empty when preferences cannot be read.
+    }
     return this.selectedTeamId;
   }
 
   /** Selects the active team for schedule and admin screens. */
   setTeamId(teamId: string | undefined): void {
     this.selectedTeamId = teamId;
+    void this.persistTeamId(teamId);
+  }
+
+  /**
+   * Stores or clears the selected team so a reload can restore its theme.
+   *
+   * @param teamId - The team to keep, or `undefined` to forget it.
+   */
+  private async persistTeamId(teamId: string | undefined): Promise<void> {
+    try {
+      if (teamId === undefined) {
+        await Preferences.remove({ key: this.selectedTeamKey });
+        return;
+      }
+      await Preferences.set({ key: this.selectedTeamKey, value: teamId });
+    } catch {
+      // The choice still applies for this visit when preferences cannot be written.
+    }
   }
 
   /** Bearer token for WebSocket `?token=`. */
@@ -75,20 +132,43 @@ export class ApiClient {
     return this.session.getAccessToken();
   }
 
-  async register(input: {
-    email: string;
-    password: string;
-    displayName: string;
-    birthday: string;
-  }): Promise<void> {
+  async register(input: RegisterBody): Promise<void> {
     await this.session.register(input);
   }
 
-  async login(input: { email: string; password: string }): Promise<void> {
+  async login(input: LoginBody): Promise<void> {
     await this.session.login(input);
   }
 
-  async completeProfile(input: { birthday: string; displayName?: string }): Promise<void> {
+  /** Loads the signed-in profile, including the photo key when one is set. */
+  async getMe(): Promise<UserProfile> {
+    const profile = await this.request<UserProfile>('GET', '/identity/me');
+    this.session.setUser(profile);
+    return profile;
+  }
+
+  /** Sets or clears the profile photo object key. */
+  async updateProfile(input: UpdateProfileBody): Promise<UserProfile> {
+    const profile = await this.request<UserProfile>('PATCH', '/identity/profile', input);
+    this.session.setUser(profile);
+    return profile;
+  }
+
+  /** Asks for a short-lived upload URL for a photo or other file. */
+  async presignUpload(
+    contentType: PresignUploadBody['contentType'],
+    contentLength: PresignUploadBody['contentLength'],
+  ): Promise<PresignUploadResponse> {
+    return this.request('POST', '/media/presign-upload', { contentType, contentLength });
+  }
+
+  /** Asks for a short-lived URL that can display an uploaded object. */
+  async presignDownload(objectKey: string): Promise<PresignDownloadResponse> {
+    const params = new URLSearchParams({ objectKey });
+    return this.request('GET', `/media/presign-download?${params}`);
+  }
+
+  async completeProfile(input: CompleteProfileBody): Promise<void> {
     const profile = await this.request<UserProfile>('POST', '/identity/profile/complete', input);
     this.session.setUser(profile);
   }
@@ -103,23 +183,23 @@ export class ApiClient {
   }
 
   async logout(): Promise<void> {
+    this.setTeamId(undefined);
+    this.hasTeams.set(false);
     if (!environment.authDisabled) {
       const returnTo = encodeURIComponent(`${window.location.origin}/login`);
       window.location.href = `${environment.apiBaseUrl}/identity/oauth/logout?returnTo=${returnTo}`;
       return;
     }
     await this.session.logout();
-    this.selectedTeamId = undefined;
-    this.hasTeams.set(false);
   }
 
-  async listTeams(): Promise<TeamSummary[]> {
-    const body = await this.request<{ teams: TeamSummary[] }>('GET', '/teams');
+  async listTeams(): Promise<TeamList['teams']> {
+    const body = await this.request<TeamList>('GET', '/teams');
     this.hasTeams.set(body.teams.length > 0);
     return body.teams;
   }
 
-  async createTeam(input: { name: string; timeZone: string }): Promise<TeamSummary> {
+  async createTeam(input: CreateTeamBody): Promise<TeamSummary> {
     const team = await this.request<TeamSummary>('POST', '/teams', input);
     this.hasTeams.set(true);
     return team;
@@ -130,7 +210,15 @@ export class ApiClient {
     return this.request('GET', `/teams/${teamId}`);
   }
 
-  /** Updates the team name, time zone, and location. */
+  /** Replaces the positions the caller plays on a team. */
+  async setPositions(
+    teamId: string,
+    positions: UpdatePositionsBody['positions'],
+  ): Promise<TeamSummary> {
+    return this.request('PUT', `/teams/${teamId}/positions`, { positions });
+  }
+
+  /** Updates the team name, time zone, location, and theme. */
   async updateTeam(teamId: string, input: UpdateTeamBody): Promise<TeamSummary> {
     return this.request('PATCH', `/teams/${teamId}`, input);
   }
@@ -138,73 +226,148 @@ export class ApiClient {
   /** Searches the team directory by name for join autocomplete. */
   async searchTeams(
     query: string,
-    options: { limit?: number; cursor?: string } = {},
-  ): Promise<{ teams: TeamDirectoryHit[]; cursor?: string }> {
+    options: Omit<SearchTeamDirectoryQuery, 'q'> = {},
+  ): Promise<TeamDirectoryPage> {
     const params = new URLSearchParams();
     if (query.trim().length > 0) params.set('q', query.trim());
     if (options.limit !== undefined) params.set('limit', String(options.limit));
     if (options.cursor !== undefined) params.set('cursor', options.cursor);
     const qs = params.toString();
-    return this.request<{ teams: TeamDirectoryHit[]; cursor?: string }>(
+    return this.request<TeamDirectoryPage>(
       'GET',
       `/teams/directory${qs.length > 0 ? `?${qs}` : ''}`,
     );
   }
 
   /** Requests membership on a team the caller does not yet belong to. */
-  async requestJoin(teamId: string): Promise<{ requestId: string }> {
+  async requestJoin(teamId: string): Promise<JoinRequestCreated> {
     return this.request('POST', `/teams/${teamId}/join-requests`);
   }
 
-  async getPermissions(teamId: string): Promise<{ roles: RolePermissions[] }> {
+  /** Lists pending join requests for a team. */
+  async listJoinRequests(teamId: string): Promise<JoinRequestList['joinRequests']> {
+    const body = await this.request<JoinRequestList>('GET', `/teams/${teamId}/join-requests`);
+    return body.joinRequests;
+  }
+
+  /**
+   * Approves a pending join request and assigns the chosen role.
+   *
+   * @param teamId - The team that owns the request.
+   * @param requestId - The pending request.
+   * @param role - Role granted when the request is approved.
+   * @returns The new membership.
+   */
+  async approveJoinRequest(
+    teamId: string,
+    requestId: string,
+    role: ApproveJoinRequestBody['role'],
+  ): Promise<ApprovedJoinRequest> {
+    return this.request('POST', `/teams/${teamId}/join-requests/${requestId}/approve`, { role });
+  }
+
+  /**
+   * Declines a pending join request.
+   *
+   * @param teamId - The team that owns the request.
+   * @param requestId - The pending request.
+   */
+  async rejectJoinRequest(teamId: string, requestId: string): Promise<void> {
+    await this.request('POST', `/teams/${teamId}/join-requests/${requestId}/reject`);
+  }
+
+  /** Lists shareable invite codes for a team. */
+  async listInvites(teamId: string): Promise<TeamInviteList['invites']> {
+    const body = await this.request<TeamInviteList>('GET', `/teams/${teamId}/invites`);
+    return body.invites;
+  }
+
+  /**
+   * Creates a multi-use invite that grants the given role on accept.
+   *
+   * @param teamId - The team that will own the invite.
+   * @param role - Role granted when the code is accepted. Defaults to player on the server.
+   * @returns The new invite.
+   */
+  async createInvite(teamId: string, role?: CreateInviteBody['role']): Promise<TeamInvite> {
+    return this.request('POST', `/teams/${teamId}/invites`, role === undefined ? {} : { role });
+  }
+
+  /**
+   * Loads the team and role behind a shared invite code.
+   *
+   * @param code - The invite code from the link.
+   * @returns Invite metadata including the team name.
+   */
+  async getInvite(code: string): Promise<InvitePreview> {
+    return this.request('GET', `/teams/invite/${encodeURIComponent(code)}`);
+  }
+
+  /**
+   * Joins the team behind an invite code.
+   *
+   * @param code - The invite code from the link.
+   * @returns The membership created by accepting.
+   */
+  async acceptInvite(code: string): Promise<AcceptedInvite> {
+    const membership = await this.request<AcceptedInvite>(
+      'POST',
+      `/teams/invite/${encodeURIComponent(code)}/accept`,
+    );
+    this.hasTeams.set(true);
+    this.setTeamId(membership.teamId);
+    return membership;
+  }
+
+  /** Lists everyone on the team. Any member can call this. */
+  async listMembers(teamId: string): Promise<TeamMemberList['members']> {
+    const body = await this.request<TeamMemberList>('GET', `/teams/${teamId}/members`);
+    return body.members;
+  }
+
+  async getPermissions(teamId: string): Promise<RolePermissionsResponse> {
     return this.request('GET', `/teams/${teamId}/permissions`);
   }
 
   async putPermissions(
     teamId: string,
-    roles: RolePermissions[],
-  ): Promise<{ roles: RolePermissions[] }> {
+    roles: RolePermissionsResponse['roles'],
+  ): Promise<RolePermissionsResponse> {
     return this.request('PUT', `/teams/${teamId}/permissions`, { roles });
   }
 
-  async getSchedule(
-    teamId: string,
-    from: string,
-    to: string,
-  ): Promise<{ occurrences: ScheduleOccurrence[] }> {
+  async getSchedule(teamId: string, from: string, to: string): Promise<ScheduleList> {
     const query = new URLSearchParams({ from, to });
     return this.request('GET', `/schedule/teams/${teamId}?${query}`);
   }
 
-  async createEvent(
-    teamId: string,
-    body: Record<string, unknown>,
-  ): Promise<unknown> {
+  async createEvent(teamId: string, body: CreateEventBody): Promise<EventResponse> {
     return this.request('POST', `/schedule/teams/${teamId}/events`, body);
   }
 
-  async putRsvp(
-    teamId: string,
-    body: { eventId: string; occurrenceStartsAt: string; status: string },
-  ): Promise<unknown> {
+  async putRsvp(teamId: string, body: RsvpBody): Promise<RsvpResponse> {
     return this.request('PUT', `/schedule/teams/${teamId}/rsvps`, body);
   }
 
-  async listChats(): Promise<ChatSummary[]> {
-    const body = await this.request<{ chats: ChatSummary[] }>('GET', '/chat');
+  async listChats(): Promise<ChatList['chats']> {
+    const body = await this.request<ChatList>('GET', '/chat');
     return body.chats;
   }
 
-  async listMessages(chatId: string): Promise<{ messages: ChatMessage[] }> {
+  async listMessages(chatId: string): Promise<MessagePage> {
     return this.request('GET', `/chat/${chatId}/messages`);
   }
 
-  async sendMessage(chatId: string, body: string): Promise<ChatMessage> {
+  async sendMessage(chatId: string, body: SendMessageBody['body']): Promise<ChatMessage> {
     return this.request('POST', `/chat/${chatId}/messages`, { body });
   }
 
-  async registerDevice(deviceId: string, token: string, platform: string): Promise<void> {
-    await this.request('PUT', `/media/devices/${encodeURIComponent(deviceId)}`, {
+  async registerDevice(
+    deviceId: string,
+    token: RegisterDeviceBody['token'],
+    platform: RegisterDeviceBody['platform'],
+  ): Promise<DeviceRegistration> {
+    return this.request('PUT', `/media/devices/${encodeURIComponent(deviceId)}`, {
       token,
       platform,
     });

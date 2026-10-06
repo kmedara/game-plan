@@ -9,6 +9,8 @@
 
 import type {
   AccountKind,
+  LoginBody,
+  RegisterBody,
   SessionTokens,
   UserProfile,
 } from '@gameplan/types';
@@ -112,16 +114,11 @@ export class SessionService {
     return this.accessToken !== undefined;
   }
 
-  async register(body: {
-    email: string;
-    password: string;
-    displayName: string;
-    birthday: string;
-  }): Promise<SessionTokens> {
+  async register(body: RegisterBody): Promise<SessionTokens> {
     return this.authenticate('register', body);
   }
 
-  async login(body: { email: string; password: string }): Promise<SessionTokens> {
+  async login(body: LoginBody): Promise<SessionTokens> {
     return this.authenticate('login', body);
   }
 
