@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { TeamsPageComponent } from './teams';
 import { ApiClient } from '../core/api-client';
+import { LiveSocket } from '../core/live-socket';
 
 describe('TeamsPageComponent', () => {
   let fixture: ComponentFixture<TeamsPageComponent>;
@@ -20,7 +21,14 @@ describe('TeamsPageComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [TeamsPageComponent],
-      providers: [provideRouter([]), { provide: ApiClient, useValue: api }],
+      providers: [
+        provideRouter([]),
+        { provide: ApiClient, useValue: api },
+        {
+          provide: LiveSocket,
+          useValue: jasmine.createSpyObj<LiveSocket>('LiveSocket', ['disconnect']),
+        },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(TeamsPageComponent);
