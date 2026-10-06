@@ -35,6 +35,9 @@ services:
       AUTH_DISABLED: 'true'
       AUTH_SEED_USER_ID: '44444444-4444-4444-8444-444444444444'
       AUTH_CALLBACK_URL: http://localhost:3000/identity/oauth/callback
+      MEDIA_LOCAL_DIR: /var/lib/gameplan/media
+    volumes:
+      - media-data:/var/lib/gameplan/media
     develop:
       watch:
         - action: sync
@@ -86,3 +89,4 @@ services:
 
 volumes:
   dynamodb-data:
+  media-data:
