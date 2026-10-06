@@ -4,6 +4,7 @@
 
 export * from './names.js';
 export * from './http.js';
+export * from './pipeline.js';
 export * from '@gameplan/schemas';
 export * from './dynamo/index.js';
 export * from './auth/index.js';
