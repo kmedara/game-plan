@@ -1,0 +1,10 @@
+{
+  "name": "@gameplan/types",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared TypeScript types and domain constants for GamePlan clients and APIs",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
