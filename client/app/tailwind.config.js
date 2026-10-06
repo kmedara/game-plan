@@ -5,16 +5,16 @@ module.exports = {
     extend: {
       colors: {
         ink: {
-          DEFAULT: '#0f172a',
-          muted: '#475569',
+          DEFAULT: 'var(--mat-sys-on-surface)',
+          muted: 'var(--mat-sys-on-surface-variant)',
         },
         field: {
-          DEFAULT: '#f1f5f9',
-          deep: '#e2e8f0',
+          DEFAULT: 'var(--mat-sys-surface-container)',
+          deep: 'var(--mat-sys-outline-variant)',
         },
         accent: {
-          DEFAULT: '#0d9488',
-          contrast: '#ccfbf1',
+          DEFAULT: 'var(--mat-sys-primary)',
+          contrast: 'var(--mat-sys-primary-container)',
         },
       },
     },

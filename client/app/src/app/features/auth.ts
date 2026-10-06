@@ -5,6 +5,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
+import { ThemeToggleComponent } from '../core/theme-toggle';
 import { ApiClient } from '../core/api-client';
 import { environment } from '../../environments/environment';
 import { LiveSocket } from '../core/live-socket';
@@ -13,7 +14,7 @@ import { PushRegistration } from '../core/push-registration';
 @Component({
   selector: 'app-auth',
   standalone: true,
-  imports: [MatButtonModule],
+  imports: [MatButtonModule, ThemeToggleComponent],
   templateUrl: './auth.html',
 })
 export class AuthPageComponent implements OnInit {

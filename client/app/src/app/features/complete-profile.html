@@ -13,7 +13,7 @@
     </mat-form-field>
 
     @if (error()) {
-      <p class="muted" style="color: #b91c1c">{{ error() }}</p>
+      <p class="error">{{ error() }}</p>
     }
 
     <button mat-flat-button color="primary" type="submit" [disabled]="form.invalid || busy()">

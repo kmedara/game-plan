@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --event-practice: #0d9488;
+  --event-game: #d97706;
+  --event-meeting: #2563eb;
+  --event-other: #7c3aed;
+}
+
 html,
 body {
   height: 100%;
@@ -10,8 +17,8 @@ body {
 body {
   margin: 0;
   font-family: Roboto, 'Helvetica Neue', sans-serif;
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--mat-sys-surface-container);
+  color: var(--mat-sys-on-surface);
 }
 
 .app-shell {
@@ -20,8 +27,8 @@ body {
   flex-direction: column;
   max-width: 40rem;
   margin: 0 auto;
-  background: #fff;
-  box-shadow: 0 0 0 1px #e2e8f0;
+  background: var(--mat-sys-surface);
+  box-shadow: 0 0 0 1px var(--mat-sys-outline-variant);
 }
 
 .app-body {
@@ -37,8 +44,8 @@ body {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
-  border-top: 1px solid #e2e8f0;
-  background: #fff;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mat-sys-surface);
   z-index: 10;
 }
 
@@ -53,12 +60,12 @@ body {
   gap: 0.15rem;
   padding: 0.65rem 0.5rem;
   text-decoration: none;
-  color: #64748b;
+  color: var(--mat-sys-on-surface-variant);
   font-size: 0.75rem;
 }
 
 .app-nav a.active {
-  color: #0d9488;
+  color: var(--mat-sys-primary);
   font-weight: 500;
 }
 
@@ -69,8 +76,7 @@ body {
 }
 
 .muted {
-  color: #64748b;
-  font-size: 0.875rem;
+  color: var(--mat-sys-on-surface-variant);
 }
 
 .row {
@@ -80,23 +86,520 @@ body {
   gap: 0.75rem;
 }
 
+.join-create-row {
+  display: flex;
+  flex-direction: row;
+  gap: 0.75rem;
+}
+
+.join-create-row button.active {
+  background: var(--mat-sys-primary);
+  border-color: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+}
+
+h1,
+.page-title {
+  color: var(--team-secondary, var(--mat-sys-on-surface));
+}
+
 .page-title {
   font-size: 1.15rem;
   margin: 0;
 }
 
+.schedule-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  column-gap: 0.5rem;
+}
+
+.schedule-header > :last-child {
+  justify-self: end;
+}
+
+.schedule-header-team {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.team-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.team-identity strong {
+  color: var(--team-secondary, inherit);
+}
+
+.team-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.role-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.team-logo {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  object-fit: cover;
+  background: var(--mat-sys-surface-container);
+  flex: none;
+}
+
+.theme-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.theme-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.theme-colors label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.team-picker.mat-mdc-form-field {
+  width: 9.5rem;
+  max-width: 100%;
+  font-size: 0.8125rem;
+}
+
+.team-picker .mat-mdc-text-field-wrapper,
+.team-picker .mat-mdc-form-field-flex {
+  height: 2rem;
+}
+
+.team-picker .mat-mdc-form-field-flex {
+  align-items: center;
+}
+
+.team-picker .mat-mdc-form-field-infix {
+  min-height: 0;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.team-picker .mat-mdc-select-trigger,
+.team-picker .mat-mdc-select-value {
+  font-size: 0.8125rem;
+}
+
 .error {
-  color: #b91c1c;
+  color: var(--mat-sys-error);
   font-size: 0.875rem;
   margin: 0;
 }
 
-.permission-role {
-  padding: 0.75rem;
-  background: #f8fafc;
+.profile-photo {
+  width: 4.5rem;
+  height: 4.5rem;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.profile-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.position-field.mat-mdc-form-field {
+  --mat-form-field-container-height: 48px;
+  --mat-form-field-container-vertical-padding: 12px;
+  --mat-form-field-container-text-size: 0.875rem;
+}
+
+.position-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.position-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.45rem 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+  font-size: 0.875rem;
+}
+
+.position-chip button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.surface-card {
+  padding: 0.65rem;
+  background: var(--mat-sys-surface-container);
   border-radius: 0.5rem;
+}
+
+.team-admin-mark {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.team-pending {
+  color: var(--mat-sys-primary);
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+a.team-row {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+a.team-row:hover {
+  background: var(--mat-sys-surface-container-high);
+}
+
+a.team-row:focus-visible {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: 2px;
+}
+
+.chat-thread {
+  container-type: inline-size;
+}
+
+button.chat-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.chat-avatar {
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 1.75rem;
+  border-radius: 999px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  font-size: 0.65rem;
+  font-weight: 600;
+}
+
+.chat-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.chat-message-copy {
+  display: block;
+  min-width: 0;
+  flex: 1;
+}
+
+.chat-message-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  opacity: 0.8;
+
+
+}
+
+.chat-sender {
+  color: var(--team-secondary, var(--mat-sys-on-surface-variant));
+}
+
+.chat-composer {
+  align-items: flex-end;
+}
+
+.chat-composer textarea {
+  resize: none;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.chat-body {
+  display: block;
+  width: fit-content;
+  max-width: min(80cqw, 100%);
+  box-sizing: border-box;
+  margin: 0.2rem 0 0;
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.5rem;
+  background: var(--mat-sys-surface-container);
+  font-size: 1.125rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--mat-sys-on-surface);
+  overflow-wrap: anywhere;
+}
+
+.permission-role,
+.invite-card {
+  padding: 0.75rem;
+  background: var(--mat-sys-surface-container);
+  border-radius: 0.5rem;
+}
+
+.invite-link {
+  overflow-wrap: anywhere;
 }
 
 .permission-list {
   margin-top: 0.5rem;
+}
+
+.calendar-month {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr 2.5rem;
+  align-items: center;
+  justify-items: center;
+}
+
+.calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.calendar-weekday {
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--mat-sys-on-surface-variant);
+  padding-bottom: 0.15rem;
+}
+
+.calendar-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  aspect-ratio: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0.2rem;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 0.4rem;
+  background: var(--mat-sys-surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.calendar-day.outside {
+  color: var(--mat-sys-on-surface-variant);
+  background: var(--mat-sys-surface-container);
+}
+
+.calendar-day.selected {
+  border-color: var(--mat-sys-primary);
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+}
+
+.calendar-day.today {
+  border-color: var(--mat-sys-primary);
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+}
+
+.calendar-day.today .calendar-day-num {
+  color: var(--mat-sys-on-primary);
+  font-weight: 700;
+}
+
+.calendar-day.today .calendar-dot {
+  box-shadow: 0 0 0 1px var(--mat-sys-on-primary);
+}
+
+.calendar-day-num {
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.calendar-dots {
+  display: flex;
+  gap: 0.15rem;
+  min-height: 0.4rem;
+}
+
+.calendar-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--mat-sys-outline);
+}
+
+.calendar-dot[data-type='practice'] {
+  background: var(--event-practice);
+}
+
+.calendar-dot[data-type='game'] {
+  background: var(--event-game);
+}
+
+.calendar-dot[data-type='meeting'] {
+  background: var(--event-meeting);
+}
+
+.calendar-dot[data-type='other'] {
+  background: var(--event-other);
+}
+
+.calendar-legend {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.75rem;
+}
+
+.calendar-legend span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+}
+
+.event-card {
+  padding: 0.75rem;
+  background: var(--mat-sys-surface-container);
+  border-radius: 0.5rem;
+}
+
+.event-type {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.event-type[data-type='practice'] {
+  color: var(--event-practice);
+}
+
+.event-type[data-type='game'] {
+  color: var(--event-game);
+}
+
+.event-type[data-type='meeting'] {
+  color: var(--event-meeting);
+}
+
+.event-type[data-type='other'] {
+  color: var(--event-other);
+}
+
+.event-type-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.event-type-row button {
+  min-width: 0;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+.event-type-row button[aria-pressed='true'] {
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  border-color: var(--mat-sys-primary);
+}
+
+.event-type-row button[aria-pressed='true'] .mdc-button__label {
+  color: var(--mat-sys-on-primary);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.theme-toggle button {
+  border: 0;
+  background: transparent;
+  color: var(--mat-sys-on-surface-variant);
+  font: inherit;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+}
+
+.theme-toggle button[aria-pressed='true'] {
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+}
+
+.time-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.time-row mat-form-field {
+  width: 100%;
+}
+
+/* The notch keeps a transparent left border for the floating label. While the
+   label is still inside the field, that border shows up as a second line. */
+.mat-mdc-form-field.mat-mdc-form-field.mat-mdc-form-field.mat-mdc-form-field.mat-mdc-form-field.mat-mdc-form-field.mat-mdc-form-field
+  .mdc-notched-outline:not(.mdc-notched-outline--notched)
+  .mdc-notched-outline__notch {
+  border-left: none;
+  clip-path: none;
 }
