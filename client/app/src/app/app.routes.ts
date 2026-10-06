@@ -8,6 +8,8 @@ import { AuthPageComponent } from './features/auth';
 import { CompleteProfilePageComponent } from './features/complete-profile';
 import { ChatThreadPageComponent, ChatsPageComponent } from './features/chats';
 import { SchedulePageComponent } from './features/schedule';
+import { InvitePageComponent } from './features/invite';
+import { ProfilePageComponent } from './features/profile';
 import { TeamAdminPageComponent, TeamsPageComponent } from './features/teams';
 
 export const routes: Routes = [
@@ -46,8 +48,23 @@ export const routes: Routes = [
     canActivate: [authGuard, completeProfileGuard],
   },
   {
+    path: 'profile',
+    component: ProfilePageComponent,
+    canActivate: [authGuard, completeProfileGuard],
+  },
+  {
+    path: 'teams/:teamId',
+    component: TeamAdminPageComponent,
+    canActivate: [authGuard, completeProfileGuard],
+  },
+  {
     path: 'teams/:teamId/admin',
     component: TeamAdminPageComponent,
+    canActivate: [authGuard, completeProfileGuard],
+  },
+  {
+    path: 'invite/:code',
+    component: InvitePageComponent,
     canActivate: [authGuard, completeProfileGuard],
   },
   { path: '**', redirectTo: 'teams' },

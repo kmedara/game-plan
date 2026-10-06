@@ -1,0 +1,19 @@
+<section class="stack">
+  <a mat-button routerLink="/teams">Back</a>
+
+  @if (preview(); as invite) {
+    <h1 class="page-title">Join {{ invite.teamName }}</h1>
+    <p class="muted">You will join as {{ roleLabel(invite.role) }}.</p>
+    @if (error()) {
+      <p class="error">{{ error() }}</p>
+    }
+    <button mat-flat-button color="primary" type="button" [disabled]="joining()" (click)="accept()">
+      Join team
+    </button>
+  } @else if (error()) {
+    <h1 class="page-title">Invite</h1>
+    <p class="error">{{ error() }}</p>
+  } @else {
+    <p class="muted">Loading invite…</p>
+  }
+</section>

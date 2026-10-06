@@ -1,0 +1,99 @@
+<section class="stack">
+  <div class="row">
+    <h1 class="page-title">Profile</h1>
+    <app-theme-toggle />
+  </div>
+
+  <div class="row" style="justify-content: flex-start">
+    <button
+      type="button"
+      class="profile-photo"
+      [disabled]="uploading()"
+      (click)="fileInput.click()"
+    >
+      @if (photoUrl(); as url) {
+        <img [src]="url" alt="" />
+      } @else {
+        {{ initials() }}
+      }
+    </button>
+    <div>
+      <strong>{{ profile()?.displayName }}</strong>
+      <div class="muted">{{ profile()?.email }}</div>
+    </div>
+  </div>
+
+  <input
+    #fileInput
+    hidden
+    type="file"
+    accept="image/jpeg,image/png,image/webp,image/gif"
+    (change)="onPhoto($event)"
+  />
+
+  <div class="row" style="justify-content: flex-start">
+    <button
+      mat-stroked-button
+      type="button"
+      [disabled]="uploading()"
+      (click)="fileInput.click()"
+    >
+      {{ profile()?.photoKey ? 'Change photo' : 'Add photo' }}
+    </button>
+    @if (profile()?.photoKey) {
+      <button mat-button type="button" [disabled]="uploading()" (click)="removePhoto()">
+        Remove photo
+      </button>
+    }
+  </div>
+  @if (photoError()) {
+    <p class="error">{{ photoError() }}</p>
+  }
+
+  <h2 class="page-title">Positions</h2>
+  @if (teams().length === 0) {
+    <p class="muted">Join a team to add the positions you play.</p>
+  }
+  @for (team of teams(); track team.teamId) {
+    <div class="surface-card stack">
+      <strong>{{ team.name }}</strong>
+      @if ((team.positions ?? []).length > 0) {
+        <div class="position-list">
+          @for (position of team.positions ?? []; track position) {
+            <span class="position-chip">
+              {{ position }}
+              <button
+                type="button"
+                [attr.aria-label]="'Remove ' + position"
+                (click)="removePosition(team, position)"
+              >
+                ×
+              </button>
+            </span>
+          }
+        </div>
+      }
+      <form class="row" style="align-items: flex-start" (submit)="$event.preventDefault(); addPosition(team)">
+        <mat-form-field
+          class="position-field"
+          appearance="outline"
+          subscriptSizing="dynamic"
+          style="flex: 1"
+        >
+          <mat-label>Position</mat-label>
+          <input matInput [formControl]="positionControl(team.teamId)" />
+        </mat-form-field>
+        <button
+          mat-stroked-button
+          type="submit"
+          [disabled]="positionControl(team.teamId).value.trim().length === 0"
+        >
+          Add
+        </button>
+      </form>
+      @if (positionError()[team.teamId]; as message) {
+        <p class="error">{{ message }}</p>
+      }
+    </div>
+  }
+</section>

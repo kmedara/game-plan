@@ -9,34 +9,46 @@
   }
 
   @for (team of teams(); track team.teamId) {
-    <div class="row" style="padding: 0.65rem; background: #f8fafc; border-radius: 0.5rem">
-      <div>
-        <strong>{{ team.name }}</strong>
-        <div class="muted">
-          {{ team.role }} · {{ team.timeZone }}
-          @if (team.location) {
-            · {{ team.location }}
-          }
+    <a class="row surface-card team-row" [routerLink]="['/teams', team.teamId]">
+      <div class="team-identity">
+        @if (teamBrand.logoFor(team.theme?.logoKey); as src) {
+          <img class="team-logo" [src]="src" alt="" />
+        }
+        <div>
+          <div class="team-title">
+            <strong>{{ team.name }}</strong>
+            <span class="role-pill">{{ roleLabel(team.role) }}</span>
+          </div>
+          <div class="muted">
+            {{ team.location }} · {{ team.timeZone }}
+          </div>
         </div>
       </div>
-      <a mat-button [routerLink]="['/teams', team.teamId, 'admin']">Admin</a>
-    </div>
+      <span class="team-admin-mark">
+        @if (hasPendingApprovals(team.teamId)) {
+          <span class="material-icons team-pending" aria-hidden="true">notifications</span>
+          <span class="sr-only">Pending join requests</span>
+        } 
+      </span>
+    </a>
   }
 
-  <div class="row">
+  <div class="join-create-row">
     <button
       mat-stroked-button
       type="button"
-      [color]="mode() === 'join' ? 'primary' : undefined"
-      (click)="mode.set('join')"
+      [class.active]="mode() === 'join'"
+      [attr.aria-pressed]="mode() === 'join'"
+      (click)="selectMode('join')"
     >
       Join team
     </button>
     <button
       mat-stroked-button
       type="button"
-      [color]="mode() === 'create' ? 'primary' : undefined"
-      (click)="mode.set('create')"
+      [class.active]="mode() === 'create'"
+      [attr.aria-pressed]="mode() === 'create'"
+      (click)="selectMode('create')"
     >
       Create team
     </button>
@@ -78,7 +90,7 @@
       <p class="muted">{{ joinMessage() }}</p>
     }
     @if (error()) {
-      <p class="muted" style="color: #b91c1c">{{ error() }}</p>
+      <p class="error">{{ error() }}</p>
     }
     <button
       mat-flat-button
@@ -89,7 +101,22 @@
     >
       Request to join
     </button>
-  } @else {
+
+    <h2 style="font-size: 1rem">Invite code</h2>
+    <p class="muted">Paste a code or link from a teammate.</p>
+    <mat-form-field appearance="outline">
+      <mat-label>Invite code</mat-label>
+      <input matInput [formControl]="inviteCode" />
+    </mat-form-field>
+    <button
+      mat-stroked-button
+      type="button"
+      [disabled]="inviteCode.value.trim().length === 0"
+      (click)="openInvite()"
+    >
+      Join with code
+    </button>
+  } @else if (mode() === 'create') {
     <h2 style="font-size: 1rem">Create team</h2>
     <form class="stack" [formGroup]="form" (ngSubmit)="create()">
       <mat-form-field appearance="outline">

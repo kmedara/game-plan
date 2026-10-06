@@ -9,6 +9,8 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { ApiClient } from './core/api-client';
 import { LiveSocket } from './core/live-socket';
 import { PushRegistration } from './core/push-registration';
+import { TeamBrand } from './core/team-brand';
+import { ThemePreference } from './core/theme';
 
 @Component({
   selector: 'app-root',
@@ -20,11 +22,14 @@ export class AppComponent implements OnInit {
   readonly api = inject(ApiClient);
   private readonly live = inject(LiveSocket);
   private readonly push = inject(PushRegistration);
+  private readonly theme = inject(ThemePreference);
+  private readonly teamBrand = inject(TeamBrand);
   private readonly router = inject(Router);
 
   showNav = false;
 
   ngOnInit(): void {
+    void this.theme.restore();
     void this.bootstrapSession();
     this.router.events.subscribe((event) => {
       if (!(event instanceof NavigationEnd)) return;
@@ -52,10 +57,20 @@ export class AppComponent implements OnInit {
     this.showNav = !this.isAuthPath(this.router.url);
   }
 
-  /** Loads team membership so schedule/chat nav can stay hidden until the user joins. */
+  /** Loads teams and applies the selected team's colors for every page. */
   private async refreshTeamMembership(): Promise<void> {
     try {
-      await this.api.listTeams();
+      const teams = await this.api.listTeams();
+      await this.api.restoreTeamId();
+      const selected =
+        teams.find((team) => team.teamId === this.api.getTeamId()) ?? teams[0];
+      if (selected === undefined) {
+        this.api.setTeamId(undefined);
+        await this.teamBrand.apply(undefined);
+        return;
+      }
+      this.api.setTeamId(selected.teamId);
+      await this.teamBrand.apply(selected.theme);
     } catch {
       this.api.hasTeams.set(false);
     }

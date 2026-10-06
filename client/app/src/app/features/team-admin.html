@@ -1,9 +1,10 @@
 <section class="stack">
   <div class="row">
     <a mat-button routerLink="/teams">Back</a>
-    <h1 class="page-title">Team admin</h1>
+    <h1 class="page-title">{{ teamName() }}</h1>
   </div>
 
+  @if (canManage()) {
   <h2 class="page-title">Settings</h2>
   <p class="muted">Name, time zone, and location.</p>
   <form class="stack" [formGroup]="settings" (ngSubmit)="saveSettings()">
@@ -32,6 +33,45 @@
       <mat-label>Location</mat-label>
       <input matInput formControlName="location" placeholder="City, region" />
     </mat-form-field>
+
+    <h2 class="page-title">Team theme</h2>
+    <p class="muted">Colors and a logo replace the default brand while this team is selected.</p>
+    <label class="theme-check">
+      <input type="checkbox" formControlName="useColors" />
+      Use team colors
+    </label>
+    @if (settings.controls.useColors.value) {
+      <div class="theme-colors">
+        <label>
+          Primary
+          <input type="color" formControlName="primary" aria-label="Primary color" />
+        </label>
+        <label>
+          Secondary
+          <input type="color" formControlName="secondary" aria-label="Secondary color" />
+        </label>
+        <label>
+          Accent
+          <input type="color" formControlName="accent" aria-label="Accent color" />
+        </label>
+      </div>
+    }
+    <div class="team-identity">
+      @if (logoPreview(); as src) {
+        <img class="team-logo" [src]="src" alt="" />
+      }
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        aria-label="Team logo"
+        [disabled]="uploadingLogo()"
+        (change)="onLogo($event)"
+      />
+      @if (settings.controls.logoKey.value) {
+        <button mat-button type="button" (click)="removeLogo()">Remove logo</button>
+      }
+    </div>
+
     @if (settingsSaved()) {
       <p class="muted">Settings saved.</p>
     }
@@ -42,7 +82,103 @@
       Save settings
     </button>
   </form>
+  }
 
+  @if (canInvite()) {
+    <h2 class="page-title">Invite members</h2>
+    <p class="muted">
+      Create a link that adds someone to this team. The same link can be used more than once.
+    </p>
+    <mat-form-field appearance="outline">
+      <mat-label>Role</mat-label>
+      <mat-select [formControl]="inviteRole">
+        @for (role of inviteRoles; track role) {
+          <mat-option [value]="role">{{ roleLabel(role) }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    @if (inviteError()) {
+      <p class="error">{{ inviteError() }}</p>
+    }
+    <button
+      mat-flat-button
+      color="primary"
+      type="button"
+      [disabled]="creatingInvite()"
+      (click)="createInviteLink()"
+    >
+      Create invite link
+    </button>
+
+    @if (invites().length === 0) {
+      <p class="muted">No invite links yet.</p>
+    }
+    @for (invite of invites(); track invite.code) {
+      <article class="invite-card">
+        <strong>{{ roleLabel(invite.role) }}</strong>
+        <p class="muted invite-link">{{ inviteLink(invite.code) }}</p>
+        <button mat-stroked-button type="button" (click)="copyInviteLink(invite.code)">
+          {{ copiedCode() === invite.code ? 'Copied' : 'Copy link' }}
+        </button>
+      </article>
+    }
+  }
+
+  @if (canApprove()) {
+    <h2 class="page-title">Join requests</h2>
+    <p class="muted">Choose a role and approve someone who asked to join.</p>
+    @if (joinError()) {
+      <p class="error">{{ joinError() }}</p>
+    }
+    @if (joinRequests().length === 0) {
+      <p class="muted">No pending requests.</p>
+    }
+    @for (request of joinRequests(); track request.requestId) {
+      <article class="invite-card">
+        <strong>{{ request.displayName ?? 'Unknown person' }}</strong>
+        @if (request.accountKind === 'minor') {
+          <span class="role-pill">Minor</span>
+        }
+        @if (request.email) {
+          <p class="muted">{{ request.email }}</p>
+        }
+        <mat-form-field appearance="outline">
+          <mat-label>Role</mat-label>
+          <mat-select
+            [value]="joinRole(request.requestId)"
+            (selectionChange)="setJoinRole(request.requestId, $event.value)"
+          >
+            @for (role of inviteRoles; track role) {
+              <mat-option [value]="role" [disabled]="roleBlocked(request, role)">
+                {{ roleLabel(role) }}
+              </mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <div class="row">
+          <button
+            mat-flat-button
+            color="primary"
+            type="button"
+            [disabled]="busyRequestId() === request.requestId"
+            (click)="approveJoin(request)"
+          >
+            Approve
+          </button>
+          <button
+            mat-button
+            type="button"
+            [disabled]="busyRequestId() === request.requestId"
+            (click)="declineJoin(request)"
+          >
+            Decline
+          </button>
+        </div>
+      </article>
+    }
+  }
+
+  @if (canManage()) {
   <h2 class="page-title">Permissions</h2>
   <p class="muted">Assign privileged permissions to each role.</p>
 
@@ -67,4 +203,20 @@
     <p class="error">{{ error() }}</p>
   }
   <button mat-flat-button color="primary" type="button" (click)="save()">Save permissions</button>
+  }
+
+  <h2 class="page-title">Roster</h2>
+  @if (rosterError()) {
+    <p class="error">{{ rosterError() }}</p>
+  } @else if (members().length === 0) {
+    <p class="muted">No members yet.</p>
+  }
+  @for (member of members(); track member.userId) {
+    <article class="invite-card">
+      <div class="team-title">
+        <strong>{{ member.displayName ?? member.email ?? 'Unknown person' }}</strong>
+        <span class="role-pill">{{ roleLabel(member.role) }}</span>
+      </div>
+    </article>
+  }
 </section>
