@@ -320,6 +320,33 @@ describe('chat channels and private chats', () => {
     expect(result.statusCode).toBe(403);
   });
 
+  it('rejects channel creation for a team the caller is not on', async () => {
+    const caller = authFor();
+    const other = authFor();
+    seedProfile({
+      userId: caller.userId,
+      email: `${caller.userId}@example.com`,
+      accountKind: 'adult',
+    });
+    seedProfile({
+      userId: other.userId,
+      email: `${other.userId}@example.com`,
+      accountKind: 'adult',
+    });
+    seedTeam({ members: [{ userId: caller.userId, role: 'team_admin' }] });
+    const { teamId: otherTeamId } = seedTeam({
+      members: [{ userId: other.userId, role: 'team_admin' }],
+    });
+
+    const result = await handler(
+      httpEvent('POST', '/chat/channels', {
+        headers: { authorization: caller.authorization },
+        body: { teamId: otherTeamId, name: 'Parents' },
+      }),
+    );
+    expect(result.statusCode).toBe(403);
+  });
+
   it('creates a private chat between adults on different teams', async () => {
     const a = authFor();
     const b = authFor();
@@ -504,6 +531,151 @@ describe('messages', () => {
       }),
     );
     expect(result.statusCode).toBe(403);
+  });
+
+  it('sorts chats by kind and name, paginates messages, and sends attachments', async () => {
+    const { authorization, userId } = authFor();
+    seedProfile({
+      userId,
+      email: `${userId}@example.com`,
+      accountKind: 'adult',
+      displayName: 'Ada Player',
+    });
+    const { teamId, defaultChatId } = seedTeam({
+      members: [{ userId, role: 'team_admin' }],
+    });
+
+    const alpha = await handler(
+      httpEvent('POST', '/chat/channels', {
+        headers: { authorization },
+        body: { teamId, name: 'Alpha channel' },
+      }),
+    );
+    const zulu = await handler(
+      httpEvent('POST', '/chat/channels', {
+        headers: { authorization },
+        body: { teamId, name: 'Zulu channel' },
+      }),
+    );
+    expect(alpha.statusCode).toBe(201);
+    expect(zulu.statusCode).toBe(201);
+    const alphaId = (JSON.parse(alpha.body ?? '') as { chatId: string }).chatId;
+    const zuluId = (JSON.parse(zulu.body ?? '') as { chatId: string }).chatId;
+
+    const listed = await handler(httpEvent('GET', '/chat', { headers: { authorization } }));
+    const chats = (JSON.parse(listed.body ?? '') as { chats: Array<{ chatId: string; name: string }> })
+      .chats;
+    expect(chats.map((c) => c.chatId)).toEqual([defaultChatId, alphaId, zuluId]);
+
+    for (let i = 0; i < 3; i += 1) {
+      await handler(
+        httpEvent('POST', `/chat/${defaultChatId}/messages`, {
+          headers: { authorization },
+          body: { body: `msg-${i}` },
+        }),
+      );
+    }
+    const page = await handler(
+      httpEvent('GET', `/chat/${defaultChatId}/messages`, {
+        headers: { authorization },
+        query: { limit: '2' },
+      }),
+    );
+    const firstPage = JSON.parse(page.body ?? '') as {
+      messages: Array<{ body: string }>;
+      cursor?: string;
+    };
+    expect(firstPage.messages).toHaveLength(2);
+    expect(firstPage.cursor).toBeDefined();
+
+    const withAttachment = await handler(
+      httpEvent('POST', `/chat/${zuluId}/messages`, {
+        headers: { authorization },
+        body: { body: 'photo', attachmentKeys: [`uploads/${userId}/a.png`] },
+      }),
+    );
+    expect(withAttachment.statusCode).toBe(201);
+    expect(JSON.parse(withAttachment.body ?? '')).toMatchObject({
+      attachmentKeys: [`uploads/${userId}/a.png`],
+    });
+  });
+
+  it('rejects a team channel when a minor fails the roster chat rule', async () => {
+    const admin = authFor();
+    const minor = authFor();
+    seedProfile({
+      userId: admin.userId,
+      email: `${admin.userId}@example.com`,
+      accountKind: 'adult',
+    });
+    seedProfile({
+      userId: minor.userId,
+      email: `${minor.userId}@example.com`,
+      accountKind: 'minor',
+    });
+    const { teamId } = seedTeam({
+      members: [
+        { userId: admin.userId, role: 'team_admin' },
+        { userId: minor.userId, role: 'player' },
+      ],
+    });
+    store.delete(itemKey(userPk(minor.userId), userTeamSk(teamId)));
+
+    const result = await handler(
+      httpEvent('POST', '/chat/channels', {
+        headers: { authorization: admin.authorization },
+        body: { teamId, name: 'Broken channel' },
+      }),
+    );
+    expect(result.statusCode).toBe(403);
+    expect(JSON.parse(result.body ?? '')).toEqual({ error: 'minor_chat_rule_violated' });
+  });
+
+  it('returns not found for unknown chats and bare route prefixes', async () => {
+    const { authorization } = authFor();
+    expect(
+      (await handler(httpEvent('GET', `/chat/${randomUUID()}/messages`, { headers: { authorization } })))
+        .statusCode,
+    ).toBe(403);
+    expect((await handler(httpEvent('GET', 'users/search', { headers: { authorization } }))).statusCode).toBe(
+      400,
+    );
+    expect((await handler(httpEvent('POST', '/chat/unknown-route', { headers: { authorization } }))).statusCode).toBe(
+      404,
+    );
+    expect((await handler(httpEvent('GET', '/health'))).statusCode).toBe(200);
+    expect((await handler(httpEvent('GET', '///'))).statusCode).toBe(401);
+    expect((await handler(httpEvent('GET', 'no-leading-slash'))).statusCode).toBe(404);
+    expect(
+      (await handler(httpEvent('GET', '/users/search', { headers: { authorization } }))).statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await handler({
+          version: '2.0',
+          requestContext: { http: { method: 'GET', path: '/chat' } },
+        } as APIGatewayProxyEventV2)
+      ).statusCode,
+    ).toBe(401);
+  });
+});
+
+describe('mapChatError', () => {
+  it('maps chat domain errors', async () => {
+    const { mapChatError } = await import('./routes/errors.js');
+    expect(mapChatError('nope')).toBeUndefined();
+    expect(mapChatError(new Error('token_expired'))?.statusCode).toBe(401);
+    expect(mapChatError(new Error('user_not_found'))?.statusCode).toBe(404);
+    expect(mapChatError(new Error('chat_not_found'))?.statusCode).toBe(404);
+    expect(mapChatError(new Error('not_a_chat_member'))?.statusCode).toBe(403);
+    expect(mapChatError(new Error('minor_chat_rule_violated'))?.statusCode).toBe(403);
+    expect(mapChatError(new Error('invalid_body'))?.statusCode).toBe(400);
+    const conditional = new Error('ConditionalCheckFailed');
+    conditional.name = 'ConditionalCheckFailedException';
+    expect(mapChatError(conditional)?.statusCode).toBe(409);
+    const txn = new Error('Transaction cancelled');
+    txn.name = 'TransactionCanceledException';
+    expect(mapChatError(txn)?.statusCode).toBe(409);
   });
 });
 

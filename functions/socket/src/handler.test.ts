@@ -62,18 +62,36 @@ const { handler } = await import('./handler.js');
  * @returns A WebSocket event.
  */
 const wsEvent = (
-  routeKey: '$connect' | '$disconnect',
+  routeKey: '$connect' | '$disconnect' | '$default' | 'health',
   connectionId: string,
-  token?: string,
-): APIGatewayProxyWebsocketEventV2 =>
-  ({
-    requestContext: { routeKey, connectionId },
-    queryStringParameters: token === undefined ? undefined : { token },
-  }) as APIGatewayProxyWebsocketEventV2;
+  options: {
+    token?: string;
+    authorizer?: unknown;
+    isHttp?: boolean;
+    path?: string;
+  } = {},
+): APIGatewayProxyWebsocketEventV2 | Record<string, unknown> => {
+  if (options.isHttp) {
+    return {
+      version: '2.0',
+      rawPath: options.path ?? '/socket/health',
+      requestContext: { http: { method: 'GET', path: options.path ?? '/socket/health' } },
+    };
+  }
+  return {
+    requestContext: {
+      routeKey,
+      connectionId,
+      ...(options.authorizer !== undefined ? { authorizer: options.authorizer } : {}),
+    },
+    queryStringParameters: options.token === undefined ? undefined : { token: options.token },
+  } as APIGatewayProxyWebsocketEventV2;
+};
 
 describe('socket handler', () => {
   beforeEach(() => {
     store.clear();
+    process.env.LOCAL_JWT_SECRET = 'socket-handler-test-secret';
   });
 
   afterEach(() => {
@@ -85,12 +103,81 @@ describe('socket handler', () => {
     const { accessToken } = issueLocalTokens(userId, `${userId}@example.com`);
     const connectionId = 'conn-1';
 
-    const connect = await handler(wsEvent('$connect', connectionId, accessToken));
+    const connect = await handler(wsEvent('$connect', connectionId, { token: accessToken }));
     expect(connect.statusCode).toBe(200);
     expect(store.has(`USER#${userId}\0CONN#${connectionId}`)).toBe(true);
 
     const disconnect = await handler(wsEvent('$disconnect', connectionId));
     expect(disconnect.statusCode).toBe(200);
     expect(store.has(`USER#${userId}\0CONN#${connectionId}`)).toBe(false);
+  });
+
+  it('connects from authorizer context including nested lambda claims', async () => {
+    const userId = randomUUID();
+    const direct = await handler(
+      wsEvent('$connect', 'conn-auth', { authorizer: { sub: userId } }),
+    );
+    expect(direct.statusCode).toBe(200);
+
+    const nested = await handler(
+      wsEvent('$connect', 'conn-nested', {
+        authorizer: { lambda: { principalId: `${userId}-nested` } },
+      }),
+    );
+    expect(nested.statusCode).toBe(200);
+
+    const badAuthorizer = await handler(
+      wsEvent('$connect', 'conn-bad', { authorizer: 'nope' }),
+    );
+    expect(badAuthorizer.statusCode).toBe(401);
+  });
+
+  it('acknowledges $default and serves HTTP health / 404', async () => {
+    expect((await handler(wsEvent('$default', 'c1'))).statusCode).toBe(200);
+    expect((await handler(wsEvent('health', 'c1', { isHttp: true }))).statusCode).toBe(200);
+    expect(
+      (
+        await handler(
+          wsEvent('health', 'c1', { isHttp: true, path: '/socket/unknown' }),
+        )
+      ).statusCode,
+    ).toBe(404);
+  });
+
+  it('disconnects a missing connection without error', async () => {
+    expect((await handler(wsEvent('$disconnect', 'missing'))).statusCode).toBe(200);
+  });
+
+  it('returns 404 for events that are neither HTTP nor WebSocket', async () => {
+    expect((await handler({ Records: [] })).statusCode).toBe(404);
+  });
+
+  it('returns 404 for unknown WebSocket routes and malformed disconnect ids', async () => {
+    expect(
+      (
+        await handler({
+          requestContext: { routeKey: 'unknown-route', connectionId: 'c1' },
+        } as APIGatewayProxyWebsocketEventV2)
+      ).statusCode,
+    ).toBe(404);
+
+    expect(
+      (
+        await handler({
+          requestContext: { routeKey: '$disconnect' },
+        } as APIGatewayProxyWebsocketEventV2)
+      ).statusCode,
+    ).toBe(200);
+
+    const userId = randomUUID();
+    const { accessToken } = issueLocalTokens(userId, `${userId}@example.com`);
+    expect(
+      (
+        await handler({
+          requestContext: { routeKey: '$connect' },
+          queryStringParameters: { token: accessToken },
+        } as APIGatewayProxyWebsocketEventV2)
+      ).statusCode,
+    ).toBe(400);
   });
 });

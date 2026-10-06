@@ -8,6 +8,7 @@ import { handler as chat } from './chat/src/handler.js';
 import { handler as fanout } from './fanout/src/handler.js';
 import { handler as identity } from './identity/src/handler.js';
 import { handler as media } from './media/src/handler.js';
+import { handler as places } from './places/src/handler.js';
 import { handler as schedule } from './schedule/src/handler.js';
 import { handler as socket } from './socket/src/handler.js';
 import { handler as teams } from './teams/src/handler.js';
@@ -19,6 +20,7 @@ const httpHandlers = [
   ['schedule', schedule],
   ['chat', chat],
   ['media', media],
+  ['places', places],
   ['socket', socket],
   ['fanout', fanout],
 ] as const;

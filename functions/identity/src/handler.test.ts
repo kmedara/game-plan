@@ -225,6 +225,26 @@ describe('identity handler (in-memory)', () => {
     ).toBe(true);
   });
 
+  it('returns invalid_birthday when age parsing fails after validation', async () => {
+    const minorChat = await import('../../lib/minor-chat.js');
+    const birthdaySpy = vi.spyOn(minorChat, 'accountKindFromBirthday').mockImplementationOnce(() => {
+      throw new Error('invalid_birthday');
+    });
+    const result = await handler(
+      httpEvent('POST', '/identity/register', {
+        body: {
+          email: `birthday-${randomUUID()}@example.com`,
+          password: 'Password1',
+          displayName: 'Test',
+          birthday: '1990-05-15',
+        },
+      }),
+    );
+    expect(result.statusCode).toBe(400);
+    expect(JSON.parse(result.body ?? '')).toEqual({ error: 'invalid_birthday' });
+    birthdaySpy.mockRestore();
+  });
+
   it('rejects duplicate email registration', async () => {
     const email = `dup-${randomUUID()}@example.com`;
     const body = {

@@ -78,5 +78,13 @@ describe('minor chat rule', () => {
   it('detects shared teams', () => {
     expect(sharesTeam(['t1', 't2'], ['t2'])).toBe(true);
     expect(sharesTeam(['t1'], ['t9'])).toBe(false);
+    expect(sharesTeam([], ['t1'])).toBe(false);
+    expect(sharesTeam(['t1'], [])).toBe(false);
+  });
+
+  it('allows adding a member when the minor rule passes', () => {
+    const existing = [person('a', 'adult', ['t1'])];
+    const teammate = person('b', 'adult', ['t1']);
+    expect(canAddChatMember(existing, teammate)).toBe(true);
   });
 });

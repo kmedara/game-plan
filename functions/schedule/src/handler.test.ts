@@ -249,6 +249,62 @@ describe('schedule handler (in-memory)', () => {
     expect(withRsvp?.rsvps).toEqual([{ userId: admin.userId, status: 'going' }]);
   });
 
+  it('stores and clears event coordinates with the location', async () => {
+    const admin = authFor();
+    const teamId = seedTeam({ userId: admin.userId, role: 'team_admin' });
+
+    const created = await handler(
+      httpEvent('POST', `/schedule/teams/${teamId}/events`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          eventType: 'game',
+          title: 'Away game',
+          startsAt: '2026-09-20T15:00:00.000Z',
+          location: 'Lincoln Park, Chicago, IL',
+          latitude: 41.9214,
+          longitude: -87.6513,
+        },
+      }),
+    );
+    expect(created.statusCode).toBe(201);
+    const event = bodyOf(created);
+    expect(event).toMatchObject({
+      location: 'Lincoln Park, Chicago, IL',
+      latitude: 41.9214,
+      longitude: -87.6513,
+    });
+    const eventId = event.eventId as string;
+
+    const window = await handler(
+      httpEvent('GET', `/schedule/teams/${teamId}`, {
+        headers: { authorization: admin.authorization },
+        query: {
+          from: '2026-09-20T00:00:00.000Z',
+          to: '2026-09-20T23:59:59.999Z',
+        },
+      }),
+    );
+    expect(window.statusCode).toBe(200);
+    const occurrence = (bodyOf(window).occurrences as Array<Record<string, unknown>>)[0];
+    expect(occurrence).toMatchObject({
+      eventId,
+      location: 'Lincoln Park, Chicago, IL',
+      latitude: 41.9214,
+      longitude: -87.6513,
+    });
+
+    const cleared = await handler(
+      httpEvent('PATCH', `/schedule/teams/${teamId}/events/${eventId}`, {
+        headers: { authorization: admin.authorization },
+        body: { location: null, latitude: null, longitude: null },
+      }),
+    );
+    expect(cleared.statusCode).toBe(200);
+    expect(bodyOf(cleared).location).toBeUndefined();
+    expect(bodyOf(cleared).latitude).toBeUndefined();
+    expect(bodyOf(cleared).longitude).toBeUndefined();
+  });
+
   it('creates a game, updates it, and rejects manage_events for a coach without the grant', async () => {
     const admin = authFor();
     const coach = authFor();
@@ -357,5 +413,161 @@ describe('schedule handler (in-memory)', () => {
     );
     const eventId = bodyOf(created).eventId as string;
     expect(store.has(itemKey(teamPk(teamId), eventSk(eventId)))).toBe(true);
+  });
+
+  it('covers schedule validation, updates, and missing resources', async () => {
+    const admin = authFor();
+    const teamId = seedTeam({ userId: admin.userId, role: 'team_admin' });
+
+    const badEnds = await handler(
+      httpEvent('POST', `/schedule/teams/${teamId}/events`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          eventType: 'practice',
+          title: 'Bad window',
+          startsAt: '2026-09-05T18:00:00.000Z',
+          endsAt: '2026-09-05T17:00:00.000Z',
+        },
+      }),
+    );
+    expect(badEnds.statusCode).toBe(400);
+    expect(bodyOf(badEnds)).toEqual({ error: 'invalid_ends_at' });
+
+    const created = await handler(
+      httpEvent('POST', `/schedule/teams/${teamId}/events`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          eventType: 'game',
+          title: 'Patch me',
+          startsAt: '2026-09-10T15:00:00.000Z',
+          endsAt: '2026-09-10T17:00:00.000Z',
+          location: 'Field 1',
+          latitude: 41.0,
+          longitude: -87.0,
+          recurrence: { frequency: 'WEEKLY', interval: 1, byWeekDay: ['TH'] },
+        },
+      }),
+    );
+    const eventId = bodyOf(created).eventId as string;
+
+    const emptyPatch = await handler(
+      httpEvent('PATCH', `/schedule/teams/${teamId}/events/${eventId}`, {
+        headers: { authorization: admin.authorization },
+        body: {},
+      }),
+    );
+    expect(emptyPatch.statusCode).toBe(400);
+    expect(bodyOf(emptyPatch)).toEqual({ error: 'invalid_body' });
+
+    const patched = await handler(
+      httpEvent('PATCH', `/schedule/teams/${teamId}/events/${eventId}`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          endsAt: '2026-09-10T18:00:00.000Z',
+          latitude: 42.0,
+          longitude: -88.0,
+          recurrence: null,
+        },
+      }),
+    );
+    expect(patched.statusCode).toBe(200);
+    expect(bodyOf(patched)).toMatchObject({
+      endsAt: '2026-09-10T18:00:00.000Z',
+      latitude: 42.0,
+      longitude: -88.0,
+    });
+    expect(bodyOf(patched).recurrence).toBeUndefined();
+
+    const recurring = await handler(
+      httpEvent('PATCH', `/schedule/teams/${teamId}/events/${eventId}`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          recurrence: { frequency: 'WEEKLY', interval: 1, byWeekDay: ['FR'] },
+        },
+      }),
+    );
+    expect(recurring.statusCode).toBe(200);
+    expect(bodyOf(recurring).recurrence).toMatchObject({ byWeekDay: ['FR'] });
+
+    const missingEvent = await handler(
+      httpEvent('GET', `/schedule/teams/${teamId}/events/${randomUUID()}`, {
+        headers: { authorization: admin.authorization },
+      }),
+    );
+    expect(missingEvent.statusCode).toBe(404);
+
+    const badOccurrence = await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/rsvps`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          eventId,
+          occurrenceStartsAt: '2026-01-01T00:00:00.000Z',
+          status: 'going',
+        },
+      }),
+    );
+    expect(badOccurrence.statusCode).toBe(404);
+    expect(bodyOf(badOccurrence)).toEqual({ error: 'not_found' });
+
+    const badWindow = await handler(
+      httpEvent('GET', `/schedule/teams/${teamId}`, {
+        headers: { authorization: admin.authorization },
+        query: { from: 'not-a-date', to: '2026-09-30T23:59:59.999Z' },
+      }),
+    );
+    expect(badWindow.statusCode).toBe(400);
+
+    expect(
+      (
+        await handler(
+          httpEvent('GET', `/teams/${teamId}`, {
+            headers: { authorization: admin.authorization },
+            query: {
+              from: '2026-09-01T00:00:00.000Z',
+              to: '2026-09-30T23:59:59.999Z',
+            },
+          }),
+        )
+      ).statusCode,
+    ).toBe(200);
+    expect((await handler(httpEvent('GET', '/health'))).statusCode).toBe(200);
+    expect((await handler(httpEvent('GET', '///'))).statusCode).toBe(404);
+    expect(
+      (
+        await handler({
+          version: '2.0',
+          requestContext: { http: { method: 'GET', path: '/schedule/teams/x' } },
+        } as APIGatewayProxyEventV2)
+      ).statusCode,
+    ).toBe(404);
+    expect((await handler(httpEvent('GET', '/schedule/teams'))).statusCode).toBe(404);
+    expect(
+      (
+        await handler(
+          httpEvent('GET', `teams/${teamId}/events/${eventId}`, {
+            headers: { authorization: admin.authorization },
+          }),
+        )
+      ).statusCode,
+    ).toBe(200);
+
+    const { requireMembership } = await import('./schedule-store.js');
+    await expect(requireMembership(teamId, randomUUID())).rejects.toThrow('not_a_member');
+  });
+});
+
+describe('mapScheduleError', () => {
+  it('maps schedule domain errors', async () => {
+    const { mapScheduleError } = await import('./routes/errors.js');
+    expect(mapScheduleError('nope')).toBeUndefined();
+    expect(mapScheduleError(new Error('token_expired'))?.statusCode).toBe(401);
+    expect(mapScheduleError(new Error('event_not_found'))?.statusCode).toBe(404);
+    expect(mapScheduleError(new Error('forbidden'))?.statusCode).toBe(403);
+    expect(mapScheduleError(new Error('invalid_window'))?.statusCode).toBe(400);
+    const conditional = new Error('ConditionalCheckFailed');
+    conditional.name = 'ConditionalCheckFailedException';
+    expect(mapScheduleError(conditional)?.statusCode).toBe(409);
+    expect(mapScheduleError(new Error('occurrence_not_found'))?.statusCode).toBe(404);
+    expect(mapScheduleError(new Error('unknown'))).toBeUndefined();
   });
 });
