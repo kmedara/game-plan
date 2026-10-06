@@ -11,7 +11,6 @@ import type {
   APIGatewayProxyWebsocketEventV2,
   SQSEvent,
 } from "aws-lambda";
-import type { z } from "zod";
 
 /** Subset of `requestContext` used to tell HTTP events apart from WebSocket events. */
 type RequestContext = {
@@ -234,94 +233,6 @@ export const parseJsonBody = (event: APIGatewayProxyEventV2): unknown => {
     return JSON.parse(raw) as unknown;
   } catch {
     return undefined;
-  }
-};
-
-/**
- * Formats Zod issues as a stable `{ error, details }` payload for `400` responses.
- *
- * @param issues - The Zod issue list from a failed `safeParse`.
- * @returns A JSON-serializable validation error body.
- */
-const zodErrorBody = (issues: z.ZodIssue[]) => ({
-  errors: issues.map((issue) => ({
-    field: issue.path.join("."),
-    message: issue.message,
-  })),
-});
-
-/**
- * Parses and validates the JSON body, then runs the route with a typed body.
- *
- * Empty bodies are treated as `{}` so optional-body schemas can still pass.
- *
- * @param schema - The Zod schema for the request body.
- * @param run - The route body that receives the validated value.
- * @returns A handler that returns `400` with Zod issue messages when validation fails.
- */
-export const withBodyValidation =
-  <T>(
-    schema: z.ZodType<T>,
-    run: (
-      event: APIGatewayProxyEventV2,
-      body: T,
-    ) => Promise<APIGatewayProxyStructuredResultV2>,
-  ) =>
-  async (
-    event: APIGatewayProxyEventV2,
-  ): Promise<APIGatewayProxyStructuredResultV2> => {
-    const parsed = schema.safeParse(parseJsonBody(event) ?? {});
-    if (!parsed.success) return badRequest(zodErrorBody(parsed.error.issues));
-    return run(event, parsed.data);
-  };
-
-/**
- * Validates query string parameters, then runs the route with a typed query.
- *
- * Missing `queryStringParameters` are treated as `{}`.
- *
- * @param schema - The Zod schema for the query object.
- * @param run - The route body that receives the validated value.
- * @returns A handler that returns `400` with Zod issue messages when validation fails.
- */
-export const withQueryValidation =
-  <T>(
-    schema: z.ZodType<T>,
-    run: (
-      event: APIGatewayProxyEventV2,
-      query: T,
-    ) => Promise<APIGatewayProxyStructuredResultV2>,
-  ) =>
-  async (
-    event: APIGatewayProxyEventV2,
-  ): Promise<APIGatewayProxyStructuredResultV2> => {
-    const parsed = schema.safeParse(event.queryStringParameters ?? {});
-    if (!parsed.success) return badRequest(zodErrorBody(parsed.error.issues));
-    return run(event, parsed.data);
-  };
-
-/**
- * Runs a route and maps known errors; unknown errors become `500`.
- *
- * @param run - The async route body.
- * @param mapError - Area-specific error mapper.
- * @returns The route response.
- */
-export const withErrors = async (
-  run: () => Promise<APIGatewayProxyStructuredResultV2>,
-  mapError: ErrorMappingFn,
-): Promise<APIGatewayProxyStructuredResultV2> => {
-  try {
-    return await run();
-  } catch (error) {
-    console.error(
-      JSON.stringify({
-        service: "http",
-        event: "error",
-        error: JSON.stringify(error),
-      }),
-    );
-    return mapError(error) ?? json(500, { error: "internal_error" });
   }
 };
 

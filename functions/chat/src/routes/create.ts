@@ -2,32 +2,31 @@
  * Create team channel and private chat routes.
  */
 
-import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import { createPrivateChatBodySchema, createTeamChannelBodySchema } from '@gameplan/schemas';
-import { json, withBodyValidation } from '../../../lib/http.js';
-import { requirePermission, requireUser } from '../../../lib/auth/index.js';
-
+import { assertPermission, requireUser } from '../../../lib/auth/index.js';
+import { json } from '../../../lib/http.js';
+import { route, withBodyValidation } from '../../../lib/pipeline.js';
 import { createPrivateChat, createTeamChannel } from '../chat-store.js';
-
 import { withChatErrors } from './errors.js';
 
 /**
  * Handles `POST /chat/channels`.
  *
+ * The team id is on the body, so the permission check runs in the handler.
+ *
  * @param event - The HTTP API event.
  * @returns The created team channel.
  */
-export const handleCreateTeamChannel = (
-  event: APIGatewayProxyEventV2,
-): Promise<APIGatewayProxyStructuredResultV2> =>
-  withChatErrors(async () =>
-    withBodyValidation(createTeamChannelBodySchema, async (event, body) => {
-      const user = await requireUser(event);
-      await requirePermission(user.userId, body.teamId, 'create_team_channels');
-      const created = await createTeamChannel({ userId: user.userId, body });
-      return json(201, created);
-    })(event),
-  );
+export const handleCreateTeamChannel = route(
+  withChatErrors(),
+  withBodyValidation(createTeamChannelBodySchema),
+  requireUser(),
+  async ({ user, body }) => {
+    await assertPermission(user.userId, body.teamId, 'create_team_channels');
+    const created = await createTeamChannel({ userId: user.userId, body });
+    return json(201, created);
+  },
+);
 
 /**
  * Handles `POST /chat/private`.
@@ -35,13 +34,12 @@ export const handleCreateTeamChannel = (
  * @param event - The HTTP API event.
  * @returns The created private chat.
  */
-export const handleCreatePrivateChat = (
-  event: APIGatewayProxyEventV2,
-): Promise<APIGatewayProxyStructuredResultV2> =>
-  withChatErrors(async () =>
-    withBodyValidation(createPrivateChatBodySchema, async (event, body) => {
-      const user = await requireUser(event);
-      const created = await createPrivateChat({ userId: user.userId, body });
-      return json(201, created);
-    })(event),
-  );
+export const handleCreatePrivateChat = route(
+  withChatErrors(),
+  withBodyValidation(createPrivateChatBodySchema),
+  requireUser(),
+  async ({ user, body }) => {
+    const created = await createPrivateChat({ userId: user.userId, body });
+    return json(201, created);
+  },
+);

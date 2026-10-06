@@ -12,10 +12,10 @@ import {
   NotAuthorizedException,
   UserNotFoundException,
 } from '@aws-sdk/client-cognito-identity-provider';
+import type { LoginBody } from '@gameplan/types';
 import type {
   IdentityProvider,
   IdentityTokens,
-  LoginInput,
   RegisterInput,
 } from './identity-provider.js';
 
@@ -143,7 +143,7 @@ export const createCognitoIdentityProvider = (): IdentityProvider => ({
     return fromAuthResult(userSub, email, loggedIn.AuthenticationResult ?? {});
   },
 
-  async login(input: LoginInput): Promise<IdentityTokens> {
+  async login(input: LoginBody): Promise<IdentityTokens> {
     const { clientId } = cognitoConfig();
     const email = input.email.trim().toLowerCase();
 

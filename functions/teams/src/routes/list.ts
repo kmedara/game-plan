@@ -2,11 +2,10 @@
  * `GET /teams` — list teams for the caller.
  */
 
-import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
-import { json } from '../../../lib/http.js';import { requireUser } from '../../../lib/auth/index.js';
-
+import { requireUser } from '../../../lib/auth/index.js';
+import { json } from '../../../lib/http.js';
+import { route } from '../../../lib/pipeline.js';
 import { listUserTeams, toTeamSummary } from '../team-store.js';
-
 import { withTeamsErrors } from './errors.js';
 
 /**
@@ -15,13 +14,13 @@ import { withTeamsErrors } from './errors.js';
  * @param event - The HTTP API event.
  * @returns The caller's team list.
  */
-export const handleListTeams = (
-  event: APIGatewayProxyEventV2,
-): Promise<APIGatewayProxyStructuredResultV2> =>
-  withTeamsErrors(async () => {
-    const user = await requireUser(event);
+export const handleListTeams = route(
+  withTeamsErrors(),
+  requireUser(),
+  async ({ user }) => {
     const teams = await listUserTeams(user.userId);
     return json(200, {
-      teams: teams.map(({ team, role }) => toTeamSummary(team, role)),
+      teams: teams.map(({ team, role, positions }) => toTeamSummary(team, role, positions)),
     });
-  });
+  },
+);

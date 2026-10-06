@@ -2,12 +2,12 @@
  * `GET /teams/:teamId` — load one team the caller belongs to.
  */
 
-import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
-import { json } from '../../../lib/http.js';import { requireUser } from '../../../lib/auth/index.js';
-
-import { requireMembership, requireTeam, toTeamSummary } from '../team-store.js';
-
+import { requireUser } from '../../../lib/auth/index.js';
+import { json } from '../../../lib/http.js';
+import { route } from '../../../lib/pipeline.js';
+import { toTeamSummary } from '../team-store.js';
 import { withTeamsErrors } from './errors.js';
+import { requireMembership, requireTeam } from './guard.js';
 
 /**
  * Handles `GET /teams/:teamId`.
@@ -16,13 +16,12 @@ import { withTeamsErrors } from './errors.js';
  * @param teamId - The team id from the path.
  * @returns The team record and the caller's role.
  */
-export const handleGetTeam = (
-  event: APIGatewayProxyEventV2,
-  teamId: string,
-): Promise<APIGatewayProxyStructuredResultV2> =>
-  withTeamsErrors(async () => {
-    const user = await requireUser(event);
-    const team = await requireTeam(teamId);
-    const member = await requireMembership(teamId, user.userId);
-    return json(200, toTeamSummary(team, member.role));
-  });
+export const handleGetTeam = route(
+  ['teamId'],
+  withTeamsErrors(),
+  requireUser(),
+  requireTeam(),
+  requireMembership(),
+  async ({ team, member }) =>
+    json(200, toTeamSummary(team, member.role, member.positions ?? [])),
+);

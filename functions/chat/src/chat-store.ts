@@ -9,7 +9,14 @@ import type {
   CreateTeamChannelBody,
   SendMessageBody,
 } from '@gameplan/schemas';
-import type { ChatKind, UserProfile } from '@gameplan/types';
+import type {
+  ChatKind,
+  ChatMessage,
+  ChatSummary,
+  MessageHistoryQuery,
+  MessagePage,
+  UserProfile,
+} from '@gameplan/types';
 import {
   MESSAGE_SK_PREFIX,
   TABLE_PK,
@@ -106,33 +113,13 @@ export type MessageItem = {
   createdAt: string;
 };
 
-/** Public chat summary returned by list and create. */
-export type ChatResponse = {
-  chatId: string;
-  kind: ChatKind;
-  name: string;
-  teamId?: string;
-  createdBy: string;
-  createdAt: string;
-};
-
-/** Public message shape. */
-export type MessageResponse = {
-  messageId: string;
-  chatId: string;
-  senderId: string;
-  body: string;
-  attachmentKeys?: string[];
-  createdAt: string;
-};
-
 /**
  * Maps a chat meta item to the wire response.
  *
  * @param item - The stored chat row.
  * @returns The public chat payload.
  */
-export const toChatResponse = (item: ChatMetaItem): ChatResponse => ({
+export const toChatResponse = (item: ChatMetaItem): ChatSummary => ({
   chatId: item.chatId,
   kind: item.kind,
   name: item.name,
@@ -142,12 +129,16 @@ export const toChatResponse = (item: ChatMetaItem): ChatResponse => ({
 });
 
 /**
- * Maps a message item to the wire response.
+ * Maps a message item to the wire response without sender identity.
+ *
+ * Callers attach the current profile through {@link withSenderIdentity}.
  *
  * @param item - The stored message row.
- * @returns The public message payload.
+ * @returns The public message payload, minus name and photo.
  */
-export const toMessageResponse = (item: MessageItem): MessageResponse => ({
+const toStoredMessage = (
+  item: MessageItem,
+): Omit<ChatMessage, 'senderDisplayName' | 'senderPhotoKey'> => ({
   messageId: item.messageId,
   chatId: item.chatId,
   senderId: item.senderId,
@@ -155,6 +146,55 @@ export const toMessageResponse = (item: MessageItem): MessageResponse => ({
   ...(item.attachmentKeys !== undefined ? { attachmentKeys: item.attachmentKeys } : {}),
   createdAt: item.createdAt,
 });
+
+/** Name shown when the sender's profile row is gone. */
+const FALLBACK_SENDER_NAME = 'Player';
+
+/** Current public identity of a message author. */
+type SenderIdentity = {
+  senderDisplayName: string;
+  senderPhotoKey?: string;
+};
+
+/**
+ * Loads the name and photo key shown beside a sender's messages.
+ *
+ * A missing profile still produces a name so the thread never shows a raw id.
+ *
+ * @param userId - The sender's user id.
+ * @returns Display name and photo key when the profile has one.
+ */
+const senderIdentity = async (userId: string): Promise<SenderIdentity> => {
+  const profile = await getProfile(userId);
+  if (profile === undefined) return { senderDisplayName: FALLBACK_SENDER_NAME };
+  return {
+    senderDisplayName: profile.displayName,
+    ...(profile.photoKey !== undefined ? { senderPhotoKey: profile.photoKey } : {}),
+  };
+};
+
+/**
+ * Attaches each sender's current name and photo to stored messages.
+ *
+ * Profiles are loaded once per distinct sender. Name and photo stay off the
+ * message row so a later profile edit shows up on older messages.
+ *
+ * @param items - Stored message rows.
+ * @returns Wire messages with sender identity.
+ */
+const withSenderIdentity = async (items: readonly MessageItem[]): Promise<ChatMessage[]> => {
+  const identities = new Map<string, SenderIdentity>();
+  const senderIds = [...new Set(items.map((item) => item.senderId))];
+  await Promise.all(
+    senderIds.map(async (senderId) => {
+      identities.set(senderId, await senderIdentity(senderId));
+    }),
+  );
+  return items.map((item) => ({
+    ...toStoredMessage(item),
+    ...(identities.get(item.senderId) ?? { senderDisplayName: FALLBACK_SENDER_NAME }),
+  }));
+};
 
 /**
  * Loads chat metadata, or throws when the chat does not exist.
@@ -278,9 +318,9 @@ const writeMemberships = async (
  * @param userId - The caller's user id.
  * @returns Chat summaries ordered by kind then name.
  */
-export const listUserChats = async (userId: string): Promise<ChatResponse[]> => {
+export const listUserChats = async (userId: string): Promise<ChatSummary[]> => {
   const memberships = await queryBySkPrefix<UserChatItem>(userPk(userId), USER_CHAT_SK_PREFIX);
-  const chats: ChatResponse[] = [];
+  const chats: ChatSummary[] = [];
   for (const membership of memberships) {
     if (typeof membership.chatId !== 'string') continue;
     const meta = await getItem<ChatMetaItem>(chatPk(membership.chatId), chatMetaSk());
@@ -306,7 +346,7 @@ export const listUserChats = async (userId: string): Promise<ChatResponse[]> => 
 export const createTeamChannel = async (input: {
   userId: string;
   body: CreateTeamChannelBody;
-}): Promise<ChatResponse> => {
+}): Promise<ChatSummary> => {
   const team = await getItem<TeamMetaItem>(teamPk(input.body.teamId), teamMetaSk());
   if (team === undefined) throw new Error('team_not_found');
   await requireTeamMembership(input.body.teamId, input.userId);
@@ -357,7 +397,7 @@ export const createTeamChannel = async (input: {
 export const createPrivateChat = async (input: {
   userId: string;
   body: CreatePrivateChatBody;
-}): Promise<ChatResponse> => {
+}): Promise<ChatSummary> => {
   const memberIds = [...new Set([input.userId, ...input.body.memberIds])];
   if (memberIds.length < 2) throw new Error('invalid_body');
 
@@ -411,8 +451,8 @@ export const searchAdultByEmail = async (email: string): Promise<UserProfile> =>
  */
 export const listMessages = async (
   chatId: string,
-  options: { limit?: number; cursor?: string } = {},
-): Promise<{ messages: MessageResponse[]; cursor?: string }> => {
+  options: MessageHistoryQuery = {},
+): Promise<MessagePage> => {
   await requireChat(chatId);
   const limit = options.limit ?? DEFAULT_MESSAGE_PAGE;
   const page = await queryPage<MessageItem>(
@@ -429,7 +469,7 @@ export const listMessages = async (
   );
 
   return {
-    messages: page.items.map(toMessageResponse),
+    messages: await withSenderIdentity(page.items),
     ...(page.cursor !== undefined ? { cursor: page.cursor } : {}),
   };
 };
@@ -444,7 +484,7 @@ export const sendMessage = async (input: {
   chatId: string;
   userId: string;
   body: SendMessageBody;
-}): Promise<MessageResponse> => {
+}): Promise<ChatMessage> => {
   await requireChat(input.chatId);
   await requireChatMembership(input.chatId, input.userId);
 
@@ -464,17 +504,22 @@ export const sendMessage = async (input: {
   };
 
   await putItem(item);
+  const identity = await senderIdentity(input.userId);
   await enqueueFanout({
     type: 'chat_message',
     chatId: input.chatId,
     messageId,
     senderId: input.userId,
+    senderDisplayName: identity.senderDisplayName,
+    ...(identity.senderPhotoKey !== undefined
+      ? { senderPhotoKey: identity.senderPhotoKey }
+      : {}),
     body: input.body.body,
     createdAt,
     ...(input.body.attachmentKeys !== undefined
       ? { attachmentKeys: input.body.attachmentKeys }
       : {}),
   });
-  return toMessageResponse(item);
+  return { ...toStoredMessage(item), ...identity };
 };
 

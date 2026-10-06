@@ -6,6 +6,7 @@ import type { APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import { refreshSetCookie } from '../../../lib/auth/index.js';
 import type { SessionTokens, UserProfile } from '@gameplan/types';
 import { conflict, json, notFound, unauthorized, withCookies } from '../../../lib/http.js';
+import { withMappedErrors } from '../../../lib/pipeline.js';
 
 /**
  * Builds a session JSON body, optionally including the refresh token.
@@ -76,6 +77,8 @@ export const mapError = (error: unknown): APIGatewayProxyStructuredResultV2 | un
       return unauthorized(error.message === 'unauthorized' ? 'unauthorized' : 'invalid_token');
     case 'profile_not_found':
       return notFound();
+    case 'invalid_photo_key':
+      return json(400, { error: 'invalid_photo_key' });
     case 'seed_user_id_required':
       return json(500, { error: 'seed_user_id_required' });
     case 'cognito_not_configured':
@@ -84,3 +87,10 @@ export const mapError = (error: unknown): APIGatewayProxyStructuredResultV2 | un
       return undefined;
   }
 };
+
+/**
+ * Catches identity route errors and maps known ones; unknown errors become `500`.
+ *
+ * @returns A pipeline step that leaves the context unchanged.
+ */
+export const withIdentityErrors = () => withMappedErrors(mapError);

@@ -4,6 +4,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve, sep } from 'node:path';
 import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { MAX_UPLOAD_BYTES, type PresignUploadBody } from '@gameplan/schemas';
@@ -143,6 +145,38 @@ export const createDownloadUrl = async (
  * @param contentType - The content type header.
  * @param body - Raw file bytes.
  */
+/**
+ * Directory that keeps local uploads across process restarts.
+ *
+ * @returns The directory from `MEDIA_LOCAL_DIR`, or `undefined` when unset.
+ */
+const localMediaDir = (): string | undefined => {
+  const dir = process.env.MEDIA_LOCAL_DIR?.trim();
+  return dir !== undefined && dir.length > 0 ? dir : undefined;
+};
+
+/**
+ * Resolves a local object path and rejects keys that leave the media directory.
+ *
+ * @param objectKey - The object key.
+ * @returns Body and content-type paths, or `undefined` when disk storage is off.
+ */
+const localFiles = (
+  objectKey: string,
+): { bodyPath: string; typePath: string } | undefined => {
+  const dir = localMediaDir();
+  if (dir === undefined) return undefined;
+  if (objectKey.includes('..') || objectKey.startsWith('/') || objectKey.includes('\\')) {
+    throw new Error('invalid_object_key');
+  }
+  const root = resolve(dir);
+  const bodyPath = resolve(join(dir, objectKey));
+  if (bodyPath !== root && !bodyPath.startsWith(`${root}${sep}`)) {
+    throw new Error('invalid_object_key');
+  }
+  return { bodyPath, typePath: `${bodyPath}.type` };
+};
+
 export const putLocalObject = (
   objectKey: string,
   contentType: string,
@@ -150,6 +184,11 @@ export const putLocalObject = (
 ): void => {
   if (body.byteLength > MAX_UPLOAD_BYTES) throw new Error('payload_too_large');
   localObjects.set(objectKey, { contentType, body });
+  const files = localFiles(objectKey);
+  if (files === undefined) return;
+  mkdirSync(dirname(files.bodyPath), { recursive: true });
+  writeFileSync(files.bodyPath, body);
+  writeFileSync(files.typePath, contentType, 'utf8');
 };
 
 /**
@@ -160,4 +199,18 @@ export const putLocalObject = (
  */
 export const getLocalObject = (
   objectKey: string,
-): { contentType: string; body: Buffer } | undefined => localObjects.get(objectKey);
+): { contentType: string; body: Buffer } | undefined => {
+  const cached = localObjects.get(objectKey);
+  if (cached !== undefined) return cached;
+  const files = localFiles(objectKey);
+  if (files === undefined) return undefined;
+  try {
+    const body = readFileSync(files.bodyPath);
+    const contentType = readFileSync(files.typePath, 'utf8');
+    const object = { contentType, body };
+    localObjects.set(objectKey, object);
+    return object;
+  } catch {
+    return undefined;
+  }
+};

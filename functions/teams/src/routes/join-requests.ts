@@ -2,10 +2,10 @@
  * Join-request create, list, approve, and reject routes.
  */
 
-import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
-import { getProfile, requirePermission, requireUser } from '../../../lib/auth/index.js';
 import { approveJoinRequestBodySchema } from '@gameplan/schemas';
-import { json, withBodyValidation } from '../../../lib/http.js';
+import { getProfile, requirePermission, requireUser } from '../../../lib/auth/index.js';
+import { json } from '../../../lib/http.js';
+import { route, withBodyValidation } from '../../../lib/pipeline.js';
 import {
   approveJoinRequest,
   createJoinRequest,
@@ -13,7 +13,6 @@ import {
   rejectJoinRequest,
   requireMembership,
 } from '../team-store.js';
-
 import { withTeamsErrors } from './errors.js';
 
 /**
@@ -23,12 +22,11 @@ import { withTeamsErrors } from './errors.js';
  * @param teamId - The team id from the path.
  * @returns The pending join request.
  */
-export const handleCreateJoinRequest = (
-  event: APIGatewayProxyEventV2,
-  teamId: string,
-): Promise<APIGatewayProxyStructuredResultV2> =>
-  withTeamsErrors(async () => {
-    const user = await requireUser(event);
+export const handleCreateJoinRequest = route(
+  ['teamId'],
+  withTeamsErrors(),
+  requireUser(),
+  async ({ teamId, user }) => {
     const request = await createJoinRequest(teamId, user.userId);
     return json(201, {
       requestId: request.requestId,
@@ -36,7 +34,8 @@ export const handleCreateJoinRequest = (
       userId: request.userId,
       createdAt: request.createdAt,
     });
-  });
+  },
+);
 
 /**
  * Handles `GET /teams/:teamId/join-requests`.
@@ -45,13 +44,12 @@ export const handleCreateJoinRequest = (
  * @param teamId - The team id from the path.
  * @returns Pending join requests for the team.
  */
-export const handleListJoinRequests = (
-  event: APIGatewayProxyEventV2,
-  teamId: string,
-): Promise<APIGatewayProxyStructuredResultV2> =>
-  withTeamsErrors(async () => {
-    const user = await requireUser(event);
-    await requirePermission(user.userId, teamId, 'approve_join_requests');
+export const handleListJoinRequests = route(
+  ['teamId'],
+  withTeamsErrors(),
+  requireUser(),
+  requirePermission('approve_join_requests'),
+  async ({ teamId, user }) => {
     await requireMembership(teamId, user.userId);
     const requests = await listJoinRequests(teamId);
     const enriched = await Promise.all(
@@ -72,7 +70,8 @@ export const handleListJoinRequests = (
       }),
     );
     return json(200, { joinRequests: enriched });
-  });
+  },
+);
 
 /**
  * Handles `POST /teams/:teamId/join-requests/:requestId/approve`.
@@ -82,26 +81,23 @@ export const handleListJoinRequests = (
  * @param requestId - The join request id from the path.
  * @returns The new membership.
  */
-export const handleApproveJoinRequest = (
-  event: APIGatewayProxyEventV2,
-  teamId: string,
-  requestId: string,
-): Promise<APIGatewayProxyStructuredResultV2> =>
-  withTeamsErrors(async () =>
-    withBodyValidation(approveJoinRequestBodySchema, async (event, body) => {
-      const user = await requireUser(event);
-      await requirePermission(user.userId, teamId, 'approve_join_requests');
-
-      const { team, member } = await approveJoinRequest(teamId, requestId, body.role);
-      return json(200, {
-        teamId: team.teamId,
-        userId: member.userId,
-        role: member.role,
-        joinedAt: member.joinedAt,
-        defaultChatId: team.defaultChatId,
-      });
-    })(event),
-  );
+export const handleApproveJoinRequest = route(
+  ['teamId', 'requestId'],
+  withTeamsErrors(),
+  withBodyValidation(approveJoinRequestBodySchema),
+  requireUser(),
+  requirePermission('approve_join_requests'),
+  async ({ teamId, requestId, body }) => {
+    const { team, member } = await approveJoinRequest(teamId, requestId, body.role);
+    return json(200, {
+      teamId: team.teamId,
+      userId: member.userId,
+      role: member.role,
+      joinedAt: member.joinedAt,
+      defaultChatId: team.defaultChatId,
+    });
+  },
+);
 
 /**
  * Handles `POST /teams/:teamId/join-requests/:requestId/reject`.
@@ -111,14 +107,13 @@ export const handleApproveJoinRequest = (
  * @param requestId - The join request id from the path.
  * @returns An empty success body.
  */
-export const handleRejectJoinRequest = (
-  event: APIGatewayProxyEventV2,
-  teamId: string,
-  requestId: string,
-): Promise<APIGatewayProxyStructuredResultV2> =>
-  withTeamsErrors(async () => {
-    const user = await requireUser(event);
-    await requirePermission(user.userId, teamId, 'approve_join_requests');
+export const handleRejectJoinRequest = route(
+  ['teamId', 'requestId'],
+  withTeamsErrors(),
+  requireUser(),
+  requirePermission('approve_join_requests'),
+  async ({ teamId, requestId }) => {
     await rejectJoinRequest(teamId, requestId);
     return { statusCode: 204 };
-  });
+  },
+);

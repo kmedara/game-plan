@@ -4,7 +4,15 @@
 
 import { randomUUID } from 'node:crypto';
 import type { CreateEventBody, UpdateEventBody } from '@gameplan/schemas';
-import type { EventType, RecurrenceRule, RsvpStatus } from '@gameplan/types';
+import type {
+  EventResponse,
+  EventType,
+  RecurrenceRule,
+  RsvpResponse,
+  RsvpStatus,
+  ScheduleList,
+  ScheduleOccurrence,
+} from '@gameplan/types';
 import {
   assertScheduleWindow,
   buildRRule,
@@ -68,32 +76,6 @@ export type RsvpItem = {
   userId: string;
   status: RsvpStatus;
   updatedAt: string;
-};
-
-/** Public event shape returned by create, get, and update. */
-export type EventResponse = {
-  eventId: string;
-  teamId: string;
-  eventType: EventType;
-  title: string;
-  startsAt: string;
-  endsAt?: string;
-  location?: string;
-  recurrence?: RecurrenceRule;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-/** One expanded occurrence with RSVPs for that instant. */
-export type OccurrenceResponse = {
-  eventId: string;
-  eventType: EventType;
-  title: string;
-  startsAt: string;
-  endsAt?: string;
-  location?: string;
-  rsvps: Array<{ userId: string; status: RsvpStatus }>;
 };
 
 /**
@@ -288,7 +270,7 @@ export const listOccurrences = async (
   teamId: string,
   fromIso: string,
   toIso: string,
-): Promise<{ teamId: string; from: string; to: string; occurrences: OccurrenceResponse[] }> => {
+): Promise<ScheduleList> => {
   await requireTeam(teamId);
   const { from, to } = assertScheduleWindow(fromIso, toIso);
 
@@ -304,7 +286,7 @@ export const listOccurrences = async (
     rsvpsByOccurrence.set(key, list);
   }
 
-  const occurrences: OccurrenceResponse[] = [];
+  const occurrences: ScheduleOccurrence[] = [];
   for (const event of events) {
     const starts = expandOccurrenceStarts(event.startsAt, event.recurrence, from, to);
     for (const start of starts) {
@@ -343,13 +325,7 @@ export const upsertRsvp = async (input: {
   eventId: string;
   occurrenceStartsAt: string;
   status: RsvpStatus;
-}): Promise<{
-  eventId: string;
-  occurrenceStartsAt: string;
-  userId: string;
-  status: RsvpStatus;
-  updatedAt: string;
-}> => {
+}): Promise<RsvpResponse> => {
   await requireTeam(input.teamId);
   const event = await requireEvent(input.teamId, input.eventId);
   const occurrence = parseInstant(input.occurrenceStartsAt, 'occurrence_starts_at');

@@ -5,10 +5,10 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { getItem, putItem } from '../dynamo/access.js';
 import { TABLE_PK, TABLE_SK, profileSk, userPk } from '../dynamo/keys.js';
+import type { LoginBody } from '@gameplan/types';
 import type {
   IdentityProvider,
   IdentityTokens,
-  LoginInput,
   RegisterInput,
   UserProfileItem,
 } from './identity-provider.js';
@@ -94,7 +94,7 @@ export const createLocalIdentityProvider = (): IdentityProvider => ({
     return { ...tokens, userId, email };
   },
 
-  async login(input: LoginInput): Promise<IdentityTokens> {
+  async login(input: LoginBody): Promise<IdentityTokens> {
     const email = input.email.trim().toLowerCase();
     const profile = await findProfileByEmail(email);
     if (profile?.passwordHash === undefined) throw new Error('invalid_credentials');

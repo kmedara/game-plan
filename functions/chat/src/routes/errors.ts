@@ -11,6 +11,7 @@ import {
   notFound,
   unauthorized,
 } from '../../../lib/http.js';
+import { withMappedErrors } from '../../../lib/pipeline.js';
 
 /**
  * Maps known domain errors to structured HTTP responses.
@@ -53,18 +54,9 @@ export const mapChatError = (
 };
 
 /**
- * Runs a route and maps known errors; unknown errors become `500`.
+ * Catches chat route errors and maps known ones; unknown errors become `500`.
  *
- * @param run - The async route body.
- * @returns The route response.
+ * @returns A pipeline step that leaves the context unchanged.
  */
-export const withChatErrors = async (
-  run: () => Promise<APIGatewayProxyStructuredResultV2>,
-): Promise<APIGatewayProxyStructuredResultV2> => {
-  try {
-    return await run();
-  } catch (error) {
-    return mapChatError(error) ?? json(500, { error: 'internal_error' });
-  }
-};
+export const withChatErrors = () => withMappedErrors(mapChatError);
 

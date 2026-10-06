@@ -2,7 +2,7 @@
  * Shared identity provider contract for Cognito and local laptop auth.
  */
 
-import type { AccountKind, UserProfile } from '@gameplan/types';
+import type { AccountKind, LoginBody, UserProfile } from '@gameplan/types';
 
 /** Result of register, login, or refresh. */
 export type IdentityTokens = {
@@ -26,12 +26,6 @@ export type RegisterInput = {
   accountKind: AccountKind;
 };
 
-/** Input for email-and-password login. */
-export type LoginInput = {
-  email: string;
-  password: string;
-};
-
 /**
  * Creates accounts and issues tokens. Implementations talk to Cognito in the
  * cloud, or to DynamoDB plus local JWTs on the laptop.
@@ -51,7 +45,7 @@ export type IdentityProvider = {
    * @param input - Email and password.
    * @returns Issued tokens and the user id.
    */
-  login: (input: LoginInput) => Promise<IdentityTokens>;
+  login: (input: LoginBody) => Promise<IdentityTokens>;
 
   /**
    * Exchanges a refresh token for a new access token (and rotated refresh).
@@ -79,6 +73,8 @@ export type UserProfileItem = {
   accountKind: AccountKind;
   /** Calendar date of birth (`YYYY-MM-DD`) when collected. */
   birthday?: string;
+  /** Media object key for the profile photo, when the user has set one. */
+  photoKey?: string;
   createdAt: string;
   /** Present only for the local identity provider. */
   passwordHash?: string;
@@ -96,5 +92,6 @@ export const toUserProfile = (item: UserProfileItem): UserProfile => ({
   displayName: item.displayName,
   accountKind: item.accountKind,
   ...(item.birthday !== undefined ? { birthday: item.birthday } : {}),
+  ...(item.photoKey !== undefined ? { photoKey: item.photoKey } : {}),
   needsProfileCompletion: item.birthday === undefined,
 });

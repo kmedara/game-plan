@@ -2,13 +2,11 @@
  * Message history and send routes.
  */
 
-import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import { messageHistoryQuerySchema, sendMessageBodySchema } from '@gameplan/schemas';
-import { json, withBodyValidation, withQueryValidation } from '../../../lib/http.js';
 import { requireUser } from '../../../lib/auth/index.js';
-
+import { json } from '../../../lib/http.js';
+import { route, withBodyValidation, withQueryValidation } from '../../../lib/pipeline.js';
 import { listMessages, requireChatMembership, sendMessage } from '../chat-store.js';
-
 import { withChatErrors } from './errors.js';
 
 /**
@@ -18,18 +16,17 @@ import { withChatErrors } from './errors.js';
  * @param chatId - The chat id from the path.
  * @returns Newest-first messages and an optional page cursor.
  */
-export const handleListMessages = (
-  event: APIGatewayProxyEventV2,
-  chatId: string,
-): Promise<APIGatewayProxyStructuredResultV2> =>
-  withChatErrors(async () =>
-    withQueryValidation(messageHistoryQuerySchema, async (event, query) => {
-      const user = await requireUser(event);
-      await requireChatMembership(chatId, user.userId);
-      const page = await listMessages(chatId, query);
-      return json(200, page);
-    })(event),
-  );
+export const handleListMessages = route(
+  ['chatId'],
+  withChatErrors(),
+  withQueryValidation(messageHistoryQuerySchema),
+  requireUser(),
+  async ({ chatId, user, query }) => {
+    await requireChatMembership(chatId, user.userId);
+    const page = await listMessages(chatId, query);
+    return json(200, page);
+  },
+);
 
 /**
  * Handles `POST /chat/:chatId/messages`.
@@ -38,18 +35,17 @@ export const handleListMessages = (
  * @param chatId - The chat id from the path.
  * @returns The persisted message.
  */
-export const handleSendMessage = (
-  event: APIGatewayProxyEventV2,
-  chatId: string,
-): Promise<APIGatewayProxyStructuredResultV2> =>
-  withChatErrors(async () =>
-    withBodyValidation(sendMessageBodySchema, async (event, body) => {
-      const user = await requireUser(event);
-      const message = await sendMessage({
-        chatId,
-        userId: user.userId,
-        body,
-      });
-      return json(201, message);
-    })(event),
-  );
+export const handleSendMessage = route(
+  ['chatId'],
+  withChatErrors(),
+  withBodyValidation(sendMessageBodySchema),
+  requireUser(),
+  async ({ chatId, user, body }) => {
+    const message = await sendMessage({
+      chatId,
+      userId: user.userId,
+      body,
+    });
+    return json(201, message);
+  },
+);

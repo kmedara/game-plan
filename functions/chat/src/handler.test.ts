@@ -166,6 +166,7 @@ const seedProfile = (input: {
   email: string;
   accountKind: AccountKind;
   displayName?: string;
+  photoKey?: string;
 }): void => {
   const email = input.email.trim().toLowerCase();
   store.set(itemKey(userPk(input.userId), profileSk()), {
@@ -176,6 +177,7 @@ const seedProfile = (input: {
     displayName: input.displayName ?? 'Player',
     accountKind: input.accountKind,
     createdAt: new Date().toISOString(),
+    ...(input.photoKey !== undefined ? { photoKey: input.photoKey } : {}),
   });
   emailIndex.set(email, { PK: userPk(input.userId), SK: profileSk() });
 };
@@ -409,7 +411,13 @@ describe('adult search', () => {
 describe('messages', () => {
   it('persists a message and lists history newest first', async () => {
     const { authorization, userId } = authFor();
-    seedProfile({ userId, email: `${userId}@example.com`, accountKind: 'adult' });
+    seedProfile({
+      userId,
+      email: `${userId}@example.com`,
+      accountKind: 'adult',
+      displayName: 'Ada Player',
+      photoKey: `uploads/${userId}/photo`,
+    });
     const { defaultChatId } = seedTeam({
       members: [{ userId, role: 'team_admin' }],
     });
@@ -421,6 +429,11 @@ describe('messages', () => {
       }),
     );
     expect(first.statusCode).toBe(201);
+    expect(JSON.parse(first.body ?? '')).toMatchObject({
+      body: 'first',
+      senderDisplayName: 'Ada Player',
+      senderPhotoKey: `uploads/${userId}/photo`,
+    });
 
     // Slightly later SK so reverse order is deterministic in the in-memory store.
     const later = new Date(Date.now() + 1000).toISOString();
@@ -442,8 +455,14 @@ describe('messages', () => {
       }),
     );
     expect(list.statusCode).toBe(200);
-    const page = JSON.parse(list.body ?? '') as { messages: Array<{ body: string }> };
+    const page = JSON.parse(list.body ?? '') as {
+      messages: Array<{ body: string; senderDisplayName: string; senderPhotoKey?: string }>;
+    };
     expect(page.messages.map((m) => m.body)).toEqual(['second', 'first']);
+    expect(page.messages[0]).toMatchObject({
+      senderDisplayName: 'Ada Player',
+      senderPhotoKey: `uploads/${userId}/photo`,
+    });
   });
 
   it('lists chats for the caller', async () => {

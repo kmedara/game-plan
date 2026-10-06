@@ -59,6 +59,8 @@ export const putProfile = async (input: {
   displayName: string;
   accountKind: AccountKind;
   birthday?: string;
+  /** Pass `null` to clear a photo. Omit to leave the row without one. */
+  photoKey?: string | null;
   passwordHash?: string;
   createdAt?: string;
 }): Promise<UserProfileItem> => {
@@ -71,6 +73,9 @@ export const putProfile = async (input: {
     accountKind: input.accountKind,
     createdAt: input.createdAt ?? new Date().toISOString(),
     ...(input.birthday !== undefined ? { birthday: input.birthday } : {}),
+    ...(input.photoKey !== undefined && input.photoKey !== null
+      ? { photoKey: input.photoKey }
+      : {}),
     ...(input.passwordHash !== undefined ? { passwordHash: input.passwordHash } : {}),
   };
   await putItem(item);

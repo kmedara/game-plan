@@ -10,8 +10,8 @@ import {
   forbidden,
   notFound,
   unauthorized,
-  withErrors,
 } from "../../../lib/http.js";
+import { logCaughtError, withMappedErrors } from "../../../lib/pipeline.js";
 
 /**
  * Maps known domain errors to structured HTTP responses.
@@ -45,6 +45,7 @@ export const mapTeamsError: ErrorMappingFn = (
       return conflict(error.message);
     case "manage_permissions_required_for_team_admin":
     case "invalid_body":
+    case "too_many_positions":
       return badRequest(error.message);
     case "TransactionCanceledException":
       return conflict("transaction_conflict");
@@ -60,11 +61,9 @@ export const mapTeamsError: ErrorMappingFn = (
 };
 
 /**
- * Runs a teams route and maps known errors; unknown errors become `500`.
+ * Catches teams route errors and maps known ones; unknown errors become `500`.
  *
- * @param run - The async route body.
- * @returns The route response.
+ * @returns A pipeline step that leaves the context unchanged.
  */
-export const withTeamsErrors = (
-  run: () => Promise<APIGatewayProxyStructuredResultV2>,
-): Promise<APIGatewayProxyStructuredResultV2> => withErrors(run, mapTeamsError);
+export const withTeamsErrors = () =>
+  withMappedErrors(mapTeamsError, { onError: logCaughtError });

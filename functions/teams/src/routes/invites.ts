@@ -2,11 +2,10 @@
  * Invite create, list, lookup, and accept routes.
  */
 
-import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import { createInviteBodySchema } from '@gameplan/schemas';
-import { json, withBodyValidation } from '../../../lib/http.js';
 import { requirePermission, requireUser } from '../../../lib/auth/index.js';
-
+import { json } from '../../../lib/http.js';
+import { route, withBodyValidation } from '../../../lib/pipeline.js';
 import {
   acceptInvite,
   createInvite,
@@ -14,7 +13,6 @@ import {
   listInvites,
   requireTeam,
 } from '../team-store.js';
-
 import { withTeamsErrors } from './errors.js';
 
 /**
@@ -24,29 +22,27 @@ import { withTeamsErrors } from './errors.js';
  * @param teamId - The team id from the path.
  * @returns The new invite code.
  */
-export const handleCreateInvite = (
-  event: APIGatewayProxyEventV2,
-  teamId: string,
-): Promise<APIGatewayProxyStructuredResultV2> =>
-  withTeamsErrors(async () =>
-    withBodyValidation(createInviteBodySchema, async (event, body) => {
-      const user = await requireUser(event);
-      await requirePermission(user.userId, teamId, 'invite_members');
+export const handleCreateInvite = route(
+  ['teamId'],
+  withTeamsErrors(),
+  withBodyValidation(createInviteBodySchema),
+  requireUser(),
+  requirePermission('invite_members'),
+  async ({ teamId, user, body }) => {
+    const invite = await createInvite({
+      teamId,
+      createdBy: user.userId,
+      role: body.role ?? 'player',
+    });
 
-      const invite = await createInvite({
-        teamId,
-        createdBy: user.userId,
-        role: body.role ?? 'player',
-      });
-
-      return json(201, {
-        code: invite.code,
-        teamId: invite.teamId,
-        role: invite.role,
-        createdAt: invite.createdAt,
-      });
-    })(event),
-  );
+    return json(201, {
+      code: invite.code,
+      teamId: invite.teamId,
+      role: invite.role,
+      createdAt: invite.createdAt,
+    });
+  },
+);
 
 /**
  * Handles `GET /teams/:teamId/invites`.
@@ -55,13 +51,12 @@ export const handleCreateInvite = (
  * @param teamId - The team id from the path.
  * @returns Active invites for the team.
  */
-export const handleListInvites = (
-  event: APIGatewayProxyEventV2,
-  teamId: string,
-): Promise<APIGatewayProxyStructuredResultV2> =>
-  withTeamsErrors(async () => {
-    const user = await requireUser(event);
-    await requirePermission(user.userId, teamId, 'invite_members');
+export const handleListInvites = route(
+  ['teamId'],
+  withTeamsErrors(),
+  requireUser(),
+  requirePermission('invite_members'),
+  async ({ teamId }) => {
     await requireTeam(teamId);
     const invites = await listInvites(teamId);
     return json(200, {
@@ -73,7 +68,8 @@ export const handleListInvites = (
         createdAt: invite.createdAt,
       })),
     });
-  });
+  },
+);
 
 /**
  * Handles `GET /teams/invite/:code`.
@@ -82,12 +78,11 @@ export const handleListInvites = (
  * @param code - The invite code from the path.
  * @returns Invite metadata and the team name.
  */
-export const handleGetInvite = (
-  event: APIGatewayProxyEventV2,
-  code: string,
-): Promise<APIGatewayProxyStructuredResultV2> =>
-  withTeamsErrors(async () => {
-    await requireUser(event);
+export const handleGetInvite = route(
+  ['code'],
+  withTeamsErrors(),
+  requireUser(),
+  async ({ code }) => {
     const invite = await getInviteByCode(code);
     const team = await requireTeam(invite.teamId);
     return json(200, {
@@ -97,7 +92,8 @@ export const handleGetInvite = (
       role: invite.role,
       createdAt: invite.createdAt,
     });
-  });
+  },
+);
 
 /**
  * Handles `POST /teams/invite/:code/accept`.
@@ -106,12 +102,11 @@ export const handleGetInvite = (
  * @param code - The invite code from the path.
  * @returns The team membership created by accepting.
  */
-export const handleAcceptInvite = (
-  event: APIGatewayProxyEventV2,
-  code: string,
-): Promise<APIGatewayProxyStructuredResultV2> =>
-  withTeamsErrors(async () => {
-    const user = await requireUser(event);
+export const handleAcceptInvite = route(
+  ['code'],
+  withTeamsErrors(),
+  requireUser(),
+  async ({ code, user }) => {
     const { team, member } = await acceptInvite(code, user.userId);
     return json(200, {
       teamId: team.teamId,
@@ -121,4 +116,5 @@ export const handleAcceptInvite = (
       role: member.role,
       joinedAt: member.joinedAt,
     });
-  });
+  },
+);

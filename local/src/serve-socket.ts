@@ -7,7 +7,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type {
   APIGatewayProxyStructuredResultV2,
   APIGatewayProxyWebsocketEventV2,
@@ -81,8 +81,11 @@ const handlePostToConnection = (
       res.end(JSON.stringify({ message: 'Gone' }));
       return;
     }
-    const data = Buffer.concat(chunks);
+    const data = Buffer.concat(chunks).toString('utf8');
     try {
+      // `ws` sends a Buffer as a binary frame. The browser then exposes a Blob,
+      // and the chat client drops it, so only the sender (HTTP response) updates.
+      // API Gateway PostToConnection delivers this JSON as a text frame.
       socket.send(data);
       res.writeHead(200);
       res.end();
@@ -96,10 +99,11 @@ const handlePostToConnection = (
 /**
  * Serves HTTP health on the same port as a local WebSocket the proxy can upgrade to.
  *
- * @param port - The loopback port to bind.
+ * @param port - The loopback port to bind. `0` asks the OS for a free port.
  * @param handle - The socket area handler.
+ * @returns The HTTP server, so tests can close it.
  */
-export const serveSocket = (port: number, handle: SocketHandler): void => {
+export const serveSocket = (port: number, handle: SocketHandler): Server => {
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const connectionMatch = url.pathname.match(/^\/@connections\/([^/]+)$/u);
@@ -140,6 +144,9 @@ export const serveSocket = (port: number, handle: SocketHandler): void => {
   });
 
   server.listen(port, '127.0.0.1', () => {
-    console.info(`socket :${port}`);
+    const bound = server.address();
+    const boundPort = typeof bound === 'object' && bound !== null ? bound.port : port;
+    console.info(`socket :${boundPort}`);
   });
+  return server;
 };

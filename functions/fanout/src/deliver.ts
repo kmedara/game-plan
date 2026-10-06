@@ -12,7 +12,8 @@ import {
   PostToConnectionCommand,
 } from '@aws-sdk/client-apigatewaymanagementapi';
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
-import type { FanoutJob } from '../../lib/fanout-enqueue.js';
+import { fanoutJobSchema } from '@gameplan/schemas';
+import type { FanoutJob } from '@gameplan/types';
 import {
   CHAT_MEMBER_SK_PREFIX,
   CONNECTION_SK_PREFIX,
@@ -242,42 +243,6 @@ export const deliverFanoutJob = async (job: FanoutJob): Promise<void> => {
  * @returns The job, or `undefined` when the shape is wrong.
  */
 export const parseFanoutJob = (body: unknown): FanoutJob | undefined => {
-  if (typeof body !== 'object' || body === null) return undefined;
-  const record = body as Record<string, unknown>;
-  if (record.type === 'schedule_changed') {
-    if (typeof record.teamId !== 'string' || typeof record.eventId !== 'string') {
-      return undefined;
-    }
-    return {
-      type: 'schedule_changed',
-      teamId: record.teamId,
-      eventId: record.eventId,
-    };
-  }
-  if (record.type === 'chat_message') {
-    if (
-      typeof record.chatId !== 'string' ||
-      typeof record.messageId !== 'string' ||
-      typeof record.senderId !== 'string' ||
-      typeof record.body !== 'string' ||
-      typeof record.createdAt !== 'string'
-    ) {
-      return undefined;
-    }
-    const job: FanoutJob = {
-      type: 'chat_message',
-      chatId: record.chatId,
-      messageId: record.messageId,
-      senderId: record.senderId,
-      body: record.body,
-      createdAt: record.createdAt,
-    };
-    if (Array.isArray(record.attachmentKeys)) {
-      job.attachmentKeys = record.attachmentKeys.filter(
-        (key): key is string => typeof key === 'string',
-      );
-    }
-    return job;
-  }
-  return undefined;
+  const parsed = fanoutJobSchema.safeParse(body);
+  return parsed.success ? parsed.data : undefined;
 };

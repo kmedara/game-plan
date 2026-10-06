@@ -9,3 +9,4 @@ export { handleMe } from './me.js';
 export { handleOAuthCallback, handleOAuthLogin, handleOAuthLogout } from './oauth.js';
 export { handleRefresh } from './refresh.js';
 export { handleRegister } from './register.js';
+export { handleUpdateProfile } from './update-profile.js';

@@ -7,6 +7,7 @@
  */
 
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
+import type { FanoutJob } from '@gameplan/types';
 
 /** Lazily created SQS client shared by area Lambdas that enqueue fan-out jobs. */
 let client: SQSClient | undefined;
@@ -27,23 +28,6 @@ const getClient = (): SQSClient => {
 export const resetFanoutSqsClient = (): void => {
   client = undefined;
 };
-
-/** Payload delivered over an open WebSocket or a push when none is open. */
-export type FanoutJob =
-  | {
-      type: 'schedule_changed';
-      teamId: string;
-      eventId: string;
-    }
-  | {
-      type: 'chat_message';
-      chatId: string;
-      messageId: string;
-      senderId: string;
-      body: string;
-      createdAt: string;
-      attachmentKeys?: string[];
-    };
 
 /**
  * Enqueues a fan-out job when a queue URL or local deliver URL is configured.

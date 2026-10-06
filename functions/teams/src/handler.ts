@@ -23,6 +23,7 @@ import {
   handleListTeams,
   handleRejectJoinRequest,
   handleSearchDirectory,
+  handleSetPositions,
   handleUpdatePermissions,
   handleUpdateTeam,
 } from './routes/index.js';
@@ -80,6 +81,9 @@ export const handler = async (
 
     if (method === 'GET' && parts.length === 1) return handleGetTeam(event, teamId);
     if (method === 'PATCH' && parts.length === 1) return handleUpdateTeam(event, teamId);
+    if (method === 'PUT' && parts.length === 2 && parts[1] === 'positions') {
+      return handleSetPositions(event, teamId);
+    }
 
     if (parts[1] === 'members') {
       if (method === 'GET' && parts.length === 2) return handleListMembers(event, teamId);

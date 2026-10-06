@@ -12,7 +12,7 @@ export {
   verifyAuthHeader,
 } from './cognito.js';
 
-export { requirePermission, requireUser } from './require.js';
+export { assertPermission, requirePermission, requireUser } from './require.js';
 
 export { isAuthDisabled, seedUserId } from './auth-disabled.js';
 
@@ -41,7 +41,6 @@ export {
   toUserProfile,
   type IdentityProvider,
   type IdentityTokens,
-  type LoginInput,
   type RegisterInput,
   type UserProfileItem,
 } from './identity-provider.js';

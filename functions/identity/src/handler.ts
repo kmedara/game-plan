@@ -16,6 +16,7 @@ import {
   handleOAuthLogout,
   handleRefresh,
   handleRegister,
+  handleUpdateProfile,
 } from './routes/index.js';
 
 /**
@@ -59,6 +60,7 @@ export const handler = async (
   if (method === 'GET' && route === 'oauth/callback') return handleOAuthCallback(event);
   if (method === 'GET' && route === 'oauth/logout') return handleOAuthLogout(event);
   if (method === 'POST' && route === 'profile/complete') return handleCompleteProfile(event);
+  if (method === 'PATCH' && route === 'profile') return handleUpdateProfile(event);
 
   return notFound();
 };

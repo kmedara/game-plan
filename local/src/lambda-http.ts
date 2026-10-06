@@ -44,17 +44,35 @@ const cookieList = (cookieHeader: string | undefined): string[] | undefined => {
 };
 
 /**
- * Reads the full request body as UTF-8 text.
+ * Reads the full request body without changing its bytes.
  *
  * @param req - The incoming HTTP request stream.
- * @returns The body string, which may be empty.
+ * @returns The raw body, which may be empty.
  */
-const readBody = async (req: IncomingMessage): Promise<string> => {
+const readBody = async (req: IncomingMessage): Promise<Buffer> => {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
-  return Buffer.concat(chunks).toString('utf8');
+  return Buffer.concat(chunks);
+};
+
+/**
+ * Returns whether a content type can travel as UTF-8 text in the Lambda event.
+ *
+ * Image and other binary uploads are base64-encoded so photo bytes survive the proxy.
+ *
+ * @param contentType - The request `Content-Type` header.
+ * @returns `true` for JSON and text bodies.
+ */
+const isTextBody = (contentType: string | undefined): boolean => {
+  if (contentType === undefined || contentType.length === 0) return true;
+  const type = contentType.split(';')[0]?.trim().toLowerCase() ?? '';
+  return (
+    type.startsWith('text/') ||
+    type === 'application/json' ||
+    type === 'application/x-www-form-urlencoded'
+  );
 };
 
 /**
@@ -69,8 +87,15 @@ export const toHttpEvent = async (
   port: number,
 ): Promise<APIGatewayProxyEventV2> => {
   const url = new URL(req.url ?? '/', `http://127.0.0.1:${port}`);
-  const body = await readBody(req);
+  const rawBody = await readBody(req);
   const headers = headerMap(req);
+  const textBody = isTextBody(headers['content-type']);
+  const body =
+    rawBody.byteLength === 0
+      ? undefined
+      : textBody
+        ? rawBody.toString('utf8')
+        : rawBody.toString('base64');
   const cookies = cookieList(headers.cookie);
   const queryStringParameters =
     url.searchParams.size > 0
@@ -102,8 +127,8 @@ export const toHttpEvent = async (
         userAgent: req.headers['user-agent'] ?? 'local',
       },
     },
-    isBase64Encoded: false,
-    body: body.length > 0 ? body : undefined,
+    isBase64Encoded: body !== undefined && !textBody,
+    ...(body !== undefined ? { body } : {}),
   };
 };
 
@@ -136,5 +161,13 @@ export const writeResult = (
     headers['set-cookie'] = result.cookies;
   }
   res.writeHead(result.statusCode ?? 200, headers);
-  res.end(result.statusCode === 204 ? undefined : (result.body ?? ''));
+  if (result.statusCode === 204) {
+    res.end();
+    return;
+  }
+  if (result.isBase64Encoded && result.body !== undefined) {
+    res.end(Buffer.from(result.body, 'base64'));
+    return;
+  }
+  res.end(result.body ?? '');
 };

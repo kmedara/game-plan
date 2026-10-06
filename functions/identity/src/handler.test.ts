@@ -22,6 +22,9 @@ vi.mock('../../lib/auth/profile.js', () => ({
     email: string;
     displayName: string;
     accountKind: 'adult' | 'minor';
+    birthday?: string;
+    photoKey?: string | null;
+    createdAt?: string;
   }) => {
     const item: UserProfileItem = {
       PK: `USER#${input.userId}`,
@@ -30,7 +33,9 @@ vi.mock('../../lib/auth/profile.js', () => ({
       email: input.email,
       displayName: input.displayName,
       accountKind: input.accountKind,
-      createdAt: new Date().toISOString(),
+      createdAt: input.createdAt ?? new Date().toISOString(),
+      ...(input.birthday !== undefined ? { birthday: input.birthday } : {}),
+      ...(input.photoKey ? { photoKey: input.photoKey } : {}),
     };
     profiles.set(input.userId, item);
     return item;
@@ -244,5 +249,51 @@ describe('identity handler (in-memory)', () => {
     );
     expect(result.statusCode).toBe(401);
     expect(JSON.parse(result.body ?? '')).toEqual({ error: 'invalid_credentials' });
+  });
+
+  it('sets and clears a profile photo owned by the caller', async () => {
+    const email = `photo-${randomUUID()}@example.com`;
+    const registered = await handler(
+      httpEvent('POST', '/identity/register', {
+        body: {
+          email,
+          password: 'Password1',
+          displayName: 'Ada Player',
+          birthday: '1990-05-15',
+        },
+      }),
+    );
+    const session = JSON.parse(registered.body ?? '') as {
+      accessToken: string;
+      user: { userId: string };
+    };
+    const photoKey = `uploads/${session.user.userId}/photo`;
+
+    const patched = await handler(
+      httpEvent('PATCH', '/identity/profile', {
+        headers: { authorization: `Bearer ${session.accessToken}` },
+        body: { photoKey },
+      }),
+    );
+    expect(patched.statusCode).toBe(200);
+    expect(JSON.parse(patched.body ?? '')).toMatchObject({ photoKey });
+
+    const rejected = await handler(
+      httpEvent('PATCH', '/identity/profile', {
+        headers: { authorization: `Bearer ${session.accessToken}` },
+        body: { photoKey: 'uploads/someone-else/photo' },
+      }),
+    );
+    expect(rejected.statusCode).toBe(400);
+    expect(JSON.parse(rejected.body ?? '')).toEqual({ error: 'invalid_photo_key' });
+
+    const cleared = await handler(
+      httpEvent('PATCH', '/identity/profile', {
+        headers: { authorization: `Bearer ${session.accessToken}` },
+        body: { photoKey: null },
+      }),
+    );
+    expect(cleared.statusCode).toBe(200);
+    expect(JSON.parse(cleared.body ?? '').photoKey).toBeUndefined();
   });
 });

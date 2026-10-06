@@ -2,7 +2,7 @@
  * `POST /identity/register`
  */
 
-import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
+import { registerBodySchema, type UserProfile } from '@gameplan/schemas';
 import {
   getIdentityProvider,
   getProfile,
@@ -12,10 +12,10 @@ import {
   wantsBodyRefreshToken,
   type UserProfileItem,
 } from '../../../lib/auth/index.js';
-import { registerBodySchema, type UserProfile } from '@gameplan/schemas';
-import { badRequest, headerOf, json, withBodyValidation } from '../../../lib/http.js';
+import { badRequest, headerOf } from '../../../lib/http.js';
 import { accountKindFromBirthday } from '../../../lib/minor-chat.js';
-import { mapError, sessionResponse } from './session.js';
+import { route, withBodyValidation } from '../../../lib/pipeline.js';
+import { sessionResponse, withIdentityErrors } from './session.js';
 
 /**
  * Ensures a profile row exists after Cognito register (local already wrote one).
@@ -45,10 +45,10 @@ const ensureProfile = async (
  * @param event - The HTTP API event.
  * @returns A session response or an error.
  */
-export const handleRegister = (
-  event: APIGatewayProxyEventV2,
-): Promise<APIGatewayProxyStructuredResultV2> =>
-  withBodyValidation(registerBodySchema, async (event, body) => {
+export const handleRegister = route(
+  withIdentityErrors(),
+  withBodyValidation(registerBodySchema),
+  async ({ event, body }) => {
     let accountKind: UserProfile['accountKind'];
     try {
       accountKind = accountKindFromBirthday(body.birthday);
@@ -56,29 +56,26 @@ export const handleRegister = (
       return badRequest('invalid_birthday');
     }
 
-    try {
-      const tokens = await getIdentityProvider().register({
-        email: body.email,
-        password: body.password,
-        displayName: body.displayName,
-        accountKind,
-      });
-      const profile = await ensureProfile(
-        tokens.userId,
-        tokens.email,
-        body.displayName,
-        accountKind,
-        body.birthday,
-      );
-      return sessionResponse(
-        201,
-        tokens.accessToken,
-        tokens.expiresIn,
-        toUserProfile(profile),
-        tokens.refreshToken,
-        wantsBodyRefreshToken(headerOf(event, REFRESH_DELIVERY_HEADER)),
-      );
-    } catch (error) {
-      return mapError(error) ?? json(500, { error: 'internal_error' });
-    }
-  })(event);
+    const tokens = await getIdentityProvider().register({
+      email: body.email,
+      password: body.password,
+      displayName: body.displayName,
+      accountKind,
+    });
+    const profile = await ensureProfile(
+      tokens.userId,
+      tokens.email,
+      body.displayName,
+      accountKind,
+      body.birthday,
+    );
+    return sessionResponse(
+      201,
+      tokens.accessToken,
+      tokens.expiresIn,
+      toUserProfile(profile),
+      tokens.refreshToken,
+      wantsBodyRefreshToken(headerOf(event, REFRESH_DELIVERY_HEADER)),
+    );
+  },
+);

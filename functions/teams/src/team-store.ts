@@ -3,7 +3,7 @@
  */
 
 import { randomBytes, randomUUID } from "node:crypto";
-import type { AccountKind, TeamPermission, TeamRole } from "@gameplan/types";
+import type { AccountKind, TeamPermission, TeamRole, TeamTheme } from "@gameplan/types";
 import { DEFAULT_ROLE_PERMISSIONS, TEAM_ROLES } from "@gameplan/types";
 import { getProfile } from "../../lib/auth/profile.js";
 import {
@@ -55,6 +55,8 @@ export type TeamMetaItem = {
   name: string;
   timeZone: string;
   location?: string;
+  /** Team colors and logo. Omitted when the team uses the default brand. */
+  theme?: TeamTheme;
   defaultChatId: string;
   createdBy: string;
   createdAt: string;
@@ -67,6 +69,8 @@ export type TeamMemberItem = {
   userId: string;
   role: TeamRole;
   joinedAt: string;
+  /** Positions this member plays. Omitted when they have not set any. */
+  positions?: string[];
 };
 
 /** User-side team membership under `USER#id` / `TEAM#teamId`. */
@@ -76,6 +80,8 @@ export type UserTeamItem = {
   teamId: string;
   role: TeamRole;
   joinedAt: string;
+  /** Positions this member plays. Omitted when they have not set any. */
+  positions?: string[];
 };
 
 /** Invite row shared by the team partition and the code lookup partition. */
@@ -147,15 +153,53 @@ export const requireTeam = async (teamId: string): Promise<TeamMetaItem> => {
  * @param role - The caller's role on the team.
  * @returns The wire summary, including location when the team has one.
  */
-export const toTeamSummary = (team: TeamMetaItem, role: TeamRole) => ({
+export const toTeamSummary = (
+  team: TeamMetaItem,
+  role: TeamRole,
+  positions: readonly string[] = [],
+) => ({
   teamId: team.teamId,
   name: team.name,
   timeZone: team.timeZone,
   ...(team.location !== undefined ? { location: team.location } : {}),
+  ...(team.theme !== undefined ? { theme: team.theme } : {}),
   defaultChatId: team.defaultChatId,
   createdAt: team.createdAt,
   role,
+  ...(positions.length > 0 ? { positions: [...positions] } : {}),
 });
+
+/**
+ * Drops blank and repeated positions, keeping the first spelling of each.
+ *
+ * @param positions - Positions from the request, already schema-trimmed.
+ * @returns The positions to store.
+ */
+const normalizePositions = (positions: readonly string[]): string[] => {
+  const seen = new Set<string>();
+  const next: string[] = [];
+  for (const position of positions) {
+    const key = position.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    next.push(position);
+  }
+  if (next.length > 8) throw new Error('too_many_positions');
+  return next;
+};
+
+/**
+ * Attribute spread that omits `positions` when the member has none.
+ *
+ * @param positions - Stored positions, when present.
+ * @returns A `positions` field, or an empty object.
+ */
+const positionsField = (
+  positions: readonly string[] | undefined,
+): { positions: string[] } | Record<string, never> =>
+  positions !== undefined && positions.length > 0
+    ? { positions: [...positions] }
+    : {};
 
 /**
  * Loads a roster membership, or returns `undefined` when absent.
@@ -366,7 +410,7 @@ export const createTeam = async (input: {
  * directory item and writes a new one in the same transaction. A rename also
  * writes the new name onto the default chat.
  *
- * @param input - The team id and the fields to change. A `null` location clears it.
+ * @param input - The team id and the fields to change. A `null` location or theme clears it.
  * @returns The updated team metadata.
  */
 export const updateTeamSettings = async (input: {
@@ -374,6 +418,7 @@ export const updateTeamSettings = async (input: {
   name?: string;
   timeZone?: string;
   location?: string | null;
+  theme?: TeamTheme | null;
 }): Promise<TeamMetaItem> => {
   const existing = await requireTeam(input.teamId);
   const name = input.name !== undefined ? input.name.trim() : existing.name;
@@ -389,6 +434,10 @@ export const updateTeamSettings = async (input: {
     location = trimmed.length === 0 ? undefined : trimmed;
   }
 
+  let theme = existing.theme;
+  if (input.theme === null) theme = undefined;
+  else if (input.theme !== undefined) theme = input.theme;
+
   const next: TeamMetaItem = {
     [TABLE_PK]: existing.PK,
     [TABLE_SK]: existing.SK,
@@ -399,6 +448,7 @@ export const updateTeamSettings = async (input: {
     createdBy: existing.createdBy,
     createdAt: existing.createdAt,
     ...(location !== undefined ? { location } : {}),
+    ...(theme !== undefined ? { theme } : {}),
   };
 
   const previousSk = teamDirectorySk(existing.name, existing.teamId);
@@ -508,12 +558,12 @@ export const searchTeamDirectory = async (
  */
 export const listUserTeams = async (
   userId: string,
-): Promise<Array<{ team: TeamMetaItem; role: TeamRole }>> => {
+): Promise<Array<{ team: TeamMetaItem; role: TeamRole; positions: string[] }>> => {
   const memberships = await queryBySkPrefix<UserTeamItem>(
     userPk(userId),
     USER_TEAM_SK_PREFIX,
   );
-  const results: Array<{ team: TeamMetaItem; role: TeamRole }> = [];
+  const results: Array<{ team: TeamMetaItem; role: TeamRole; positions: string[] }> = [];
   for (const membership of memberships) {
     if (typeof membership.teamId !== "string") continue;
     const team = await getItem<TeamMetaItem>(
@@ -521,7 +571,11 @@ export const listUserTeams = async (
       teamMetaSk(),
     );
     if (team === undefined) continue;
-    results.push({ team, role: membership.role });
+    results.push({
+      team,
+      role: membership.role,
+      positions: membership.positions ?? [],
+    });
   }
   return results;
 };
@@ -554,12 +608,14 @@ export const assignMemberRole = async (
   assertRoleAllowedForAccount(profile.accountKind, role, matrix);
 
   const joinedAt = member.joinedAt;
+  const positions = positionsField(member.positions);
   const updated: TeamMemberItem = {
     [TABLE_PK]: teamPk(teamId),
     [TABLE_SK]: teamMemberSk(userId),
     userId,
     role,
     joinedAt,
+    ...positions,
   };
   await transactWrite([
     { Put: { TableName: TABLE_NAME, Item: updated } },
@@ -572,11 +628,62 @@ export const assignMemberRole = async (
           teamId,
           role,
           joinedAt,
+          ...positions,
         } satisfies UserTeamItem,
       },
     },
   ]);
   return updated;
+};
+
+/**
+ * Replaces the positions the member plays on a team.
+ *
+ * Writes both the roster row and the user-side membership so a later role
+ * change keeps the same list.
+ *
+ * @param teamId - The team id.
+ * @param userId - The member updating their own positions.
+ * @param positions - The replacement list. An empty list clears them.
+ * @returns The member's role and the positions that were stored.
+ */
+export const setMemberPositions = async (
+  teamId: string,
+  userId: string,
+  positions: readonly string[],
+): Promise<{ role: TeamRole; positions: string[] }> => {
+  const member = await requireMembership(teamId, userId);
+  const next = normalizePositions(positions);
+  const stored = positionsField(next);
+  await transactWrite([
+    {
+      Put: {
+        TableName: TABLE_NAME,
+        Item: {
+          [TABLE_PK]: teamPk(teamId),
+          [TABLE_SK]: teamMemberSk(userId),
+          userId,
+          role: member.role,
+          joinedAt: member.joinedAt,
+          ...stored,
+        } satisfies TeamMemberItem,
+      },
+    },
+    {
+      Put: {
+        TableName: TABLE_NAME,
+        Item: {
+          [TABLE_PK]: userPk(userId),
+          [TABLE_SK]: userTeamSk(teamId),
+          teamId,
+          role: member.role,
+          joinedAt: member.joinedAt,
+          ...stored,
+        } satisfies UserTeamItem,
+      },
+    },
+  ]);
+  return { role: member.role, positions: next };
 };
 
 /**

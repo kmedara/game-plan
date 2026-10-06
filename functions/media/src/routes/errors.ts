@@ -3,30 +3,45 @@
  */
 
 import type { APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
-import { badRequest, forbidden, json, unauthorized } from '../../../lib/http.js';
+import {
+  badRequest,
+  type ErrorMappingFn,
+  forbidden,
+  json,
+  unauthorized,
+} from '../../../lib/http.js';
+import { withMappedErrors } from '../../../lib/pipeline.js';
 
 /**
- * Runs a media route and maps known error codes to HTTP responses.
+ * Maps known media errors to structured HTTP responses.
  *
- * @param run - The route body.
- * @returns The route response.
+ * @param error - The thrown value.
+ * @returns A proxy result when the error is known, otherwise `undefined`.
  */
-export const withMediaErrors = async (
-  run: () => Promise<APIGatewayProxyStructuredResultV2>,
-): Promise<APIGatewayProxyStructuredResultV2> => {
-  try {
-    return await run();
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message === 'unauthorized') return unauthorized();
-    if (message === 'forbidden') return forbidden();
-    if (message === 'invalid_object_key' || message === 'payload_too_large') {
-      return badRequest(message);
-    }
-    if (message === 'media_bucket_not_configured') {
-      return json(503, { error: message });
-    }
-    console.error(error);
-    return json(500, { error: 'internal' });
+export const mapMediaError: ErrorMappingFn = (
+  error: unknown,
+): APIGatewayProxyStructuredResultV2 | undefined => {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message === 'unauthorized') return unauthorized();
+  if (message === 'forbidden') return forbidden();
+  if (message === 'invalid_object_key' || message === 'payload_too_large') {
+    return badRequest(message);
   }
+  if (message === 'media_bucket_not_configured') {
+    return json(503, { error: message });
+  }
+  return undefined;
 };
+
+/**
+ * Catches media route errors. Unknown errors are logged and become `500`.
+ *
+ * @returns A pipeline step that leaves the context unchanged.
+ */
+export const withMediaErrors = () =>
+  withMappedErrors(mapMediaError, {
+    onUnmapped: (error) => {
+      console.error(error);
+    },
+    fallback: () => json(500, { error: 'internal' }),
+  });

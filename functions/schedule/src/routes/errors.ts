@@ -10,8 +10,8 @@ import {
   forbidden,
   notFound,
   unauthorized,
-  withErrors,
 } from "../../../lib/http.js";
+import { logCaughtError, withMappedErrors } from "../../../lib/pipeline.js";
 
 /**
  * Maps known domain errors to structured HTTP responses.
@@ -55,11 +55,9 @@ export const mapScheduleError: ErrorMappingFn = (
 };
 
 /**
- * Runs a schedule route and maps known errors; unknown errors become `500`.
+ * Catches schedule route errors and maps known ones; unknown errors become `500`.
  *
- * @param run - The async route body.
- * @returns The route response.
+ * @returns A pipeline step that leaves the context unchanged.
  */
-export const withScheduleErrors = (
-  run: () => Promise<APIGatewayProxyStructuredResultV2>,
-): Promise<APIGatewayProxyStructuredResultV2> => withErrors(run, mapScheduleError);
+export const withScheduleErrors = () =>
+  withMappedErrors(mapScheduleError, { onError: logCaughtError });

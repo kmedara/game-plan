@@ -501,6 +501,77 @@ describe('teams handler (in-memory)', () => {
     expect(empty.statusCode).toBe(400);
   });
 
+  it('stores and clears a team theme', async () => {
+    const admin = seedUser('adult', 'Ada');
+    const created = await handler(
+      httpEvent('POST', '/teams', {
+        headers: { authorization: admin.authorization },
+        body: { name: 'U12 Hawks', timeZone: 'America/New_York' },
+      }),
+    );
+    const teamId = bodyOf(created).teamId as string;
+    const theme = {
+      primary: '#7c2d12',
+      secondary: '#1e40af',
+      accent: '#f59e0b',
+      logoKey: 'uploads/admin/logo',
+    };
+
+    const updated = await handler(
+      httpEvent('PATCH', `/teams/${teamId}`, {
+        headers: { authorization: admin.authorization },
+        body: { theme },
+      }),
+    );
+    expect(updated.statusCode).toBe(200);
+    expect(bodyOf(updated).theme).toEqual(theme);
+
+    const renamed = await handler(
+      httpEvent('PATCH', `/teams/${teamId}`, {
+        headers: { authorization: admin.authorization },
+        body: { name: 'Eastside United' },
+      }),
+    );
+    expect(bodyOf(renamed).theme).toEqual(theme);
+
+    const cleared = await handler(
+      httpEvent('PATCH', `/teams/${teamId}`, {
+        headers: { authorization: admin.authorization },
+        body: { theme: null },
+      }),
+    );
+    expect(cleared.statusCode).toBe(200);
+    expect(bodyOf(cleared).theme).toBeUndefined();
+  });
+
+  it('stores the caller positions on a team', async () => {
+    const admin = seedUser('adult', 'Ada');
+    const created = await handler(
+      httpEvent('POST', '/teams', {
+        headers: { authorization: admin.authorization },
+        body: { name: 'U12 Hawks', timeZone: 'America/New_York' },
+      }),
+    );
+    const teamId = bodyOf(created).teamId;
+
+    const updated = await handler(
+      httpEvent('PUT', `/teams/${teamId}/positions`, {
+        headers: { authorization: admin.authorization },
+        body: { positions: ['Fly-half', 'fly-half', 'Wing'] },
+      }),
+    );
+    expect(updated.statusCode).toBe(200);
+    expect(bodyOf(updated).positions).toEqual(['Fly-half', 'Wing']);
+
+    const listed = await handler(
+      httpEvent('GET', '/teams', { headers: { authorization: admin.authorization } }),
+    );
+    const teams = bodyOf(listed).teams as Array<{ teamId: string; positions?: string[] }>;
+    expect(teams).toEqual([
+      expect.objectContaining({ teamId, positions: ['Fly-half', 'Wing'] }),
+    ]);
+  });
+
   it('returns health for the teams area', async () => {
     const result = await handler(httpEvent('GET', '/teams/health'));
     expect(result.statusCode).toBe(200);
