@@ -34,10 +34,9 @@ API is up and logs show `Debugger listening on ws://0.0.0.0:92xx/...`, set a bre
 under `functions/` or `local/`, then use **Run and Debug** → **Attach teams** (or the
 matching area). **Attach API (all)** connects to every inspector at once.
 
-Compose sets `NODE_INSPECT_HOST` so each area runs as
-`node --inspect --import tsx …` (not the `tsx` CLI, which forks and leaves the
-debugger on the wrong process). File sync still updates the container; restart the
-API container after large edits if you need a clean reload while debugging.
+Compose sets `NODE_INSPECT_HOST`. Each area runs under `tsx watch`, and `--inspect` is
+passed to the child that runs the routes. A synced source edit restarts that child, and
+the debugger reattaches when the launch config has `restart` set.
 
 | Process  | Port |
 | -------- | ---- |

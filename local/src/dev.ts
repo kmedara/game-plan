@@ -8,8 +8,9 @@
  * `docker compose up --watch` syncs host files into the container filesystem; `tsx watch`
  * then sees normal inotify events (no bind-mount polling).
  *
- * When `NODE_INSPECT_HOST` is set (Compose uses `0.0.0.0`), each child listens on a
- * fixed inspector port so Cursor can attach breakpoints.
+ * When `NODE_INSPECT_HOST` is set (Compose uses `0.0.0.0`), `--inspect` is passed after
+ * `watch` so it lands on the child that runs the routes. The watcher parent stays
+ * uninspected and restarts that child when a synced file changes.
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -51,12 +52,11 @@ const shutdown = (code = 0): void => {
 };
 
 /**
- * Spawns a TypeScript entry.
+ * Spawns a TypeScript entry under `tsx watch`.
  *
- * Without inspect: `tsx watch` so Compose file sync restarts the process.
- * With inspect: `node --inspect --import tsx <script>` so the inspected process
- * is the one that runs route code. The `tsx` CLI always forks a child; putting
- * `--inspect` on the CLI leaves breakpoints on an empty parent process.
+ * `--inspect` is an argument of `watch`, not of this parent process. The `tsx`
+ * CLI forks a child to run the script; a flag before `watch` would attach the
+ * debugger to the watcher and leave route breakpoints unbound.
  *
  * @param script - A path relative to the repository root.
  * @param env - Extra environment variables for the child.
@@ -68,10 +68,11 @@ const start = (
   inspectPort?: number,
 ): void => {
   const inspectHost = process.env.NODE_INSPECT_HOST?.trim();
-  const debugging = Boolean(inspectHost && inspectPort !== undefined);
-  const args = debugging
-    ? [`--inspect=${inspectHost}:${inspectPort}`, '--import', 'tsx', script]
-    : [tsxCli, 'watch', '--clear-screen=false', script];
+  const inspectArgs =
+    inspectHost && inspectPort !== undefined
+      ? [`--inspect=${inspectHost}:${inspectPort}`]
+      : [];
+  const args = [tsxCli, 'watch', '--clear-screen=false', ...inspectArgs, script];
 
   const child = spawn(process.execPath, args, {
     cwd: repoRoot,
