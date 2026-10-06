@@ -1,20 +1,23 @@
+import { createSpyObj, type SpyObj } from '../../testing/spy';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { ChatThreadPageComponent } from './chats';
-import { ApiClient } from '../core/api-client';
-import { LiveSocket } from '../core/live-socket';
+import { ApiClientService } from '../core/api-client.service';
+import { LiveSocketService } from '../core/live-socket.service';
 
 describe('ChatThreadPageComponent', () => {
   let fixture: ComponentFixture<ChatThreadPageComponent>;
+  let api: SpyObj<ApiClientService>;
+  let liveHandler: ((event: unknown) => void) | undefined;
 
   beforeEach(async () => {
-    const api = jasmine.createSpyObj<ApiClient>('ApiClient', [
+    api = createSpyObj<ApiClientService>('ApiClientService', [
       'listChats',
       'listMessages',
       'sendMessage',
       'presignDownload',
     ]);
-    api.listChats.and.resolveTo([
+    api.listChats.mockResolvedValue([
       {
         chatId: 'chat-1',
         kind: 'default',
@@ -23,7 +26,7 @@ describe('ChatThreadPageComponent', () => {
         createdAt: '2026-10-01T00:00:00.000Z',
       },
     ]);
-    api.listMessages.and.resolveTo({
+    api.listMessages.mockResolvedValue({
       messages: [
         {
           messageId: 'm1',
@@ -44,7 +47,15 @@ describe('ChatThreadPageComponent', () => {
         },
       ],
     });
-    api.presignDownload.and.resolveTo({
+    api.sendMessage.mockImplementation(async (chatId: string, body: string) => ({
+      messageId: 'sent-1',
+      chatId,
+      senderId: 'u1',
+      senderDisplayName: 'Ada Player',
+      body,
+      createdAt: '2026-10-05T20:00:00.000Z',
+    }));
+    api.presignDownload.mockResolvedValue({
       downloadUrl: 'https://cdn.example/ada.jpg',
       objectKey: 'uploads/u1/photo',
     });
@@ -53,14 +64,18 @@ describe('ChatThreadPageComponent', () => {
       imports: [ChatThreadPageComponent],
       providers: [
         provideRouter([]),
-        { provide: ApiClient, useValue: api },
+        { provide: ApiClientService, useValue: api },
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { paramMap: { get: () => 'chat-1' } } },
         },
         {
-          provide: LiveSocket,
-          useValue: jasmine.createSpyObj<LiveSocket>('LiveSocket', ['subscribe']),
+          provide: LiveSocketService,
+          useValue: {
+            subscribe: (handler: (event: unknown) => void) => {
+              liveHandler = handler;
+            },
+          },
         },
       ],
     }).compileComponents();
@@ -100,5 +115,108 @@ describe('ChatThreadPageComponent', () => {
     (messages[0] as HTMLButtonElement).click();
     fixture.detectChanges();
     expect(root.textContent).not.toContain('Ada Player');
+  });
+
+  it('merges live chat messages and sends on Enter', async () => {
+    const component = fixture.componentInstance;
+    liveHandler?.({
+      type: 'chat_message',
+      chatId: 'chat-1',
+      messageId: 'live-1',
+      senderId: 'u9',
+      senderDisplayName: 'Live Sender',
+      senderPhotoKey: 'uploads/live/photo',
+      body: 'Live ping',
+      attachmentKeys: [],
+      createdAt: '2026-10-05T19:00:00.000Z',
+    });
+    fixture.detectChanges();
+    expect(component.messages()[0]?.body).toBe('Live ping');
+    expect(component.messages()[0]?.senderPhotoKey).toBe('uploads/live/photo');
+    expect(component.senderName(component.messages()[0]!)).toBe('Live Sender');
+
+    liveHandler?.({
+      type: 'chat_message',
+      chatId: 'chat-1',
+      messageId: 'live-2',
+      senderId: 'u8',
+      body: 'No photo',
+      attachmentKeys: [],
+      createdAt: '2026-10-05T19:01:00.000Z',
+    });
+    fixture.detectChanges();
+    expect(component.messages()[0]?.senderPhotoKey).toBeUndefined();
+    expect(component.senderName(component.messages()[0]!)).toBe('Player');
+
+    component.draft = 'Hello team';
+    component.submitDraft(new KeyboardEvent('keydown', { key: 'Enter' }));
+    await fixture.whenStable();
+    expect(api.sendMessage).toHaveBeenCalledWith('chat-1', 'Hello team');
+    expect(component.draft).toBe('');
+
+    component.submitDraft(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true }));
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores blank sends and tolerates chat list lookup failures', async () => {
+    api.listChats.mockRejectedValue(new Error('offline'));
+    fixture = TestBed.createComponent(ChatThreadPageComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.chatName()).toBe('');
+
+    await fixture.componentInstance.send();
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('leaves the title blank when the chat is not in the list', async () => {
+    api.listChats.mockResolvedValue([]);
+    fixture = TestBed.createComponent(ChatThreadPageComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.chatName()).toBe('');
+  });
+
+  it('falls back to an empty chat id when the route has no chatId param', async () => {
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [ChatThreadPageComponent],
+      providers: [
+        provideRouter([]),
+        { provide: ApiClientService, useValue: api },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { paramMap: { get: () => null } } },
+        },
+        { provide: LiveSocketService, useValue: { subscribe: vi.fn() } },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(ChatThreadPageComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(api.listMessages).toHaveBeenLastCalledWith('');
+  });
+
+  it('keeps initials when a photo presign fails', async () => {
+    api.presignDownload.mockRejectedValue(new Error('denied'));
+    api.listMessages.mockResolvedValue({
+      messages: [
+        {
+          messageId: 'm3',
+          chatId: 'chat-1',
+          senderId: 'u3',
+          senderDisplayName: '   ',
+          senderPhotoKey: 'uploads/u3/photo',
+          body: 'No name',
+          createdAt: '2026-10-05T16:00:00.000Z',
+        },
+      ],
+    });
+    fixture = TestBed.createComponent(ChatThreadPageComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.initials(fixture.componentInstance.messages()[0]!)).toBe('?');
+    expect(fixture.componentInstance.photoUrl(fixture.componentInstance.messages()[0]!)).toBeUndefined();
   });
 });

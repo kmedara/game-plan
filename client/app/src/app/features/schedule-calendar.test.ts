@@ -2,7 +2,7 @@
  * Month-grid placement in a team time zone.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   buildMonthGrid,
   dayKeyInZone,
@@ -21,6 +21,19 @@ describe('schedule calendar', () => {
     });
     expect(cells.at(-1)?.key).toBe('2026-10-31');
     expect(cells.length % 7).toBe(0);
+  });
+
+  it('pads March 2026 with trailing days from April', () => {
+    const cells = buildMonthGrid(2026, 3, 'America/New_York');
+    expect(cells.some((cell) => cell.key === '2026-04-01' && !cell.inMonth)).toBe(true);
+    expect(cells.length % 7).toBe(0);
+  });
+
+  it('wraps lead and trail months across the year boundary', () => {
+    const january = buildMonthGrid(2026, 1, 'America/New_York');
+    expect(january.some((cell) => cell.key.startsWith('2025-12-'))).toBe(true);
+    const december = buildMonthGrid(2026, 12, 'America/New_York');
+    expect(december.some((cell) => cell.key.startsWith('2027-01-'))).toBe(true);
   });
 
   it('stores 6:00pm Eastern as 22:00 UTC during daylight time', () => {
@@ -46,5 +59,21 @@ describe('schedule calendar', () => {
       year: 2027,
       month: 1,
     });
+  });
+
+  it('normalizes hour 24 and missing Intl parts when reading zoned times', () => {
+    const spy = vi.spyOn(Intl.DateTimeFormat.prototype, 'formatToParts').mockReturnValue([
+      { type: 'year', value: '2026' },
+      { type: 'month', value: '10' },
+      { type: 'day', value: '05' },
+      { type: 'hour', value: '24' },
+      { type: 'minute', value: '00' },
+    ] as Intl.DateTimeFormatPart[]);
+    expect(wallTimeToIso('America/New_York', '2026-10-05', '00:00')).toMatch(/T/);
+    spy.mockReturnValue([
+      { type: 'literal', value: 'x' },
+    ] as Intl.DateTimeFormatPart[]);
+    expect(wallTimeToIso('UTC', '2026-01-01', '00:00')).toMatch(/T/);
+    spy.mockRestore();
   });
 });
