@@ -1,0 +1,16 @@
+<div class="modal-backdrop" (click)="dismiss()"></div>
+<div
+  class="modal-panel stack"
+  role="dialog"
+  aria-modal="true"
+  [attr.aria-labelledby]="titleId"
+  tabindex="-1"
+>
+  <div class="row">
+    <h2 class="page-title" [id]="titleId">{{ title() }}</h2>
+    <button mat-icon-button type="button" aria-label="Close" (click)="dismiss()">
+      <span class="material-icons">close</span>
+    </button>
+  </div>
+  <ng-container #outlet />
+</div>

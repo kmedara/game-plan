@@ -1,6 +1,24 @@
 <section class="stack">
-  <div class="row">
-    <h1>Schedule</h1>
+  <div class="schedule-header">
+    <h1 class="page-title">Schedule</h1>
+    <div class="schedule-header-team">
+      @if (teamBrand.logoFor(activeTeam()?.theme?.logoKey); as src) {
+        <img class="team-logo" [src]="src" [alt]="activeTeam()?.name ?? 'Team logo'" />
+      }
+      @if (teams().length > 0) {
+        <mat-form-field class="team-picker" appearance="outline" subscriptSizing="dynamic">
+          <mat-select
+            [ngModel]="teamId()"
+            (ngModelChange)="onTeamChange($event)"
+            aria-label="Team"
+          >
+            @for (team of teams(); track team.teamId) {
+              <mat-option [value]="team.teamId">{{ team.name }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
+    </div>
     <a mat-button routerLink="/teams">Teams</a>
   </div>
 
@@ -8,33 +26,81 @@
     <p class="muted">Join or create a team to see practices and games.</p>
     <a mat-flat-button color="primary" routerLink="/teams">Go to teams</a>
   } @else {
-    <mat-form-field appearance="outline">
-      <mat-label>Team</mat-label>
-      <mat-select
-        [ngModel]="teamId()"
-        (ngModelChange)="onTeamChange($event)"
-      >
-        @for (team of teams(); track team.teamId) {
-          <mat-option [value]="team.teamId">{{ team.name }}</mat-option>
-        }
-      </mat-select>
-    </mat-form-field>
+    <div class="calendar-month">
+      <button mat-icon-button type="button" aria-label="Previous month" (click)="shiftMonth(-1)">
+        <span class="material-icons">chevron_left</span>
+      </button>
+      <h2 class="page-title">{{ monthLabel() }}</h2>
+      <button mat-icon-button type="button" aria-label="Next month" (click)="shiftMonth(1)">
+        <span class="material-icons">chevron_right</span>
+      </button>
+    </div>
+    @if (!viewingCurrentMonth()) {
+      <button mat-button type="button" (click)="showToday()">Today</button>
+    }
+
+    <div class="calendar" role="grid" [attr.aria-label]="monthLabel()">
+      @for (label of weekdayLabels; track label) {
+        <div class="calendar-weekday" role="columnheader">{{ label }}</div>
+      }
+      @for (cell of cells(); track cell.key) {
+        <button
+          type="button"
+          class="calendar-day"
+          role="gridcell"
+          [class.outside]="!cell.inMonth"
+          [class.selected]="cell.key === selectedKey()"
+          [class.today]="cell.key === todayKey()"
+          [attr.aria-label]="cell.key"
+          [attr.aria-selected]="cell.key === selectedKey()"
+          (click)="selectDay(cell.key)"
+        >
+          <span class="calendar-day-num">{{ cell.day }}</span>
+          <span class="calendar-dots">
+            @for (item of cell.events.slice(0, 3); track item.eventId + item.startsAt) {
+              <span class="calendar-dot" [attr.data-type]="item.eventType"></span>
+            }
+          </span>
+        </button>
+      }
+    </div>
+
+    <div class="calendar-legend">
+      @for (type of eventTypes; track type) {
+        <span>
+          <span class="calendar-dot" [attr.data-type]="type"></span>
+          {{ eventLabel(type) }}
+        </span>
+      }
+    </div>
 
     @if (error()) {
-      <p class="muted" style="color: #b91c1c">{{ error() }}</p>
+      <p class="error">{{ error() }}</p>
     }
 
-    @if (occurrences().length === 0 && !error()) {
-      <p class="muted">No practices or games in the next month.</p>
+    <div class="row">
+      <h2 class="page-title">{{ selectedLabel() }}</h2>
+      @if (canManage()) {
+        <button mat-stroked-button type="button" (click)="startAdd()">Add event</button>
+      }
+    </div>
+
+    @if (selectedEvents().length === 0) {
+      <p class="muted">Nothing scheduled.</p>
     }
 
-    @for (item of occurrences(); track item.eventId + item.startsAt) {
-      <article class="stack" style="padding: 0.75rem; background: #f8fafc; border-radius: 0.5rem">
+    @for (item of selectedEvents(); track item.eventId + item.startsAt) {
+      <article class="stack event-card">
         <div class="row">
           <strong>{{ item.title }}</strong>
-          <span class="muted">{{ item.eventType }}</span>
+          <span class="event-type" [attr.data-type]="item.eventType">{{ eventLabel(item.eventType) }}</span>
         </div>
-        <div class="muted">{{ item.startsAt | date: 'medium' }}</div>
+        <div class="muted">
+          {{ timeLabel(item.startsAt) }}
+          @if (item.endsAt) {
+            – {{ timeLabel(item.endsAt) }}
+          }
+        </div>
         @if (item.location) {
           <div class="muted">{{ item.location }}</div>
         }
