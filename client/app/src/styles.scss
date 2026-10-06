@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: Roboto, 'Helvetica Neue', sans-serif;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.app-shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  max-width: 40rem;
+  margin: 0 auto;
+  background: #fff;
+  box-shadow: 0 0 0 1px #e2e8f0;
+}
+
+.app-body {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem;
+  padding-bottom: 5rem;
+}
+
+.app-nav {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
+  z-index: 10;
+}
+
+.app-nav .material-icons {
+  font-size: 1.25rem;
+}
+
+.app-nav a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.65rem 0.5rem;
+  text-decoration: none;
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.app-nav a.active {
+  color: #0d9488;
+  font-weight: 500;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.muted {
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.page-title {
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+.error {
+  color: #b91c1c;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.permission-role {
+  padding: 0.75rem;
+  background: #f8fafc;
+  border-radius: 0.5rem;
+}
+
+.permission-list {
+  margin-top: 0.5rem;
+}

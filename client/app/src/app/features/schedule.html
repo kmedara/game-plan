@@ -1,0 +1,52 @@
+<section class="stack">
+  <div class="row">
+    <h1>Schedule</h1>
+    <a mat-button routerLink="/teams">Teams</a>
+  </div>
+
+  @if (teams().length === 0) {
+    <p class="muted">Join or create a team to see practices and games.</p>
+    <a mat-flat-button color="primary" routerLink="/teams">Go to teams</a>
+  } @else {
+    <mat-form-field appearance="outline">
+      <mat-label>Team</mat-label>
+      <mat-select
+        [ngModel]="teamId()"
+        (ngModelChange)="onTeamChange($event)"
+      >
+        @for (team of teams(); track team.teamId) {
+          <mat-option [value]="team.teamId">{{ team.name }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    @if (error()) {
+      <p class="muted" style="color: #b91c1c">{{ error() }}</p>
+    }
+
+    @if (occurrences().length === 0 && !error()) {
+      <p class="muted">No practices or games in the next month.</p>
+    }
+
+    @for (item of occurrences(); track item.eventId + item.startsAt) {
+      <article class="stack" style="padding: 0.75rem; background: #f8fafc; border-radius: 0.5rem">
+        <div class="row">
+          <strong>{{ item.title }}</strong>
+          <span class="muted">{{ item.eventType }}</span>
+        </div>
+        <div class="muted">{{ item.startsAt | date: 'medium' }}</div>
+        @if (item.location) {
+          <div class="muted">{{ item.location }}</div>
+        }
+        <div class="row">
+          <span class="muted">RSVP: {{ myRsvp(item) }}</span>
+          <span>
+            <button mat-button type="button" (click)="rsvp(item, 'going')">Going</button>
+            <button mat-button type="button" (click)="rsvp(item, 'maybe')">Maybe</button>
+            <button mat-button type="button" (click)="rsvp(item, 'not_going')">No</button>
+          </span>
+        </div>
+      </article>
+    }
+  }
+</section>

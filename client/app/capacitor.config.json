@@ -1,0 +1,13 @@
+{
+  "appId": "com.gameplan.app",
+  "appName": "GamePlan",
+  "webDir": "dist/app/browser",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

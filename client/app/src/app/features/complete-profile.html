@@ -1,0 +1,23 @@
+<section class="stack" style="padding-top: 2rem">
+  <h1>Finish your profile</h1>
+  <p class="muted">Birthday is required so the account can be marked adult or minor.</p>
+
+  <form class="stack" [formGroup]="form" (ngSubmit)="submit()">
+    <mat-form-field appearance="outline">
+      <mat-label>Display name</mat-label>
+      <input matInput formControlName="displayName" autocomplete="name" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Birthday</mat-label>
+      <input matInput type="date" formControlName="birthday" autocomplete="bday" />
+    </mat-form-field>
+
+    @if (error()) {
+      <p class="muted" style="color: #b91c1c">{{ error() }}</p>
+    }
+
+    <button mat-flat-button color="primary" type="submit" [disabled]="form.invalid || busy()">
+      Save
+    </button>
+  </form>
+</section>

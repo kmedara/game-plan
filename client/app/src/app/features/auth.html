@@ -1,0 +1,20 @@
+<section class="stack" style="padding-top: 2rem">
+  <h1>Sign in</h1>
+  <p class="muted">Schedule, teams, and chat in one place.</p>
+
+  @if (error()) {
+    <p class="muted" style="color: #b91c1c">{{ error() }}</p>
+  }
+
+  @if (authDisabled) {
+    <p class="muted">Local auth bypass is on. Continue as {{ seedUserEmail() || 'the seed user' }}.</p>
+    <button mat-flat-button color="primary" type="button" [disabled]="busy()" (click)="continueLocal()">
+      Continue
+    </button>
+  } @else {
+    <button mat-flat-button color="primary" type="button" (click)="startHostedUi()">
+      Continue with Cognito
+    </button>
+    <p class="muted">Google, Apple, Facebook, or email — via Cognito Hosted UI.</p>
+  }
+</section>

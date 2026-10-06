@@ -1,0 +1,121 @@
+<section class="stack">
+  <div class="row">
+    <h1>Teams</h1>
+    <button mat-button type="button" (click)="logout()">Sign out</button>
+  </div>
+
+  @if (teams().length === 0) {
+    <p class="muted">Join an existing team or create a new one to get started.</p>
+  }
+
+  @for (team of teams(); track team.teamId) {
+    <div class="row" style="padding: 0.65rem; background: #f8fafc; border-radius: 0.5rem">
+      <div>
+        <strong>{{ team.name }}</strong>
+        <div class="muted">
+          {{ team.role }} · {{ team.timeZone }}
+          @if (team.location) {
+            · {{ team.location }}
+          }
+        </div>
+      </div>
+      <a mat-button [routerLink]="['/teams', team.teamId, 'admin']">Admin</a>
+    </div>
+  }
+
+  <div class="row">
+    <button
+      mat-stroked-button
+      type="button"
+      [color]="mode() === 'join' ? 'primary' : undefined"
+      (click)="mode.set('join')"
+    >
+      Join team
+    </button>
+    <button
+      mat-stroked-button
+      type="button"
+      [color]="mode() === 'create' ? 'primary' : undefined"
+      (click)="mode.set('create')"
+    >
+      Create team
+    </button>
+  </div>
+
+  @if (mode() === 'join') {
+    <h2 style="font-size: 1rem">Join a team</h2>
+    <mat-form-field appearance="outline">
+      <mat-label>Team</mat-label>
+      <input
+        type="text"
+        matInput
+        role="combobox"
+        [formControl]="joinControl"
+        [matAutocomplete]="joinAuto"
+        placeholder="Search by team name"
+      />
+      <mat-autocomplete
+        #joinAuto="matAutocomplete"
+        [displayWith]="displayTeam"
+        (opened)="onJoinPanelOpened()"
+        (closed)="onJoinPanelClosed()"
+        (optionSelected)="onJoinSelected($event.option.value)"
+      >
+        @for (team of directoryHits(); track team.teamId) {
+          <mat-option [value]="team">
+            {{ team.name }}
+            @if (team.location) {
+              <span class="muted"> · {{ team.location }}</span>
+            }
+          </mat-option>
+        }
+        @if (directoryLoadingMore()) {
+          <mat-option disabled>Loading more…</mat-option>
+        }
+      </mat-autocomplete>
+    </mat-form-field>
+    @if (joinMessage()) {
+      <p class="muted">{{ joinMessage() }}</p>
+    }
+    @if (error()) {
+      <p class="muted" style="color: #b91c1c">{{ error() }}</p>
+    }
+    <button
+      mat-flat-button
+      color="primary"
+      type="button"
+      [disabled]="selectedJoin() === undefined"
+      (click)="requestJoin()"
+    >
+      Request to join
+    </button>
+  } @else {
+    <h2 style="font-size: 1rem">Create team</h2>
+    <form class="stack" [formGroup]="form" (ngSubmit)="create()">
+      <mat-form-field appearance="outline">
+        <mat-label>Name</mat-label>
+        <input matInput formControlName="name" />
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Time zone</mat-label>
+        <input
+          type="text"
+          matInput
+          role="combobox"
+          formControlName="timeZone"
+          [matAutocomplete]="timeZoneAuto"
+          placeholder="Search time zones"
+        />
+        <mat-autocomplete #timeZoneAuto="matAutocomplete" autoActiveFirstOption>
+          @for (zone of timeZoneOptions(); track zone) {
+            <mat-option [value]="zone">{{ zone }}</mat-option>
+          }
+        </mat-autocomplete>
+        <mat-error>Pick a time zone from the list.</mat-error>
+      </mat-form-field>
+      <button mat-flat-button color="primary" type="submit" [disabled]="form.invalid">
+        Create
+      </button>
+    </form>
+  }
+</section>

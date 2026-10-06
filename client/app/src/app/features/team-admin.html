@@ -1,0 +1,70 @@
+<section class="stack">
+  <div class="row">
+    <a mat-button routerLink="/teams">Back</a>
+    <h1 class="page-title">Team admin</h1>
+  </div>
+
+  <h2 class="page-title">Settings</h2>
+  <p class="muted">Name, time zone, and location.</p>
+  <form class="stack" [formGroup]="settings" (ngSubmit)="saveSettings()">
+    <mat-form-field appearance="outline">
+      <mat-label>Team name</mat-label>
+      <input matInput formControlName="name" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Time zone</mat-label>
+      <input
+        type="text"
+        matInput
+        role="combobox"
+        formControlName="timeZone"
+        [matAutocomplete]="timeZoneAuto"
+        placeholder="Search time zones"
+      />
+      <mat-autocomplete #timeZoneAuto="matAutocomplete" autoActiveFirstOption>
+        @for (zone of timeZoneOptions(); track zone) {
+          <mat-option [value]="zone">{{ zone }}</mat-option>
+        }
+      </mat-autocomplete>
+      <mat-error>Pick a time zone from the list.</mat-error>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Location</mat-label>
+      <input matInput formControlName="location" placeholder="City, region" />
+    </mat-form-field>
+    @if (settingsSaved()) {
+      <p class="muted">Settings saved.</p>
+    }
+    @if (settingsError()) {
+      <p class="error">{{ settingsError() }}</p>
+    }
+    <button mat-flat-button color="primary" type="submit" [disabled]="settings.invalid">
+      Save settings
+    </button>
+  </form>
+
+  <h2 class="page-title">Permissions</h2>
+  <p class="muted">Assign privileged permissions to each role.</p>
+
+  @for (row of roles(); track row.role) {
+    <article class="permission-role">
+      <strong>{{ row.role }}</strong>
+      <div class="stack permission-list">
+        @for (permission of permissions; track permission) {
+          <mat-checkbox
+            [checked]="has(row, permission)"
+            [disabled]="row.role === 'team_admin' && permission === 'manage_permissions'"
+            (change)="toggle(row.role, permission, $event.checked)"
+          >
+            {{ permission }}
+          </mat-checkbox>
+        }
+      </div>
+    </article>
+  }
+
+  @if (error()) {
+    <p class="error">{{ error() }}</p>
+  }
+  <button mat-flat-button color="primary" type="button" (click)="save()">Save permissions</button>
+</section>
