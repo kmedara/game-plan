@@ -48,9 +48,19 @@ export const userProfileSchema = z.object({
   displayName: z.string().min(1).max(100),
   accountKind: accountKindSchema,
   birthday: z.string().date().optional(),
+  /** Object key for the profile photo in the media bucket. */
+  photoKey: z.string().min(1).max(512).optional(),
   /** `true` when the caller must finish birthday (and usually display name) setup. */
   needsProfileCompletion: z.boolean().optional(),
 });
+
+/** Body for setting or clearing the caller's profile photo. */
+export const updateProfileBodySchema = z
+  .object({
+    /** `null` removes the photo. */
+    photoKey: z.union([z.string().min(1).max(512), z.null()]),
+  })
+  .strict();
 
 /** Body for finishing a social-sign-in profile after Hosted UI. */
 export const completeProfileBodySchema = z
@@ -95,6 +105,9 @@ export type UserProfile = z.infer<typeof userProfileSchema>;
 
 /** Inferred type for {@link completeProfileBodySchema}. */
 export type CompleteProfileBody = z.infer<typeof completeProfileBodySchema>;
+
+/** Inferred type for {@link updateProfileBodySchema}. */
+export type UpdateProfileBody = z.infer<typeof updateProfileBodySchema>;
 
 /** Inferred type for {@link sessionTokensSchema}. */
 export type SessionTokens = z.infer<typeof sessionTokensSchema>;

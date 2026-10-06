@@ -51,6 +51,15 @@ export const chatSummarySchema = z
     kind: chatKindSchema,
     name: z.string().min(1),
     teamId: z.string().min(1).optional(),
+    createdBy: z.string().min(1),
+    createdAt: z.string().min(1),
+  })
+  .strict();
+
+/** `GET /chat`. */
+export const chatListSchema = z
+  .object({
+    chats: z.array(chatSummarySchema),
   })
   .strict();
 
@@ -60,9 +69,21 @@ export const chatMessageSchema = z
     messageId: z.string().min(1),
     chatId: z.string().min(1),
     senderId: z.string().min(1),
+    /** Current profile name of the sender. */
+    senderDisplayName: z.string().min(1).max(100),
+    /** Media object key for the sender's profile photo, when they have one. */
+    senderPhotoKey: z.string().min(1).max(512).optional(),
     body: z.string().min(1),
     attachmentKeys: z.array(z.string().min(1)).optional(),
     createdAt: z.string().min(1),
+  })
+  .strict();
+
+/** `GET /chat/:chatId/messages`. */
+export const messagePageSchema = z
+  .object({
+    messages: z.array(chatMessageSchema),
+    cursor: z.string().min(1).optional(),
   })
   .strict();
 
@@ -86,3 +107,9 @@ export type ChatSummary = z.infer<typeof chatSummarySchema>;
 
 /** Inferred type for {@link chatMessageSchema}. */
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
+
+/** Inferred type for {@link chatListSchema}. */
+export type ChatList = z.infer<typeof chatListSchema>;
+
+/** Inferred type for {@link messagePageSchema}. */
+export type MessagePage = z.infer<typeof messagePageSchema>;

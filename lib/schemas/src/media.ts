@@ -32,6 +32,15 @@ export const presignDownloadResponseSchema = z.object({
   objectKey: z.string().min(1),
 });
 
+/** `PUT /media/devices/:deviceId`. */
+export const deviceRegistrationSchema = z
+  .object({
+    deviceId: z.string().min(1),
+    platform: devicePlatformSchema,
+    updatedAt: z.string().min(1),
+  })
+  .strict();
+
 /** Body for registering or replacing a push device token. */
 export const registerDeviceBodySchema = z
   .object({
@@ -54,3 +63,6 @@ export type PresignDownloadResponse = z.infer<typeof presignDownloadResponseSche
 
 /** Inferred type for {@link registerDeviceBodySchema}. */
 export type RegisterDeviceBody = z.infer<typeof registerDeviceBodySchema>;
+
+/** Inferred type for {@link deviceRegistrationSchema}. */
+export type DeviceRegistration = z.infer<typeof deviceRegistrationSchema>;

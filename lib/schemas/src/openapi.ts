@@ -6,11 +6,24 @@
  */
 
 import {
+  acceptedInviteSchema,
   approveJoinRequestBodySchema,
   assignRoleBodySchema,
   createInviteBodySchema,
   createTeamBodySchema,
+  invitePreviewSchema,
+  approvedJoinRequestSchema,
+  joinRequestCreatedSchema,
+  joinRequestListSchema,
+  rolePermissionsResponseSchema,
   searchTeamDirectoryQuerySchema,
+  teamDirectoryPageSchema,
+  teamInviteListSchema,
+  teamMemberListSchema,
+  teamInviteSchema,
+  teamListSchema,
+  teamSummarySchema,
+  updatePositionsBodySchema,
   updateRolePermissionsBodySchema,
   updateTeamBodySchema,
 } from './teams.js';
@@ -21,22 +34,31 @@ import {
   refreshBodySchema,
   registerBodySchema,
   sessionTokensSchema,
+  updateProfileBodySchema,
   userProfileSchema,
 } from './auth.js';
 import {
   createEventBodySchema,
+  eventResponseSchema,
   rsvpBodySchema,
+  rsvpResponseSchema,
+  scheduleListSchema,
   scheduleWindowQuerySchema,
   updateEventBodySchema,
 } from './schedule.js';
 import {
+  chatListSchema,
+  chatMessageSchema,
+  chatSummarySchema,
   createPrivateChatBodySchema,
   createTeamChannelBodySchema,
   messageHistoryQuerySchema,
+  messagePageSchema,
   searchUsersQuerySchema,
   sendMessageBodySchema,
 } from './chat.js';
 import {
+  deviceRegistrationSchema,
   presignDownloadQuerySchema,
   presignDownloadResponseSchema,
   presignUploadBodySchema,
@@ -97,6 +119,14 @@ const AREAS: Record<string, AreaSpec> = {
       '/identity/me': {
         get: { summary: 'Current user profile', response: userProfileSchema, secured: true },
       },
+      '/identity/profile': {
+        patch: {
+          summary: 'Set or clear the profile photo',
+          body: updateProfileBodySchema,
+          response: userProfileSchema,
+          secured: true,
+        },
+      },
       '/identity/profile/complete': {
         post: {
           summary: 'Finish a social-login profile',
@@ -137,39 +167,69 @@ const AREAS: Record<string, AreaSpec> = {
     secured: true,
     paths: {
       '/teams': {
-        get: { summary: "List the caller's teams" },
-        post: { summary: 'Create a team', body: createTeamBodySchema },
+        get: { summary: "List the caller's teams", response: teamListSchema },
+        post: { summary: 'Create a team', body: createTeamBodySchema, response: teamSummarySchema },
       },
       '/teams/directory': {
         get: {
           summary: 'Search the team directory by name',
           query: searchTeamDirectoryQuerySchema,
+          response: teamDirectoryPageSchema,
         },
       },
-      '/teams/invite/{code}': { get: { summary: 'Look up an invite code' } },
-      '/teams/invite/{code}/accept': { post: { summary: 'Accept an invite' } },
-      '/teams/{teamId}': {
-        get: { summary: 'Get a team' },
-        patch: { summary: 'Update the name, time zone, or location', body: updateTeamBodySchema },
+      '/teams/invite/{code}': {
+        get: { summary: 'Look up an invite code', response: invitePreviewSchema },
       },
-      '/teams/{teamId}/members': { get: { summary: 'List the roster' } },
+      '/teams/invite/{code}/accept': {
+        post: { summary: 'Accept an invite', response: acceptedInviteSchema },
+      },
+      '/teams/{teamId}': {
+        get: { summary: 'Get a team', response: teamSummarySchema },
+        patch: {
+          summary: 'Update the name, time zone, location, or theme',
+          body: updateTeamBodySchema,
+          response: teamSummarySchema,
+        },
+      },
+      '/teams/{teamId}/positions': {
+        put: {
+          summary: "Replace the caller's positions on the team",
+          body: updatePositionsBodySchema,
+          response: teamSummarySchema,
+        },
+      },
+      '/teams/{teamId}/members': {
+        get: { summary: 'List the roster', response: teamMemberListSchema },
+      },
       '/teams/{teamId}/members/{userId}': {
         patch: { summary: "Change a member's role", body: assignRoleBodySchema },
       },
       '/teams/{teamId}/permissions': {
-        get: { summary: 'Get the role-permission matrix' },
-        put: { summary: 'Replace the role-permission matrix', body: updateRolePermissionsBodySchema },
+        get: { summary: 'Get the role-permission matrix', response: rolePermissionsResponseSchema },
+        put: {
+          summary: 'Replace the role-permission matrix',
+          body: updateRolePermissionsBodySchema,
+          response: rolePermissionsResponseSchema,
+        },
       },
       '/teams/{teamId}/invites': {
-        get: { summary: 'List invite codes' },
-        post: { summary: 'Create an invite code', body: createInviteBodySchema },
+        get: { summary: 'List invite codes', response: teamInviteListSchema },
+        post: {
+          summary: 'Create an invite code',
+          body: createInviteBodySchema,
+          response: teamInviteSchema,
+        },
       },
       '/teams/{teamId}/join-requests': {
-        get: { summary: 'List pending join requests' },
-        post: { summary: 'Ask to join the team' },
+        get: { summary: 'List pending join requests', response: joinRequestListSchema },
+        post: { summary: 'Ask to join the team', response: joinRequestCreatedSchema },
       },
       '/teams/{teamId}/join-requests/{requestId}/approve': {
-        post: { summary: 'Approve a join request', body: approveJoinRequestBodySchema },
+        post: {
+          summary: 'Approve a join request',
+          body: approveJoinRequestBodySchema,
+          response: approvedJoinRequestSchema,
+        },
       },
       '/teams/{teamId}/join-requests/{requestId}/reject': {
         post: { summary: 'Reject a join request' },
@@ -181,17 +241,21 @@ const AREAS: Record<string, AreaSpec> = {
     secured: true,
     paths: {
       '/schedule/teams/{teamId}': {
-        get: { summary: 'Expanded event occurrences in a time window', query: scheduleWindowQuerySchema },
+        get: {
+          summary: 'Expanded event occurrences in a time window',
+          query: scheduleWindowQuerySchema,
+          response: scheduleListSchema,
+        },
       },
       '/schedule/teams/{teamId}/events': {
-        post: { summary: 'Create an event', body: createEventBodySchema },
+        post: { summary: 'Create an event', body: createEventBodySchema, response: eventResponseSchema },
       },
       '/schedule/teams/{teamId}/events/{eventId}': {
-        get: { summary: 'Get an event' },
-        patch: { summary: 'Update an event', body: updateEventBodySchema },
+        get: { summary: 'Get an event', response: eventResponseSchema },
+        patch: { summary: 'Update an event', body: updateEventBodySchema, response: eventResponseSchema },
       },
       '/schedule/teams/{teamId}/rsvps': {
-        put: { summary: 'Set an RSVP for one occurrence', body: rsvpBodySchema },
+        put: { summary: 'Set an RSVP for one occurrence', body: rsvpBodySchema, response: rsvpResponseSchema },
       },
     },
   },
@@ -199,15 +263,23 @@ const AREAS: Record<string, AreaSpec> = {
     description: 'Team channels, private chats, and messages.',
     secured: true,
     paths: {
-      '/chat': { get: { summary: "List the caller's chats" } },
-      '/chat/channels': { post: { summary: 'Create a team channel', body: createTeamChannelBodySchema } },
-      '/chat/private': { post: { summary: 'Create a private chat', body: createPrivateChatBodySchema } },
+      '/chat': { get: { summary: "List the caller's chats", response: chatListSchema } },
+      '/chat/channels': {
+        post: { summary: 'Create a team channel', body: createTeamChannelBodySchema, response: chatSummarySchema },
+      },
+      '/chat/private': {
+        post: { summary: 'Create a private chat', body: createPrivateChatBodySchema, response: chatSummarySchema },
+      },
       '/chat/users/search': {
         get: { summary: 'Find a user by exact email', query: searchUsersQuerySchema },
       },
       '/chat/{chatId}/messages': {
-        get: { summary: 'Message history, newest first', query: messageHistoryQuerySchema },
-        post: { summary: 'Send a message', body: sendMessageBodySchema },
+        get: {
+          summary: 'Message history, newest first',
+          query: messageHistoryQuerySchema,
+          response: messagePageSchema,
+        },
+        post: { summary: 'Send a message', body: sendMessageBodySchema, response: chatMessageSchema },
       },
     },
   },
@@ -230,7 +302,11 @@ const AREAS: Record<string, AreaSpec> = {
         },
       },
       '/media/devices/{deviceId}': {
-        put: { summary: 'Register a device for push notifications', body: registerDeviceBodySchema },
+        put: {
+          summary: 'Register a device for push notifications',
+          body: registerDeviceBodySchema,
+          response: deviceRegistrationSchema,
+        },
         delete: { summary: 'Remove a device' },
       },
     },

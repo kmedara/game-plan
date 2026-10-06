@@ -1,5 +1,5 @@
 /**
- * Practice and game schedule wire contracts.
+ * Team schedule wire contracts.
  */
 
 import { eventTypeSchema, rsvpStatusSchema } from './enums.js';
@@ -16,7 +16,7 @@ export const recurrenceRuleSchema = z
   })
   .strict();
 
-/** Body for creating a practice or game. */
+/** Body for creating a team event. */
 export const createEventBodySchema = z
   .object({
     eventType: eventTypeSchema,
@@ -34,7 +34,7 @@ export const scheduleWindowQuerySchema = z.object({
   to: z.string().datetime(),
 });
 
-/** Body for editing a practice or game. */
+/** Body for editing a team event. */
 export const updateEventBodySchema = z
   .object({
     eventType: eventTypeSchema.optional(),
@@ -76,6 +76,44 @@ export const scheduleOccurrenceSchema = z
   })
   .strict();
 
+/** `GET /schedule/teams/:teamId`. */
+export const scheduleListSchema = z
+  .object({
+    teamId: z.string().min(1),
+    from: z.string().min(1),
+    to: z.string().min(1),
+    occurrences: z.array(scheduleOccurrenceSchema),
+  })
+  .strict();
+
+/** Created or updated event from the schedule routes. */
+export const eventResponseSchema = z
+  .object({
+    eventId: z.string().min(1),
+    teamId: z.string().min(1),
+    eventType: eventTypeSchema,
+    title: z.string().min(1),
+    startsAt: z.string().min(1),
+    endsAt: z.string().min(1).optional(),
+    location: z.string().optional(),
+    recurrence: recurrenceRuleSchema.optional(),
+    createdBy: z.string().min(1),
+    createdAt: z.string().min(1),
+    updatedAt: z.string().min(1),
+  })
+  .strict();
+
+/** Stored RSVP from `PUT /schedule/teams/:teamId/rsvps`. */
+export const rsvpResponseSchema = z
+  .object({
+    eventId: z.string().min(1),
+    occurrenceStartsAt: z.string().min(1),
+    userId: z.string().min(1),
+    status: rsvpStatusSchema,
+    updatedAt: z.string().min(1),
+  })
+  .strict();
+
 /** Inferred type for {@link recurrenceRuleSchema}. */
 export type RecurrenceRule = z.infer<typeof recurrenceRuleSchema>;
 
@@ -93,3 +131,12 @@ export type RsvpBody = z.infer<typeof rsvpBodySchema>;
 
 /** Inferred type for {@link scheduleOccurrenceSchema}. */
 export type ScheduleOccurrence = z.infer<typeof scheduleOccurrenceSchema>;
+
+/** Inferred type for {@link scheduleListSchema}. */
+export type ScheduleList = z.infer<typeof scheduleListSchema>;
+
+/** Inferred type for {@link eventResponseSchema}. */
+export type EventResponse = z.infer<typeof eventResponseSchema>;
+
+/** Inferred type for {@link rsvpResponseSchema}. */
+export type RsvpResponse = z.infer<typeof rsvpResponseSchema>;

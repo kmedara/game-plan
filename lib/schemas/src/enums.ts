@@ -50,8 +50,8 @@ export const chatKindSchema = z.enum(CHAT_KINDS);
 /** Inferred type for {@link chatKindSchema}. */
 export type ChatKind = z.infer<typeof chatKindSchema>;
 
-/** Schedule event types in v1. */
-export const EVENT_TYPES = ['practice', 'game'] as const;
+/** Schedule event types. `other` covers anything that is not a practice, game, or meeting. */
+export const EVENT_TYPES = ['practice', 'game', 'meeting', 'fundraiser', 'other'] as const;
 
 /** Schema for {@link EVENT_TYPES}. */
 export const eventTypeSchema = z.enum(EVENT_TYPES);
