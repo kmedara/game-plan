@@ -15,6 +15,7 @@ const areas = [
   'schedule',
   'chat',
   'media',
+  'places',
   'socket',
   'fanout',
 ] as const;

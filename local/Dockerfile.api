@@ -18,6 +18,7 @@ COPY functions/teams/package.json ./functions/teams/package.json
 COPY functions/schedule/package.json ./functions/schedule/package.json
 COPY functions/chat/package.json ./functions/chat/package.json
 COPY functions/media/package.json ./functions/media/package.json
+COPY functions/places/package.json ./functions/places/package.json
 COPY functions/socket/package.json ./functions/socket/package.json
 COPY functions/fanout/package.json ./functions/fanout/package.json
 

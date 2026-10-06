@@ -131,6 +131,11 @@ export class Api extends Construct {
             ...tableEnv,
             MEDIA_BUCKET: props.mediaBucket.bucketName,
           };
+        case 'places':
+          return {
+            ...shared,
+            GOOGLE_MAPS_API_KEY: process.env.GOOGLE_MAPS_API_KEY ?? '',
+          };
         case 'fanout':
           return { ...shared, ...tableEnv, ...queueEnv, PUSH_TOPIC_ARN: pushTopic.topicArn };
         default: {

@@ -118,6 +118,12 @@ for (const area of AREAS) {
     env.MEDIA_PUBLIC_ORIGIN =
       process.env.MEDIA_PUBLIC_ORIGIN ?? 'http://localhost:3000';
   }
+  if (area === 'places') {
+    const mapsKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
+    if (mapsKey !== undefined && mapsKey.length > 0) {
+      env.GOOGLE_MAPS_API_KEY = mapsKey;
+    }
+  }
   start(`functions/${area}/src/local.ts`, env, inspectPortForArea(area));
 }
 start('local/src/proxy.ts', {}, PROXY_INSPECT_PORT);

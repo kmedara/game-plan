@@ -6,8 +6,8 @@ services:
     user: root
     working_dir: /home/dynamodblocal
     ports:
-      - '8000:8000'
-    command: ['-jar', 'DynamoDBLocal.jar', '-sharedDb', '-dbPath', './data']
+      - "8000:8000"
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-dbPath", "./data"]
     volumes:
       - dynamodb-data:/home/dynamodblocal/data
 
@@ -20,22 +20,24 @@ services:
     depends_on:
       - dynamodb
     ports:
-      - '3000:3000'
-      - '9229-9236:9229-9236'
+      - "3000:3000"
+      - "9229-9237:9229-9237"
     environment:
       DYNAMODB_ENDPOINT: http://dynamodb:8000
-      LISTEN_HOST: '0.0.0.0'
-      NODE_INSPECT_HOST: '0.0.0.0'
+      LISTEN_HOST: "0.0.0.0"
+      NODE_INSPECT_HOST: "0.0.0.0"
       CLIENT_ORIGIN: http://localhost:4200
       MEDIA_PUBLIC_ORIGIN: http://localhost:3000
       MEDIA_BUCKET: gameplan-media-local
       AWS_REGION: us-east-1
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: local
-      AUTH_DISABLED: 'true'
-      AUTH_SEED_USER_ID: '44444444-4444-4444-8444-444444444444'
+      AUTH_DISABLED: "true"
+      AUTH_SEED_USER_ID: "44444444-4444-4444-8444-444444444444"
+      #AUTH_SEED_USER_ID: "22222222-2222-4222-8222-222222222222"
       AUTH_CALLBACK_URL: http://localhost:3000/identity/oauth/callback
       MEDIA_LOCAL_DIR: /var/lib/gameplan/media
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
     volumes:
       - media-data:/var/lib/gameplan/media
     develop:
@@ -55,7 +57,7 @@ services:
     healthcheck:
       test:
         [
-          'CMD-SHELL',
+          "CMD-SHELL",
           'node -e "fetch(\"http://127.0.0.1:3000/identity/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
         ]
       interval: 10s
@@ -72,12 +74,12 @@ services:
     depends_on:
       - api
     ports:
-      - '4200:4200'
-      - '49153:49153'
+      - "4200:4200"
+      - "49153:49153"
     environment:
       API_BASE_URL: http://localhost:3000
       WS_BASE_URL: ws://localhost:3000/socket
-      AUTH_DISABLED: 'true'
+      AUTH_DISABLED: "true"
     develop:
       watch:
         - action: sync
