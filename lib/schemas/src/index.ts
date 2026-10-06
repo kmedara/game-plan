@@ -164,5 +164,22 @@ export {
   type RegisterDeviceBody,
 } from './media.js';
 
+export {
+  placeDetailsSchema,
+  placeSuggestionSchema,
+  placesAutocompleteQuerySchema,
+  placesAutocompleteResponseSchema,
+  placesMapQuerySchema,
+  placesResolveQuerySchema,
+  placesReverseQuerySchema,
+  type PlaceDetails,
+  type PlaceSuggestion,
+  type PlacesAutocompleteQuery,
+  type PlacesAutocompleteResponse,
+  type PlacesMapQuery,
+  type PlacesResolveQuery,
+  type PlacesReverseQuery,
+} from './places.js';
+
 export { timeZoneSchema, type TimeZone } from './time.js';
 export { fanoutJobSchema, type FanoutJob } from './fanout.js';

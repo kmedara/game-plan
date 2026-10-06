@@ -65,6 +65,14 @@ import {
   presignUploadResponseSchema,
   registerDeviceBodySchema,
 } from './media.js';
+import {
+  placeDetailsSchema,
+  placesAutocompleteQuerySchema,
+  placesAutocompleteResponseSchema,
+  placesMapQuerySchema,
+  placesResolveQuerySchema,
+  placesReverseQuerySchema,
+} from './places.js';
 import { z, type ZodType } from './zod.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
@@ -308,6 +316,39 @@ const AREAS: Record<string, AreaSpec> = {
           response: deviceRegistrationSchema,
         },
         delete: { summary: 'Remove a device' },
+      },
+    },
+  },
+  places: {
+    description: 'Place autocomplete, details, and map previews (Google Places proxied by the API).',
+    secured: true,
+    paths: {
+      '/places/autocomplete': {
+        get: {
+          summary: 'Autocomplete place suggestions',
+          query: placesAutocompleteQuerySchema,
+          response: placesAutocompleteResponseSchema,
+        },
+      },
+      '/places/resolve': {
+        get: {
+          summary: 'Resolve a place id to a label and coordinates',
+          query: placesResolveQuerySchema,
+          response: placeDetailsSchema,
+        },
+      },
+      '/places/reverse': {
+        get: {
+          summary: 'Reverse-geocode coordinates to a label',
+          query: placesReverseQuerySchema,
+          response: placeDetailsSchema,
+        },
+      },
+      '/places/map': {
+        get: {
+          summary: 'Static map preview image for coordinates',
+          query: placesMapQuerySchema,
+        },
       },
     },
   },

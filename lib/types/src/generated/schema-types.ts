@@ -76,11 +76,13 @@ export type CompleteProfileBody = {
 }
 
 export type CreateEventBody = {
-  eventType: 'practice' | 'game' | 'meeting' | 'fundraiser' | 'other';
+  eventType: 'practice' | 'game' | 'meeting' | 'other';
   title: string;
   startsAt: string;
   endsAt?: string;
   location?: string;
+  latitude?: number;
+  longitude?: number;
   recurrence?: {
     frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
     interval?: number;
@@ -126,11 +128,13 @@ export type ErrorBody = {
 export type EventResponse = {
   eventId: string;
   teamId: string;
-  eventType: 'practice' | 'game' | 'meeting' | 'fundraiser' | 'other';
+  eventType: 'practice' | 'game' | 'meeting' | 'other';
   title: string;
   startsAt: string;
   endsAt?: string;
   location?: string;
+  latitude?: number;
+  longitude?: number;
   recurrence?: {
     frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
     interval?: number;
@@ -143,7 +147,7 @@ export type EventResponse = {
   updatedAt: string;
 }
 
-export type EventType = 'practice' | 'game' | 'meeting' | 'fundraiser' | 'other';
+export type EventType = 'practice' | 'game' | 'meeting' | 'other';
 
 export type FanoutJob =
   | {
@@ -220,6 +224,44 @@ export type MessagePage = {
     createdAt: string;
   }[];
   cursor?: string;
+}
+
+export type PlaceDetails = {
+  label: string;
+  latitude: number;
+  longitude: number;
+}
+
+export type PlacesAutocompleteQuery = {
+  q: string;
+}
+
+export type PlacesAutocompleteResponse = {
+  suggestions: {
+    id: string;
+    primaryText: string;
+    secondaryText?: string;
+  }[];
+}
+
+export type PlacesMapQuery = {
+  latitude: number;
+  longitude: number;
+}
+
+export type PlacesResolveQuery = {
+  id: string;
+}
+
+export type PlacesReverseQuery = {
+  latitude: number;
+  longitude: number;
+}
+
+export type PlaceSuggestion = {
+  id: string;
+  primaryText: string;
+  secondaryText?: string;
 }
 
 export type PresignDownloadQuery = {
@@ -314,11 +356,13 @@ export type ScheduleList = {
   to: string;
   occurrences: {
     eventId: string;
-    eventType: 'practice' | 'game' | 'meeting' | 'fundraiser' | 'other';
+    eventType: 'practice' | 'game' | 'meeting' | 'other';
     title: string;
     startsAt: string;
     endsAt?: string;
     location?: string;
+    latitude?: number;
+    longitude?: number;
     rsvps: {
       userId: string;
       status: ('going' | 'not_going' | 'maybe') | string;
@@ -328,11 +372,13 @@ export type ScheduleList = {
 
 export type ScheduleOccurrence = {
   eventId: string;
-  eventType: 'practice' | 'game' | 'meeting' | 'fundraiser' | 'other';
+  eventType: 'practice' | 'game' | 'meeting' | 'other';
   title: string;
   startsAt: string;
   endsAt?: string;
   location?: string;
+  latitude?: number;
+  longitude?: number;
   rsvps: {
     userId: string;
     status: ('going' | 'not_going' | 'maybe') | string;
@@ -499,11 +545,13 @@ export type TeamTheme = {
 export type TimeZone = string;
 
 export type UpdateEventBody = {
-  eventType?: 'practice' | 'game' | 'meeting' | 'fundraiser' | 'other';
+  eventType?: 'practice' | 'game' | 'meeting' | 'other';
   title?: string;
   startsAt?: string;
   endsAt?: string | null;
   location?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   recurrence?: {
     frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
     interval?: number;
@@ -579,7 +627,7 @@ export const CHAT_KINDS = ["default", "channel", "private"] as const;
 
 export const DEVICE_PLATFORMS = ["ios", "android", "web"] as const;
 
-export const EVENT_TYPES = ["practice", "game", "meeting", "fundraiser", "other"] as const;
+export const EVENT_TYPES = ["practice", "game", "meeting", "other"] as const;
 
 export const RSVP_STATUSES = ["going", "not_going", "maybe"] as const;
 

@@ -16,6 +16,27 @@ export const recurrenceRuleSchema = z
   })
   .strict();
 
+/** Latitude in decimal degrees. */
+const latitudeSchema = z.number().min(-90).max(90);
+
+/** Longitude in decimal degrees. */
+const longitudeSchema = z.number().min(-180).max(180);
+
+/**
+ * Ensures latitude and longitude are both present or both absent.
+ *
+ * @param value - An object that may carry coordinate fields.
+ * @returns True when the pair is complete or omitted.
+ */
+const hasPairedCoordinates = (value: {
+  latitude?: number | null;
+  longitude?: number | null;
+}): boolean => {
+  const hasLat = value.latitude !== undefined && value.latitude !== null;
+  const hasLng = value.longitude !== undefined && value.longitude !== null;
+  return hasLat === hasLng;
+};
+
 /** Body for creating a team event. */
 export const createEventBodySchema = z
   .object({
@@ -24,9 +45,12 @@ export const createEventBodySchema = z
     startsAt: z.string().datetime(),
     endsAt: z.string().datetime().optional(),
     location: z.string().max(500).optional(),
+    latitude: latitudeSchema.optional(),
+    longitude: longitudeSchema.optional(),
     recurrence: recurrenceRuleSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine(hasPairedCoordinates, { message: 'coordinates_incomplete' });
 
 /** Query for expanding events into a visible date window. */
 export const scheduleWindowQuerySchema = z.object({
@@ -42,9 +66,12 @@ export const updateEventBodySchema = z
     startsAt: z.string().datetime().optional(),
     endsAt: z.union([z.string().datetime(), z.null()]).optional(),
     location: z.union([z.string().max(500), z.null()]).optional(),
+    latitude: z.union([latitudeSchema, z.null()]).optional(),
+    longitude: z.union([longitudeSchema, z.null()]).optional(),
     recurrence: z.union([recurrenceRuleSchema, z.null()]).optional(),
   })
-  .strict();
+  .strict()
+  .refine(hasPairedCoordinates, { message: 'coordinates_incomplete' });
 
 /** Body for a per-occurrence RSVP. */
 export const rsvpBodySchema = z
@@ -72,9 +99,12 @@ export const scheduleOccurrenceSchema = z
     startsAt: z.string().min(1),
     endsAt: z.string().min(1).optional(),
     location: z.string().optional(),
+    latitude: latitudeSchema.optional(),
+    longitude: longitudeSchema.optional(),
     rsvps: z.array(scheduleOccurrenceRsvpSchema),
   })
-  .strict();
+  .strict()
+  .refine(hasPairedCoordinates, { message: 'coordinates_incomplete' });
 
 /** `GET /schedule/teams/:teamId`. */
 export const scheduleListSchema = z
@@ -96,12 +126,15 @@ export const eventResponseSchema = z
     startsAt: z.string().min(1),
     endsAt: z.string().min(1).optional(),
     location: z.string().optional(),
+    latitude: latitudeSchema.optional(),
+    longitude: longitudeSchema.optional(),
     recurrence: recurrenceRuleSchema.optional(),
     createdBy: z.string().min(1),
     createdAt: z.string().min(1),
     updatedAt: z.string().min(1),
   })
-  .strict();
+  .strict()
+  .refine(hasPairedCoordinates, { message: 'coordinates_incomplete' });
 
 /** Stored RSVP from `PUT /schedule/teams/:teamId/rsvps`. */
 export const rsvpResponseSchema = z
