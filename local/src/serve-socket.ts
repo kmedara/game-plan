@@ -61,6 +61,11 @@ const wsEvent = (
 /**
  * Handles `POST /@connections/{connectionId}` the way the management API does.
  *
+ * Fan-out posts JSON bytes. Amazon API Gateway delivers those as **text**
+ * WebSocket frames. The `ws` library treats a `Buffer` as binary, and browsers
+ * then expose a `Blob` — `JSON.parse(String(blob))` fails and live chat never
+ * updates. Send UTF-8 text so the browser receives a string frame.
+ *
  * @param req - The incoming HTTP request.
  * @param res - The HTTP response.
  * @param connectionId - The target connection id.
@@ -81,7 +86,7 @@ const handlePostToConnection = (
       res.end(JSON.stringify({ message: 'Gone' }));
       return;
     }
-    const data = Buffer.concat(chunks);
+    const data = Buffer.concat(chunks).toString('utf8');
     try {
       socket.send(data);
       res.writeHead(200);
@@ -102,9 +107,11 @@ const handlePostToConnection = (
 export const serveSocket = (port: number, handle: SocketHandler): void => {
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
-    const connectionMatch = url.pathname.match(/^\/@connections\/([^/]+)$/u);
+    // AWS SDK may percent-encode `@` as `%40` in the management path.
+    const pathname = decodeURIComponent(url.pathname);
+    const connectionMatch = pathname.match(/^\/@connections\/([^/]+)$/u);
     if (req.method === 'POST' && connectionMatch?.[1] !== undefined) {
-      handlePostToConnection(req, res, decodeURIComponent(connectionMatch[1]));
+      handlePostToConnection(req, res, connectionMatch[1]);
       return;
     }
 
@@ -125,6 +132,11 @@ export const serveSocket = (port: number, handle: SocketHandler): void => {
       const result = await handle(wsEvent('$connect', connectionId, req));
       if (result.statusCode !== undefined && result.statusCode >= 400) {
         ws.close();
+        return;
+      }
+      // Client may have dropped during the async `$connect` Dynamo write.
+      if (ws.readyState !== WebSocket.OPEN) {
+        void handle(wsEvent('$disconnect', connectionId, req));
         return;
       }
       liveSockets.set(connectionId, ws);

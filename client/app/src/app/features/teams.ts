@@ -34,6 +34,7 @@ import {
   type TeamDirectoryHit,
   type TeamSummary,
 } from '../core/api-client';
+import { LiveSocket } from '../core/live-socket';
 import { TEAM_PERMISSIONS, type TeamPermission, type TeamRole } from '@gameplan/types';
 
 /** Page size for join-team directory autocomplete. */
@@ -81,6 +82,7 @@ const timeZoneValidator: ValidatorFn = (control) =>
 })
 export class TeamsPageComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiClient);
+  private readonly live = inject(LiveSocket);
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
 
@@ -266,6 +268,7 @@ export class TeamsPageComponent implements OnInit, OnDestroy {
   }
 
   async logout(): Promise<void> {
+    this.live.disconnect();
     await this.api.logout();
     await this.router.navigateByUrl('/login');
   }

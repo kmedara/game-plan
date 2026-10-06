@@ -34,20 +34,18 @@ export class AppComponent implements OnInit {
 
   /** Tries cookie/Preferences refresh so a reload stays signed in. */
   private async bootstrapSession(): Promise<void> {
-    if (this.api.isAuthenticated()) {
-      await this.refreshTeamMembership();
-      return;
+    if (!this.api.isAuthenticated()) {
+      const ok = await this.api.refreshSession();
+      if (!ok) return;
     }
-    const ok = await this.api.refreshSession();
-    if (!ok) return;
+    const token = this.api.accessToken();
+    if (token !== undefined) this.live.connect(token);
+    void this.push.register();
     const user = this.api.user;
     if (user?.needsProfileCompletion) {
       await this.router.navigateByUrl('/complete-profile');
       return;
     }
-    const token = this.api.accessToken();
-    if (token !== undefined) this.live.connect(token);
-    void this.push.register();
     await this.refreshTeamMembership();
     this.showNav = !this.isAuthPath(this.router.url);
   }
