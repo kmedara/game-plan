@@ -1,0 +1,149 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Attach identity",
+      "type": "node",
+      "request": "attach",
+      "address": "localhost",
+      "port": 9229,
+      "restart": true,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/app",
+      "sourceMaps": true,
+      "sourceMapPathOverrides": {
+        "/app/*": "${workspaceFolder}/*",
+        "file:///app/*": "${workspaceFolder}/*"
+      },
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "Attach teams",
+      "type": "node",
+      "request": "attach",
+      "address": "localhost",
+      "port": 9230,
+      "restart": true,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/app",
+      "sourceMaps": true,
+      "sourceMapPathOverrides": {
+        "/app/*": "${workspaceFolder}/*",
+        "file:///app/*": "${workspaceFolder}/*"
+      },
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "Attach schedule",
+      "type": "node",
+      "request": "attach",
+      "address": "localhost",
+      "port": 9231,
+      "restart": true,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/app",
+      "sourceMaps": true,
+      "sourceMapPathOverrides": {
+        "/app/*": "${workspaceFolder}/*",
+        "file:///app/*": "${workspaceFolder}/*"
+      },
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "Attach chat",
+      "type": "node",
+      "request": "attach",
+      "address": "localhost",
+      "port": 9232,
+      "restart": true,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/app",
+      "sourceMaps": true,
+      "sourceMapPathOverrides": {
+        "/app/*": "${workspaceFolder}/*",
+        "file:///app/*": "${workspaceFolder}/*"
+      },
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "Attach media",
+      "type": "node",
+      "request": "attach",
+      "address": "localhost",
+      "port": 9233,
+      "restart": true,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/app",
+      "sourceMaps": true,
+      "sourceMapPathOverrides": {
+        "/app/*": "${workspaceFolder}/*",
+        "file:///app/*": "${workspaceFolder}/*"
+      },
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "Attach socket",
+      "type": "node",
+      "request": "attach",
+      "address": "localhost",
+      "port": 9234,
+      "restart": true,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/app",
+      "sourceMaps": true,
+      "sourceMapPathOverrides": {
+        "/app/*": "${workspaceFolder}/*",
+        "file:///app/*": "${workspaceFolder}/*"
+      },
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "Attach fanout",
+      "type": "node",
+      "request": "attach",
+      "address": "localhost",
+      "port": 9235,
+      "restart": true,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/app",
+      "sourceMaps": true,
+      "sourceMapPathOverrides": {
+        "/app/*": "${workspaceFolder}/*",
+        "file:///app/*": "${workspaceFolder}/*"
+      },
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "Attach proxy",
+      "type": "node",
+      "request": "attach",
+      "address": "localhost",
+      "port": 9236,
+      "restart": true,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/app",
+      "sourceMaps": true,
+      "sourceMapPathOverrides": {
+        "/app/*": "${workspaceFolder}/*",
+        "file:///app/*": "${workspaceFolder}/*"
+      },
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Attach API (all)",
+      "configurations": [
+        "Attach identity",
+        "Attach teams",
+        "Attach schedule",
+        "Attach chat",
+        "Attach media",
+        "Attach socket",
+        "Attach fanout",
+        "Attach proxy"
+      ],
+      "stopAll": true
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "areas": ["identity", "teams", "schedule", "chat", "media", "socket", "fanout"],
+  "tableName": "gameplan",
+  "emailIndex": "EmailIndex",
+  "connectionIndex": "ConnectionIndex",
+  "proxyPort": 3000,
+  "firstAreaPort": 3101
+}

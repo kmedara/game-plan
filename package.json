@@ -1,0 +1,41 @@
+{
+  "name": "gameplan",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "lib/*",
+    "functions/*",
+    "local",
+    "infrastructure",
+    "client/*"
+  ],
+  "scripts": {
+    "dev": "tsx local/src/dev.ts",
+    "db:up": "docker compose up -d dynamodb",
+    "db:create": "tsx local/src/create-table.ts",
+    "db:seed": "tsx local/src/seed-demo-teams.ts --reset",
+    "up": "docker compose up --watch",
+    "up:build": "docker compose up --build --watch",
+    "down": "docker compose down",
+    "test": "vitest run",
+    "generate:types": "tsx lib/schemas/scripts/generate-types.ts",
+    "typecheck": "npm run generate:types && tsc -p tsconfig.json --noEmit && tsc -p infrastructure/tsconfig.json --noEmit && tsc -p client/session/tsconfig.json --noEmit",
+    "client:start": "npm start -w @gameplan/app",
+    "client:build": "npm run build -w @gameplan/app",
+    "local-dynamo": "npx dynamodb-admin --dynamo-endpoint http://localhost:8000",
+    "synth": "npm run synth -w @gameplan/infrastructure"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.152",
+    "@types/http-proxy": "^1.17.17",
+    "@types/node": "^22.16.5",
+    "@types/ws": "^8.18.2",
+    "json-schema-to-typescript": "^16.0.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
