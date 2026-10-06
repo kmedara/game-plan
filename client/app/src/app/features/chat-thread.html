@@ -1,22 +1,49 @@
 <section class="stack">
   <div class="row">
     <a mat-button routerLink="/chats">Back</a>
-    <h1 style="font-size: 1.15rem; margin: 0">Chat</h1>
+    <h1 style="font-size: 1.15rem; margin: 0">{{ chatName() }}</h1>
   </div>
 
-  <div class="stack" style="flex-direction: column-reverse">
+  <div class="stack chat-thread" style="flex-direction: column-reverse">
     @for (message of messages(); track message.messageId) {
-      <article style="padding: 0.65rem; background: #f8fafc; border-radius: 0.5rem">
-        <div class="muted">{{ message.createdAt | date: 'short' }}</div>
-        <div>{{ message.body }}</div>
-      </article>
+      <button
+        type="button"
+        class="chat-message"
+        [attr.aria-expanded]="revealedMessageId() === message.messageId"
+        (click)="toggleMeta(message.messageId)"
+      >
+        <span class="chat-avatar" aria-hidden="true">
+          @if (photoUrl(message); as url) {
+            <img [src]="url" alt="" />
+          } @else {
+            {{ initials(message) }}
+          }
+        </span>
+        <span class="chat-message-copy">
+          @if (revealedMessageId() === message.messageId) {
+            <span class="chat-message-meta">
+              <span class="chat-sender">{{ senderName(message) }}</span>
+              <span class="muted">{{ message.createdAt | date: 'short' }}</span>
+            </span>
+          }
+          <span class="chat-body">{{ message.body }}</span>
+        </span>
+      </button>
     }
   </div>
 
-  <form class="row" (ngSubmit)="send()">
+  <form class="row chat-composer" (ngSubmit)="send()">
     <mat-form-field appearance="outline" style="flex: 1">
       <mat-label>Message</mat-label>
-      <input matInput [(ngModel)]="draft" name="draft" />
+      <textarea
+        matInput
+        cdkTextareaAutosize
+        cdkAutosizeMinRows="1"
+        cdkAutosizeMaxRows="6"
+        [(ngModel)]="draft"
+        name="draft"
+        (keydown.enter)="submitDraft($event)"
+      ></textarea>
     </mat-form-field>
     <button mat-flat-button color="primary" type="submit">Send</button>
   </form>

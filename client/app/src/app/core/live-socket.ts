@@ -3,26 +3,26 @@
  */
 
 import { Injectable, NgZone } from '@angular/core';
+import type { FanoutJob } from '@gameplan/types';
 import { environment } from '../../environments/environment';
 
-/** Fan-out payload shapes delivered over the socket. */
-export type LiveEvent =
-  | {
-      type: 'chat_message';
-      chatId: string;
-      messageId: string;
-      senderId: string;
-      body: string;
-      createdAt: string;
-      attachmentKeys?: string[];
-    }
-  | {
-      type: 'schedule_changed';
-      teamId: string;
-      eventId: string;
-    };
+type LiveListener = (event: FanoutJob) => void;
 
-type LiveListener = (event: LiveEvent) => void;
+/**
+ * Reads a WebSocket frame as text.
+ *
+ * Text frames arrive as strings. A binary frame arrives as a Blob, and
+ * `String(blob)` is not the JSON body.
+ *
+ * @param data - The `MessageEvent` data.
+ * @returns The frame text.
+ */
+const frameText = async (data: unknown): Promise<string> => {
+  if (typeof data === 'string') return data;
+  if (data instanceof Blob) return data.text();
+  if (data instanceof ArrayBuffer) return new TextDecoder().decode(data);
+  return String(data);
+};
 
 /**
  * Opens a WebSocket while the app is foregrounded and exposes live events.
@@ -57,14 +57,16 @@ export class LiveSocket {
     const url = `${environment.wsBaseUrl}?token=${encodeURIComponent(accessToken)}`;
     this.socket = new WebSocket(url);
     this.socket.addEventListener('message', (event) => {
-      try {
-        const payload = JSON.parse(String(event.data)) as LiveEvent;
-        this.zone.run(() => {
-          for (const listener of this.listeners) listener(payload);
+      void frameText(event.data)
+        .then((text) => {
+          const payload = JSON.parse(text) as FanoutJob;
+          this.zone.run(() => {
+            for (const listener of this.listeners) listener(payload);
+          });
+        })
+        .catch(() => {
+          // Ignore non-JSON frames.
         });
-      } catch {
-        // Ignore non-JSON frames.
-      }
     });
     this.socket.addEventListener('close', () => {
       if (this.token === undefined) return;
