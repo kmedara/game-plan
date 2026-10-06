@@ -2,12 +2,18 @@
  * `GET /teams/:teamId` — load one team the caller belongs to.
  */
 
-import { requireUser } from '../../../lib/auth/index.js';
+import {
+  requireMembership,
+  requireUser,
+} from '../../../lib/guards.js';
 import { json } from '../../../lib/http.js';
 import { route } from '../../../lib/pipeline.js';
-import { toTeamSummary } from '../team-store.js';
+import {
+  getMembership,
+  requireTeam as loadTeam,
+  toTeamSummary,
+} from '../team-store.js';
 import { withTeamsErrors } from './errors.js';
-import { requireMembership, requireTeam } from './guard.js';
 
 /**
  * Handles `GET /teams/:teamId`.
@@ -20,8 +26,13 @@ export const handleGetTeam = route(
   ['teamId'],
   withTeamsErrors(),
   requireUser(),
-  requireTeam(),
   requireMembership(),
-  async ({ team, member }) =>
-    json(200, toTeamSummary(team, member.role, member.positions ?? [])),
+  async ({ teamId, member }) => {
+    const team = await loadTeam(teamId);
+    const membership = await getMembership(teamId, member.userId);
+    return json(
+      200,
+      toTeamSummary(team, member.role, membership?.positions ?? []),
+    );
+  },
 );

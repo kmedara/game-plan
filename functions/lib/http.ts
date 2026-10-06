@@ -48,6 +48,25 @@ export const json = (
 });
 
 /**
+ * Builds a binary HTTP response for Amazon API Gateway.
+ *
+ * @param statusCode - The HTTP status code to return.
+ * @param contentType - The response `Content-Type`.
+ * @param bytes - The raw response body.
+ * @returns A structured proxy result with a base64-encoded body.
+ */
+export const binary = (
+  statusCode: number,
+  contentType: string,
+  bytes: Buffer,
+): APIGatewayProxyStructuredResultV2 => ({
+  statusCode,
+  headers: { "content-type": contentType },
+  body: bytes.toString("base64"),
+  isBase64Encoded: true,
+});
+
+/**
  * Attaches `Set-Cookie` values for the HTTP API `cookies` array.
  *
  * @param result - An existing structured proxy result.

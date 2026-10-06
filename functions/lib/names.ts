@@ -10,7 +10,16 @@ import { fileURLToPath } from 'node:url';
 
 /** Shape of `config/resources.json`. */
 type Resources = {
-  areas: ['identity', 'teams', 'schedule', 'chat', 'media', 'socket', 'fanout'];
+  areas: [
+    'identity',
+    'teams',
+    'schedule',
+    'chat',
+    'media',
+    'places',
+    'socket',
+    'fanout',
+  ];
   tableName: string;
   emailIndex: string;
   connectionIndex: string;
@@ -67,7 +76,7 @@ export const areaPort = (area: Area): number =>
  * @returns The area port, or `undefined` when no area matches.
  */
 export const portForPath = (path: string): number | undefined => {
-  const pathname = path.split('?')[0] ?? '/';
+  const pathname = path.split('?')[0] || '/';
   const area = AREAS.find(
     (name) => pathname === `/${name}` || pathname.startsWith(`/${name}/`),
   );

@@ -2,18 +2,22 @@
  * Join-request create, list, approve, and reject routes.
  */
 
-import { approveJoinRequestBodySchema } from '@gameplan/schemas';
-import { getProfile, requirePermission, requireUser } from '../../../lib/auth/index.js';
-import { json } from '../../../lib/http.js';
-import { route, withBodyValidation } from '../../../lib/pipeline.js';
+import { approveJoinRequestBodySchema } from "@gameplan/schemas";
+import { getProfile } from "../../../lib/auth/index.js";
+import {
+  requireMembership,
+  requirePermission,
+  requireUser,
+} from "../../../lib/guards.js";
+import { json } from "../../../lib/http.js";
+import { route, withBodyValidation } from "../../../lib/pipeline.js";
 import {
   approveJoinRequest,
   createJoinRequest,
   listJoinRequests,
   rejectJoinRequest,
-  requireMembership,
-} from '../team-store.js';
-import { withTeamsErrors } from './errors.js';
+} from "../team-store.js";
+import { withTeamsErrors } from "./errors.js";
 
 /**
  * Handles `POST /teams/:teamId/join-requests`.
@@ -23,7 +27,7 @@ import { withTeamsErrors } from './errors.js';
  * @returns The pending join request.
  */
 export const handleCreateJoinRequest = route(
-  ['teamId'],
+  ["teamId"],
   withTeamsErrors(),
   requireUser(),
   async ({ teamId, user }) => {
@@ -45,12 +49,12 @@ export const handleCreateJoinRequest = route(
  * @returns Pending join requests for the team.
  */
 export const handleListJoinRequests = route(
-  ['teamId'],
+  ["teamId"],
   withTeamsErrors(),
   requireUser(),
-  requirePermission('approve_join_requests'),
-  async ({ teamId, user }) => {
-    await requireMembership(teamId, user.userId);
+  requirePermission("approve_join_requests"),
+  requireMembership(),
+  async ({ teamId }) => {
     const requests = await listJoinRequests(teamId);
     const enriched = await Promise.all(
       requests.map(async (request) => {
@@ -82,13 +86,17 @@ export const handleListJoinRequests = route(
  * @returns The new membership.
  */
 export const handleApproveJoinRequest = route(
-  ['teamId', 'requestId'],
+  ["teamId", "requestId"],
   withTeamsErrors(),
   withBodyValidation(approveJoinRequestBodySchema),
   requireUser(),
-  requirePermission('approve_join_requests'),
+  requirePermission("approve_join_requests"),
   async ({ teamId, requestId, body }) => {
-    const { team, member } = await approveJoinRequest(teamId, requestId, body.role);
+    const { team, member } = await approveJoinRequest(
+      teamId,
+      requestId,
+      body.role,
+    );
     return json(200, {
       teamId: team.teamId,
       userId: member.userId,
@@ -108,10 +116,10 @@ export const handleApproveJoinRequest = route(
  * @returns An empty success body.
  */
 export const handleRejectJoinRequest = route(
-  ['teamId', 'requestId'],
+  ["teamId", "requestId"],
   withTeamsErrors(),
   requireUser(),
-  requirePermission('approve_join_requests'),
+  requirePermission("approve_join_requests"),
   async ({ teamId, requestId }) => {
     await rejectJoinRequest(teamId, requestId);
     return { statusCode: 204 };

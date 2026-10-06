@@ -192,7 +192,7 @@ const withSenderIdentity = async (items: readonly MessageItem[]): Promise<ChatMe
   );
   return items.map((item) => ({
     ...toStoredMessage(item),
-    ...(identities.get(item.senderId) ?? { senderDisplayName: FALLBACK_SENDER_NAME }),
+    ...identities.get(item.senderId)!,
   }));
 };
 

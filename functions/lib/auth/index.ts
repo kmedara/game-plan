@@ -10,11 +10,19 @@ export {
   toAuthUser,
   verifyAccessToken,
   verifyAuthHeader,
-} from './cognito.js';
+} from "./cognito.js";
 
-export { assertPermission, requirePermission, requireUser } from './require.js';
+export {
+  requireMembership,
+  requirePermission,
+  requireTeam,
+  requireUser,
+  withTeamIdFromBody,
+  type GuardMember,
+  type GuardTeam,
+} from "../guards.js";
 
-export { isAuthDisabled, seedUserId } from './auth-disabled.js';
+export { isAuthDisabled, seedUserId } from "./auth-disabled.js";
 
 export {
   buildAuthorizeUrl,
@@ -27,7 +35,7 @@ export {
   readOAuthIdClaims,
   type OAuthIdClaims,
   type OAuthTokens,
-} from './oauth.js';
+} from "./oauth.js";
 
 export {
   clearRefreshSetCookie,
@@ -35,7 +43,7 @@ export {
   REFRESH_DELIVERY_HEADER,
   refreshSetCookie,
   wantsBodyRefreshToken,
-} from './refresh-cookie.js';
+} from "./refresh-cookie.js";
 
 export {
   toUserProfile,
@@ -43,11 +51,18 @@ export {
   type IdentityTokens,
   type RegisterInput,
   type UserProfileItem,
-} from './identity-provider.js';
+} from "./identity-provider.js";
 
-export { getIdentityProvider, resetIdentityProvider, setIdentityProvider } from './provider.js';
-export { createLocalIdentityProvider } from './local-provider.js';
-export { createCognitoIdentityProvider, resetCognitoClient } from './cognito-provider.js';
+export {
+  getIdentityProvider,
+  resetIdentityProvider,
+  setIdentityProvider,
+} from "./provider.js";
+export { createLocalIdentityProvider } from "./local-provider.js";
+export {
+  createCognitoIdentityProvider,
+  resetCognitoClient,
+} from "./cognito-provider.js";
 export {
   issueLocalTokens,
   LOCAL_ACCESS_TTL_SECONDS,
@@ -56,5 +71,5 @@ export {
   signLocalJwt,
   verifyLocalJwt,
   type LocalJwtClaims,
-} from './local-jwt.js';
-export { findProfileByEmail, getProfile, putProfile } from './profile.js';
+} from "./local-jwt.js";
+export { findProfileByEmail, getProfile, putProfile } from "./profile.js";

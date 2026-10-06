@@ -2,12 +2,17 @@
  * Roster routes: list members and assign roles.
  */
 
-import { assignRoleBodySchema } from '@gameplan/schemas';
-import { getProfile, requirePermission, requireUser, toUserProfile } from '../../../lib/auth/index.js';
-import { json } from '../../../lib/http.js';
-import { route, withBodyValidation } from '../../../lib/pipeline.js';
-import { assignMemberRole, listMembers, requireMembership } from '../team-store.js';
-import { withTeamsErrors } from './errors.js';
+import { assignRoleBodySchema } from "@gameplan/schemas";
+import { getProfile, toUserProfile } from "../../../lib/auth/index.js";
+import {
+  requireMembership,
+  requirePermission,
+  requireUser,
+} from "../../../lib/guards.js";
+import { json } from "../../../lib/http.js";
+import { route, withBodyValidation } from "../../../lib/pipeline.js";
+import { assignMemberRole, listMembers } from "../team-store.js";
+import { withTeamsErrors } from "./errors.js";
 
 /**
  * Handles `GET /teams/:teamId/members`.
@@ -17,11 +22,11 @@ import { withTeamsErrors } from './errors.js';
  * @returns The roster with basic profile fields when available.
  */
 export const handleListMembers = route(
-  ['teamId'],
+  ["teamId"],
   withTeamsErrors(),
   requireUser(),
-  async ({ teamId, user }) => {
-    await requireMembership(teamId, user.userId);
+  requireMembership(),
+  async ({ teamId }) => {
     const members = await listMembers(teamId);
     const enriched = await Promise.all(
       members.map(async (member) => {
@@ -53,11 +58,11 @@ export const handleListMembers = route(
  * @returns The updated membership.
  */
 export const handleAssignRole = route(
-  ['teamId', 'memberUserId'],
+  ["teamId", "memberUserId"],
   withTeamsErrors(),
   withBodyValidation(assignRoleBodySchema),
   requireUser(),
-  requirePermission('assign_roles'),
+  requirePermission("assign_roles"),
   async ({ teamId, memberUserId, body }) => {
     const member = await assignMemberRole(teamId, memberUserId, body.role);
     const profile = await getProfile(member.userId);

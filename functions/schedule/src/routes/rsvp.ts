@@ -2,12 +2,12 @@
  * Per-occurrence RSVP route.
  */
 
-import { rsvpBodySchema } from '@gameplan/schemas';
-import { requireUser } from '../../../lib/auth/index.js';
-import { json } from '../../../lib/http.js';
-import { route, withBodyValidation } from '../../../lib/pipeline.js';
-import { requireMembership, upsertRsvp } from '../schedule-store.js';
-import { withScheduleErrors } from './errors.js';
+import { rsvpBodySchema } from "@gameplan/schemas";
+import { requireMembership, requireUser } from "../../../lib/guards.js";
+import { json } from "../../../lib/http.js";
+import { route, withBodyValidation } from "../../../lib/pipeline.js";
+import { upsertRsvp } from "../schedule-store.js";
+import { withScheduleErrors } from "./errors.js";
 
 /**
  * Handles `PUT /schedule/teams/:teamId/rsvps`.
@@ -17,12 +17,12 @@ import { withScheduleErrors } from './errors.js';
  * @returns The stored RSVP.
  */
 export const handleUpsertRsvp = route(
-  ['teamId'],
+  ["teamId"],
   withScheduleErrors(),
   withBodyValidation(rsvpBodySchema),
   requireUser(),
+  requireMembership(),
   async ({ teamId, user, body }) => {
-    await requireMembership(teamId, user.userId);
     const rsvp = await upsertRsvp({
       teamId,
       userId: user.userId,

@@ -3,7 +3,11 @@
  */
 
 import { createPrivateChatBodySchema, createTeamChannelBodySchema } from '@gameplan/schemas';
-import { assertPermission, requireUser } from '../../../lib/auth/index.js';
+import {
+  requirePermission,
+  requireUser,
+  withTeamIdFromBody,
+} from '../../../lib/guards.js';
 import { json } from '../../../lib/http.js';
 import { route, withBodyValidation } from '../../../lib/pipeline.js';
 import { createPrivateChat, createTeamChannel } from '../chat-store.js';
@@ -12,8 +16,6 @@ import { withChatErrors } from './errors.js';
 /**
  * Handles `POST /chat/channels`.
  *
- * The team id is on the body, so the permission check runs in the handler.
- *
  * @param event - The HTTP API event.
  * @returns The created team channel.
  */
@@ -21,8 +23,9 @@ export const handleCreateTeamChannel = route(
   withChatErrors(),
   withBodyValidation(createTeamChannelBodySchema),
   requireUser(),
+  withTeamIdFromBody(),
+  requirePermission('create_team_channels'),
   async ({ user, body }) => {
-    await assertPermission(user.userId, body.teamId, 'create_team_channels');
     const created = await createTeamChannel({ userId: user.userId, body });
     return json(201, created);
   },

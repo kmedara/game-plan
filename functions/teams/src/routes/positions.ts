@@ -3,12 +3,15 @@
  */
 
 import { updatePositionsBodySchema } from '@gameplan/schemas';
-import { requireUser } from '../../../lib/auth/index.js';
+import { requireTeam, requireUser } from '../../../lib/guards.js';
 import { json } from '../../../lib/http.js';
 import { route, withBodyValidation } from '../../../lib/pipeline.js';
-import { setMemberPositions, toTeamSummary } from '../team-store.js';
+import {
+  requireTeam as loadTeam,
+  setMemberPositions,
+  toTeamSummary,
+} from '../team-store.js';
 import { withTeamsErrors } from './errors.js';
-import { requireTeam } from './guard.js';
 
 /**
  * Handles `PUT /teams/:teamId/positions`.
@@ -23,8 +26,9 @@ export const handleSetPositions = route(
   withBodyValidation(updatePositionsBodySchema),
   requireUser(),
   requireTeam(),
-  async ({ teamId, user, team, body }) => {
+  async ({ teamId, user, body }) => {
     const membership = await setMemberPositions(teamId, user.userId, body.positions);
+    const team = await loadTeam(teamId);
     return json(200, toTeamSummary(team, membership.role, membership.positions));
   },
 );

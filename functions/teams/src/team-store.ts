@@ -154,7 +154,10 @@ export const requireTeam = async (teamId: string): Promise<TeamMetaItem> => {
  * @returns The wire summary, including location when the team has one.
  */
 export const toTeamSummary = (
-  team: TeamMetaItem,
+  team: Pick<
+    TeamMetaItem,
+    'teamId' | 'name' | 'timeZone' | 'location' | 'theme' | 'defaultChatId' | 'createdAt'
+  >,
   role: TeamRole,
   positions: readonly string[] = [],
 ) => ({

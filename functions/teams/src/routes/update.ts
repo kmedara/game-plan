@@ -2,12 +2,16 @@
  * `PATCH /teams/:teamId` — update the team name, time zone, location, and theme.
  */
 
-import { updateTeamBodySchema } from '@gameplan/schemas';
-import { badRequest, json } from '../../../lib/http.js';
-import { requirePermission, requireUser } from '../../../lib/auth/index.js';
-import { route, withBodyValidation } from '../../../lib/pipeline.js';
-import { requireMembership, toTeamSummary, updateTeamSettings } from '../team-store.js';
-import { withTeamsErrors } from './errors.js';
+import { updateTeamBodySchema } from "@gameplan/schemas";
+import {
+  requireMembership,
+  requirePermission,
+  requireUser,
+} from "../../../lib/guards.js";
+import { badRequest, json } from "../../../lib/http.js";
+import { route, withBodyValidation } from "../../../lib/pipeline.js";
+import { toTeamSummary, updateTeamSettings } from "../team-store.js";
+import { withTeamsErrors } from "./errors.js";
 
 /**
  * Handles `PATCH /teams/:teamId`.
@@ -17,30 +21,33 @@ import { withTeamsErrors } from './errors.js';
  * @returns The updated team summary.
  */
 export const handleUpdateTeam = route(
-  ['teamId'],
+  ["teamId"],
   withTeamsErrors(),
   withBodyValidation(updateTeamBodySchema),
   requireUser(),
-  requirePermission('manage_permissions'),
-  async ({ teamId, user, body }) => {
-    if (Object.keys(body).length === 0) return badRequest('invalid_body');
+  requirePermission("manage_permissions"),
+  requireMembership(),
+  async ({ teamId, member, body }) => {
+    if (Object.keys(body).length === 0) return badRequest("invalid_body");
 
     const name = body.name?.trim();
     const timeZone = body.timeZone?.trim();
     if (body.name !== undefined && (name === undefined || name.length === 0)) {
-      return badRequest('invalid_body');
+      return badRequest("invalid_body");
     }
-    if (body.timeZone !== undefined && (timeZone === undefined || timeZone.length === 0)) {
-      return badRequest('invalid_body');
+    if (
+      body.timeZone !== undefined &&
+      (timeZone === undefined || timeZone.length === 0)
+    ) {
+      return badRequest("invalid_body");
     }
 
     let location = body.location;
-    if (typeof location === 'string') {
+    if (typeof location === "string") {
       const trimmed = location.trim();
       location = trimmed.length === 0 ? null : trimmed;
     }
 
-    const member = await requireMembership(teamId, user.userId);
     const team = await updateTeamSettings({
       teamId,
       ...(name !== undefined ? { name } : {}),

@@ -2,14 +2,18 @@
  * Permission-matrix routes for the team admin screen.
  */
 
-import { TEAM_ROLES } from '@gameplan/types';
-import { updateRolePermissionsBodySchema } from '@gameplan/schemas';
-import { json } from '../../../lib/http.js';
-import { loadRolePermissionMatrix } from '../../../lib/permissions.js';
-import { requirePermission, requireUser } from '../../../lib/auth/index.js';
-import { route, withBodyValidation } from '../../../lib/pipeline.js';
-import { requireMembership, updateRolePermissions } from '../team-store.js';
-import { withTeamsErrors } from './errors.js';
+import { TEAM_ROLES } from "@gameplan/types";
+import { updateRolePermissionsBodySchema } from "@gameplan/schemas";
+import {
+  requireMembership,
+  requirePermission,
+  requireUser,
+} from "../../../lib/guards.js";
+import { json } from "../../../lib/http.js";
+import { loadRolePermissionMatrix } from "../../../lib/permissions.js";
+import { route, withBodyValidation } from "../../../lib/pipeline.js";
+import { updateRolePermissions } from "../team-store.js";
+import { withTeamsErrors } from "./errors.js";
 
 /**
  * Handles `GET /teams/:teamId/permissions`.
@@ -19,11 +23,11 @@ import { withTeamsErrors } from './errors.js';
  * @returns The role-permission matrix.
  */
 export const handleGetPermissions = route(
-  ['teamId'],
+  ["teamId"],
   withTeamsErrors(),
   requireUser(),
-  async ({ teamId, user }) => {
-    await requireMembership(teamId, user.userId);
+  requireMembership(),
+  async ({ teamId }) => {
     const matrix = await loadRolePermissionMatrix(teamId);
     return json(200, {
       roles: TEAM_ROLES.map((role) => ({
@@ -42,11 +46,11 @@ export const handleGetPermissions = route(
  * @returns The updated matrix.
  */
 export const handleUpdatePermissions = route(
-  ['teamId'],
+  ["teamId"],
   withTeamsErrors(),
   withBodyValidation(updateRolePermissionsBodySchema),
   requireUser(),
-  requirePermission('manage_permissions'),
+  requirePermission("manage_permissions"),
   async ({ teamId, body }) => {
     const matrix = await updateRolePermissions(teamId, body.roles);
     return json(200, {

@@ -58,7 +58,7 @@ export const handler = async (
   }
 
   if (parts.length === 2 && parts[0] === 'devices') {
-    const deviceId = decodeURIComponent(parts[1] ?? '');
+    const deviceId = decodeURIComponent(parts[1]!);
     if (method === 'PUT') return handleRegisterDevice(event, deviceId);
     if (method === 'DELETE') return handleDeleteDevice(event, deviceId);
   }

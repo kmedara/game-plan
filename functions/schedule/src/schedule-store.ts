@@ -60,6 +60,8 @@ export type EventItem = {
   startsAt: string;
   endsAt?: string;
   location?: string;
+  latitude?: number;
+  longitude?: number;
   recurrence?: RecurrenceRule;
   createdBy: string;
   createdAt: string;
@@ -92,6 +94,8 @@ export const toEventResponse = (item: EventItem): EventResponse => ({
   startsAt: item.startsAt,
   ...(item.endsAt !== undefined ? { endsAt: item.endsAt } : {}),
   ...(item.location !== undefined ? { location: item.location } : {}),
+  ...(item.latitude !== undefined ? { latitude: item.latitude } : {}),
+  ...(item.longitude !== undefined ? { longitude: item.longitude } : {}),
   ...(item.recurrence !== undefined ? { recurrence: item.recurrence } : {}),
   createdBy: item.createdBy,
   createdAt: item.createdAt,
@@ -166,6 +170,8 @@ export const createEvent = async (input: {
       ? { endsAt: new Date(input.body.endsAt).toISOString() }
       : {}),
     ...(input.body.location !== undefined ? { location: input.body.location } : {}),
+    ...(input.body.latitude !== undefined ? { latitude: input.body.latitude } : {}),
+    ...(input.body.longitude !== undefined ? { longitude: input.body.longitude } : {}),
     ...(input.body.recurrence !== undefined ? { recurrence: input.body.recurrence } : {}),
     createdBy: input.userId,
     createdAt: now,
@@ -223,6 +229,16 @@ export const updateEvent = async (input: {
   if (input.body.location === null) nextLocation = undefined;
   else if (input.body.location !== undefined) nextLocation = input.body.location;
 
+  let nextLatitude: number | undefined = existing.latitude;
+  let nextLongitude: number | undefined = existing.longitude;
+  if (input.body.latitude === null || input.body.longitude === null) {
+    nextLatitude = undefined;
+    nextLongitude = undefined;
+  } else if (input.body.latitude !== undefined && input.body.longitude !== undefined) {
+    nextLatitude = input.body.latitude;
+    nextLongitude = input.body.longitude;
+  }
+
   let nextRecurrence: RecurrenceRule | undefined = existing.recurrence;
   if (input.body.recurrence === null) nextRecurrence = undefined;
   else if (input.body.recurrence !== undefined) nextRecurrence = input.body.recurrence;
@@ -240,6 +256,8 @@ export const updateEvent = async (input: {
     startsAt: nextStartsAt,
     ...(nextEndsAt !== undefined ? { endsAt: nextEndsAt } : {}),
     ...(nextLocation !== undefined ? { location: nextLocation } : {}),
+    ...(nextLatitude !== undefined ? { latitude: nextLatitude } : {}),
+    ...(nextLongitude !== undefined ? { longitude: nextLongitude } : {}),
     ...(nextRecurrence !== undefined ? { recurrence: nextRecurrence } : {}),
     updatedAt: now,
   };
@@ -247,6 +265,8 @@ export const updateEvent = async (input: {
   // Drop cleared optional fields so DynamoDB does not keep stale attributes.
   if (nextEndsAt === undefined) delete item.endsAt;
   if (nextLocation === undefined) delete item.location;
+  if (nextLatitude === undefined) delete item.latitude;
+  if (nextLongitude === undefined) delete item.longitude;
   if (nextRecurrence === undefined) delete item.recurrence;
 
   await putItem(item);
@@ -299,6 +319,8 @@ export const listOccurrences = async (
         startsAt,
         ...(endsAt !== undefined ? { endsAt } : {}),
         ...(event.location !== undefined ? { location: event.location } : {}),
+        ...(event.latitude !== undefined ? { latitude: event.latitude } : {}),
+        ...(event.longitude !== undefined ? { longitude: event.longitude } : {}),
         rsvps: rsvpsByOccurrence.get(`${event.eventId}\0${startsAt}`) ?? [],
       });
     }
