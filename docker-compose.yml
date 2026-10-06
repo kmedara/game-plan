@@ -7,9 +7,32 @@ services:
     working_dir: /home/dynamodblocal
     ports:
       - '8000:8000'
-    command: ['-jar', 'DynamoDBLocal.jar', '-sharedDb', '-dbPath', './data']
+    environment:
+      # Jetty in DynamoDB Local 3.x binds IPv6-only by default; other Compose
+      # services reach this container over the IPv4 bridge and would time out.
+      JAVA_TOOL_OPTIONS: '-Djava.net.preferIPv4Stack=true'
+    # -disableTelemetry avoids a startup hang when outbound telemetry is blocked.
+    command:
+      [
+        '-jar',
+        'DynamoDBLocal.jar',
+        '-sharedDb',
+        '-dbPath',
+        './data',
+        '-disableTelemetry',
+      ]
     volumes:
       - dynamodb-data:/home/dynamodblocal/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'curl -sf -o /dev/null -X POST http://127.0.0.1:8000/ -H "Content-Type: application/x-amz-json-1.0" -H "X-Amz-Target: DynamoDB_20120810.ListTables" -H "Authorization: AWS4-HMAC-SHA256 Credential=local/20200101/us-east-1/dynamodb/aws4_request, SignedHeaders=host;x-amz-date, Signature=aaaa" -d "{}"',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
   api:
     build:
@@ -18,7 +41,8 @@ services:
     container_name: gameplan-api
     restart: unless-stopped
     depends_on:
-      - dynamodb
+      dynamodb:
+        condition: service_healthy
     ports:
       - '3000:3000'
       - '9229-9236:9229-9236'
