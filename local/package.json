@@ -1,0 +1,14 @@
+{
+  "name": "@gameplan/local",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.888.0",
+    "@gameplan/schemas": "*",
+    "@gameplan/types": "*",
+    "http-proxy": "^1.18.1",
+    "swagger-ui-dist": "^5.33.1",
+    "ws": "^8.18.3"
+  }
+}

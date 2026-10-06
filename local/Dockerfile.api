@@ -1,0 +1,55 @@
+# syntax=docker/dockerfile:1
+#
+# Local API image: area processes + reverse proxy.
+# Installs only lib/*, functions/*, and local — skips client and infrastructure.
+
+FROM node:22-bookworm-slim
+
+WORKDIR /app
+
+# Manifests only — source COPY comes after install so code edits keep the install layer.
+COPY package.json package-lock.json ./
+COPY lib/schemas/package.json ./lib/schemas/package.json
+COPY lib/types/package.json ./lib/types/package.json
+COPY local/package.json ./local/package.json
+COPY functions/lib/package.json ./functions/lib/package.json
+COPY functions/identity/package.json ./functions/identity/package.json
+COPY functions/teams/package.json ./functions/teams/package.json
+COPY functions/schedule/package.json ./functions/schedule/package.json
+COPY functions/chat/package.json ./functions/chat/package.json
+COPY functions/media/package.json ./functions/media/package.json
+COPY functions/socket/package.json ./functions/socket/package.json
+COPY functions/fanout/package.json ./functions/fanout/package.json
+
+# Filtered workspaces no longer match the full lockfile, so use npm install (not npm ci).
+RUN --mount=type=cache,target=/root/.npm \
+  node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); p.workspaces=['lib/*','functions/*','local']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));" \
+  && npm install --no-audit --no-fund
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY functions ./functions
+COPY local ./local
+COPY lib ./lib
+COPY config ./config
+
+COPY local/docker-entrypoint.sh /docker-entrypoint.sh
+RUN sed -i 's/\r$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
+
+ENV NODE_ENV=development
+ENV LISTEN_HOST=0.0.0.0
+ENV DYNAMODB_ENDPOINT=http://dynamodb:8000
+ENV CLIENT_ORIGIN=http://localhost:4200
+ENV MEDIA_PUBLIC_ORIGIN=http://localhost:3000
+ENV AWS_REGION=us-east-1
+ENV AWS_ACCESS_KEY_ID=local
+ENV AWS_SECRET_ACCESS_KEY=local
+ENV AUTH_DISABLED=true
+ENV AUTH_SEED_USER_ID=44444444-4444-4444-8444-444444444444
+ENV AUTH_CALLBACK_URL=http://localhost:3000/identity/oauth/callback
+
+EXPOSE 3000
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
