@@ -8,6 +8,7 @@
  * - `API_BASE_URL` — HTTP API origin (required for production)
  * - `WS_BASE_URL` — WebSocket origin (defaults from `API_BASE_URL` + `/socket`)
  * - `AUTH_DISABLED` — `true` enables the seed-user bypass (dev only; prod forces false)
+ * - `GOOGLE_MAPS_BROWSER_API_KEY` — Maps JavaScript API key for the web map picker
  */
 
 import fs from 'node:fs';
@@ -43,6 +44,7 @@ const environment = {
   authDisabled: isProduction
     ? false
     : (process.env.AUTH_DISABLED ?? 'true') === 'true',
+  googleMapsApiKey: (process.env.GOOGLE_MAPS_BROWSER_API_KEY ?? '').trim(),
 };
 
 const contents = `import type { Environment } from './environment.types';
@@ -52,5 +54,5 @@ export const environment: Environment = ${JSON.stringify(environment, null, 2)};
 
 fs.writeFileSync(target, contents);
 console.log(
-  `Wrote ${target} (configuration=${configuration}, authDisabled=${environment.authDisabled})`,
+  `Wrote ${target} (configuration=${configuration}, authDisabled=${environment.authDisabled}, mapsBrowserKey=${environment.googleMapsApiKey.length > 0})`,
 );

@@ -138,7 +138,7 @@ export class ModalService {
   private readonly appRef = inject(ApplicationRef);
   private readonly environmentInjector = inject(EnvironmentInjector);
   private readonly injector = inject(Injector);
-  private openShell: { destroy: () => void } | undefined;
+  private openShell = false;
 
   /**
    * Injects `component` into a modal shell.
@@ -148,12 +148,12 @@ export class ModalService {
    * @returns The value passed to {@link ModalRef.close}, or `undefined` when dismissed.
    */
   open<R>(component: Type<unknown>, options: ModalOpenOptions): Promise<R | undefined> {
-    if (this.openShell !== undefined) return Promise.resolve(undefined);
+    if (this.openShell) return Promise.resolve(undefined);
 
     return new Promise((resolve) => {
       let shellRef: ReturnType<typeof createComponent<ModalShellComponent>> | undefined;
       const finish = (result: R | undefined): void => {
-        this.openShell = undefined;
+        this.openShell = false;
         if (shellRef !== undefined) {
           this.appRef.detachView(shellRef.hostView);
           shellRef.destroy();
@@ -176,7 +176,7 @@ export class ModalService {
       shellRef.instance.contentInputs = options.inputs ?? {};
       document.body.appendChild(shellRef.location.nativeElement);
       this.appRef.attachView(shellRef.hostView);
-      this.openShell = { destroy: () => finish(undefined) };
+      this.openShell = true;
       shellRef.changeDetectorRef.detectChanges();
     });
   }

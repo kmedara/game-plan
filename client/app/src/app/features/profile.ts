@@ -8,8 +8,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import type { TeamSummary, UserProfile } from '@gameplan/types';
-import { ApiClient } from '../core/api-client';
+import { ApiClientService } from '../core/api-client.service';
+import { ActiveTeamService } from '../core/active-team.service';
 import { ThemeToggleComponent } from '../core/theme-toggle';
+import { Router } from '@angular/router';
 
 /** Image types accepted for a profile photo. */
 const PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
@@ -25,7 +27,7 @@ const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
  */
 const initialsOf = (displayName: string): string => {
   const parts = displayName.trim().split(/\s+/u).filter((part) => part.length > 0);
-  const letters = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '');
+  const letters = parts.slice(0, 2).map((part) => part.charAt(0).toUpperCase());
   const initials = letters.join('');
   return initials.length > 0 ? initials : '?';
 };
@@ -55,7 +57,9 @@ const positionMessage = (code: string): string => {
   templateUrl: './profile.html',
 })
 export class ProfilePageComponent implements OnInit {
-  private readonly api = inject(ApiClient);
+  private readonly api = inject(ApiClientService);
+  private readonly activeTeam = inject(ActiveTeamService);
+  private readonly router = inject(Router);
   private readonly positionControls = new Map<string, FormControl<string>>();
 
   readonly profile = signal<UserProfile | undefined>(undefined);
@@ -68,6 +72,13 @@ export class ProfilePageComponent implements OnInit {
 
   ngOnInit(): void {
     void this.load();
+  }
+
+  /** Clears the session and returns to login. */
+  async logout(): Promise<void> {
+    await this.activeTeam.clear();
+    await this.api.logout();
+    await this.router.navigateByUrl('/login');
   }
 
   /**

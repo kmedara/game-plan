@@ -12,6 +12,8 @@ COPY package.json package-lock.json ./
 COPY lib/types/package.json ./lib/types/package.json
 COPY client/app/package.json ./client/app/package.json
 COPY client/session/package.json ./client/session/package.json
+# file: dependency of @gameplan/app — directory must exist before npm install.
+COPY client/app/plugins/place-search/package.json ./client/app/plugins/place-search/package.json
 
 # Filtered workspaces no longer match the full lockfile, so use npm install (not npm ci).
 RUN --mount=type=cache,target=/root/.npm \
@@ -21,6 +23,11 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY client ./client
 COPY lib/types ./lib/types
 COPY config ./config
+
+# Plugin dist/ is excluded by .dockerignore; compile so @gameplan/place-search resolves.
+RUN --mount=type=cache,target=/root/.npm \
+  npm --prefix client/app/plugins/place-search install --no-audit --no-fund \
+  && npm --prefix client/app/plugins/place-search run build
 
 ENV API_BASE_URL=http://localhost:3000
 ENV WS_BASE_URL=ws://localhost:3000/socket

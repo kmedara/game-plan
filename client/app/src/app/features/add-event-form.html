@@ -33,9 +33,36 @@
     </mat-form-field>
   </div>
 
+  <app-location-map
+    [latitude]="mapLatitude()"
+    [longitude]="mapLongitude()"
+    (locationPicked)="onMapPicked($event)"
+  />
+
   <mat-form-field appearance="outline">
     <mat-label>Location</mat-label>
-    <input matInput name="location" [(ngModel)]="draftLocation" />
+    <input
+      matInput
+      name="location"
+      [ngModel]="draftLocation"
+      [matAutocomplete]="locationAuto"
+      (ngModelChange)="onLocationInput($event)"
+      placeholder="Search for a place"
+    />
+    <mat-autocomplete
+      #locationAuto="matAutocomplete"
+      [displayWith]="displayLocation"
+      (optionSelected)="onPlaceSelected($event.option.value)"
+    >
+      @for (suggestion of placeSuggestions(); track suggestion.id) {
+        <mat-option [value]="suggestion">
+          {{ suggestion.primaryText }}
+          @if (suggestion.secondaryText) {
+            <span class="muted"> · {{ suggestion.secondaryText }}</span>
+          }
+        </mat-option>
+      }
+    </mat-autocomplete>
   </mat-form-field>
 
   <mat-form-field appearance="outline">

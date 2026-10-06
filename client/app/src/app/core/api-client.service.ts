@@ -48,14 +48,14 @@ import {
   CapacitorRefreshStore,
   SessionService,
   WebRefreshStore,
-} from './session-bridge';
+} from './session.service';
 import { environment } from '../../environments/environment';
 
 /**
  * Session + product API client used by the Angular screens.
  */
 @Injectable({ providedIn: 'root' })
-export class ApiClient {
+export class ApiClientService {
   private readonly native = Capacitor.isNativePlatform();
   private readonly session = new SessionService({
     baseUrl: `${environment.apiBaseUrl}/identity`,
@@ -65,7 +65,8 @@ export class ApiClient {
       : new WebRefreshStore(),
   });
 
-  private selectedTeamId: string | undefined;
+  /** Selected team id for schedule, chats, and branding (persisted). */
+  readonly selectedTeamId = signal<string | undefined>(undefined);
 
   /** Whether the signed-in user belongs to at least one team (drives schedule/chat nav). */
   readonly hasTeams = signal(false);
@@ -85,7 +86,7 @@ export class ApiClient {
 
   /** Currently selected team id for schedule and admin screens. */
   getTeamId(): string | undefined {
-    return this.selectedTeamId;
+    return this.selectedTeamId();
   }
 
   /**
@@ -94,19 +95,19 @@ export class ApiClient {
    * @returns The stored id, or `undefined` when none has been saved.
    */
   async restoreTeamId(): Promise<string | undefined> {
-    if (this.selectedTeamId !== undefined) return this.selectedTeamId;
+    if (this.selectedTeamId() !== undefined) return this.selectedTeamId();
     try {
       const { value } = await Preferences.get({ key: this.selectedTeamKey });
-      if (value !== null && value.length > 0) this.selectedTeamId = value;
+      if (value !== null && value.length > 0) this.selectedTeamId.set(value);
     } catch {
       // The in-memory id stays empty when preferences cannot be read.
     }
-    return this.selectedTeamId;
+    return this.selectedTeamId();
   }
 
   /** Selects the active team for schedule and admin screens. */
   setTeamId(teamId: string | undefined): void {
-    this.selectedTeamId = teamId;
+    this.selectedTeamId.set(teamId);
     void this.persistTeamId(teamId);
   }
 
@@ -315,7 +316,6 @@ export class ApiClient {
       `/teams/invite/${encodeURIComponent(code)}/accept`,
     );
     this.hasTeams.set(true);
-    this.setTeamId(membership.teamId);
     return membership;
   }
 
@@ -347,6 +347,59 @@ export class ApiClient {
 
   async putRsvp(teamId: string, body: RsvpBody): Promise<RsvpResponse> {
     return this.request('PUT', `/schedule/teams/${teamId}/rsvps`, body);
+  }
+
+  /**
+   * Autocompletes places through the API Places proxy.
+   *
+   * @param query - The typed place text.
+   * @returns Suggestion rows for the location field.
+   */
+  async autocompletePlaces(
+    query: string,
+  ): Promise<Array<{ id: string; primaryText: string; secondaryText?: string }>> {
+    const params = new URLSearchParams({ q: query });
+    const body = await this.request<{
+      suggestions: Array<{ id: string; primaryText: string; secondaryText?: string }>;
+    }>('GET', `/places/autocomplete?${params}`);
+    return body.suggestions;
+  }
+
+  /**
+   * Resolves a place id through the API Places proxy.
+   *
+   * @param id - The place id from autocomplete.
+   * @returns Label and coordinates.
+   */
+  async resolvePlace(id: string): Promise<{
+    label: string;
+    latitude: number;
+    longitude: number;
+  }> {
+    const params = new URLSearchParams({ id });
+    return this.request('GET', `/places/resolve?${params}`);
+  }
+
+  /**
+   * Reverse-geocodes a map pin through the API Places proxy.
+   *
+   * @param latitude - Latitude in decimal degrees.
+   * @param longitude - Longitude in decimal degrees.
+   * @returns Label and coordinates.
+   */
+  async reverseGeocodePlace(
+    latitude: number,
+    longitude: number,
+  ): Promise<{
+    label: string;
+    latitude: number;
+    longitude: number;
+  }> {
+    const params = new URLSearchParams({
+      latitude: String(latitude),
+      longitude: String(longitude),
+    });
+    return this.request('GET', `/places/reverse?${params}`);
   }
 
   async listChats(): Promise<ChatList['chats']> {
@@ -386,6 +439,25 @@ export class ApiClient {
     path: string,
     body?: unknown,
   ): Promise<T> {
+    const response = await this.fetchAuthorized(method, path, body);
+    if (response.status === 204) return {} as T;
+    if (!response.ok) throw new Error(await this.errorCode(response));
+    return (await response.json()) as T;
+  }
+
+  /**
+   * Runs an authenticated fetch with one refresh retry on `401`.
+   *
+   * @param method - HTTP method.
+   * @param path - API path.
+   * @param body - Optional JSON body.
+   * @returns The raw fetch response.
+   */
+  private async fetchAuthorized(
+    method: string,
+    path: string,
+    body?: unknown,
+  ): Promise<Response> {
     const headers: Record<string, string> = {};
     const auth = this.session.authorizationHeader();
     if (auth !== undefined) headers['authorization'] = auth;
@@ -412,17 +484,23 @@ export class ApiClient {
       }
     }
 
-    if (response.status === 204) return {} as T;
-    if (!response.ok) {
-      let code = `http_${response.status}`;
-      try {
-        const err = (await response.json()) as { error?: string };
-        if (typeof err.error === 'string') code = err.error;
-      } catch {
-        // Keep status-based code.
-      }
-      throw new Error(code);
+    return response;
+  }
+
+  /**
+   * Reads a stable error code from a failed API response.
+   *
+   * @param response - The failed fetch response.
+   * @returns An `error` field from JSON, or `http_<status>`.
+   */
+  private async errorCode(response: Response): Promise<string> {
+    let code = `http_${response.status}`;
+    try {
+      const err = (await response.json()) as { error?: string };
+      if (typeof err.error === 'string') code = err.error;
+    } catch {
+      // Keep status-based code.
     }
-    return (await response.json()) as T;
+    return code;
   }
 }

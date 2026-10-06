@@ -4,9 +4,9 @@
 
 import { Injectable, InjectionToken, inject, signal } from '@angular/core';
 import { Preferences } from '@capacitor/preferences';
-import type { PreferencesLike } from './session-bridge';
+import type { PreferencesLike } from './session.service';
 
-/** Preference values for {@link ThemePreference}. */
+/** Preference values for {@link ThemePreferenceService}. */
 export const THEME_MODES = ['system', 'light', 'dark'] as const;
 
 /** Saved appearance choice. */
@@ -15,11 +15,26 @@ export type ThemeMode = (typeof THEME_MODES)[number];
 /** Preferences key for the saved appearance. */
 export const THEME_MODE_KEY = 'theme-mode';
 
-/** Store used by {@link ThemePreference}. Tests replace this token. */
+/** Store used by {@link ThemePreferenceService}. Tests replace this token. */
 export const THEME_PREFERENCES = new InjectionToken<PreferencesLike>('THEME_PREFERENCES', {
   providedIn: 'root',
-  factory: () => Preferences,
+  // Plain object — Capacitor's Preferences proxy throws if Angular teardown
+  // probes `ngOnDestroy` on the plugin object during TestBed cleanup.
+  factory: capacitorThemePreferences,
 });
+
+/**
+ * Capacitor Preferences adapter for theme storage.
+ *
+ * @returns A plain {@link PreferencesLike} that delegates to Capacitor.
+ */
+export function capacitorThemePreferences(): PreferencesLike {
+  return {
+    get: (options) => Preferences.get(options),
+    set: (options) => Preferences.set(options),
+    remove: (options) => Preferences.remove(options),
+  };
+}
 
 const COLOR_SCHEME: Record<ThemeMode, string> = {
   system: 'light dark',
@@ -40,7 +55,7 @@ export const isThemeMode = (value: string | null | undefined): value is ThemeMod
  * Applies the saved appearance by setting `color-scheme` on the document.
  */
 @Injectable({ providedIn: 'root' })
-export class ThemePreference {
+export class ThemePreferenceService {
   private readonly preferences = inject(THEME_PREFERENCES);
 
   readonly mode = signal<ThemeMode>('system');

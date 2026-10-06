@@ -30,8 +30,9 @@ import type {
   TeamSummary,
   TeamTheme,
 } from '@gameplan/types';
-import { ApiClient } from '../core/api-client';
-import { TeamBrand } from '../core/team-brand';
+import { ApiClientService } from '../core/api-client.service';
+import { ActiveTeamService } from '../core/active-team.service';
+import { TeamBrandService } from '../core/team-brand.service';
 import {
   TEAM_PERMISSIONS,
   TEAM_ROLES,
@@ -45,10 +46,11 @@ const DIRECTORY_PAGE_SIZE = 10;
 /** Pixels from the panel bottom that trigger the next directory page. */
 const DIRECTORY_SCROLL_THRESHOLD_PX = 32;
 /** IANA time zones known to the browser; some engines omit `UTC` from the list. */
-const TIME_ZONES: readonly string[] = (() => {
+export const listTimeZones = (): readonly string[] => {
   const zones = Intl.supportedValuesOf('timeZone');
   return zones.includes('UTC') ? zones : [...zones, 'UTC'].sort();
-})();
+};
+const TIME_ZONES: readonly string[] = listTimeZones();
 const TIME_ZONE_SET = new Set(TIME_ZONES);
 
 /**
@@ -75,7 +77,8 @@ const timeZoneValidator: ValidatorFn = (control) =>
  * @param err - The error thrown by the API client.
  * @returns Text to show on the admin page.
  */
-function joinRequestMessage(err: unknown): string {
+/** Maps join-request API errors to short UI sentences. */
+export function joinRequestMessage(err: unknown): string {
   const code = err instanceof Error ? err.message : '';
   if (code === 'minor_cannot_be_team_admin') return 'A minor cannot be a team admin.';
   if (code === 'minor_cannot_hold_manage_permissions') {
@@ -140,15 +143,16 @@ export const inviteCodeFromInput = (raw: string): string => {
   templateUrl: './teams.html',
 })
 export class TeamsPageComponent implements OnInit, OnDestroy {
-  private readonly api = inject(ApiClient);
+  private readonly api = inject(ApiClientService);
+  private readonly activeTeam = inject(ActiveTeamService);
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
-  readonly teamBrand = inject(TeamBrand);
+  readonly teamBrand = inject(TeamBrandService);
   readonly roleLabel = roleLabel;
 
   @ViewChild('joinAuto') private joinAuto?: MatAutocomplete;
 
-  readonly teams = signal<TeamSummary[]>([]);
+  readonly teams = this.activeTeam.teams;
   /** Team ids with join requests the caller is allowed to approve. */
   readonly pendingApprovalTeamIds = signal<ReadonlySet<string>>(new Set());
   readonly error = signal<string | undefined>(undefined);
@@ -302,7 +306,7 @@ export class TeamsPageComponent implements OnInit, OnDestroy {
     } catch {
       // Keep the rows already shown; the user can scroll again to retry.
     } finally {
-      if (seq === this.searchSeq) this.directoryLoadingMore.set(false);
+      this.directoryLoadingMore.set(false);
     }
   }
 
@@ -316,15 +320,8 @@ export class TeamsPageComponent implements OnInit, OnDestroy {
   }
 
   private async load(): Promise<void> {
-    const teams = await this.api.listTeams();
-    this.teams.set(teams);
-    void this.loadPendingApprovals(teams);
-    await this.api.restoreTeamId();
-    const selected =
-      teams.find((team) => team.teamId === this.api.getTeamId()) ?? teams[0];
-    if (selected !== undefined) this.api.setTeamId(selected.teamId);
-    void this.teamBrand.apply(selected?.theme);
-    for (const team of teams) void this.teamBrand.rememberLogo(team.theme?.logoKey);
+    await this.activeTeam.refresh();
+    void this.loadPendingApprovals(this.teams());
   }
 
   /**
@@ -375,8 +372,8 @@ export class TeamsPageComponent implements OnInit, OnDestroy {
     this.error.set(undefined);
     try {
       const team = await this.api.createTeam(this.form.getRawValue());
-      this.api.setTeamId(team.teamId);
-      await this.load();
+      await this.activeTeam.refresh();
+      await this.activeTeam.select(team.teamId);
       this.form.reset({ name: '', timeZone: 'America/New_York' });
       await this.router.navigateByUrl('/schedule');
     } catch (err) {
@@ -389,12 +386,6 @@ export class TeamsPageComponent implements OnInit, OnDestroy {
     const code = inviteCodeFromInput(this.inviteCode.value);
     if (code.length === 0) return;
     await this.router.navigate(['/invite', code]);
-  }
-
-  async logout(): Promise<void> {
-    await this.api.logout();
-    await this.teamBrand.apply(undefined);
-    await this.router.navigateByUrl('/login');
   }
 }
 
@@ -439,10 +430,10 @@ const sameTheme = (next: TeamTheme | null, loaded: TeamTheme | undefined): boole
   templateUrl: './team-admin.html',
 })
 export class TeamAdminPageComponent implements OnInit, OnDestroy {
-  private readonly api = inject(ApiClient);
+  private readonly api = inject(ApiClientService);
   private readonly route = inject(ActivatedRoute);
   private readonly fb = inject(FormBuilder);
-  readonly teamBrand = inject(TeamBrand);
+  readonly teamBrand = inject(TeamBrandService);
 
   readonly teamName = signal('Team');
   readonly members = signal<TeamMember[]>([]);
@@ -509,6 +500,7 @@ export class TeamAdminPageComponent implements OnInit, OnDestroy {
     this.teamName.set(team.name);
     this.settings.reset(this.settingsValue(team), { emitEvent: false });
     this.loadedTheme = team.theme;
+    // Preview this team's theme while editing; does not change the app-wide selection.
     void this.teamBrand.apply(team.theme);
     void this.showLogo(team.theme?.logoKey);
     this.roles.set(result.roles);

@@ -1,0 +1,39 @@
+{
+  "name": "@gameplan/place-search",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Capacitor place autocomplete: MapKit on iOS, Google Places on Android",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "unpkg": "dist/plugin.js",
+  "files": [
+    "android/src/main/",
+    "android/build.gradle",
+    "dist/",
+    "ios/Sources",
+    "Package.swift",
+    "GameplanPlaceSearch.podspec"
+  ],
+  "scripts": {
+    "build": "npm run clean && tsc && rollup -c rollup.config.mjs",
+    "clean": "rimraf ./dist"
+  },
+  "peerDependencies": {
+    "@capacitor/core": ">=8.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/core": "^8.5.2",
+    "rimraf": "^6.1.0",
+    "rollup": "^4.53.2",
+    "typescript": "~5.7.2"
+  },
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    },
+    "android": {
+      "src": "android"
+    }
+  }
+}

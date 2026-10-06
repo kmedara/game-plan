@@ -3,7 +3,7 @@
  */
 
 import { Component, inject } from '@angular/core';
-import { THEME_MODES, ThemePreference, type ThemeMode } from './theme';
+import { THEME_MODES, ThemePreferenceService, type ThemeMode } from './theme-preference.service';
 
 const LABELS: Record<ThemeMode, string> = {
   system: 'System',
@@ -17,6 +17,6 @@ const LABELS: Record<ThemeMode, string> = {
   templateUrl: './theme-toggle.html',
 })
 export class ThemeToggleComponent {
-  readonly theme = inject(ThemePreference);
+  readonly theme = inject(ThemePreferenceService);
   readonly options = THEME_MODES.map((mode) => ({ mode, label: LABELS[mode] }));
 }

@@ -26,7 +26,8 @@ export const RRULE_WEEKDAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as cons
  */
 export const rruleWeekDay = (dayKey: string): (typeof RRULE_WEEKDAYS)[number] => {
   const [year, month, day] = dayKey.split('-').map(Number) as [number, number, number];
-  return RRULE_WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()] ?? 'MO';
+  // getUTCDay is always 0–6 for a valid civil date.
+  return RRULE_WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()]!;
 };
 
 /** One cell in a month grid, including days that belong to the adjacent months. */

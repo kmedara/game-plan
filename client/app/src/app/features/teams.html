@@ -1,9 +1,4 @@
 <section class="stack">
-  <div class="row">
-    <h1>Teams</h1>
-    <button mat-button type="button" (click)="logout()">Sign out</button>
-  </div>
-
   @if (teams().length === 0) {
     <p class="muted">Join an existing team or create a new one to get started.</p>
   }

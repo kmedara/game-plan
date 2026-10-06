@@ -6,7 +6,8 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import type { InvitePreview } from '@gameplan/types';
-import { ApiClient } from '../core/api-client';
+import { ApiClientService } from '../core/api-client.service';
+import { ActiveTeamService } from '../core/active-team.service';
 import { roleLabel } from './teams';
 
 /**
@@ -39,7 +40,8 @@ export const inviteErrorMessage = (err: unknown): string => {
   templateUrl: './invite.html',
 })
 export class InvitePageComponent implements OnInit {
-  private readonly api = inject(ApiClient);
+  private readonly api = inject(ApiClientService);
+  private readonly activeTeam = inject(ActiveTeamService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
@@ -73,7 +75,9 @@ export class InvitePageComponent implements OnInit {
     this.joining.set(true);
     this.error.set(undefined);
     try {
-      await this.api.acceptInvite(this.code);
+      const membership = await this.api.acceptInvite(this.code);
+      await this.activeTeam.refresh();
+      await this.activeTeam.select(membership.teamId);
       await this.router.navigateByUrl('/schedule');
     } catch (err) {
       this.error.set(inviteErrorMessage(err));

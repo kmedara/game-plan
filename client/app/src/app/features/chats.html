@@ -1,6 +1,4 @@
 <section class="stack">
-  <h1>Chats</h1>
-
   @if (!onATeam() && privateChats().length === 0) {
     <p class="muted">Join or create a team to open the team chat.</p>
     <a mat-flat-button color="primary" routerLink="/teams">Go to teams</a>

@@ -11,8 +11,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import type { ChatMessage, ChatSummary } from '@gameplan/types';
-import { ApiClient } from '../core/api-client';
-import { LiveSocket } from '../core/live-socket';
+import { ApiClientService } from '../core/api-client.service';
+import { LiveSocketService } from '../core/live-socket.service';
 
 /** Name shown when a live event arrives without a profile name. */
 const FALLBACK_SENDER_NAME = 'Player';
@@ -25,7 +25,7 @@ const FALLBACK_SENDER_NAME = 'Player';
  */
 const initialsOf = (displayName: string): string => {
   const parts = displayName.trim().split(/\s+/u).filter((part) => part.length > 0);
-  const letters = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '');
+  const letters = parts.slice(0, 2).map((part) => part.charAt(0).toUpperCase());
   const initials = letters.join('');
   return initials.length > 0 ? initials : '?';
 };
@@ -37,7 +37,7 @@ const initialsOf = (displayName: string): string => {
   templateUrl: './chats.html',
 })
 export class ChatsPageComponent implements OnInit {
-  private readonly api = inject(ApiClient);
+  private readonly api = inject(ApiClientService);
   readonly teamGroups = signal<{ label: string; items: ChatSummary[] }[]>([]);
   readonly privateChats = signal<ChatSummary[]>([]);
   readonly onATeam = signal(false);
@@ -77,9 +77,9 @@ export class ChatsPageComponent implements OnInit {
   templateUrl: './chat-thread.html',
 })
 export class ChatThreadPageComponent implements OnInit {
-  private readonly api = inject(ApiClient);
+  private readonly api = inject(ApiClientService);
   private readonly route = inject(ActivatedRoute);
-  private readonly live = inject(LiveSocket);
+  private readonly live = inject(LiveSocketService);
 
   readonly messages = signal<ChatMessage[]>([]);
   /** Title shown in the thread header. */

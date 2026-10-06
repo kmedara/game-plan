@@ -1,27 +1,4 @@
 <section class="stack">
-  <div class="schedule-header">
-    <h1 class="page-title">Schedule</h1>
-    <div class="schedule-header-team">
-      @if (teamBrand.logoFor(activeTeam()?.theme?.logoKey); as src) {
-        <img class="team-logo" [src]="src" [alt]="activeTeam()?.name ?? 'Team logo'" />
-      }
-      @if (teams().length > 0) {
-        <mat-form-field class="team-picker" appearance="outline" subscriptSizing="dynamic">
-          <mat-select
-            [ngModel]="teamId()"
-            (ngModelChange)="onTeamChange($event)"
-            aria-label="Team"
-          >
-            @for (team of teams(); track team.teamId) {
-              <mat-option [value]="team.teamId">{{ team.name }}</mat-option>
-            }
-          </mat-select>
-        </mat-form-field>
-      }
-    </div>
-    <a mat-button routerLink="/teams">Teams</a>
-  </div>
-
   @if (teams().length === 0) {
     <p class="muted">Join or create a team to see practices and games.</p>
     <a mat-flat-button color="primary" routerLink="/teams">Go to teams</a>
@@ -102,7 +79,19 @@
           }
         </div>
         @if (item.location) {
-          <div class="muted">{{ item.location }}</div>
+          <div class="event-location">
+            <div class="muted">{{ item.location }}</div>
+            <div class="event-maps-links">
+              <button mat-button type="button" (click)="openMaps(item, primaryMapsProvider())">
+                Open in {{ mapsProviderLabel(primaryMapsProvider()) }}
+              </button>
+              @if (showSecondaryMapsLink()) {
+                <button mat-button type="button" (click)="openMaps(item, secondaryMapsProvider())">
+                  {{ mapsProviderLabel(secondaryMapsProvider()) }}
+                </button>
+              }
+            </div>
+          </div>
         }
         <div class="row">
           <span class="muted">RSVP: {{ myRsvp(item) }}</span>

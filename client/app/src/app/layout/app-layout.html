@@ -1,0 +1,47 @@
+<header class="app-header">
+  <h1 class="page-title">{{ title() ?? '' }}</h1>
+  <div class="app-header-team">
+    @if (teamBrand.logoFor(activeTeam.active()?.theme?.logoKey); as src) {
+      <img class="team-logo" [src]="src" [alt]="activeTeam.active()?.name ?? 'Team logo'" />
+    }
+    @if (activeTeam.teams().length > 0) {
+      <mat-form-field class="team-picker" appearance="outline" subscriptSizing="dynamic">
+        <mat-select
+          [ngModel]="activeTeam.teamId()"
+          (ngModelChange)="onTeamChange($event)"
+          aria-label="Team"
+        >
+          @for (team of activeTeam.teams(); track team.teamId) {
+            <mat-option [value]="team.teamId">{{ team.name }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    }
+  </div>
+  <a mat-button routerLink="/teams">Teams</a>
+</header>
+
+<main class="app-body">
+  <router-outlet />
+</main>
+
+<nav class="app-nav" aria-label="Primary">
+  @if (api.hasTeams()) {
+    <a routerLink="/schedule" routerLinkActive="active">
+      <span class="material-icons">event</span>
+      Schedule
+    </a>
+    <a routerLink="/chats" routerLinkActive="active">
+      <span class="material-icons">chat</span>
+      Chats
+    </a>
+  }
+  <a routerLink="/teams" routerLinkActive="active">
+    <span class="material-icons">groups</span>
+    Teams
+  </a>
+  <a routerLink="/profile" routerLinkActive="active">
+    <span class="material-icons">person</span>
+    Profile
+  </a>
+</nav>

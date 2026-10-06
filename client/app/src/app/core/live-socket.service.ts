@@ -28,7 +28,7 @@ const frameText = async (data: unknown): Promise<string> => {
  * Opens a WebSocket while the app is foregrounded and exposes live events.
  */
 @Injectable({ providedIn: 'root' })
-export class LiveSocket {
+export class LiveSocketService {
   private socket: WebSocket | undefined;
   private token: string | undefined;
   private readonly listeners = new Set<LiveListener>();

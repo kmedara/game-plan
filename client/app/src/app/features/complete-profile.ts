@@ -8,7 +8,7 @@ import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { ApiClient } from '../core/api-client';
+import { ApiClientService } from '../core/api-client.service';
 
 @Component({
   selector: 'app-complete-profile',
@@ -22,7 +22,7 @@ import { ApiClient } from '../core/api-client';
   templateUrl: './complete-profile.html',
 })
 export class CompleteProfilePageComponent {
-  private readonly api = inject(ApiClient);
+  private readonly api = inject(ApiClientService);
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
 

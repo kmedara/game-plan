@@ -9,4 +9,9 @@ export type Environment = {
   wsBaseUrl: string;
   /** When true, skip Cognito Hosted UI and use the identity seed user. */
   authDisabled: boolean;
+  /**
+   * Browser-restricted Google Maps JavaScript API key (web map picker only).
+   * Empty when unset; the map shows an unavailable state instead of a fallback provider.
+   */
+  googleMapsApiKey: string;
 };

@@ -1,5 +1,14 @@
 apply plugin: 'com.android.application'
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { localProperties.load(it) }
+}
+def googleMapsAndroidApiKey = System.getenv('GOOGLE_MAPS_ANDROID_API_KEY')
+    ?: localProperties.getProperty('GOOGLE_MAPS_ANDROID_API_KEY')
+    ?: (project.findProperty('GOOGLE_MAPS_ANDROID_API_KEY') ?: '')
+
 android {
     namespace = "com.gameplan.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -10,6 +19,7 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders = [GOOGLE_MAPS_ANDROID_API_KEY: googleMapsAndroidApiKey]
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61

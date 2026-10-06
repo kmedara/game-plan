@@ -4,7 +4,7 @@
 
 import { Injectable, inject, signal } from '@angular/core';
 import type { TeamTheme } from '@gameplan/types';
-import { ApiClient } from './api-client';
+import { ApiClientService } from './api-client.service';
 
 /** CSS variables a team theme replaces. */
 const TEAM_COLOR_PROPS = [
@@ -56,15 +56,19 @@ const mix = (base: Rgb, toward: Rgb, amount: number): Rgb => ({
 const luminance = ({ r, g, b }: Rgb): number => {
   const channel = (value: number): number => {
     const scaled = value / 255;
-    return scaled <= 0.03928 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4;
+    return scaled <= 0.03928
+      ? scaled / 12.92
+      : ((scaled + 0.055) / 1.055) ** 2.4;
   };
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
 };
 
 /** Text color that stays readable on `color`. */
-const onColor = (color: Rgb): string => (luminance(color) > 0.4 ? '#171d1c' : '#ffffff');
+const onColor = (color: Rgb): string =>
+  luminance(color) > 0.4 ? '#171d1c' : '#ffffff';
 
-const pair = (light: string, dark: string): string => `light-dark(${light}, ${dark})`;
+const pair = (light: string, dark: string): string =>
+  `light-dark(${light}, ${dark})`;
 
 /**
  * Light and dark versions of one team color.
@@ -96,13 +100,25 @@ export const teamColorOverrides = (
   if (primary === undefined) return undefined;
   const primaryTone = tone(primary);
   const accent = parseHex(theme?.accent) ?? primary;
-  const lightContainer = mix(accent, WHITE, 0.78);
+  const lightContainer = mix(accent, WHITE, 0.2);
   const darkContainer = mix(accent, BLACK, 0.62);
   const overrides: Partial<Record<TeamColorProp, string>> = {
-    '--mat-sys-primary': pair(toHex(primaryTone.light), toHex(primaryTone.dark)),
-    '--mat-sys-on-primary': pair(onColor(primaryTone.light), onColor(primaryTone.dark)),
-    '--mat-sys-primary-container': pair(toHex(lightContainer), toHex(darkContainer)),
-    '--mat-sys-on-primary-container': pair(onColor(lightContainer), onColor(darkContainer)),
+    '--mat-sys-primary': pair(
+      toHex(primaryTone.light),
+      toHex(primaryTone.dark),
+    ),
+    '--mat-sys-on-primary': pair(
+      onColor(primaryTone.light),
+      onColor(primaryTone.dark),
+    ),
+    '--mat-sys-primary-container': pair(
+      toHex(lightContainer),
+      toHex(darkContainer),
+    ),
+    '--mat-sys-on-primary-container': pair(
+      onColor(lightContainer),
+      onColor(darkContainer),
+    ),
   };
   const secondary = parseHex(theme?.secondary);
   if (secondary !== undefined) {
@@ -136,17 +152,40 @@ export const applyTeamColors = (theme: TeamTheme | undefined): void => {
 
 /**
  * Selected team's colors and cached logo download URLs.
+ *
+ * Call {@link select} or {@link clear} when the active team changes. Pages must
+ * not re-apply branding on load. {@link apply} is only for live theme previews
+ * (for example team admin settings).
  */
 @Injectable({ providedIn: 'root' })
-export class TeamBrand {
-  private readonly api = inject(ApiClient);
+export class TeamBrandService {
+  private readonly api = inject(ApiClientService);
   private readonly logos = signal<Record<string, string>>({});
   private readonly loading = new Set<string>();
 
   /**
-   * Applies `theme` to the app chrome and loads its logo when it has one.
+   * Makes `teamId` the active team and paints its brand app-wide.
    *
-   * @param theme - The selected team's theme, or `undefined` for the default brand.
+   * @param teamId - The team to keep selected across pages.
+   * @param theme - That team's theme, or `undefined` for the default brand.
+   */
+  async select(teamId: string, theme: TeamTheme | undefined): Promise<void> {
+    this.api.setTeamId(teamId);
+    await this.apply(theme);
+  }
+
+  /** Clears the active team and restores the default brand. */
+  async clear(): Promise<void> {
+    this.api.setTeamId(undefined);
+    await this.apply(undefined);
+  }
+
+  /**
+   * Paints `theme` without changing the selected team id.
+   *
+   * Use for admin live previews. Prefer {@link select} when switching teams.
+   *
+   * @param theme - The theme to show, or `undefined` for the default brand.
    */
   async apply(theme: TeamTheme | undefined): Promise<void> {
     applyTeamColors(theme);
@@ -170,13 +209,20 @@ export class TeamBrand {
    * @param logoKey - The stored object key.
    */
   async rememberLogo(logoKey: string | undefined): Promise<void> {
-    if (logoKey === undefined || this.logos()[logoKey] !== undefined || this.loading.has(logoKey)) {
+    if (
+      logoKey === undefined ||
+      this.logos()[logoKey] !== undefined ||
+      this.loading.has(logoKey)
+    ) {
       return;
     }
     this.loading.add(logoKey);
     try {
       const download = await this.api.presignDownload(logoKey);
-      this.logos.update((current) => ({ ...current, [logoKey]: download.downloadUrl }));
+      this.logos.update((current) => ({
+        ...current,
+        [logoKey]: download.downloadUrl,
+      }));
     } catch {
       // The team name stays in place when the logo cannot be loaded.
     } finally {

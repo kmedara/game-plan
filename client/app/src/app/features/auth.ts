@@ -5,24 +5,34 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
-import { ThemeToggleComponent } from '../core/theme-toggle';
-import { ApiClient } from '../core/api-client';
+import { ApiClientService } from '../core/api-client.service';
 import { environment } from '../../environments/environment';
-import { LiveSocket } from '../core/live-socket';
-import { PushRegistration } from '../core/push-registration';
+import { LiveSocketService } from '../core/live-socket.service';
+import { PushRegistrationService } from '../core/push-registration.service';
+
+/**
+ * Login URL for Cognito Hosted UI through the identity BFF.
+ *
+ * @param origin - The app origin used to build the post-login return URL.
+ * @returns The absolute login URL.
+ */
+export const hostedUiLoginHref = (origin: string): string => {
+  const returnTo = encodeURIComponent(`${origin}/teams`);
+  return `${environment.apiBaseUrl}/identity/oauth/login?returnTo=${returnTo}`;
+};
 
 @Component({
   selector: 'app-auth',
   standalone: true,
-  imports: [MatButtonModule, ThemeToggleComponent],
+  imports: [MatButtonModule],
   templateUrl: './auth.html',
 })
 export class AuthPageComponent implements OnInit {
-  private readonly api = inject(ApiClient);
+  private readonly api = inject(ApiClientService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-  private readonly live = inject(LiveSocket);
-  private readonly push = inject(PushRegistration);
+  private readonly live = inject(LiveSocketService);
+  private readonly push = inject(PushRegistrationService);
 
   readonly authDisabled = environment.authDisabled;
   readonly seedUserEmail = signal('');
@@ -37,8 +47,7 @@ export class AuthPageComponent implements OnInit {
 
   /** Starts Cognito Hosted UI through the identity BFF. */
   startHostedUi(): void {
-    const returnTo = encodeURIComponent(`${window.location.origin}/teams`);
-    window.location.href = `${environment.apiBaseUrl}/identity/oauth/login?returnTo=${returnTo}`;
+    window.location.href = hostedUiLoginHref(window.location.origin);
   }
 
   /** Issues the seed session when auth is disabled. */

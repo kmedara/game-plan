@@ -6,14 +6,14 @@
 import { Injectable } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
-import { ApiClient } from './api-client';
+import { ApiClientService } from './api-client.service';
 
 /**
  * Capacitor push registration for offline message and schedule alerts.
  */
 @Injectable({ providedIn: 'root' })
-export class PushRegistration {
-  constructor(private readonly api: ApiClient) {}
+export class PushRegistrationService {
+  constructor(private readonly api: ApiClientService) {}
 
   /**
    * Requests permission and registers the device token with the media API.

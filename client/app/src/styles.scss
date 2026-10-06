@@ -31,11 +31,51 @@ body {
   box-shadow: 0 0 0 1px var(--mat-sys-outline-variant);
 }
 
+/* Routed components are siblings of router-outlet. */
+.app-shell > router-outlet {
+  display: none;
+}
+
+.app-shell > *:not(router-outlet) {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.app-layout {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell > *:not(router-outlet):not(.app-layout) {
+  padding: 1rem;
+}
+
 .app-body {
   flex: 1;
   overflow: auto;
   padding: 1rem;
   padding-bottom: 5rem;
+  min-height: 0;
+}
+
+.app-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  column-gap: 0.5rem;
+  padding: 0.75rem 1rem 0;
+}
+
+.app-header > :last-child {
+  justify-self: end;
+}
+
+.app-header-team {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .app-nav {
@@ -75,6 +115,17 @@ body {
   gap: 0.75rem;
 }
 
+.auth-page {
+  padding-top: 2rem;
+  min-width: 0;
+}
+
+.auth-page > button {
+  align-self: stretch;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 .muted {
   color: var(--mat-sys-on-surface-variant);
 }
@@ -106,23 +157,6 @@ h1,
 .page-title {
   font-size: 1.15rem;
   margin: 0;
-}
-
-.schedule-header {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  column-gap: 0.5rem;
-}
-
-.schedule-header > :last-child {
-  justify-self: end;
-}
-
-.schedule-header-team {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
 }
 
 .team-identity {
@@ -365,10 +399,32 @@ button.chat-message {
   align-items: flex-end;
 }
 
+.chat-composer mat-form-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-composer .mat-mdc-unelevated-button {
+  height: var(--mat-form-field-container-height, 48px);
+}
+
 .chat-composer textarea {
   resize: none;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.event-location {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.event-maps-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-left: -0.5rem;
 }
 
 .chat-body {

@@ -1,27 +1,3 @@
 <div class="app-shell">
-  <main class="app-body">
-    <router-outlet />
-  </main>
-  @if (showNav) {
-    <nav class="app-nav" aria-label="Primary">
-      @if (api.hasTeams()) {
-        <a routerLink="/schedule" routerLinkActive="active">
-          <span class="material-icons">event</span>
-          Schedule
-        </a>
-        <a routerLink="/chats" routerLinkActive="active">
-          <span class="material-icons">chat</span>
-          Chats
-        </a>
-      }
-      <a routerLink="/teams" routerLinkActive="active">
-        <span class="material-icons">groups</span>
-        Teams
-      </a>
-      <a routerLink="/profile" routerLinkActive="active">
-        <span class="material-icons">person</span>
-        Profile
-      </a>
-    </nav>
-  }
+  <router-outlet />
 </div>

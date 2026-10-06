@@ -45,9 +45,10 @@ the debugger reattaches when the launch config has `restart` set.
 | schedule | 9231 |
 | chat     | 9232 |
 | media    | 9233 |
-| socket   | 9234 |
-| fanout   | 9235 |
-| proxy    | 9236 |
+| places   | 9234 |
+| socket   | 9235 |
+| fanout   | 9236 |
+| proxy    | 9237 |
 
 Configs live in [`.vscode/launch.json`](.vscode/launch.json) (`localRoot` → `remoteRoot`
 `/app`). Restart the API container (or re-run `npm run up`) after pulling changes that
@@ -140,9 +141,13 @@ stores birthday and derives `accountKind`.
 
 Client config is written at start/build from environment variables by
 [`client/app/scripts/write-environment.mjs`](client/app/scripts/write-environment.mjs)
-(`API_BASE_URL`, optional `WS_BASE_URL`, `AUTH_DISABLED`). Production builds require `API_BASE_URL`
-and set `BUILD_CONFIGURATION=production`. When `AUTH_DISABLED=true`, the API also needs
-`AUTH_SEED_USER_ID`.
+(`API_BASE_URL`, optional `WS_BASE_URL`, `AUTH_DISABLED`). Production builds require
+`API_BASE_URL` and set `BUILD_CONFIGURATION=production`. When `AUTH_DISABLED=true`,
+the API also needs `AUTH_SEED_USER_ID`.
+
+Place autocomplete and reverse geocode use `GOOGLE_MAPS_API_KEY` on the **API**.
+The interactive map uses `GOOGLE_MAPS_BROWSER_API_KEY` (web) and
+`GOOGLE_MAPS_ANDROID_API_KEY` (Android). See [`docs/maps/README.md`](docs/maps/README.md).
 
 | Method | Path                            | Notes                                              |
 | ------ | ------------------------------- | -------------------------------------------------- |

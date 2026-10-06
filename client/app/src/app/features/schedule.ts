@@ -2,23 +2,29 @@
  * Schedule home: a month calendar, the selected day's events, and RSVP.
  */
 
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import {
+  Component,
+  OnInit,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatSelectModule } from '@angular/material/select';
+import { Capacitor } from '@capacitor/core';
 import { RouterLink } from '@angular/router';
 import {
   EVENT_TYPES,
   type RsvpStatus,
   type ScheduleOccurrence,
-  type TeamSummary,
 } from '@gameplan/types';
-import { ApiClient } from '../core/api-client';
-import { LiveSocket } from '../core/live-socket';
-import { ModalService } from '../core/modal';
-import { TeamBrand } from '../core/team-brand';
+import { ActiveTeamService } from '../core/active-team.service';
+import { ApiClientService } from '../core/api-client.service';
+import { LiveSocketService } from '../core/live-socket.service';
+import { ModalService } from '../core/modal.service';
 import { AddEventFormComponent, eventTypeLabel } from './add-event-form';
+import { openPlaceInMaps, type MapsProvider } from './place-search';
 import {
   WEEKDAY_LABELS,
   buildMonthGrid,
@@ -34,28 +40,19 @@ import {
 @Component({
   selector: 'app-schedule',
   standalone: true,
-  imports: [
-    FormsModule,
-    MatButtonModule,
-    MatFormFieldModule,
-    MatSelectModule,
-    RouterLink,
-  ],
+  imports: [MatButtonModule, RouterLink],
   templateUrl: './schedule.html',
 })
 export class SchedulePageComponent implements OnInit {
-  private readonly api = inject(ApiClient);
-  private readonly live = inject(LiveSocket);
+  private readonly api = inject(ApiClientService);
+  private readonly activeTeam = inject(ActiveTeamService);
+  private readonly live = inject(LiveSocketService);
   private readonly modal = inject(ModalService);
-  readonly teamBrand = inject(TeamBrand);
 
   readonly weekdayLabels = WEEKDAY_LABELS;
   readonly eventTypes = EVENT_TYPES;
-  readonly teams = signal<TeamSummary[]>([]);
-  readonly teamId = signal<string | undefined>(undefined);
-  readonly activeTeam = computed(
-    () => this.teams().find((team) => team.teamId === this.teamId()),
-  );
+  readonly teams = this.activeTeam.teams;
+  readonly teamId = this.activeTeam.teamId;
   readonly occurrences = signal<ScheduleOccurrence[]>([]);
   readonly month = signal<CalendarMonth>({ year: 2026, month: 1 });
   readonly selectedKey = signal('');
@@ -63,7 +60,7 @@ export class SchedulePageComponent implements OnInit {
   readonly error = signal<string | undefined>(undefined);
 
   readonly timeZone = computed(
-    () => this.teams().find((team) => team.teamId === this.teamId())?.timeZone ?? 'UTC',
+    () => this.activeTeam.active()?.timeZone ?? 'UTC',
   );
 
   readonly cells = computed(() => {
@@ -83,11 +80,30 @@ export class SchedulePageComponent implements OnInit {
   });
 
   readonly selectedEvents = computed(
-    () => this.cells().find((cell) => cell.key === this.selectedKey())?.events ?? [],
+    () =>
+      this.cells().find((cell) => cell.key === this.selectedKey())?.events ??
+      [],
   );
 
+  constructor() {
+    effect(() => {
+      const id = this.teamId();
+      // Only `teamId` should re-run this effect. Loading reads month/occurrences
+      // and then writes them, which would loop if those reads were tracked.
+      untracked(() => {
+        if (id === undefined) {
+          this.occurrences.set([]);
+          this.canManage.set(false);
+          return;
+        }
+        this.focusToday();
+        void Promise.all([this.loadSchedule(), this.loadPermissions()]);
+      });
+    });
+  }
+
   ngOnInit(): void {
-    void this.bootstrap();
+    if (this.teams().length === 0) void this.activeTeam.refresh();
     this.live.subscribe((event) => {
       if (event.type === 'schedule_changed' && event.teamId === this.teamId()) {
         void this.loadSchedule();
@@ -139,40 +155,6 @@ export class SchedulePageComponent implements OnInit {
     return today === `${year}-${String(month).padStart(2, '0')}`;
   }
 
-  /** Loads teams and the selected team's current month. */
-  private async bootstrap(): Promise<void> {
-    try {
-      const teams = await this.api.listTeams();
-      this.teams.set(teams);
-      await this.api.restoreTeamId();
-      const selected =
-        teams.find((team) => team.teamId === this.api.getTeamId())?.teamId ??
-        teams[0]?.teamId;
-      if (selected !== undefined) {
-        this.api.setTeamId(selected);
-        this.teamId.set(selected);
-        void this.teamBrand.apply(teams.find((team) => team.teamId === selected)?.theme);
-        this.focusToday();
-        await Promise.all([this.loadSchedule(), this.loadPermissions()]);
-      }
-    } catch (err) {
-      this.error.set(err instanceof Error ? err.message : 'load_failed');
-    }
-  }
-
-  /**
-   * Switches the active team and reloads the current month.
-   *
-   * @param teamId - The selected team id.
-   */
-  async onTeamChange(teamId: string): Promise<void> {
-    this.api.setTeamId(teamId);
-    this.teamId.set(teamId);
-    void this.teamBrand.apply(this.teams().find((team) => team.teamId === teamId)?.theme);
-    this.focusToday();
-    await Promise.all([this.loadSchedule(), this.loadPermissions()]);
-  }
-
   /**
    * Moves the visible month and keeps a selected day inside it.
    *
@@ -184,7 +166,8 @@ export class SchedulePageComponent implements OnInit {
     const today = this.todayKey();
     const monthKey = `${next.year}-${String(next.month).padStart(2, '0')}`;
     if (today.startsWith(monthKey)) this.selectedKey.set(today);
-    else if (!this.selectedKey().startsWith(monthKey)) this.selectedKey.set(`${monthKey}-01`);
+    else if (!this.selectedKey().startsWith(monthKey))
+      this.selectedKey.set(`${monthKey}-01`);
     await this.loadSchedule();
   }
 
@@ -250,7 +233,60 @@ export class SchedulePageComponent implements OnInit {
   myRsvp(item: ScheduleOccurrence): string {
     const userId = this.api.user?.userId;
     if (userId === undefined) return 'none';
-    return item.rsvps.find((entry) => entry.userId === userId)?.status ?? 'none';
+    return (
+      item.rsvps.find((entry) => entry.userId === userId)?.status ?? 'none'
+    );
+  }
+
+  /**
+   * Preferred maps app for the primary open action on this platform.
+   *
+   * @returns Apple Maps on iOS, otherwise Google Maps.
+   */
+  primaryMapsProvider(): MapsProvider {
+    return Capacitor.getPlatform() === 'ios' ? 'apple' : 'google';
+  }
+
+  /**
+   * Whether the secondary maps link should be shown.
+   *
+   * @returns True on iOS (Google as secondary) and on web (both links).
+   */
+  showSecondaryMapsLink(): boolean {
+    const platform = Capacitor.getPlatform();
+    return platform === 'ios' || platform === 'web';
+  }
+
+  /**
+   * Secondary maps provider when both links are shown.
+   *
+   * @returns Google on iOS; Apple on web/Android when secondary is shown.
+   */
+  secondaryMapsProvider(): MapsProvider {
+    return this.primaryMapsProvider() === 'apple' ? 'google' : 'apple';
+  }
+
+  /**
+   * Opens the occurrence location in a maps app.
+   *
+   * @param item - The schedule occurrence with a location label.
+   * @param provider - Apple Maps or Google Maps.
+   */
+  openMaps(item: ScheduleOccurrence, provider: MapsProvider): void {
+    if (item.location === undefined || item.location.length === 0) return;
+    openPlaceInMaps(
+      {
+        label: item.location,
+        ...(item.latitude !== undefined ? { latitude: item.latitude } : {}),
+        ...(item.longitude !== undefined ? { longitude: item.longitude } : {}),
+      },
+      provider,
+    );
+  }
+
+  /** Label for a maps provider button. */
+  mapsProviderLabel(provider: MapsProvider): string {
+    return provider === 'apple' ? 'Apple Maps' : 'Google Maps';
   }
 
   /** Points the visible month and selection at today in the team zone. */
@@ -266,9 +302,9 @@ export class SchedulePageComponent implements OnInit {
     const teamId = this.teamId();
     if (teamId === undefined) return;
     const grid = this.cells();
-    const first = grid[0]?.key;
-    const last = grid.at(-1)?.key;
-    if (first === undefined || last === undefined) return;
+    // A month grid always holds at least four full weeks.
+    const first = grid[0]!.key;
+    const last = grid.at(-1)!.key;
     const zone = this.timeZone();
     try {
       const result = await this.api.getSchedule(
@@ -293,7 +329,8 @@ export class SchedulePageComponent implements OnInit {
     }
     try {
       const body = await this.api.getPermissions(teamId);
-      const permissions = body.roles.find((entry) => entry.role === role)?.permissions ?? [];
+      const permissions =
+        body.roles.find((entry) => entry.role === role)?.permissions ?? [];
       this.canManage.set(permissions.includes('manage_events'));
     } catch {
       this.canManage.set(false);
