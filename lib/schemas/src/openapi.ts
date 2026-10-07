@@ -20,6 +20,7 @@ import {
   teamDirectoryPageSchema,
   teamInviteListSchema,
   teamMemberListSchema,
+  teamMemberProfileSchema,
   teamInviteSchema,
   teamListSchema,
   teamSummarySchema,
@@ -129,7 +130,7 @@ const AREAS: Record<string, AreaSpec> = {
       },
       '/identity/profile': {
         patch: {
-          summary: 'Set or clear the profile photo',
+          summary: 'Update the profile photo and/or phone number',
           body: updateProfileBodySchema,
           response: userProfileSchema,
           secured: true,
@@ -210,6 +211,7 @@ const AREAS: Record<string, AreaSpec> = {
         get: { summary: 'List the roster', response: teamMemberListSchema },
       },
       '/teams/{teamId}/members/{userId}': {
+        get: { summary: 'Get one roster member profile', response: teamMemberProfileSchema },
         patch: { summary: "Change a member's role", body: assignRoleBodySchema },
       },
       '/teams/{teamId}/permissions': {

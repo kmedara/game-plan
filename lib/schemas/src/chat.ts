@@ -2,6 +2,7 @@
  * Chat, adult search, and message wire contracts.
  */
 
+import { displayNameSchema } from './display-name.js';
 import { chatKindSchema } from './enums.js';
 import { z } from './zod.js';
 
@@ -39,8 +40,9 @@ export const messageHistoryQuerySchema = z.object({
 /** Body for persisting a chat message. */
 export const sendMessageBodySchema = z
   .object({
-    body: z.string().min(1).max(8_000),
-    attachmentKeys: z.array(z.string().min(1)).max(10).optional(),
+    /** Caption text; may be empty when `attachmentKeys` has at least one image. */
+    body: z.string().max(8_000),
+    attachmentKeys: z.array(z.string().min(1).max(512)).max(10).optional(),
   })
   .strict();
 
@@ -70,11 +72,12 @@ export const chatMessageSchema = z
     chatId: z.string().min(1),
     senderId: z.string().min(1),
     /** Current profile name of the sender. */
-    senderDisplayName: z.string().min(1).max(100),
+    senderDisplayName: displayNameSchema,
     /** Media object key for the sender's profile photo, when they have one. */
     senderPhotoKey: z.string().min(1).max(512).optional(),
-    body: z.string().min(1),
-    attachmentKeys: z.array(z.string().min(1)).optional(),
+    /** Caption text; empty when the message is image-only. */
+    body: z.string().max(8_000),
+    attachmentKeys: z.array(z.string().min(1).max(512)).optional(),
     createdAt: z.string().min(1),
   })
   .strict();

@@ -121,6 +121,8 @@ export type DeviceRegistration = {
   updatedAt: string;
 }
 
+export type DisplayName = string;
+
 export type ErrorBody = {
   error: string;
 }
@@ -225,6 +227,8 @@ export type MessagePage = {
   }[];
   cursor?: string;
 }
+
+export type PhoneNumber = string;
 
 export type PlaceDetails = {
   label: string;
@@ -429,6 +433,7 @@ export type SessionTokens = {
     accountKind: 'adult' | 'minor';
     birthday?: string;
     photoKey?: string;
+    phoneNumber?: string;
     needsProfileCompletion?: boolean;
   };
   refreshToken?: string;
@@ -499,6 +504,18 @@ export type TeamMemberList = {
   }[];
 }
 
+export type TeamMemberProfile = {
+  userId: string;
+  role: 'team_admin' | 'coach' | 'parent' | 'player';
+  joinedAt: string;
+  displayName?: string;
+  email?: string;
+  accountKind?: 'adult' | 'minor';
+  photoKey?: string;
+  phoneNumber?: string;
+  positions?: string[];
+}
+
 export type TeamMember = {
   userId: string;
   role: 'team_admin' | 'coach' | 'parent' | 'player';
@@ -566,7 +583,8 @@ export type UpdatePositionsBody = {
 }
 
 export type UpdateProfileBody = {
-  photoKey: string | null;
+  photoKey?: string | null;
+  phoneNumber?: string | null;
 }
 
 export type UpdateRolePermissionsBody = {
@@ -618,6 +636,7 @@ export type UserProfile = {
   accountKind: 'adult' | 'minor';
   birthday?: string;
   photoKey?: string;
+  phoneNumber?: string;
   needsProfileCompletion?: boolean;
 }
 
