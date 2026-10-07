@@ -82,7 +82,7 @@
       "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
     },
     {
-      "name": "Attach socket",
+      "name": "Attach places",
       "type": "node",
       "request": "attach",
       "address": "localhost",
@@ -98,7 +98,7 @@
       "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
     },
     {
-      "name": "Attach fanout",
+      "name": "Attach socket",
       "type": "node",
       "request": "attach",
       "address": "localhost",
@@ -114,11 +114,27 @@
       "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
     },
     {
-      "name": "Attach proxy",
+      "name": "Attach fanout",
       "type": "node",
       "request": "attach",
       "address": "localhost",
       "port": 9236,
+      "restart": true,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/app",
+      "sourceMaps": true,
+      "sourceMapPathOverrides": {
+        "/app/*": "${workspaceFolder}/*",
+        "file:///app/*": "${workspaceFolder}/*"
+      },
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "Attach proxy",
+      "type": "node",
+      "request": "attach",
+      "address": "localhost",
+      "port": 9237,
       "restart": true,
       "localRoot": "${workspaceFolder}",
       "remoteRoot": "/app",
@@ -139,6 +155,7 @@
         "Attach schedule",
         "Attach chat",
         "Attach media",
+        "Attach places",
         "Attach socket",
         "Attach fanout",
         "Attach proxy"
