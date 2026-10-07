@@ -1,5 +1,5 @@
 /**
- * `PATCH /identity/profile` — set or clear the caller's profile photo.
+ * `PATCH /identity/profile` — update the caller's photo and/or phone number.
  */
 
 import { updateProfileBodySchema } from '@gameplan/schemas';
@@ -36,7 +36,10 @@ export const handleUpdateProfile = route(
   withBodyValidation(updateProfileBodySchema),
   requireUser(),
   async ({ user, body }) => {
-    if (body.photoKey !== null && !ownsPhotoKey(user.userId, body.photoKey)) {
+    if (body.photoKey === undefined && body.phoneNumber === undefined) {
+      throw new Error('invalid_body');
+    }
+    if (body.photoKey !== undefined && body.photoKey !== null && !ownsPhotoKey(user.userId, body.photoKey)) {
       throw new Error('invalid_photo_key');
     }
 
@@ -51,7 +54,9 @@ export const handleUpdateProfile = route(
       birthday: existing.birthday,
       createdAt: existing.createdAt,
       passwordHash: existing.passwordHash,
-      photoKey: body.photoKey,
+      photoKey: body.photoKey !== undefined ? body.photoKey : (existing.photoKey ?? null),
+      phoneNumber:
+        body.phoneNumber !== undefined ? body.phoneNumber : (existing.phoneNumber ?? null),
     });
     return json(200, toUserProfile(profile));
   },

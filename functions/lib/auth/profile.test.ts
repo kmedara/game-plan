@@ -6,9 +6,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TABLE_NAME } from '../names.js';
 import { GSI_EMAIL, profileSk, userPk } from '../dynamo/keys.js';
 
-const mockSend = vi.fn();
-const mockGetItem = vi.fn();
-const mockPutItem = vi.fn();
+const { mockSend, mockGetItem, mockPutItem } = vi.hoisted(() => ({
+  mockSend: vi.fn(),
+  mockGetItem: vi.fn(),
+  mockPutItem: vi.fn(),
+}));
 
 vi.mock('../dynamo/client.js', () => ({
   getDocClient: () => ({ send: mockSend }),
@@ -70,6 +72,7 @@ describe('profile helpers', () => {
       accountKind: 'minor',
       birthday: '2010-01-01',
       photoKey: 'photos/u4.jpg',
+      phoneNumber: ' 555-0100 ',
       passwordHash: 'scrypt$abc',
       createdAt: '2026-01-01T00:00:00.000Z',
     });
@@ -80,6 +83,7 @@ describe('profile helpers', () => {
       displayName: 'Writer',
       birthday: '2010-01-01',
       photoKey: 'photos/u4.jpg',
+      phoneNumber: '555-0100',
       passwordHash: 'scrypt$abc',
       createdAt: '2026-01-01T00:00:00.000Z',
     });
@@ -90,7 +94,9 @@ describe('profile helpers', () => {
       displayName: 'Clear',
       accountKind: 'adult',
       photoKey: null,
+      phoneNumber: null,
     });
     expect(clearedPhoto.photoKey).toBeUndefined();
+    expect(clearedPhoto.phoneNumber).toBeUndefined();
   });
 });

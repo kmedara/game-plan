@@ -43,6 +43,7 @@ export const handleCompleteProfile = route(
       createdAt: existing?.createdAt,
       passwordHash: existing?.passwordHash,
       photoKey: existing?.photoKey,
+      phoneNumber: existing?.phoneNumber,
     });
     return json(200, toUserProfile(profile));
   },
