@@ -9,6 +9,7 @@ import { CompleteProfilePageComponent } from './features/complete-profile';
 import { ChatThreadPageComponent, ChatsPageComponent } from './features/chats';
 import { SchedulePageComponent } from './features/schedule';
 import { InvitePageComponent } from './features/invite';
+import { MemberProfilePageComponent } from './features/member-profile';
 import { ProfilePageComponent } from './features/profile';
 import { TeamAdminPageComponent, TeamsPageComponent } from './features/teams';
 import { AppLayoutComponent } from './layout/app-layout';
@@ -36,12 +37,12 @@ export const routes: Routes = [
       {
         path: 'schedule',
         component: SchedulePageComponent,
-        data: { title: 'Schedule' },
+        data: { titleKey: 'title.schedule' },
       },
       {
         path: 'chats',
         component: ChatsPageComponent,
-        data: { title: 'Chats' },
+        data: { titleKey: 'title.chats' },
       },
       {
         path: 'chats/:chatId',
@@ -50,12 +51,12 @@ export const routes: Routes = [
       {
         path: 'teams',
         component: TeamsPageComponent,
-        data: { title: 'Teams' },
+        data: { titleKey: 'title.teams' },
       },
       {
         path: 'profile',
         component: ProfilePageComponent,
-        data: { title: 'Profile' },
+        data: { titleKey: 'title.profile' },
       },
       {
         path: 'teams/:teamId',
@@ -66,9 +67,14 @@ export const routes: Routes = [
         component: TeamAdminPageComponent,
       },
       {
+        path: 'teams/:teamId/members/:userId',
+        component: MemberProfilePageComponent,
+        data: { titleKey: 'title.profile' },
+      },
+      {
         path: 'invite/:code',
         component: InvitePageComponent,
-        data: { title: 'Invite' },
+        data: { titleKey: 'title.invite' },
       },
     ],
   },

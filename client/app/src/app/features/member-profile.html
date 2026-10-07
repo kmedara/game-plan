@@ -1,0 +1,50 @@
+<section class="stack">
+  <div class="row">
+    <a mat-button [routerLink]="['/teams', teamId]">{{ 'nav.back' | transloco }}</a>
+    <h1 class="page-title">{{ 'memberProfile.title' | transloco }}</h1>
+  </div>
+
+  @if (error()) {
+    <p class="error">{{ error() | transloco }}</p>
+  } @else {
+    @if (member(); as person) {
+      <div class="row" style="justify-content: flex-start">
+        <div class="profile-photo profile-photo-static" aria-hidden="true">
+          @if (photoUrl(); as url) {
+            <img [src]="url" alt="" />
+          } @else {
+            {{ initials() }}
+          }
+        </div>
+        <div>
+          <div class="team-title">
+            <strong>{{ person.displayName ?? ('common.unknownPerson' | transloco) }}</strong>
+            <span class="role-pill">{{ roleLabel(person.role) | transloco }}</span>
+            @if (person.accountKind === 'minor') {
+              <span class="role-pill">{{ 'common.minor' | transloco }}</span>
+            }
+          </div>
+          @if (person.email) {
+            <div class="muted">{{ person.email }}</div>
+          }
+          @if (person.phoneNumber) {
+            <div class="muted">{{ person.phoneNumber }}</div>
+          }
+        </div>
+      </div>
+
+      <h2 class="page-title">{{ 'memberProfile.positions' | transloco }}</h2>
+      @if ((person.positions ?? []).length === 0) {
+        <p class="muted">{{ 'memberProfile.noPositions' | transloco }}</p>
+      } @else {
+        <div class="position-list">
+          @for (position of person.positions; track position) {
+            <span class="position-chip position-chip-static">{{ position }}</span>
+          }
+        </div>
+      }
+    } @else {
+      <p class="muted">{{ 'common.loading' | transloco }}</p>
+    }
+  }
+</section>
