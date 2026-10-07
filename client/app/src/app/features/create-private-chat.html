@@ -1,0 +1,29 @@
+<form class="stack" (ngSubmit)="create()">
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>{{ 'chats.email' | transloco }}</mat-label>
+    <input matInput type="email" [(ngModel)]="email" name="email" autocomplete="email" />
+  </mat-form-field>
+  <button mat-button type="button" [disabled]="searching()" (click)="search()">
+    {{ searching() ? ('chats.searching' | transloco) : ('chats.findUser' | transloco) }}
+  </button>
+
+  @if (match(); as user) {
+    <p>
+      {{ user.displayName }}
+      <span class="muted">({{ user.email }})</span>
+    </p>
+  }
+
+  @if (error(); as err) {
+    <p class="error">{{ err | transloco }}</p>
+  }
+
+  <button
+    mat-flat-button
+    color="primary"
+    type="submit"
+    [disabled]="match() === undefined || creating()"
+  >
+    {{ creating() ? ('chats.creating' | transloco) : ('chats.startPrivate' | transloco) }}
+  </button>
+</form>
