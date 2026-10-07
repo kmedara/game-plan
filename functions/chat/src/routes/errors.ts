@@ -41,6 +41,7 @@ export const mapChatError = (
     case 'minor_chat_rule_violated':
       return forbidden(error.message);
     case 'invalid_body':
+    case 'invalid_attachment_key':
       return badRequest(error.message);
     default:
       if (error.name === 'ConditionalCheckFailedException') {
