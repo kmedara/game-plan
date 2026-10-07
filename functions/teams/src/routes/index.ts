@@ -19,6 +19,6 @@ export {
 } from './join-requests.js';
 export { handleListTeams } from './list.js';
 export { handleSetPositions } from './positions.js';
-export { handleAssignRole, handleListMembers } from './members.js';
+export { handleAssignRole, handleGetMember, handleListMembers } from './members.js';
 export { handleGetPermissions, handleUpdatePermissions } from './permissions.js';
 export { handleUpdateTeam } from './update.js';

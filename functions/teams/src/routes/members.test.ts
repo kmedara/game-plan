@@ -9,8 +9,17 @@ import { issueLocalTokens } from '../../../lib/auth/local-jwt.js';
 import { TABLE_PK, TABLE_SK, rolePermissionsSk, teamMemberSk, teamMetaSk, teamPk } from '../../../lib/dynamo/keys.js';
 import { DEFAULT_ROLE_PERMISSIONS } from '@gameplan/types';
 
-const store = new Map<string, Record<string, unknown>>();
-const itemKey = (pk: string, sk: string): string => `${pk}\0${sk}`;
+const { store, itemKey, assignMemberRole, getProfileMock } = vi.hoisted(() => {
+  const store = new Map<string, Record<string, unknown>>();
+  const itemKey = (pk: string, sk: string): string => `${pk}\0${sk}`;
+  const assignMemberRole = vi.fn(async () => ({
+    userId: 'member',
+    role: 'coach' as const,
+    joinedAt: new Date().toISOString(),
+  }));
+  const getProfileMock = vi.fn(async () => undefined);
+  return { store, itemKey, assignMemberRole, getProfileMock };
+});
 
 vi.mock('../../../lib/dynamo/access.js', () => ({
   getItem: async <T extends Record<string, unknown>>(pk: string, sk: string) =>
@@ -37,16 +46,8 @@ vi.mock('../../../lib/dynamo/access.js', () => ({
 }));
 
 vi.mock('../../../lib/auth/profile.js', () => ({
-  getProfile: async () => undefined,
+  getProfile: (...args: unknown[]) => getProfileMock(...args),
   toUserProfile: (item: Record<string, unknown>) => item,
-}));
-
-const assignMemberRole = vi.fn(async () => ({
-  [TABLE_PK]: teamPk('team'),
-  [TABLE_SK]: teamMemberSk('member'),
-  userId: 'member',
-  role: 'coach' as const,
-  joinedAt: new Date().toISOString(),
 }));
 
 vi.mock('../team-store.js', async (importOriginal) => {
@@ -71,6 +72,106 @@ const httpEvent = (
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     requestContext: { http: { method, path } },
   }) as APIGatewayProxyEventV2;
+
+describe('handleGetMember', () => {
+  beforeEach(() => {
+    store.clear();
+    getProfileMock.mockReset();
+    getProfileMock.mockResolvedValue(undefined);
+    process.env.LOCAL_JWT_SECRET = 'members-route-test';
+  });
+
+  afterEach(() => {
+    store.clear();
+  });
+
+  it('returns a roster member profile for another teammate', async () => {
+    const viewerId = randomUUID();
+    const memberId = randomUUID();
+    const teamId = randomUUID();
+    const { accessToken } = issueLocalTokens(viewerId, `${viewerId}@example.com`);
+
+    store.set(itemKey(teamPk(teamId), teamMetaSk()), {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: teamMetaSk(),
+      teamId,
+      name: 'Hawks',
+      timeZone: 'UTC',
+      defaultChatId: randomUUID(),
+      createdBy: viewerId,
+      createdAt: new Date().toISOString(),
+    });
+    store.set(itemKey(teamPk(teamId), teamMemberSk(viewerId)), {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: teamMemberSk(viewerId),
+      userId: viewerId,
+      role: 'coach',
+      joinedAt: new Date().toISOString(),
+    });
+    store.set(itemKey(teamPk(teamId), teamMemberSk(memberId)), {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: teamMemberSk(memberId),
+      userId: memberId,
+      role: 'player',
+      joinedAt: new Date().toISOString(),
+      positions: ['Wing'],
+    });
+    getProfileMock.mockResolvedValueOnce({
+      userId: memberId,
+      email: `${memberId}@example.com`,
+      displayName: 'Pat Player',
+      accountKind: 'adult',
+      phoneNumber: '555-0100',
+      photoKey: `uploads/${memberId}/photo`,
+    });
+
+    const result = await handler(
+      httpEvent('GET', `/teams/${teamId}/members/${memberId}`, {
+        headers: { authorization: `Bearer ${accessToken}` },
+      }),
+    );
+    expect(result.statusCode).toBe(200);
+    expect(JSON.parse(result.body ?? '')).toMatchObject({
+      userId: memberId,
+      role: 'player',
+      positions: ['Wing'],
+      displayName: 'Pat Player',
+      phoneNumber: '555-0100',
+      photoKey: `uploads/${memberId}/photo`,
+    });
+  });
+
+  it('returns 404 when the target is not on the roster', async () => {
+    const viewerId = randomUUID();
+    const teamId = randomUUID();
+    const { accessToken } = issueLocalTokens(viewerId, `${viewerId}@example.com`);
+
+    store.set(itemKey(teamPk(teamId), teamMetaSk()), {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: teamMetaSk(),
+      teamId,
+      name: 'Hawks',
+      timeZone: 'UTC',
+      defaultChatId: randomUUID(),
+      createdBy: viewerId,
+      createdAt: new Date().toISOString(),
+    });
+    store.set(itemKey(teamPk(teamId), teamMemberSk(viewerId)), {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: teamMemberSk(viewerId),
+      userId: viewerId,
+      role: 'coach',
+      joinedAt: new Date().toISOString(),
+    });
+
+    const result = await handler(
+      httpEvent('GET', `/teams/${teamId}/members/${randomUUID()}`, {
+        headers: { authorization: `Bearer ${accessToken}` },
+      }),
+    );
+    expect(result.statusCode).toBe(404);
+  });
+});
 
 describe('handleAssignRole', () => {
   beforeEach(() => {

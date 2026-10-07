@@ -31,6 +31,7 @@ export const mapTeamsError: ErrorMappingFn = (
     case "team_not_found":
     case "invite_not_found":
     case "join_request_not_found":
+    case "member_not_found":
     case "profile_not_found":
       return notFound();
     case "not_a_member":
