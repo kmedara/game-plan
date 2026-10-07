@@ -50,11 +50,13 @@ const requireApiKey = (): string => {
  * @returns A single label string.
  */
 const buildLabel = (name: string, address: string): string => {
-  if (name.length > 0 && address.length > 0 && !address.includes(name)) {
+  if (name.length > 0 && address.length > 0) {
+    // Formatted addresses often already include the place name — keep the address.
+    if (address.includes(name)) return address;
     return `${name}, ${address}`;
   }
-  if (name.length > 0) return name;
   if (address.length > 0) return address;
+  if (name.length > 0) return name;
   return "Selected place";
 };
 
