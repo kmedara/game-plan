@@ -554,6 +554,18 @@ export const searchTeamDirectory = async (
 };
 
 /**
+ * Reads the team id from a user-side membership sort key (`TEAM#<teamId>`).
+ *
+ * @param sk - The sort key on the membership row.
+ * @returns The team id, or `undefined` when the key is not a membership key.
+ */
+const teamIdFromUserTeamSk = (sk: unknown): string | undefined => {
+  if (typeof sk !== "string" || !sk.startsWith(USER_TEAM_SK_PREFIX)) return undefined;
+  const teamId = sk.slice(USER_TEAM_SK_PREFIX.length);
+  return teamId.length > 0 ? teamId : undefined;
+};
+
+/**
  * Lists teams the user belongs to.
  *
  * @param userId - The caller's user id.
@@ -568,11 +580,12 @@ export const listUserTeams = async (
   );
   const results: Array<{ team: TeamMetaItem; role: TeamRole; positions: string[] }> = [];
   for (const membership of memberships) {
-    if (typeof membership.teamId !== "string") continue;
-    const team = await getItem<TeamMetaItem>(
-      teamPk(membership.teamId),
-      teamMetaSk(),
-    );
+    const teamId =
+      typeof membership.teamId === "string" && membership.teamId.length > 0
+        ? membership.teamId
+        : teamIdFromUserTeamSk(membership[TABLE_SK]);
+    if (teamId === undefined) continue;
+    const team = await getItem<TeamMetaItem>(teamPk(teamId), teamMetaSk());
     if (team === undefined) continue;
     results.push({
       team,

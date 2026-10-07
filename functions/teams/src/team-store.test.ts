@@ -281,12 +281,19 @@ describe('team-store edge cases', () => {
     ).rejects.toThrow('profile_not_found');
   });
 
-  it('listUserTeams skips broken membership rows and missing teams', async () => {
+  it('listUserTeams skips missing teams and recovers teamId from the sort key', async () => {
+    const adminId = randomUUID();
+    seedProfile(adminId, 'adult');
+    const team = await createTeam({
+      name: 'Hawks',
+      timeZone: 'UTC',
+      userId: adminId,
+    });
     const userId = randomUUID();
-    const teamId = randomUUID();
-    store.set(itemKey(userPk(userId), userTeamSk(teamId)), {
+    store.set(itemKey(userPk(userId), userTeamSk(team.teamId)), {
       [TABLE_PK]: userPk(userId),
-      [TABLE_SK]: userTeamSk(teamId),
+      [TABLE_SK]: userTeamSk(team.teamId),
+      // Non-string teamId: list should still use the TEAM# sort key.
       teamId: 42,
       role: 'player',
       joinedAt: new Date().toISOString(),
@@ -299,7 +306,10 @@ describe('team-store edge cases', () => {
       joinedAt: new Date().toISOString(),
     });
     const { listUserTeams } = await import('./team-store.js');
-    expect(await listUserTeams(userId)).toEqual([]);
+    const listed = await listUserTeams(userId);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.team.teamId).toBe(team.teamId);
+    expect(listed[0]?.role).toBe('player');
   });
 
   it('updateTeamSettings clears theme and rejects blank name', async () => {
