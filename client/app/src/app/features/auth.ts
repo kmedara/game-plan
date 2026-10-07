@@ -4,6 +4,7 @@
 
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { MatButtonModule } from '@angular/material/button';
 import { ApiClientService } from '../core/api-client.service';
 import { environment } from '../../environments/environment';
@@ -24,7 +25,7 @@ export const hostedUiLoginHref = (origin: string): string => {
 @Component({
   selector: 'app-auth',
   standalone: true,
-  imports: [MatButtonModule],
+  imports: [MatButtonModule, TranslocoPipe],
   templateUrl: './auth.html',
 })
 export class AuthPageComponent implements OnInit {

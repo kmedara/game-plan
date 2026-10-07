@@ -291,7 +291,7 @@ describe('TeamAdminPageComponent', () => {
     await vi.waitFor(() => expect(api.listJoinRequests).toHaveBeenCalled());
 
     await fixture.componentInstance.approveJoin(request);
-    expect(fixture.componentInstance.joinError()).toContain('minor');
+    expect(fixture.componentInstance.joinError()).toBe('errors.join.minorCannotBeTeamAdmin');
 
     await fixture.componentInstance.declineJoin(request);
     expect(api.rejectJoinRequest).toHaveBeenCalledWith('team-1', 'req-2');
@@ -358,14 +358,14 @@ describe('TeamAdminPageComponent', () => {
 
     fixture.componentInstance.settings.controls.name.setValue('   ');
     await fixture.componentInstance.saveSettings();
-    expect(fixture.componentInstance.settingsError()).toContain('required');
+    expect(fixture.componentInstance.settingsError()).toBe('errors.teamAdmin.settingsRequired');
 
     const bad = document.createElement('input');
     Object.defineProperty(bad, 'files', {
       value: [new File(['x'], 'logo.txt', { type: 'text/plain' })],
     });
     await fixture.componentInstance.onLogo({ target: bad } as unknown as Event);
-    expect(fixture.componentInstance.settingsError()).toContain('JPEG');
+    expect(fixture.componentInstance.settingsError()).toBe('errors.teamAdmin.badLogoType');
 
     fetchMock.mockRestore();
   });
@@ -380,7 +380,7 @@ describe('TeamAdminPageComponent', () => {
     await fixture.whenStable();
 
     await fixture.componentInstance.createInviteLink();
-    expect(fixture.componentInstance.inviteError()).toContain('Could not create');
+    expect(fixture.componentInstance.inviteError()).toBe('errors.teamAdmin.inviteFailed');
 
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {
@@ -393,7 +393,7 @@ describe('TeamAdminPageComponent', () => {
 
     writeText.mockRejectedValue(new Error('denied'));
     await fixture.componentInstance.copyInviteLink('abc');
-    expect(fixture.componentInstance.inviteError()).toContain('Could not copy');
+    expect(fixture.componentInstance.inviteError()).toBe('errors.teamAdmin.copyFailed');
   });
 
   it('covers roster errors, logo limits, minors, and destroy branding restore', async () => {
@@ -449,7 +449,7 @@ describe('TeamAdminPageComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     await vi.waitFor(() => {
-      expect(fixture.componentInstance.rosterError()).toContain('roster');
+      expect(fixture.componentInstance.rosterError()).toBe('errors.teamAdmin.rosterFailed');
     });
 
     const huge = new File([new Uint8Array(6 * 1024 * 1024)], 'big.png', {
@@ -458,7 +458,7 @@ describe('TeamAdminPageComponent', () => {
     const input = document.createElement('input');
     Object.defineProperty(input, 'files', { value: [huge] });
     await fixture.componentInstance.onLogo({ target: input } as unknown as Event);
-    expect(fixture.componentInstance.settingsError()).toContain('5 MB');
+    expect(fixture.componentInstance.settingsError()).toBe('errors.teamAdmin.logoTooLarge');
 
     expect(
       fixture.componentInstance.roleBlocked(
@@ -518,7 +518,7 @@ describe('TeamAdminPageComponent', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
       accountKind: 'adult',
     });
-    expect(fixture.componentInstance.joinError()).toContain('no longer pending');
+    expect(fixture.componentInstance.joinError()).toBe('errors.join.notPending');
 
     fixture.componentInstance.ngOnDestroy();
     await vi.waitFor(() => {
@@ -745,7 +745,7 @@ describe('TeamAdminPageComponent edge branches', () => {
       value: [new File(['x'], 'logo.png', { type: 'image/png' })],
     });
     await fixture.componentInstance.onLogo({ target: input } as unknown as Event);
-    expect(fixture.componentInstance.settingsError()).toContain('Could not upload');
+    expect(fixture.componentInstance.settingsError()).toBe('errors.teamAdmin.logoUploadFailed');
     expect(fixture.componentInstance.settings.controls.logoKey.value).toBe('');
   });
 

@@ -5,7 +5,8 @@
 import '@angular/compiler';
 import '@analogjs/vitest-angular/setup-zone';
 
-import { getTestBed } from '@angular/core/testing';
+import { TestBed, getTestBed } from '@angular/core/testing';
+import { provideTranslocoForTests } from './testing/transloco';
 import {
   BrowserDynamicTestingModule,
   platformBrowserDynamicTesting,
@@ -16,3 +17,10 @@ getTestBed().initTestEnvironment(
   platformBrowserDynamicTesting(),
   { teardown: { destroyAfterEach: true } },
 );
+
+const configureTestingModule = TestBed.configureTestingModule.bind(TestBed);
+TestBed.configureTestingModule = (moduleDef) =>
+  configureTestingModule({
+    ...moduleDef,
+    providers: [...(moduleDef.providers ?? []), ...provideTranslocoForTests()],
+  });

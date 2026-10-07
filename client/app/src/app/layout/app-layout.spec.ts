@@ -5,31 +5,31 @@ import { provideRouter } from '@angular/router';
 import { ActiveTeamService } from '../core/active-team.service';
 import { ApiClientService } from '../core/api-client.service';
 import { TeamBrandService } from '../core/team-brand.service';
-import { AppLayoutComponent, childTitle } from './app-layout';
+import { AppLayoutComponent, childTitleKey } from './app-layout';
 import { ActivatedRoute } from '@angular/router';
 
-describe('childTitle', () => {
-  it('reads nested titles and ignores empty values', () => {
+describe('childTitleKey', () => {
+  it('reads nested title keys and ignores empty values', () => {
     const leaf = {
       firstChild: null,
-      snapshot: { data: { title: 'Schedule' } },
+      snapshot: { data: { titleKey: 'title.schedule' } },
     } as unknown as ActivatedRoute;
     const parent = { firstChild: leaf, snapshot: { data: {} } } as unknown as ActivatedRoute;
-    expect(childTitle(parent)).toBe('Schedule');
+    expect(childTitleKey(parent)).toBe('title.schedule');
     expect(
-      childTitle({
+      childTitleKey({
         firstChild: null,
-        snapshot: { data: { title: '' } },
+        snapshot: { data: { titleKey: '' } },
       } as unknown as ActivatedRoute),
     ).toBeUndefined();
     expect(
-      childTitle({
+      childTitleKey({
         firstChild: null,
-        snapshot: { data: { title: 12 } },
+        snapshot: { data: { titleKey: 12 } },
       } as unknown as ActivatedRoute),
     ).toBeUndefined();
     expect(
-      childTitle({
+      childTitleKey({
         firstChild: null,
         snapshot: undefined,
       } as unknown as ActivatedRoute),
@@ -67,7 +67,9 @@ describe('AppLayoutComponent', () => {
           {
             path: '',
             component: AppLayoutComponent,
-            children: [{ path: 'teams', component: AppLayoutComponent, data: { title: 'Teams' } }],
+            children: [
+              { path: 'teams', component: AppLayoutComponent, data: { titleKey: 'title.teams' } },
+            ],
           },
         ]),
         { provide: ApiClientService, useValue: api },

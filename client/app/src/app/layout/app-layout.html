@@ -2,14 +2,14 @@
   <h1 class="page-title">{{ title() ?? '' }}</h1>
   <div class="app-header-team">
     @if (teamBrand.logoFor(activeTeam.active()?.theme?.logoKey); as src) {
-      <img class="team-logo" [src]="src" [alt]="activeTeam.active()?.name ?? 'Team logo'" />
+      <img class="team-logo" [src]="src" [alt]="activeTeam.active()?.name ?? ('nav.teamLogo' | transloco)" />
     }
     @if (activeTeam.teams().length > 0) {
       <mat-form-field class="team-picker" appearance="outline" subscriptSizing="dynamic">
         <mat-select
           [ngModel]="activeTeam.teamId()"
           (ngModelChange)="onTeamChange($event)"
-          aria-label="Team"
+          [attr.aria-label]="'nav.team' | transloco"
         >
           @for (team of activeTeam.teams(); track team.teamId) {
             <mat-option [value]="team.teamId">{{ team.name }}</mat-option>
@@ -18,30 +18,30 @@
       </mat-form-field>
     }
   </div>
-  <a mat-button routerLink="/teams">Teams</a>
+  <a mat-button routerLink="/teams">{{ 'nav.teams' | transloco }}</a>
 </header>
 
 <main class="app-body">
   <router-outlet />
 </main>
 
-<nav class="app-nav" aria-label="Primary">
+<nav class="app-nav" [attr.aria-label]="'nav.primary' | transloco">
   @if (api.hasTeams()) {
     <a routerLink="/schedule" routerLinkActive="active">
       <span class="material-icons">event</span>
-      Schedule
+      {{ 'nav.schedule' | transloco }}
     </a>
     <a routerLink="/chats" routerLinkActive="active">
       <span class="material-icons">chat</span>
-      Chats
+      {{ 'nav.chats' | transloco }}
     </a>
   }
   <a routerLink="/teams" routerLinkActive="active">
     <span class="material-icons">groups</span>
-    Teams
+    {{ 'nav.teams' | transloco }}
   </a>
   <a routerLink="/profile" routerLinkActive="active">
     <span class="material-icons">person</span>
-    Profile
+    {{ 'nav.profile' | transloco }}
   </a>
 </nav>

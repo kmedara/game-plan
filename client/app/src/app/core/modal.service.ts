@@ -18,6 +18,7 @@ import {
   HostListener,
 } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 /**
  * Handle given to the injected component so it can close the dialog.
@@ -54,7 +55,7 @@ export type ModalOpenOptions = {
 @Component({
   selector: 'app-modal',
   standalone: true,
-  imports: [MatButtonModule],
+  imports: [MatButtonModule, TranslocoPipe],
   templateUrl: './modal.html',
   styles: [
     `

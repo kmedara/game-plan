@@ -17,21 +17,22 @@ import {
   RouterOutlet,
 } from '@angular/router';
 import { filter, map } from 'rxjs/operators';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { ActiveTeamService } from '../core/active-team.service';
 import { ApiClientService } from '../core/api-client.service';
 import { TeamBrandService } from '../core/team-brand.service';
 
 /**
- * Reads `data.title` from the deepest activated child route.
+ * Reads `data.titleKey` from the deepest activated child route.
  *
  * @param route - The layout's activated route.
- * @returns The title string, or `undefined` when unset.
+ * @returns The translation key, or `undefined` when unset.
  */
-export const childTitle = (route: ActivatedRoute): string | undefined => {
+export const childTitleKey = (route: ActivatedRoute): string | undefined => {
   let current: ActivatedRoute | null = route;
   while (current.firstChild) current = current.firstChild;
-  const title = current.snapshot?.data?.['title'];
-  return typeof title === 'string' && title.length > 0 ? title : undefined;
+  const titleKey = current.snapshot?.data?.['titleKey'];
+  return typeof titleKey === 'string' && titleKey.length > 0 ? titleKey : undefined;
 };
 
 @Component({
@@ -45,6 +46,7 @@ export const childTitle = (route: ActivatedRoute): string | undefined => {
     RouterLink,
     RouterLinkActive,
     RouterOutlet,
+    TranslocoPipe,
   ],
   templateUrl: './app-layout.html',
   host: { class: 'app-layout' },
@@ -55,13 +57,22 @@ export class AppLayoutComponent implements OnInit {
   readonly teamBrand = inject(TeamBrandService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly i18n = inject(TranslocoService);
 
   readonly title = toSignal(
     this.router.events.pipe(
       filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-      map(() => childTitle(this.route)),
+      map(() => {
+        const key = childTitleKey(this.route);
+        return key === undefined ? undefined : this.i18n.translate(key);
+      }),
     ),
-    { initialValue: childTitle(this.route) },
+    {
+      initialValue: (() => {
+        const key = childTitleKey(this.route);
+        return key === undefined ? undefined : this.i18n.translate(key);
+      })(),
+    },
   );
 
   ngOnInit(): void {

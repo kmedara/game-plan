@@ -10,6 +10,7 @@ import { MatInputModule } from '@angular/material/input';
 import type { TeamSummary, UserProfile } from '@gameplan/types';
 import { ApiClientService } from '../core/api-client.service';
 import { ActiveTeamService } from '../core/active-team.service';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ThemeToggleComponent } from '../core/theme-toggle';
 import { Router } from '@angular/router';
 
@@ -39,9 +40,9 @@ const initialsOf = (displayName: string): string => {
  * @returns Text for the team card.
  */
 const positionMessage = (code: string): string => {
-  if (code === 'too_many_positions') return 'You can add up to 8 positions on a team.';
-  if (code === 'invalid_body') return 'Use letters and numbers, up to 40 characters.';
-  return 'Could not save that position.';
+  if (code === 'too_many_positions') return 'errors.position.tooMany';
+  if (code === 'invalid_body') return 'errors.position.invalid';
+  return 'errors.position.saveFailed';
 };
 
 @Component({
@@ -53,6 +54,7 @@ const positionMessage = (code: string): string => {
     MatFormFieldModule,
     MatInputModule,
     ThemeToggleComponent,
+    TranslocoPipe,
   ],
   templateUrl: './profile.html',
 })
@@ -67,6 +69,9 @@ export class ProfilePageComponent implements OnInit {
   readonly photoUrl = signal<string | undefined>(undefined);
   readonly uploading = signal(false);
   readonly photoError = signal<string | undefined>(undefined);
+  readonly phoneControl = new FormControl('', { nonNullable: true });
+  readonly savingPhone = signal(false);
+  readonly phoneError = signal<string | undefined>(undefined);
   readonly positionError = signal<Record<string, string>>({});
   readonly initials = computed(() => initialsOf(this.profile()?.displayName ?? ''));
 
@@ -106,11 +111,11 @@ export class ProfilePageComponent implements OnInit {
     input.value = '';
     if (file === undefined) return;
     if (!PHOTO_TYPES.has(file.type)) {
-      this.photoError.set('Choose a JPEG, PNG, WebP, or GIF.');
+      this.photoError.set('errors.profile.badImageType');
       return;
     }
     if (file.size > PHOTO_MAX_BYTES) {
-      this.photoError.set('Choose a photo smaller than 5 MB.');
+      this.photoError.set('errors.profile.imageTooLarge');
       return;
     }
 
@@ -128,7 +133,7 @@ export class ProfilePageComponent implements OnInit {
       this.profile.set(profile);
       await this.loadPhoto(profile.photoKey);
     } catch {
-      this.photoError.set('Could not save that photo.');
+      this.photoError.set('errors.profile.savePhotoFailed');
     } finally {
       this.uploading.set(false);
     }
@@ -143,9 +148,32 @@ export class ProfilePageComponent implements OnInit {
       this.profile.set(profile);
       this.photoUrl.set(undefined);
     } catch {
-      this.photoError.set('Could not remove the photo.');
+      this.photoError.set('errors.profile.removePhotoFailed');
     } finally {
       this.uploading.set(false);
+    }
+  }
+
+  /** Saves or clears the contact phone teammates can see. */
+  async savePhone(): Promise<void> {
+    const next = this.phoneControl.value.trim();
+    this.savingPhone.set(true);
+    this.phoneError.set(undefined);
+    try {
+      const profile = await this.api.updateProfile({
+        phoneNumber: next.length > 0 ? next : null,
+      });
+      this.profile.set(profile);
+      this.phoneControl.setValue(profile.phoneNumber ?? '');
+    } catch (err) {
+      const code = err instanceof Error ? err.message : 'save_failed';
+      this.phoneError.set(
+        code === 'invalid_body'
+          ? 'errors.profile.badPhone'
+          : 'errors.profile.savePhoneFailed',
+      );
+    } finally {
+      this.savingPhone.set(false);
     }
   }
 
@@ -177,10 +205,11 @@ export class ProfilePageComponent implements OnInit {
     try {
       const [profile, teams] = await Promise.all([this.api.getMe(), this.api.listTeams()]);
       this.profile.set(profile);
+      this.phoneControl.setValue(profile.phoneNumber ?? '');
       this.teams.set(teams);
       await this.loadPhoto(profile.photoKey);
     } catch {
-      this.photoError.set('Could not load your profile.');
+      this.photoError.set('errors.profile.loadFailed');
     }
   }
 

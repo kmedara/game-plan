@@ -17,12 +17,14 @@ describe('inviteCodeFromInput', () => {
 
 describe('inviteErrorMessage', () => {
   it('explains known invite failures', () => {
-    expect(inviteErrorMessage(new Error('not_found'))).toContain('not valid');
-    expect(inviteErrorMessage(new Error('already_a_member'))).toContain('already');
-    expect(inviteErrorMessage(new Error('minor_cannot_be_team_admin'))).toContain('not available');
-    expect(inviteErrorMessage(new Error('forbidden'))).toContain('cannot use');
-    expect(inviteErrorMessage(new Error('other'))).toContain('Could not use');
-    expect(inviteErrorMessage('plain')).toContain('Could not use');
+    expect(inviteErrorMessage(new Error('not_found'))).toBe('errors.invite.notValid');
+    expect(inviteErrorMessage(new Error('already_a_member'))).toBe('errors.invite.alreadyMember');
+    expect(inviteErrorMessage(new Error('minor_cannot_be_team_admin'))).toBe(
+      'errors.invite.roleUnavailable',
+    );
+    expect(inviteErrorMessage(new Error('forbidden'))).toBe('errors.invite.cannotUse');
+    expect(inviteErrorMessage(new Error('other'))).toBe('errors.invite.failed');
+    expect(inviteErrorMessage('plain')).toBe('errors.invite.failed');
   });
 });
 
@@ -110,7 +112,7 @@ describe('InvitePageComponent', () => {
     fixture = TestBed.createComponent(InvitePageComponent);
     fixture.detectChanges();
     await fixture.whenStable();
-    expect(fixture.componentInstance.error()).toContain('not valid');
+    expect(fixture.componentInstance.error()).toBe('errors.invite.notValid');
     expect(emptyApi.getInvite).not.toHaveBeenCalled();
   });
 
@@ -142,14 +144,14 @@ describe('InvitePageComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     await fixture.componentInstance.accept();
-    expect(fixture.componentInstance.error()).toContain('not valid');
+    expect(fixture.componentInstance.error()).toBe('errors.invite.notValid');
     expect(api.acceptInvite).not.toHaveBeenCalled();
   });
 
   it('surfaces accept failures without leaving joining stuck', async () => {
     api.acceptInvite.mockRejectedValue(new Error('forbidden'));
     await fixture.componentInstance.accept();
-    expect(fixture.componentInstance.error()).toContain('cannot use');
+    expect(fixture.componentInstance.error()).toBe('errors.invite.cannotUse');
     expect(fixture.componentInstance.joining()).toBe(false);
   });
 });

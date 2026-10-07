@@ -19,6 +19,9 @@
     <div>
       <strong>{{ profile()?.displayName }}</strong>
       <div class="muted">{{ profile()?.email }}</div>
+      @if (profile()?.phoneNumber; as phone) {
+        <div class="muted">{{ phone }}</div>
+      }
     </div>
   </div>
 
@@ -37,21 +40,42 @@
       [disabled]="uploading()"
       (click)="fileInput.click()"
     >
-      {{ profile()?.photoKey ? 'Change photo' : 'Add photo' }}
+      {{
+        profile()?.photoKey ? ('profile.changePhoto' | transloco) : ('profile.addPhoto' | transloco)
+      }}
     </button>
     @if (profile()?.photoKey) {
       <button mat-button type="button" [disabled]="uploading()" (click)="removePhoto()">
-        Remove photo
+        {{ 'profile.removePhoto' | transloco }}
       </button>
     }
   </div>
   @if (photoError()) {
-    <p class="error">{{ photoError() }}</p>
+    <p class="error">{{ photoError() | transloco }}</p>
   }
 
-  <h2 class="page-title">Positions</h2>
+  <h2 class="page-title">{{ 'profile.phone' | transloco }}</h2>
+  <p class="muted">{{ 'profile.phoneHint' | transloco }}</p>
+  <form class="stack" (submit)="$event.preventDefault(); savePhone()">
+    <mat-form-field appearance="outline">
+      <mat-label>{{ 'profile.phoneNumber' | transloco }}</mat-label>
+      <input matInput type="tel" [formControl]="phoneControl" placeholder="555-0100" />
+    </mat-form-field>
+    @if (phoneError()) {
+      <p class="error">{{ phoneError() | transloco }}</p>
+    }
+    <button
+      mat-stroked-button
+      type="submit"
+      [disabled]="savingPhone() || phoneControl.value.trim() === (profile()?.phoneNumber ?? '')"
+    >
+      {{ 'profile.savePhone' | transloco }}
+    </button>
+  </form>
+
+  <h2 class="page-title">{{ 'profile.positions' | transloco }}</h2>
   @if (teams().length === 0) {
-    <p class="muted">Join a team to add the positions you play.</p>
+    <p class="muted">{{ 'profile.positionsEmpty' | transloco }}</p>
   }
   @for (team of teams(); track team.teamId) {
     <div class="surface-card stack">
@@ -63,7 +87,7 @@
               {{ position }}
               <button
                 type="button"
-                [attr.aria-label]="'Remove ' + position"
+                [attr.aria-label]="'profile.removePosition' | transloco: { position: position }"
                 (click)="removePosition(team, position)"
               >
                 ×
@@ -79,7 +103,7 @@
           subscriptSizing="dynamic"
           style="flex: 1"
         >
-          <mat-label>Position</mat-label>
+          <mat-label>{{ 'profile.position' | transloco }}</mat-label>
           <input matInput [formControl]="positionControl(team.teamId)" />
         </mat-form-field>
         <button
@@ -87,14 +111,14 @@
           type="submit"
           [disabled]="positionControl(team.teamId).value.trim().length === 0"
         >
-          Add
+          {{ 'common.add' | transloco }}
         </button>
       </form>
       @if (positionError()[team.teamId]; as message) {
-        <p class="error">{{ message }}</p>
+        <p class="error">{{ message | transloco }}</p>
       }
     </div>
   }
 
-  <button mat-button type="button" (click)="logout()">Sign out</button>
+  <button mat-button type="button" (click)="logout()">{{ 'profile.signOut' | transloco }}</button>
 </section>

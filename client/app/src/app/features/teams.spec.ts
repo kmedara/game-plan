@@ -26,22 +26,24 @@ describe('listTimeZones', () => {
 
 describe('roleLabel', () => {
   it('labels known roles and passes through unknown values', () => {
-    expect(roleLabel('coach')).toBe('Coach');
+    expect(roleLabel('coach')).toBe('role.coach');
     expect(roleLabel('custom')).toBe('custom');
   });
 });
 
 describe('joinRequestMessage', () => {
   it('maps known join-request errors', () => {
-    expect(joinRequestMessage(new Error('minor_cannot_be_team_admin'))).toContain('minor');
-    expect(joinRequestMessage(new Error('minor_cannot_hold_manage_permissions'))).toContain(
-      'manages permissions',
+    expect(joinRequestMessage(new Error('minor_cannot_be_team_admin'))).toBe(
+      'errors.join.minorCannotBeTeamAdmin',
     );
-    expect(joinRequestMessage(new Error('already_a_member'))).toContain('already');
-    expect(joinRequestMessage(new Error('join_request_not_found'))).toContain('no longer pending');
-    expect(joinRequestMessage(new Error('not_found'))).toContain('no longer pending');
-    expect(joinRequestMessage(new Error('other'))).toContain('Could not update');
-    expect(joinRequestMessage('plain')).toContain('Could not update');
+    expect(joinRequestMessage(new Error('minor_cannot_hold_manage_permissions'))).toBe(
+      'errors.join.minorCannotManagePermissions',
+    );
+    expect(joinRequestMessage(new Error('already_a_member'))).toBe('errors.join.alreadyMember');
+    expect(joinRequestMessage(new Error('join_request_not_found'))).toBe('errors.join.notPending');
+    expect(joinRequestMessage(new Error('not_found'))).toBe('errors.join.notPending');
+    expect(joinRequestMessage(new Error('other'))).toBe('errors.join.updateFailed');
+    expect(joinRequestMessage('plain')).toBe('errors.join.updateFailed');
   });
 });
 
@@ -154,7 +156,7 @@ describe('TeamsPageComponent', () => {
     api.requestJoin.mockResolvedValue(undefined);
     await component.requestJoin();
     expect(api.requestJoin).toHaveBeenCalledWith('t1');
-    expect(component.joinMessage()).toContain('Join request sent');
+    expect(component.joinMessage()).toBe('teams.joinRequestSent');
   });
 
   it('creates a team and navigates to the schedule', async () => {

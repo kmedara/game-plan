@@ -4,6 +4,7 @@
 
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { MatButtonModule } from '@angular/material/button';
 import type { InvitePreview } from '@gameplan/types';
 import { ApiClientService } from '../core/api-client.service';
@@ -20,23 +21,23 @@ export const inviteErrorMessage = (err: unknown): string => {
   const code = err instanceof Error ? err.message : '';
   switch (code) {
     case 'not_found':
-      return 'That invite link is not valid.';
+      return 'errors.invite.notValid';
     case 'already_a_member':
-      return 'You are already on this team.';
+      return 'errors.invite.alreadyMember';
     case 'minor_cannot_be_team_admin':
     case 'minor_cannot_hold_manage_permissions':
-      return 'This invite role is not available for your account.';
+      return 'errors.invite.roleUnavailable';
     case 'forbidden':
-      return 'You cannot use this invite.';
+      return 'errors.invite.cannotUse';
     default:
-      return 'Could not use this invite.';
+      return 'errors.invite.failed';
   }
 };
 
 @Component({
   selector: 'app-invite',
   standalone: true,
-  imports: [RouterLink, MatButtonModule],
+  imports: [RouterLink, MatButtonModule, TranslocoPipe],
   templateUrl: './invite.html',
 })
 export class InvitePageComponent implements OnInit {

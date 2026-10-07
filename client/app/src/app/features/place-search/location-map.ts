@@ -10,11 +10,13 @@ import {
   OnDestroy,
   afterNextRender,
   effect,
+  inject,
   input,
   output,
   signal,
   viewChild,
 } from '@angular/core';
+import { TranslocoService } from '@jsverse/transloco';
 import { Capacitor } from '@capacitor/core';
 import { GoogleMap } from '@capacitor/google-maps';
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader';
@@ -123,7 +125,7 @@ export class LocationMapComponent implements OnDestroy {
 
   readonly platform = Capacitor.getPlatform();
   readonly unavailable = signal(false);
-  readonly hint = signal('Search below or tap the map to set a pin.');
+  readonly hint = signal('');
 
   private readonly mapCanvas = viewChild<ElementRef<HTMLElement>>('mapCanvas');
 
@@ -135,7 +137,10 @@ export class LocationMapComponent implements OnDestroy {
   private syncingFromParent = false;
   private initialized = false;
 
+  private readonly transloco = inject(TranslocoService);
+
   constructor() {
+    this.hint.set(this.transloco.translate('maps.searchOrPin'));
     afterNextRender(() => {
       void this.initMap();
     });
@@ -187,7 +192,7 @@ export class LocationMapComponent implements OnDestroy {
   /** Creates the platform map and wires click / drag handlers. */
   private async initMap(): Promise<void> {
     if (this.platform === 'ios') {
-      this.hint.set('Search below or open the map to set a pin.');
+      this.hint.set(this.transloco.translate('maps.searchOrPin'));
       this.initialized = true;
       return;
     }
@@ -205,7 +210,7 @@ export class LocationMapComponent implements OnDestroy {
     const apiKey = environment.googleMapsApiKey.trim();
     if (apiKey.length === 0) {
       this.unavailable.set(true);
-      this.hint.set('Map requires GOOGLE_MAPS_BROWSER_API_KEY.');
+      this.hint.set(this.transloco.translate('maps.needsBrowserKey'));
       return;
     }
 
@@ -247,7 +252,7 @@ export class LocationMapComponent implements OnDestroy {
       this.initialized = true;
     } catch {
       this.unavailable.set(true);
-      this.hint.set('Could not load Google Maps.');
+      this.hint.set(this.transloco.translate('maps.loadFailed'));
     }
   }
 
@@ -263,7 +268,7 @@ export class LocationMapComponent implements OnDestroy {
       const { apiKey } = await MapsKey.getAndroidMapsApiKey();
       if (apiKey.trim().length === 0) {
         this.unavailable.set(true);
-        this.hint.set('Map requires GOOGLE_MAPS_ANDROID_API_KEY.');
+        this.hint.set(this.transloco.translate('maps.needsAndroidKey'));
         return;
       }
 
@@ -305,7 +310,7 @@ export class LocationMapComponent implements OnDestroy {
       this.initialized = true;
     } catch {
       this.unavailable.set(true);
-      this.hint.set('Could not load Google Maps on Android.');
+      this.hint.set(this.transloco.translate('maps.loadFailedAndroid'));
     }
   }
 
