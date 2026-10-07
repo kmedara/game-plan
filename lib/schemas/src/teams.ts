@@ -2,7 +2,9 @@
  * Teams, roster, invites, and permission-matrix wire contracts.
  */
 
+import { displayNameSchema } from "./display-name.js";
 import { accountKindSchema, teamPermissionSchema, teamRoleSchema } from "./enums.js";
+import { phoneNumberSchema } from "./phone.js";
 import { timeZoneSchema } from "./time.js";
 import { z } from "./zod.js";
 
@@ -16,7 +18,7 @@ export const noSpecialCharsString = z
 /** Body for creating a team (also creates the default chat). */
 export const createTeamBodySchema = z
   .object({
-    name: noSpecialCharsString,
+    name: displayNameSchema,
     timeZone: timeZoneSchema,
   })
   .strict();
@@ -56,7 +58,7 @@ export const teamThemeSchema = z
 /** Body for updating a team's name, time zone, location, and theme. */
 export const updateTeamBodySchema = z
   .object({
-    name: noSpecialCharsString.optional(),
+    name: z.string().min(1).max(30).optional(),
     timeZone: z.string().min(1).max(64).optional(),
     location: z.union([z.string().max(200), z.null()]).optional(),
     theme: z.union([teamThemeSchema, z.null()]).optional(),
@@ -164,9 +166,22 @@ export const teamMemberSchema = z
     userId: z.string().min(1),
     role: teamRoleSchema,
     joinedAt: z.string().min(1),
-    displayName: z.string().min(1).optional(),
+    displayName: displayNameSchema.optional(),
     email: z.string().min(1).optional(),
     accountKind: accountKindSchema.optional(),
+  })
+  .strict();
+
+/**
+ * One teammate on `GET /teams/:teamId/members/:userId`.
+ *
+ * Adds photo, phone, and positions for the profile view.
+ */
+export const teamMemberProfileSchema = teamMemberSchema
+  .extend({
+    photoKey: z.string().min(1).max(512).optional(),
+    phoneNumber: phoneNumberSchema.optional(),
+    positions: z.array(z.string().min(1).max(40)).optional(),
   })
   .strict();
 
@@ -242,7 +257,7 @@ export const joinRequestSchema = z
     requestId: z.string().min(1),
     userId: z.string().min(1),
     createdAt: z.string().min(1),
-    displayName: z.string().min(1).optional(),
+    displayName: displayNameSchema.optional(),
     email: z.string().min(1).optional(),
     accountKind: accountKindSchema.optional(),
   })
@@ -320,6 +335,9 @@ export type TeamList = z.infer<typeof teamListSchema>;
 
 /** Inferred type for {@link teamMemberSchema}. */
 export type TeamMember = z.infer<typeof teamMemberSchema>;
+
+/** Inferred type for {@link teamMemberProfileSchema}. */
+export type TeamMemberProfile = z.infer<typeof teamMemberProfileSchema>;
 
 /** Inferred type for {@link teamMemberListSchema}. */
 export type TeamMemberList = z.infer<typeof teamMemberListSchema>;

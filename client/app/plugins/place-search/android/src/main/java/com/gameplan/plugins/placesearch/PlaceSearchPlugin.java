@@ -187,14 +187,18 @@ public class PlaceSearchPlugin extends Plugin {
     private static String buildLabel(@NonNull String name, @NonNull String address) {
         String trimmedName = name.trim();
         String trimmedAddress = address.trim();
-        if (!trimmedName.isEmpty() && !trimmedAddress.isEmpty() && !trimmedAddress.contains(trimmedName)) {
+        if (!trimmedName.isEmpty() && !trimmedAddress.isEmpty()) {
+            // Formatted addresses often already include the place name — keep the address.
+            if (trimmedAddress.contains(trimmedName)) {
+                return trimmedAddress;
+            }
             return trimmedName + ", " + trimmedAddress;
-        }
-        if (!trimmedName.isEmpty()) {
-            return trimmedName;
         }
         if (!trimmedAddress.isEmpty()) {
             return trimmedAddress;
+        }
+        if (!trimmedName.isEmpty()) {
+            return trimmedName;
         }
         return "Selected place";
     }

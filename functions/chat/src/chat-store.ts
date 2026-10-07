@@ -38,8 +38,7 @@ import {
   transactWrite,
   userChatSk,
   userPk,
-} from '../../lib/dynamo/index.js';
-import { enqueueFanout } from '../../lib/fanout-enqueue.js';
+} from '../../lib/dynamo/index.js';import { enqueueFanout } from '../../lib/fanout-enqueue.js';
 import {
   isMinorChatMembershipAllowed,
   type ChatParticipant,
@@ -439,7 +438,9 @@ export const searchAdultByEmail = async (email: string): Promise<UserProfile> =>
   if (!matchesUserSearchPolicy(profile.accountKind, V1_USER_SEARCH_POLICY)) {
     throw new Error('user_not_found');
   }
-  return toUserProfile(profile);
+  // Phone is teammate-only; email search must not expose it.
+  const { phoneNumber: _phone, ...safe } = toUserProfile(profile);
+  return safe;
 };
 
 /**
@@ -475,6 +476,18 @@ export const listMessages = async (
 };
 
 /**
+ * True when `key` is an upload object owned by `userId`.
+ *
+ * @param userId - The authenticated sender.
+ * @param key - A media object key from the request.
+ * @returns Whether the key is under that user's upload prefix.
+ */
+const isOwnedUploadKey = (userId: string, key: string): boolean => {
+  const prefix = `uploads/${userId}/`;
+  return key.startsWith(prefix) && !key.includes('..') && key.length > prefix.length;
+};
+
+/**
  * Persists a message and enqueues fan-out delivery.
  *
  * @param input - Chat, sender, and message body.
@@ -488,6 +501,17 @@ export const sendMessage = async (input: {
   await requireChat(input.chatId);
   await requireChatMembership(input.chatId, input.userId);
 
+  const bodyText = input.body.body.trim();
+  const attachmentKeys = (input.body.attachmentKeys ?? []).filter((key) => key.length > 0);
+  if (bodyText.length === 0 && attachmentKeys.length === 0) {
+    throw new Error('invalid_body');
+  }
+  for (const key of attachmentKeys) {
+    if (!isOwnedUploadKey(input.userId, key)) {
+      throw new Error('invalid_attachment_key');
+    }
+  }
+
   const createdAt = new Date().toISOString();
   const messageId = randomUUID();
   const item: MessageItem = {
@@ -496,10 +520,8 @@ export const sendMessage = async (input: {
     messageId,
     chatId: input.chatId,
     senderId: input.userId,
-    body: input.body.body,
-    ...(input.body.attachmentKeys !== undefined
-      ? { attachmentKeys: input.body.attachmentKeys }
-      : {}),
+    body: bodyText,
+    ...(attachmentKeys.length > 0 ? { attachmentKeys } : {}),
     createdAt,
   };
 
@@ -514,11 +536,9 @@ export const sendMessage = async (input: {
     ...(identity.senderPhotoKey !== undefined
       ? { senderPhotoKey: identity.senderPhotoKey }
       : {}),
-    body: input.body.body,
+    body: bodyText,
     createdAt,
-    ...(input.body.attachmentKeys !== undefined
-      ? { attachmentKeys: input.body.attachmentKeys }
-      : {}),
+    ...(attachmentKeys.length > 0 ? { attachmentKeys } : {}),
   });
   return { ...toStoredMessage(item), ...identity };
 };

@@ -12,6 +12,7 @@ import {
   type ValidatorFn,
 } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { TranslocoPipe } from '@jsverse/transloco';
 import {
   MatAutocomplete,
   MatAutocompleteModule,
@@ -77,36 +78,36 @@ const timeZoneValidator: ValidatorFn = (control) =>
  * @param err - The error thrown by the API client.
  * @returns Text to show on the admin page.
  */
-/** Maps join-request API errors to short UI sentences. */
+/** Maps join-request API errors to translation keys. */
 export function joinRequestMessage(err: unknown): string {
   const code = err instanceof Error ? err.message : '';
-  if (code === 'minor_cannot_be_team_admin') return 'A minor cannot be a team admin.';
+  if (code === 'minor_cannot_be_team_admin') return 'errors.join.minorCannotBeTeamAdmin';
   if (code === 'minor_cannot_hold_manage_permissions') {
-    return 'A minor cannot hold a role that manages permissions.';
+    return 'errors.join.minorCannotManagePermissions';
   }
-  if (code === 'already_a_member') return 'They are already on the team.';
+  if (code === 'already_a_member') return 'errors.join.alreadyMember';
   if (code === 'join_request_not_found' || code === 'not_found') {
-    return 'That request is no longer pending.';
+    return 'errors.join.notPending';
   }
-  return 'Could not update the join request.';
+  return 'errors.join.updateFailed';
 }
 
-/** Display names for team roles on invite controls. */
-const ROLE_LABELS: Record<TeamRole, string> = {
-  team_admin: 'Team admin',
-  coach: 'Coach',
-  parent: 'Parent',
-  player: 'Player',
+/** Translation keys for team roles on invite controls. */
+const ROLE_LABEL_KEYS: Record<TeamRole, string> = {
+  team_admin: 'role.team_admin',
+  coach: 'role.coach',
+  parent: 'role.parent',
+  player: 'role.player',
 };
 
 /**
- * Display name for a team role.
+ * Translation key for a team role, or the raw role when unknown.
  *
  * @param role - The stored role.
- * @returns A readable label, such as `Team admin`.
+ * @returns A Transloco key such as `role.team_admin`.
  */
 export const roleLabel = (role: string): string =>
-  role in ROLE_LABELS ? ROLE_LABELS[role as TeamRole] : role;
+  role in ROLE_LABEL_KEYS ? ROLE_LABEL_KEYS[role as TeamRole] : role;
 
 /**
  * Reads an invite code from a pasted link or a bare code.
@@ -139,6 +140,7 @@ export const inviteCodeFromInput = (raw: string): string => {
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
+    TranslocoPipe,
   ],
   templateUrl: './teams.html',
 })
@@ -365,7 +367,7 @@ export class TeamsPageComponent implements OnInit, OnDestroy {
     this.joinMessage.set(undefined);
     try {
       await this.api.requestJoin(team.teamId);
-      this.joinMessage.set(`Join request sent to ${team.name}. An admin must approve it.`);
+      this.joinMessage.set('teams.joinRequestSent');
       this.joinControl.setValue('', { emitEvent: false });
       this.selectedJoin.set(undefined);
       void this.searchDirectory('');
@@ -433,6 +435,7 @@ const sameTheme = (next: TeamTheme | null, loaded: TeamTheme | undefined): boole
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
+    TranslocoPipe,
   ],
   templateUrl: './team-admin.html',
 })
@@ -480,11 +483,10 @@ export class TeamAdminPageComponent implements OnInit, OnDestroy {
     initialValue: '',
   });
   readonly timeZoneOptions = computed(() => filterTimeZones(this.timeZoneQuery()));
-  private teamId = '';
+  readonly teamId = this.route.snapshot.paramMap.get('teamId') ?? '';
   private loadedTheme: TeamTheme | undefined;
 
   ngOnInit(): void {
-    this.teamId = this.route.snapshot.paramMap.get('teamId') ?? '';
     this.settings.valueChanges.subscribe(() => {
       this.settingsSaved.set(false);
       void this.teamBrand.apply(this.currentTheme() ?? undefined);
@@ -520,7 +522,7 @@ export class TeamAdminPageComponent implements OnInit, OnDestroy {
       this.members.set(await this.loadMembers());
       this.rosterError.set(undefined);
     } catch {
-      this.rosterError.set('Could not load the roster.');
+      this.rosterError.set('errors.teamAdmin.rosterFailed');
     }
     if (this.canInvite()) {
       try {
@@ -637,7 +639,7 @@ export class TeamAdminPageComponent implements OnInit, OnDestroy {
       await this.api.createInvite(this.teamId, this.inviteRole.value);
       this.invites.set(await this.loadInvites());
     } catch {
-      this.inviteError.set('Could not create the invite.');
+      this.inviteError.set('errors.teamAdmin.inviteFailed');
     } finally {
       this.creatingInvite.set(false);
     }
@@ -654,7 +656,7 @@ export class TeamAdminPageComponent implements OnInit, OnDestroy {
       this.copiedCode.set(code);
       this.inviteError.set(undefined);
     } catch {
-      this.inviteError.set('Could not copy the link. Select it and copy it manually.');
+      this.inviteError.set('errors.teamAdmin.copyFailed');
     }
   }
 
@@ -691,7 +693,7 @@ export class TeamAdminPageComponent implements OnInit, OnDestroy {
     const timeZone = raw.timeZone.trim();
     const location = raw.location.trim();
     if (name.length === 0 || timeZone.length === 0) {
-      this.settingsError.set('Name and time zone are required.');
+      this.settingsError.set('errors.teamAdmin.settingsRequired');
       return;
     }
     this.settingsError.set(undefined);
@@ -724,11 +726,11 @@ export class TeamAdminPageComponent implements OnInit, OnDestroy {
     input.value = '';
     if (file === undefined) return;
     if (!LOGO_TYPES.has(file.type)) {
-      this.settingsError.set('Choose a JPEG, PNG, WebP, or GIF.');
+      this.settingsError.set('errors.teamAdmin.badLogoType');
       return;
     }
     if (file.size > LOGO_MAX_BYTES) {
-      this.settingsError.set('Choose a logo smaller than 5 MB.');
+      this.settingsError.set('errors.teamAdmin.logoTooLarge');
       return;
     }
 
@@ -745,7 +747,7 @@ export class TeamAdminPageComponent implements OnInit, OnDestroy {
       this.settings.controls.logoKey.setValue(presign.objectKey);
       this.logoPreview.set(URL.createObjectURL(file));
     } catch {
-      this.settingsError.set('Could not upload that logo.');
+      this.settingsError.set('errors.teamAdmin.logoUploadFailed');
     } finally {
       this.uploadingLogo.set(false);
     }

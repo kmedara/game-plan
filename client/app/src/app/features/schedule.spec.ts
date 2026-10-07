@@ -238,7 +238,7 @@ describe('SchedulePageComponent', () => {
     expect(component.primaryMapsProvider()).toBe('apple');
     expect(component.showSecondaryMapsLink()).toBe(true);
     expect(component.secondaryMapsProvider()).toBe('google');
-    expect(component.mapsProviderLabel('google')).toBe('Google Maps');
+    expect(component.mapsProviderLabel('google')).toBe('maps.google');
 
     const openMaps = vi.spyOn(placeSearch, 'openPlaceInMaps').mockImplementation(() => undefined);
     component.openMaps(occurrence, 'google');
@@ -257,6 +257,12 @@ describe('SchedulePageComponent', () => {
     modal.open.mockResolvedValue(true);
     await component.startAdd();
     expect(api.getSchedule.mock.calls.length).toBeGreaterThan(1);
+
+    const scheduleLoads = api.getSchedule.mock.calls.length;
+    modal.open.mockResolvedValue(true);
+    await component.openEvent(occurrence);
+    expect(modal.open).toHaveBeenCalled();
+    expect(api.getSchedule.mock.calls.length).toBeGreaterThan(scheduleLoads);
 
     liveHandler?.({ type: 'schedule_changed', teamId: 't1' });
     await fixture.whenStable();
@@ -335,7 +341,7 @@ describe('SchedulePageComponent', () => {
     expect(component.primaryMapsProvider()).toBe('google');
     expect(component.showSecondaryMapsLink()).toBe(false);
     expect(component.secondaryMapsProvider()).toBe('apple');
-    expect(component.mapsProviderLabel('apple')).toBe('Apple Maps');
+    expect(component.mapsProviderLabel('apple')).toBe('maps.apple');
 
     const openMaps = vi.spyOn(placeSearch, 'openPlaceInMaps').mockImplementation(() => undefined);
     component.openMaps(
@@ -366,6 +372,14 @@ describe('SchedulePageComponent', () => {
     expect(component.selectedEvents()).toEqual([]);
 
     await component.startAdd();
+    expect(modal.open).not.toHaveBeenCalled();
+    await component.openEvent({
+      eventId: 'e1',
+      eventType: 'practice',
+      title: 'P',
+      startsAt: '2026-10-05T22:00:00.000Z',
+      rsvps: [],
+    });
     expect(modal.open).not.toHaveBeenCalled();
     await component.rsvp(
       { eventId: 'e1', eventType: 'practice', title: 'P', startsAt: '2026-10-05T22:00:00.000Z', rsvps: [] },

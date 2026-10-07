@@ -22,94 +22,113 @@ import {
   userPk,
 } from '../../lib/dynamo/keys.js';
 
-const store = new Map<string, Record<string, unknown>>();
-const profiles = new Map<
-  string,
-  { userId: string; displayName: string; email: string; accountKind: AccountKind; photoKey?: string }
->();
-
-const itemKey = (pk: string, sk: string): string => `${pk}\0${sk}`;
-
-const findProfileByEmail = vi.fn(async () => undefined);
-
-vi.mock('../../lib/auth/profile.js', () => ({
-  getProfile: async (userId: string) => {
-    const row = profiles.get(userId);
-    if (row === undefined) return undefined;
-    return {
-      PK: userPk(userId),
-      SK: profileSk(),
-      userId: row.userId,
-      email: row.email,
-      displayName: row.displayName,
-      accountKind: row.accountKind,
-      createdAt: new Date().toISOString(),
-      ...(row.photoKey !== undefined ? { photoKey: row.photoKey } : {}),
-    };
-  },
-  findProfileByEmail: (...args: unknown[]) => findProfileByEmail(...args),
-  toUserProfile: (item: { userId: string; email: string; displayName: string; accountKind: AccountKind }) =>
-    item,
-}));
-
-vi.mock('../../lib/dynamo/access.js', () => ({
-  getItem: async <T extends Record<string, unknown>>(pk: string, sk: string) =>
-    store.get(itemKey(pk, sk)) as T | undefined,
-  putItem: async (item: Record<string, unknown>): Promise<void> => {
-    store.set(itemKey(String(item[TABLE_PK]), String(item[TABLE_SK])), item);
-  },
-  deleteItem: async (): Promise<void> => undefined,
-  transactWrite: async (
-    items: Array<{ Put?: { Item: Record<string, unknown> } }>,
-  ): Promise<void> => {
-    for (const entry of items) {
-      if (entry.Put?.Item !== undefined) {
-        const item = entry.Put.Item;
-        store.set(itemKey(String(item[TABLE_PK]), String(item[TABLE_SK])), item);
-      }
+const { store, profiles, itemKey, findProfileByEmail, fanout } = vi.hoisted(() => {
+  const store = new Map<string, Record<string, unknown>>();
+  const profiles = new Map<
+    string,
+    {
+      userId: string;
+      displayName: string;
+      email: string;
+      accountKind: AccountKind;
+      photoKey?: string;
     }
-  },
-  queryBySkPrefix: async <T extends Record<string, unknown>>(pk: string, skPrefix: string) => {
-    const items: T[] = [];
-    for (const [key, item] of store) {
-      const [itemPk, itemSk] = key.split('\0');
-      if (itemPk === pk && itemSk.startsWith(skPrefix)) items.push(item as T);
-    }
-    return items;
-  },
-  queryBySkBetween: async () => [],
-  queryAll: async () => [],
-  queryPage: async <T extends Record<string, unknown>>(
-    input: {
-      ExpressionAttributeValues?: Record<string, unknown>;
-      ScanIndexForward?: boolean;
+  >();
+  const itemKey = (pk: string, sk: string): string => `${pk}\0${sk}`;
+  const findProfileByEmail = vi.fn(async () => undefined);
+  const fanout = vi.fn(async (): Promise<void> => undefined);
+  return { store, profiles, itemKey, findProfileByEmail, fanout };
+});
+
+vi.mock('../../lib/auth/profile.js', async () => {
+  const keys = await import('../../lib/dynamo/keys.js');
+  return {
+    getProfile: async (userId: string) => {
+      const row = profiles.get(userId);
+      if (row === undefined) return undefined;
+      return {
+        PK: keys.userPk(userId),
+        SK: keys.profileSk(),
+        userId: row.userId,
+        email: row.email,
+        displayName: row.displayName,
+        accountKind: row.accountKind,
+        createdAt: new Date().toISOString(),
+        ...(row.photoKey !== undefined ? { photoKey: row.photoKey } : {}),
+      };
     },
-    options: { limit: number; cursor?: string },
-  ): Promise<{ items: T[]; cursor?: string }> => {
-    const pk = String(input.ExpressionAttributeValues?.[':pk'] ?? '');
-    const skPrefix = String(input.ExpressionAttributeValues?.[':skPrefix'] ?? '');
-    const all: T[] = [];
-    for (const [key, item] of store) {
-      const [itemPk, itemSk] = key.split('\0');
-      if (itemPk === pk && itemSk.startsWith(skPrefix)) all.push(item as T);
-    }
-    all.sort((a, b) => String(a[TABLE_SK]).localeCompare(String(b[TABLE_SK])));
-    if (input.ScanIndexForward === false) all.reverse();
+    findProfileByEmail: (...args: unknown[]) => findProfileByEmail(...args),
+    toUserProfile: (item: {
+      userId: string;
+      email: string;
+      displayName: string;
+      accountKind: AccountKind;
+    }) => item,
+  };
+});
 
-    const start = options.cursor !== undefined ? Number(options.cursor) : 0;
-    const slice = all.slice(start, start + options.limit);
-    const next = start + options.limit;
-    return {
-      items: slice,
-      cursor: next < all.length ? String(next) : undefined,
-    };
-  },
-  queryPartition: async () => [],
-  encodeCursor: () => undefined,
-  decodeCursor: () => undefined,
-}));
+vi.mock('../../lib/dynamo/access.js', async () => {
+  const keys = await import('../../lib/dynamo/keys.js');
+  return {
+    getItem: async <T extends Record<string, unknown>>(pk: string, sk: string) =>
+      store.get(itemKey(pk, sk)) as T | undefined,
+    putItem: async (item: Record<string, unknown>): Promise<void> => {
+      store.set(itemKey(String(item[keys.TABLE_PK]), String(item[keys.TABLE_SK])), item);
+    },
+    deleteItem: async (): Promise<void> => undefined,
+    transactWrite: async (
+      items: Array<{ Put?: { Item: Record<string, unknown> } }>,
+    ): Promise<void> => {
+      for (const entry of items) {
+        if (entry.Put?.Item !== undefined) {
+          const item = entry.Put.Item;
+          store.set(itemKey(String(item[keys.TABLE_PK]), String(item[keys.TABLE_SK])), item);
+        }
+      }
+    },
+    queryBySkPrefix: async <T extends Record<string, unknown>>(pk: string, skPrefix: string) => {
+      const items: T[] = [];
+      for (const [key, item] of store) {
+        const [itemPk, itemSk] = key.split('\0');
+        if (itemPk === pk && itemSk.startsWith(skPrefix)) items.push(item as T);
+      }
+      return items;
+    },
+    queryBySkBetween: async () => [],
+    queryAll: async () => [],
+    queryPage: async <T extends Record<string, unknown>>(
+      input: {
+        ExpressionAttributeValues?: Record<string, unknown>;
+        ScanIndexForward?: boolean;
+      },
+      options: { limit: number; cursor?: string },
+    ): Promise<{ items: T[]; cursor?: string }> => {
+      const pk = String(input.ExpressionAttributeValues?.[':pk'] ?? '');
+      const skPrefix = String(input.ExpressionAttributeValues?.[':skPrefix'] ?? '');
+      const all: T[] = [];
+      for (const [key, item] of store) {
+        const [itemPk, itemSk] = key.split('\0');
+        if (itemPk === pk && itemSk.startsWith(skPrefix)) all.push(item as T);
+      }
+      all.sort((a, b) =>
+        String(a[keys.TABLE_SK]).localeCompare(String(b[keys.TABLE_SK])),
+      );
+      if (input.ScanIndexForward === false) all.reverse();
 
-const fanout = vi.fn(async (): Promise<void> => undefined);
+      const start = options.cursor !== undefined ? Number(options.cursor) : 0;
+      const slice = all.slice(start, start + options.limit);
+      const next = start + options.limit;
+      return {
+        items: slice,
+        cursor: next < all.length ? String(next) : undefined,
+      };
+    },
+    queryPartition: async () => [],
+    encodeCursor: () => undefined,
+    decodeCursor: () => undefined,
+  };
+});
+
 vi.mock('../../lib/fanout-enqueue.js', () => ({
   enqueueFanout: (...args: unknown[]) => fanout(...args),
   resetFanoutSqsClient: (): void => undefined,
@@ -197,18 +216,62 @@ describe('chat-store', () => {
       chatId,
       userId,
     });
+    const objectKey = `uploads/${userId}/file.png`;
     const message = await sendMessage({
       chatId,
       userId,
-      body: { body: 'see file', attachmentKeys: ['uploads/u/file.png'] },
+      body: { body: 'see file', attachmentKeys: [objectKey] },
     });
-    expect(message.attachmentKeys).toEqual(['uploads/u/file.png']);
+    expect(message.attachmentKeys).toEqual([objectKey]);
     expect(fanout).toHaveBeenCalledWith(
       expect.objectContaining({
-        attachmentKeys: ['uploads/u/file.png'],
+        attachmentKeys: [objectKey],
         senderPhotoKey: 'uploads/u/photo',
       }),
     );
+  });
+
+  it('sendMessage allows image-only bodies and rejects foreign attachment keys', async () => {
+    const userId = randomUUID();
+    const chatId = randomUUID();
+    seedProfile(userId, 'adult');
+    store.set(itemKey(chatPk(chatId), chatMetaSk()), {
+      [TABLE_PK]: chatPk(chatId),
+      [TABLE_SK]: chatMetaSk(),
+      chatId,
+      kind: 'private',
+      name: 'Direct',
+      createdAt: new Date().toISOString(),
+    });
+    store.set(itemKey(chatPk(chatId), chatMemberSk(userId)), {
+      [TABLE_PK]: chatPk(chatId),
+      [TABLE_SK]: chatMemberSk(userId),
+      chatId,
+      userId,
+    });
+    const objectKey = `uploads/${userId}/only.png`;
+    const message = await sendMessage({
+      chatId,
+      userId,
+      body: { body: '   ', attachmentKeys: [objectKey] },
+    });
+    expect(message.body).toBe('');
+    expect(message.attachmentKeys).toEqual([objectKey]);
+
+    await expect(
+      sendMessage({
+        chatId,
+        userId,
+        body: { body: '', attachmentKeys: ['uploads/other/file.png'] },
+      }),
+    ).rejects.toThrow('invalid_attachment_key');
+    await expect(
+      sendMessage({
+        chatId,
+        userId,
+        body: { body: '   ' },
+      }),
+    ).rejects.toThrow('invalid_body');
   });
 
   it('createTeamChannel rejects rosters that violate minor chat rules', async () => {

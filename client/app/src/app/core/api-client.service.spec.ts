@@ -174,6 +174,14 @@ describe('ApiClientService', () => {
       if (url.includes('/accept')) {
         return jsonResponse({ teamId: 't1', role: 'player' });
       }
+      if (url.match(/\/members\/[^/?]+$/u)) {
+        return jsonResponse({
+          userId: 'u1',
+          role: 'player',
+          joinedAt: '2026-01-01T00:00:00.000Z',
+          displayName: 'Ada',
+        });
+      }
       if (url.includes('/members')) {
         return jsonResponse({ members: [{ userId: 'u1', role: 'player' }] });
       }
@@ -198,6 +206,27 @@ describe('ApiClientService', () => {
         return jsonResponse({ label: 'Corner', latitude: 3, longitude: 4 });
       }
       if (url.endsWith('/chat')) return jsonResponse({ chats: [{ chatId: 'c1' }] });
+      if (url.includes('/chat/users/search')) {
+        return jsonResponse({
+          user: {
+            userId: 'u2',
+            email: 'ada@example.com',
+            displayName: 'Ada',
+            accountKind: 'adult',
+          },
+        });
+      }
+      if (url.endsWith('/chat/private') && method === 'POST') {
+        return jsonResponse({ chatId: 'p1', kind: 'private', name: 'Private chat' });
+      }
+      if (url.endsWith('/chat/channels') && method === 'POST') {
+        return jsonResponse({
+          chatId: 'ch1',
+          kind: 'channel',
+          name: 'Parents',
+          teamId: 't1',
+        });
+      }
       if (url.includes('/messages') && method === 'GET') {
         return jsonResponse({ messages: [] });
       }
@@ -246,6 +275,7 @@ describe('ApiClientService', () => {
     await api.getInvite('abc');
     await api.acceptInvite('abc');
     await api.listMembers('t1');
+    await api.getMember('t1', 'u1');
     await api.getPermissions('t1');
     await api.putPermissions('t1', { player: [] } as never);
     await api.getSchedule('t1', '2026-01-01', '2026-01-31');
@@ -259,8 +289,15 @@ describe('ApiClientService', () => {
     await api.resolvePlace('p1');
     await api.reverseGeocodePlace(3, 4);
     await api.listChats();
+    await expect(api.searchChatUser('ada@example.com')).resolves.toMatchObject({
+      userId: 'u2',
+    });
+    await expect(api.createPrivateChat(['u2'])).resolves.toMatchObject({ chatId: 'p1' });
+    await expect(api.createTeamChannel('t1', 'Parents')).resolves.toMatchObject({
+      chatId: 'ch1',
+    });
     await api.listMessages('c1');
-    await api.sendMessage('c1', 'hi');
+    await api.sendMessage('c1', { body: 'hi' });
     await api.presignUpload('image/png', 12);
     await api.presignDownload('k');
     await api.registerDevice('d1', 'tok', 'web');

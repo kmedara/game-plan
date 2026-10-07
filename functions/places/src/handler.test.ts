@@ -188,15 +188,32 @@ describe('places handler', () => {
 
     fetchMock.mockResolvedValueOnce(
       mockResponse({
+        displayName: { text: 'City Hall' },
+        formattedAddress: 'City Hall, 1 City Hall Square, Boston, MA',
+        location: { latitude: 1, longitude: 2 },
+      }),
+    );
+    const addressContainsName = await handler(
+      httpEvent('GET', '/places/resolve', {
+        headers: authHeader(),
+        query: { id: 'place-2' },
+      }),
+    );
+    expect(JSON.parse(addressContainsName.body ?? '').label).toBe(
+      'City Hall, 1 City Hall Square, Boston, MA',
+    );
+
+    fetchMock.mockResolvedValueOnce(
+      mockResponse({
         displayName: { text: 'Park' },
-        formattedAddress: 'Park Blvd',
+        formattedAddress: '',
         location: { latitude: 1, longitude: 2 },
       }),
     );
     const nameOnly = await handler(
       httpEvent('GET', '/places/resolve', {
         headers: authHeader(),
-        query: { id: 'place-2' },
+        query: { id: 'place-2b' },
       }),
     );
     expect(JSON.parse(nameOnly.body ?? '').label).toBe('Park');

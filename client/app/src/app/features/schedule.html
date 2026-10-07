@@ -1,19 +1,29 @@
 <section class="stack">
   @if (teams().length === 0) {
-    <p class="muted">Join or create a team to see practices and games.</p>
-    <a mat-flat-button color="primary" routerLink="/teams">Go to teams</a>
+    <p class="muted">{{ 'schedule.empty' | transloco }}</p>
+    <a mat-flat-button color="primary" routerLink="/teams">{{ 'schedule.goToTeams' | transloco }}</a>
   } @else {
     <div class="calendar-month">
-      <button mat-icon-button type="button" aria-label="Previous month" (click)="shiftMonth(-1)">
+      <button
+        mat-icon-button
+        type="button"
+        [attr.aria-label]="'schedule.prevMonth' | transloco"
+        (click)="shiftMonth(-1)"
+      >
         <span class="material-icons">chevron_left</span>
       </button>
       <h2 class="page-title">{{ monthLabel() }}</h2>
-      <button mat-icon-button type="button" aria-label="Next month" (click)="shiftMonth(1)">
+      <button
+        mat-icon-button
+        type="button"
+        [attr.aria-label]="'schedule.nextMonth' | transloco"
+        (click)="shiftMonth(1)"
+      >
         <span class="material-icons">chevron_right</span>
       </button>
     </div>
     @if (!viewingCurrentMonth()) {
-      <button mat-button type="button" (click)="showToday()">Today</button>
+      <button mat-button type="button" (click)="showToday()">{{ 'schedule.today' | transloco }}</button>
     }
 
     <div class="calendar" role="grid" [attr.aria-label]="monthLabel()">
@@ -46,7 +56,7 @@
       @for (type of eventTypes; track type) {
         <span>
           <span class="calendar-dot" [attr.data-type]="type"></span>
-          {{ eventLabel(type) }}
+          {{ eventLabel(type) | transloco }}
         </span>
       }
     </div>
@@ -58,19 +68,31 @@
     <div class="row">
       <h2 class="page-title">{{ selectedLabel() }}</h2>
       @if (canManage()) {
-        <button mat-stroked-button type="button" (click)="startAdd()">Add event</button>
+        <button mat-stroked-button type="button" (click)="startAdd()">
+          {{ 'schedule.addEvent' | transloco }}
+        </button>
       }
     </div>
 
     @if (selectedEvents().length === 0) {
-      <p class="muted">Nothing scheduled.</p>
+      <p class="muted">{{ 'schedule.nothingScheduled' | transloco }}</p>
     }
 
     @for (item of selectedEvents(); track item.eventId + item.startsAt) {
-      <article class="stack event-card">
+      <article
+        class="stack event-card event-card-link"
+        role="button"
+        tabindex="0"
+        [attr.aria-label]="item.title"
+        (click)="openEvent(item)"
+        (keydown.enter)="openEvent(item)"
+        (keydown.space)="$event.preventDefault(); openEvent(item)"
+      >
         <div class="row">
           <strong>{{ item.title }}</strong>
-          <span class="event-type" [attr.data-type]="item.eventType">{{ eventLabel(item.eventType) }}</span>
+          <span class="event-type" [attr.data-type]="item.eventType">{{
+            eventLabel(item.eventType) | transloco
+          }}</span>
         </div>
         <div class="muted">
           {{ timeLabel(item.startsAt) }}
@@ -79,27 +101,38 @@
           }
         </div>
         @if (item.location) {
-          <div class="event-location">
-            <div class="muted">{{ item.location }}</div>
-            <div class="event-maps-links">
-              <button mat-button type="button" (click)="openMaps(item, primaryMapsProvider())">
-                Open in {{ mapsProviderLabel(primaryMapsProvider()) }}
-              </button>
-              @if (showSecondaryMapsLink()) {
-                <button mat-button type="button" (click)="openMaps(item, secondaryMapsProvider())">
-                  {{ mapsProviderLabel(secondaryMapsProvider()) }}
-                </button>
-              }
-            </div>
-          </div>
+          <div class="muted">{{ item.location }}</div>
         }
-        <div class="row">
-          <span class="muted">RSVP: {{ myRsvp(item) }}</span>
-          <span>
-            <button mat-button type="button" (click)="rsvp(item, 'going')">Going</button>
-            <button mat-button type="button" (click)="rsvp(item, 'maybe')">Maybe</button>
-            <button mat-button type="button" (click)="rsvp(item, 'not_going')">No</button>
-          </span>
+        <div
+          class="event-rsvp"
+          role="group"
+          [attr.aria-label]="
+            'schedule.rsvp' | transloco: { status: rsvpStatusLabel(item) }
+          "
+          (click)="$event.stopPropagation()"
+          (keydown)="$event.stopPropagation()"
+        >
+          @for (status of rsvpStatuses; track status) {
+            @if (myRsvp(item) === status) {
+              <button
+                mat-flat-button
+                type="button"
+                aria-pressed="true"
+                (click)="rsvp(item, status)"
+              >
+                {{ rsvpChoiceKey(status) | transloco }}
+              </button>
+            } @else {
+              <button
+                mat-stroked-button
+                type="button"
+                aria-pressed="false"
+                (click)="rsvp(item, status)"
+              >
+                {{ rsvpChoiceKey(status) | transloco }}
+              </button>
+            }
+          }
         </div>
       </article>
     }

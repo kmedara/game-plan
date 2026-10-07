@@ -11,10 +11,13 @@ import type {
   ApproveJoinRequestBody,
   ChatList,
   ChatMessage,
+  ChatSummary,
   CompleteProfileBody,
   CreateEventBody,
   CreateInviteBody,
+  CreatePrivateChatBody,
   CreateTeamBody,
+  CreateTeamChannelBody,
   DeviceRegistration,
   EventResponse,
   InvitePreview,
@@ -38,6 +41,7 @@ import type {
   TeamInviteList,
   TeamList,
   TeamMemberList,
+  TeamMemberProfile,
   TeamSummary,
   UpdatePositionsBody,
   UpdateProfileBody,
@@ -148,7 +152,7 @@ export class ApiClientService {
     return profile;
   }
 
-  /** Sets or clears the profile photo object key. */
+  /** Updates the caller's photo and/or phone number. */
   async updateProfile(input: UpdateProfileBody): Promise<UserProfile> {
     const profile = await this.request<UserProfile>('PATCH', '/identity/profile', input);
     this.session.setUser(profile);
@@ -325,6 +329,20 @@ export class ApiClientService {
     return body.members;
   }
 
+  /**
+   * Loads one teammate's profile on a team.
+   *
+   * @param teamId - The team id.
+   * @param userId - The roster member's user id.
+   * @returns Display fields, role, photo key, and positions.
+   */
+  async getMember(teamId: string, userId: string): Promise<TeamMemberProfile> {
+    return this.request(
+      'GET',
+      `/teams/${teamId}/members/${encodeURIComponent(userId)}`,
+    );
+  }
+
   async getPermissions(teamId: string): Promise<RolePermissionsResponse> {
     return this.request('GET', `/teams/${teamId}/permissions`);
   }
@@ -407,12 +425,47 @@ export class ApiClientService {
     return body.chats;
   }
 
+  /**
+   * Exact-email adult search for starting a private chat.
+   *
+   * @param email - The email to look up.
+   * @returns The matching public profile.
+   */
+  async searchChatUser(email: string): Promise<UserProfile> {
+    const params = new URLSearchParams({ email: email.trim() });
+    const body = await this.request<{ user: UserProfile }>(
+      'GET',
+      `/chat/users/search?${params}`,
+    );
+    return body.user;
+  }
+
+  async createPrivateChat(
+    memberIds: CreatePrivateChatBody['memberIds'],
+  ): Promise<ChatSummary> {
+    return this.request('POST', '/chat/private', { memberIds });
+  }
+
+  async createTeamChannel(
+    teamId: string,
+    name: CreateTeamChannelBody['name'],
+  ): Promise<ChatSummary> {
+    return this.request('POST', '/chat/channels', { teamId, name });
+  }
+
   async listMessages(chatId: string): Promise<MessagePage> {
     return this.request('GET', `/chat/${chatId}/messages`);
   }
 
-  async sendMessage(chatId: string, body: SendMessageBody['body']): Promise<ChatMessage> {
-    return this.request('POST', `/chat/${chatId}/messages`, { body });
+  /**
+   * Sends a chat message. `attachmentKeys` is a plain string list at the call
+   * site; generated {@link SendMessageBody} types it as a max-10 tuple union.
+   */
+  async sendMessage(
+    chatId: string,
+    body: { body: string; attachmentKeys?: string[] },
+  ): Promise<ChatMessage> {
+    return this.request('POST', `/chat/${chatId}/messages`, body as SendMessageBody);
   }
 
   async registerDevice(

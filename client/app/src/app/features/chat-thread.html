@@ -1,6 +1,6 @@
 <section class="stack">
   <div class="row">
-    <a mat-button routerLink="/chats">Back</a>
+    <a mat-button routerLink="/chats">{{ 'nav.back' | transloco }}</a>
     <h1 style="font-size: 1.15rem; margin: 0">{{ chatName() }}</h1>
   </div>
 
@@ -26,15 +26,63 @@
               <span class="muted">{{ message.createdAt | date: 'short' }}</span>
             </span>
           }
-          <span class="chat-body">{{ message.body }}</span>
+          @if (message.body.length > 0) {
+            <span class="chat-body">{{ message.body }}</span>
+          }
+          @if (message.attachmentKeys?.length) {
+            <span class="chat-attachments">
+              @for (key of message.attachmentKeys; track key) {
+                @if (attachmentUrl(key); as url) {
+                  <img class="chat-attachment" [src]="url" alt="" />
+                }
+              }
+            </span>
+          }
         </span>
       </button>
     }
   </div>
 
+  @if (pendingAttachments().length > 0) {
+    <div class="chat-pending-attachments">
+      @for (item of pendingAttachments(); track item.key) {
+        <div class="chat-pending-item">
+          <img [src]="item.previewUrl" alt="" />
+          <button
+            mat-button
+            type="button"
+            [attr.aria-label]="'chats.removePhoto' | transloco"
+            (click)="removePending(item.key)"
+          >
+            {{ 'chats.removePhoto' | transloco }}
+          </button>
+        </div>
+      }
+    </div>
+  }
+
+  @if (attachError(); as err) {
+    <p class="error">{{ err | transloco }}</p>
+  }
+
   <form class="row chat-composer" (ngSubmit)="send()">
+    <input
+      #photoInput
+      type="file"
+      accept="image/jpeg,image/png,image/webp,image/gif"
+      hidden
+      (change)="onPhotoSelected($event)"
+    />
+    <button
+      mat-button
+      type="button"
+      [disabled]="uploading() || pendingAttachments().length >= maxAttachments"
+      (click)="photoInput.click()"
+    >
+      {{ uploading() ? ('chats.uploading' | transloco) : ('chats.attachPhoto' | transloco) }}
+    </button>
     <mat-form-field appearance="outline" subscriptSizing="dynamic">
-      <mat-label>Message</mat-label>
+      <mat-label>{{ 'chats.message' | transloco }}</mat-label>
       <textarea
         matInput
         cdkTextareaAutosize
@@ -45,6 +93,8 @@
         (keydown.enter)="submitDraft($event)"
       ></textarea>
     </mat-form-field>
-    <button mat-flat-button color="primary" type="submit">Send</button>
+    <button mat-flat-button color="primary" type="submit" [disabled]="uploading()">
+      {{ 'chats.send' | transloco }}
+    </button>
   </form>
 </section>

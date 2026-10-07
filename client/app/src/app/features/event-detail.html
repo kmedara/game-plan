@@ -1,0 +1,103 @@
+@if (item(); as event) {
+  <div class="stack">
+    <div class="row">
+      <strong>{{ event.title }}</strong>
+      <span class="event-type" [attr.data-type]="event.eventType">{{
+        eventLabel(event.eventType) | transloco
+      }}</span>
+    </div>
+
+    <p class="muted">{{ dayLabel() }}</p>
+    <p>
+      {{ timeLabel(event.startsAt) }}
+      @if (event.endsAt) {
+        – {{ timeLabel(event.endsAt) }}
+      }
+    </p>
+
+    @if (event.location) {
+      <div class="event-location">
+        <div>{{ event.location }}</div>
+        <div class="event-maps-links">
+          <button mat-button type="button" (click)="openMaps(primaryMapsProvider())">
+            {{
+              'schedule.openInMaps'
+                | transloco
+                  : {
+                      provider: (mapsProviderLabel(primaryMapsProvider()) | transloco),
+                    }
+            }}
+          </button>
+          @if (showSecondaryMapsLink()) {
+            <button mat-button type="button" (click)="openMaps(secondaryMapsProvider())">
+              {{ mapsProviderLabel(secondaryMapsProvider()) | transloco }}
+            </button>
+          }
+        </div>
+      </div>
+    } @else {
+      <p class="muted">{{ 'schedule.noLocation' | transloco }}</p>
+    }
+
+    <div>
+      <h3 class="page-title">{{ 'schedule.yourRsvp' | transloco }}</h3>
+      <div
+        class="event-rsvp"
+        role="group"
+        [attr.aria-label]="'schedule.yourRsvp' | transloco"
+      >
+        @for (status of rsvpStatuses; track status) {
+          @if (myRsvp() === status) {
+            <button
+              mat-flat-button
+              type="button"
+              aria-pressed="true"
+              (click)="rsvp(status)"
+            >
+              {{ rsvpChoiceKey(status) | transloco }}
+            </button>
+          } @else {
+            <button
+              mat-stroked-button
+              type="button"
+              aria-pressed="false"
+              (click)="rsvp(status)"
+            >
+              {{ rsvpChoiceKey(status) | transloco }}
+            </button>
+          }
+        }
+      </div>
+    </div>
+
+    <div class="stack">
+      <h3 class="page-title">{{ 'schedule.responses' | transloco }}</h3>
+      @for (status of rsvpStatuses; track status) {
+        <div>
+          <strong
+            >{{ rsvpChoiceKey(status) | transloco }} ({{ namesFor(status).length }})</strong
+          >
+          @if (namesFor(status).length === 0) {
+            <p class="muted">{{ 'schedule.noResponses' | transloco }}</p>
+          } @else {
+            <ul class="event-rsvp-list">
+              @for (name of namesFor(status); track name) {
+                <li>{{ name }}</li>
+              }
+            </ul>
+          }
+        </div>
+      }
+    </div>
+
+    @if (error()) {
+      <p class="error">{{ error() }}</p>
+    }
+
+    <div class="row">
+      <button mat-flat-button color="primary" type="button" (click)="close()">
+        {{ 'common.close' | transloco }}
+      </button>
+    </div>
+  </div>
+}

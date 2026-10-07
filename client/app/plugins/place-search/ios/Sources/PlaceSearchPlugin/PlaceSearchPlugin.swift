@@ -110,14 +110,18 @@ public class PlaceSearchPlugin: CAPPlugin, CAPBridgedPlugin, MKLocalSearchComple
             .joined(separator: ", ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if !name.isEmpty && !address.isEmpty && !address.contains(name) {
+        if !name.isEmpty && !address.isEmpty {
+            // Addresses often already include the place name — keep the address.
+            if address.contains(name) {
+                return address
+            }
             return "\(name), \(address)"
-        }
-        if !name.isEmpty {
-            return name
         }
         if !address.isEmpty {
             return address
+        }
+        if !name.isEmpty {
+            return name
         }
         return "Selected place"
     }

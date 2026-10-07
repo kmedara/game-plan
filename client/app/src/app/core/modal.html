@@ -8,7 +8,7 @@
 >
   <div class="row">
     <h2 class="page-title" [id]="titleId">{{ title() }}</h2>
-    <button mat-icon-button type="button" aria-label="Close" (click)="dismiss()">
+    <button mat-icon-button type="button" [attr.aria-label]="'common.close' | transloco" (click)="dismiss()">
       <span class="material-icons">close</span>
     </button>
   </div>

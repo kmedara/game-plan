@@ -75,6 +75,8 @@ export type UserProfileItem = {
   birthday?: string;
   /** Media object key for the profile photo, when the user has set one. */
   photoKey?: string;
+  /** Contact phone teammates can see on a shared-team profile. */
+  phoneNumber?: string;
   createdAt: string;
   /** Present only for the local identity provider. */
   passwordHash?: string;
@@ -93,5 +95,6 @@ export const toUserProfile = (item: UserProfileItem): UserProfile => ({
   accountKind: item.accountKind,
   ...(item.birthday !== undefined ? { birthday: item.birthday } : {}),
   ...(item.photoKey !== undefined ? { photoKey: item.photoKey } : {}),
+  ...(item.phoneNumber !== undefined ? { phoneNumber: item.phoneNumber } : {}),
   needsProfileCompletion: item.birthday === undefined,
 });

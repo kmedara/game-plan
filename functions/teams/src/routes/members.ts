@@ -11,7 +11,7 @@ import {
 } from "../../../lib/guards.js";
 import { json } from "../../../lib/http.js";
 import { route, withBodyValidation } from "../../../lib/pipeline.js";
-import { assignMemberRole, listMembers } from "../team-store.js";
+import { assignMemberRole, getMembership, listMembers } from "../team-store.js";
 import { withTeamsErrors } from "./errors.js";
 
 /**
@@ -46,6 +46,46 @@ export const handleListMembers = route(
       }),
     );
     return json(200, { members: enriched });
+  },
+);
+
+/**
+ * Handles `GET /teams/:teamId/members/:userId`.
+ *
+ * @param event - The HTTP API event.
+ * @param teamId - The team id from the path.
+ * @param memberUserId - The roster member to view.
+ * @returns Profile fields teammates can see on this team.
+ */
+export const handleGetMember = route(
+  ["teamId", "memberUserId"],
+  withTeamsErrors(),
+  requireUser(),
+  requireMembership(),
+  async ({ teamId, memberUserId }) => {
+    const member = await getMembership(teamId, memberUserId);
+    if (member === undefined) throw new Error("member_not_found");
+
+    const profile = await getProfile(memberUserId);
+    return json(200, {
+      userId: member.userId,
+      role: member.role,
+      joinedAt: member.joinedAt,
+      ...(member.positions !== undefined && member.positions.length > 0
+        ? { positions: member.positions }
+        : {}),
+      ...(profile !== undefined
+        ? {
+            displayName: profile.displayName,
+            email: profile.email,
+            accountKind: profile.accountKind,
+            ...(profile.photoKey !== undefined ? { photoKey: profile.photoKey } : {}),
+            ...(profile.phoneNumber !== undefined
+              ? { phoneNumber: profile.phoneNumber }
+              : {}),
+          }
+        : {}),
+    });
   },
 );
 

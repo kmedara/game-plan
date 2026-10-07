@@ -5,7 +5,13 @@
  * to the API stay UTC ISO strings.
  */
 
-/** Sunday-first labels for the month grid. */
+import { APP_LOCALE_ID } from '../core/i18n';
+
+/**
+ * English short weekday labels used only to locate the first column of the
+ * month grid via `en-US` `Intl` output. Display labels come from
+ * {@link weekdayLabelsForLocale}.
+ */
 export const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 /**
@@ -199,14 +205,36 @@ export const buildMonthGrid = (
 };
 
 /**
+ * Sunday-first short weekday labels for the calendar header in a locale.
+ *
+ * @param locale - BCP 47 locale tag (defaults to the app language).
+ * @returns Seven short weekday names starting Sunday.
+ */
+export const weekdayLabelsForLocale = (
+  locale: string = APP_LOCALE_ID,
+): readonly string[] => {
+  // 2023-01-01 was a Sunday in UTC; format each day at noon for stable names.
+  return WEEKDAY_LABELS.map((_, index) =>
+    new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }).format(
+      new Date(Date.UTC(2023, 0, 1 + index, 12)),
+    ),
+  );
+};
+
+/**
  * Formats a visible month for the calendar heading.
  *
  * @param month - The visible month.
  * @param timeZone - An IANA time zone.
+ * @param locale - BCP 47 locale tag (defaults to the app language).
  * @returns A label such as "October 2026".
  */
-export const monthTitle = (month: CalendarMonth, timeZone: string): string =>
-  new Intl.DateTimeFormat('en-US', { timeZone, month: 'long', year: 'numeric' }).format(
+export const monthTitle = (
+  month: CalendarMonth,
+  timeZone: string,
+  locale: string = APP_LOCALE_ID,
+): string =>
+  new Intl.DateTimeFormat(locale, { timeZone, month: 'long', year: 'numeric' }).format(
     new Date(wallTimeToIso(timeZone, `${month.year}-${pad(month.month)}-15`, '12:00')),
   );
 
@@ -215,10 +243,15 @@ export const monthTitle = (month: CalendarMonth, timeZone: string): string =>
  *
  * @param dayKey - A `YYYY-MM-DD` wall date.
  * @param timeZone - An IANA time zone.
+ * @param locale - BCP 47 locale tag (defaults to the app language).
  * @returns A label such as "Monday, October 5".
  */
-export const dayTitle = (dayKey: string, timeZone: string): string =>
-  new Intl.DateTimeFormat('en-US', {
+export const dayTitle = (
+  dayKey: string,
+  timeZone: string,
+  locale: string = APP_LOCALE_ID,
+): string =>
+  new Intl.DateTimeFormat(locale, {
     timeZone,
     weekday: 'long',
     month: 'long',
@@ -230,9 +263,14 @@ export const dayTitle = (dayKey: string, timeZone: string): string =>
  *
  * @param iso - A UTC ISO instant.
  * @param timeZone - An IANA time zone.
+ * @param locale - BCP 47 locale tag (defaults to the app language).
  * @returns A short clock time.
  */
-export const clockLabel = (iso: string, timeZone: string): string =>
-  new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit' }).format(
+export const clockLabel = (
+  iso: string,
+  timeZone: string,
+  locale: string = APP_LOCALE_ID,
+): string =>
+  new Intl.DateTimeFormat(locale, { timeZone, hour: 'numeric', minute: '2-digit' }).format(
     new Date(iso),
   );

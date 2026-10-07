@@ -8,6 +8,7 @@ import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ApiClientService } from '../core/api-client.service';
 
 @Component({
@@ -18,6 +19,7 @@ import { ApiClientService } from '../core/api-client.service';
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
+    TranslocoPipe,
   ],
   templateUrl: './complete-profile.html',
 })

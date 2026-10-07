@@ -1,19 +1,24 @@
 <section class="stack">
-  <a mat-button routerLink="/teams">Back</a>
+  <a mat-button routerLink="/teams">{{ 'nav.back' | transloco }}</a>
 
   @if (preview(); as invite) {
-    <h1 class="page-title">Join {{ invite.teamName }}</h1>
-    <p class="muted">You will join as {{ roleLabel(invite.role) }}.</p>
+    <h1 class="page-title">{{ 'invite.joinTeamName' | transloco: { name: invite.teamName } }}</h1>
+    <p class="muted">
+      {{
+        'invite.joinAsRole'
+          | transloco: { role: (roleLabel(invite.role) | transloco) }
+      }}
+    </p>
     @if (error()) {
-      <p class="error">{{ error() }}</p>
+      <p class="error">{{ error() | transloco }}</p>
     }
     <button mat-flat-button color="primary" type="button" [disabled]="joining()" (click)="accept()">
-      Join team
+      {{ 'invite.joinTeam' | transloco }}
     </button>
   } @else if (error()) {
-    <h1 class="page-title">Invite</h1>
-    <p class="error">{{ error() }}</p>
+    <h1 class="page-title">{{ 'title.invite' | transloco }}</h1>
+    <p class="error">{{ error() | transloco }}</p>
   } @else {
-    <p class="muted">Loading invite…</p>
+    <p class="muted">{{ 'invite.loading' | transloco }}</p>
   }
 </section>

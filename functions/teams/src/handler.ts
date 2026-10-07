@@ -15,6 +15,7 @@ import {
   handleCreateJoinRequest,
   handleCreateTeam,
   handleGetInvite,
+  handleGetMember,
   handleGetPermissions,
   handleGetTeam,
   handleListInvites,
@@ -87,6 +88,9 @@ export const handler = async (
 
     if (parts[1] === 'members') {
       if (method === 'GET' && parts.length === 2) return handleListMembers(event, teamId);
+      if (method === 'GET' && parts.length === 3 && parts[2] !== undefined) {
+        return handleGetMember(event, teamId, parts[2]);
+      }
       if (method === 'PATCH' && parts.length === 3 && parts[2] !== undefined) {
         return handleAssignRole(event, teamId, parts[2]);
       }

@@ -54,6 +54,8 @@ export {
   type UserProfile,
 } from './auth.js';
 
+export { phoneNumberSchema } from './phone.js';
+
 export {
   acceptedInviteSchema,
   approveJoinRequestBodySchema,
@@ -74,6 +76,7 @@ export {
   teamInviteSchema,
   teamListSchema,
   teamMemberListSchema,
+  teamMemberProfileSchema,
   teamMemberSchema,
   teamSummarySchema,
   teamThemeSchema,
@@ -100,6 +103,7 @@ export {
   type TeamList,
   type TeamMember,
   type TeamMemberList,
+  type TeamMemberProfile,
   type TeamSummary,
   type TeamTheme,
   type UpdatePositionsBody,
@@ -181,5 +185,6 @@ export {
   type PlacesReverseQuery,
 } from './places.js';
 
+export { displayNameSchema, type DisplayName } from './display-name.js';
 export { timeZoneSchema, type TimeZone } from './time.js';
 export { fanoutJobSchema, type FanoutJob } from './fanout.js';

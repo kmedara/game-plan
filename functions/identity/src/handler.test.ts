@@ -24,6 +24,7 @@ vi.mock('../../lib/auth/profile.js', () => ({
     accountKind: 'adult' | 'minor';
     birthday?: string;
     photoKey?: string | null;
+    phoneNumber?: string | null;
     createdAt?: string;
   }) => {
     const item: UserProfileItem = {
@@ -36,6 +37,7 @@ vi.mock('../../lib/auth/profile.js', () => ({
       createdAt: input.createdAt ?? new Date().toISOString(),
       ...(input.birthday !== undefined ? { birthday: input.birthday } : {}),
       ...(input.photoKey ? { photoKey: input.photoKey } : {}),
+      ...(input.phoneNumber ? { phoneNumber: input.phoneNumber } : {}),
     };
     profiles.set(input.userId, item);
     return item;
@@ -315,5 +317,23 @@ describe('identity handler (in-memory)', () => {
     );
     expect(cleared.statusCode).toBe(200);
     expect(JSON.parse(cleared.body ?? '').photoKey).toBeUndefined();
+
+    const withPhone = await handler(
+      httpEvent('PATCH', '/identity/profile', {
+        headers: { authorization: `Bearer ${session.accessToken}` },
+        body: { phoneNumber: '555-0100' },
+      }),
+    );
+    expect(withPhone.statusCode).toBe(200);
+    expect(JSON.parse(withPhone.body ?? '')).toMatchObject({ phoneNumber: '555-0100' });
+
+    const clearedPhone = await handler(
+      httpEvent('PATCH', '/identity/profile', {
+        headers: { authorization: `Bearer ${session.accessToken}` },
+        body: { phoneNumber: null },
+      }),
+    );
+    expect(clearedPhone.statusCode).toBe(200);
+    expect(JSON.parse(clearedPhone.body ?? '').phoneNumber).toBeUndefined();
   });
 });

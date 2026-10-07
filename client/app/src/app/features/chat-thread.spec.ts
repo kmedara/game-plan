@@ -15,6 +15,7 @@ describe('ChatThreadPageComponent', () => {
       'listChats',
       'listMessages',
       'sendMessage',
+      'presignUpload',
       'presignDownload',
     ]);
     api.listChats.mockResolvedValue([
@@ -47,12 +48,13 @@ describe('ChatThreadPageComponent', () => {
         },
       ],
     });
-    api.sendMessage.mockImplementation(async (chatId: string, body: string) => ({
+    api.sendMessage.mockImplementation(async (chatId: string, body: { body: string; attachmentKeys?: string[] }) => ({
       messageId: 'sent-1',
       chatId,
       senderId: 'u1',
       senderDisplayName: 'Ada Player',
-      body,
+      body: body.body,
+      ...(body.attachmentKeys !== undefined ? { attachmentKeys: body.attachmentKeys } : {}),
       createdAt: '2026-10-05T20:00:00.000Z',
     }));
     api.presignDownload.mockResolvedValue({
@@ -151,7 +153,7 @@ describe('ChatThreadPageComponent', () => {
     component.draft = 'Hello team';
     component.submitDraft(new KeyboardEvent('keydown', { key: 'Enter' }));
     await fixture.whenStable();
-    expect(api.sendMessage).toHaveBeenCalledWith('chat-1', 'Hello team');
+    expect(api.sendMessage).toHaveBeenCalledWith('chat-1', { body: 'Hello team' });
     expect(component.draft).toBe('');
 
     component.submitDraft(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true }));
@@ -218,5 +220,81 @@ describe('ChatThreadPageComponent', () => {
     fixture.detectChanges();
     expect(fixture.componentInstance.initials(fixture.componentInstance.messages()[0]!)).toBe('?');
     expect(fixture.componentInstance.photoUrl(fixture.componentInstance.messages()[0]!)).toBeUndefined();
+  });
+
+  it('uploads a photo, sends it, and loads attachment urls', async () => {
+    const component = fixture.componentInstance;
+    api.presignUpload.mockResolvedValue({
+      uploadUrl: 'https://upload.example/put',
+      objectKey: 'uploads/u1/chat.png',
+    });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true } as Response);
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      writable: true,
+      value: vi.fn(() => 'blob:preview'),
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      writable: true,
+      value: vi.fn(),
+    });
+
+    const file = new File(['img'], 'chat.png', { type: 'image/png' });
+    const input = document.createElement('input');
+    Object.defineProperty(input, 'files', { value: [file] });
+    await component.onPhotoSelected({ target: input } as unknown as Event);
+    expect(component.pendingAttachments()).toEqual([
+      { key: 'uploads/u1/chat.png', previewUrl: 'blob:preview' },
+    ]);
+
+    await component.send();
+    expect(api.sendMessage).toHaveBeenCalledWith('chat-1', {
+      body: '',
+      attachmentKeys: ['uploads/u1/chat.png'],
+    });
+    expect(component.pendingAttachments()).toEqual([]);
+
+    api.listMessages.mockResolvedValue({
+      messages: [
+        {
+          messageId: 'm-photo',
+          chatId: 'chat-1',
+          senderId: 'u1',
+          senderDisplayName: 'Ada Player',
+          body: '',
+          attachmentKeys: ['uploads/u1/chat.png'],
+          createdAt: '2026-10-05T21:00:00.000Z',
+        },
+      ],
+    });
+    api.presignDownload.mockResolvedValue({
+      downloadUrl: 'https://cdn.example/chat.png',
+      objectKey: 'uploads/u1/chat.png',
+    });
+    fixture = TestBed.createComponent(ChatThreadPageComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.attachmentUrl('uploads/u1/chat.png')).toBe(
+      'https://cdn.example/chat.png',
+    );
+  });
+
+  it('rejects bad chat photo types and surfaces upload failures', async () => {
+    const component = fixture.componentInstance;
+    const bad = new File(['x'], 'notes.txt', { type: 'text/plain' });
+    const badInput = document.createElement('input');
+    Object.defineProperty(badInput, 'files', { value: [bad] });
+    await component.onPhotoSelected({ target: badInput } as unknown as Event);
+    expect(component.attachError()).toBe('errors.profile.badImageType');
+    expect(api.presignUpload).not.toHaveBeenCalled();
+
+    api.presignUpload.mockRejectedValue(new Error('fail'));
+    const file = new File(['img'], 'chat.png', { type: 'image/png' });
+    const input = document.createElement('input');
+    Object.defineProperty(input, 'files', { value: [file] });
+    await component.onPhotoSelected({ target: input } as unknown as Event);
+    expect(component.attachError()).toBe('chats.attachFailed');
   });
 });

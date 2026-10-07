@@ -89,14 +89,14 @@ describe('ProfilePageComponent', () => {
     const badInput = document.createElement('input');
     Object.defineProperty(badInput, 'files', { value: [new File(['x'], 'x.txt', { type: 'text/plain' })] });
     await component.onPhoto({ target: badInput } as unknown as Event);
-    expect(component.photoError()).toContain('JPEG');
+    expect(component.photoError()).toBe('errors.profile.badImageType');
 
     const hugeInput = document.createElement('input');
     Object.defineProperty(hugeInput, 'files', {
       value: [new File([new Uint8Array(6 * 1024 * 1024)], 'big.jpg', { type: 'image/jpeg' })],
     });
     await component.onPhoto({ target: hugeInput } as unknown as Event);
-    expect(component.photoError()).toContain('5 MB');
+    expect(component.photoError()).toBe('errors.profile.imageTooLarge');
   });
 
   it('uploads a photo and loads its display URL', async () => {
@@ -128,7 +128,7 @@ describe('ProfilePageComponent', () => {
     const input = document.createElement('input');
     Object.defineProperty(input, 'files', { value: [file] });
     await fixture.componentInstance.onPhoto({ target: input } as unknown as Event);
-    expect(fixture.componentInstance.photoError()).toContain('Could not save');
+    expect(fixture.componentInstance.photoError()).toBe('errors.profile.savePhotoFailed');
   });
 
   it('rejects a photo when the storage upload is refused', async () => {
@@ -144,7 +144,7 @@ describe('ProfilePageComponent', () => {
     await fixture.componentInstance.onPhoto({ target: input } as unknown as Event);
 
     expect(api.updateProfile).not.toHaveBeenCalled();
-    expect(fixture.componentInstance.photoError()).toContain('Could not save');
+    expect(fixture.componentInstance.photoError()).toBe('errors.profile.savePhotoFailed');
   });
 
   it('removes the profile photo', async () => {
@@ -193,28 +193,28 @@ describe('ProfilePageComponent', () => {
     api.setPositions.mockRejectedValue('offline');
     fixture.componentInstance.positionControl('team-1').setValue('Extra');
     await fixture.componentInstance.addPosition(team);
-    expect(fixture.componentInstance.positionError()['team-1']).toContain('Could not save');
+    expect(fixture.componentInstance.positionError()['team-1']).toBe('errors.position.saveFailed');
   });
 
   it('maps position save errors', async () => {
     api.setPositions.mockRejectedValue(new Error('too_many_positions'));
     fixture.componentInstance.positionControl('team-1').setValue('Extra');
     await fixture.componentInstance.addPosition(team);
-    expect(fixture.componentInstance.positionError()['team-1']).toContain('8 positions');
+    expect(fixture.componentInstance.positionError()['team-1']).toBe('errors.position.tooMany');
 
     api.setPositions.mockRejectedValue(new Error('invalid_body'));
     await fixture.componentInstance.addPosition(team);
-    expect(fixture.componentInstance.positionError()['team-1']).toContain('letters and numbers');
+    expect(fixture.componentInstance.positionError()['team-1']).toBe('errors.position.invalid');
 
     api.setPositions.mockRejectedValue(new Error('other'));
     await fixture.componentInstance.addPosition(team);
-    expect(fixture.componentInstance.positionError()['team-1']).toContain('Could not save');
+    expect(fixture.componentInstance.positionError()['team-1']).toBe('errors.position.saveFailed');
   });
 
   it('shows a load failure message', async () => {
     api.getMe.mockRejectedValue(new Error('offline'));
     await (fixture.componentInstance as unknown as { load: () => Promise<void> }).load();
-    expect(fixture.componentInstance.photoError()).toContain('Could not load');
+    expect(fixture.componentInstance.photoError()).toBe('errors.profile.loadFailed');
   });
 
   it('leaves photoUrl empty when presign fails', async () => {
@@ -235,6 +235,6 @@ describe('ProfilePageComponent', () => {
   it('surfaces remove-photo failures', async () => {
     api.updateProfile.mockRejectedValue(new Error('fail'));
     await fixture.componentInstance.removePhoto();
-    expect(fixture.componentInstance.photoError()).toContain('Could not remove');
+    expect(fixture.componentInstance.photoError()).toBe('errors.profile.removePhotoFailed');
   });
 });

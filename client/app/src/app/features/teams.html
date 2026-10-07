@@ -1,6 +1,6 @@
 <section class="stack">
   @if (teams().length === 0) {
-    <p class="muted">Join an existing team or create a new one to get started.</p>
+    <p class="muted">{{ 'teams.empty' | transloco }}</p>
   }
 
   @for (team of teams(); track team.teamId) {
@@ -12,7 +12,7 @@
         <div>
           <div class="team-title">
             <strong>{{ team.name }}</strong>
-            <span class="role-pill">{{ roleLabel(team.role) }}</span>
+            <span class="role-pill">{{ roleLabel(team.role) | transloco }}</span>
           </div>
           <div class="muted">
             {{ team.location }} · {{ team.timeZone }}
@@ -22,8 +22,8 @@
       <span class="team-admin-mark">
         @if (hasPendingApprovals(team.teamId)) {
           <span class="material-icons team-pending" aria-hidden="true">notifications</span>
-          <span class="sr-only">Pending join requests</span>
-        } 
+          <span class="sr-only">{{ 'teams.pendingApprovals' | transloco }}</span>
+        }
       </span>
     </a>
   }
@@ -36,7 +36,7 @@
       [attr.aria-pressed]="mode() === 'join'"
       (click)="selectMode('join')"
     >
-      Join team
+      {{ 'teams.joinTeam' | transloco }}
     </button>
     <button
       mat-stroked-button
@@ -45,21 +45,21 @@
       [attr.aria-pressed]="mode() === 'create'"
       (click)="selectMode('create')"
     >
-      Create team
+      {{ 'teams.createTeam' | transloco }}
     </button>
   </div>
 
   @if (mode() === 'join') {
-    <h2 style="font-size: 1rem">Join a team</h2>
+    <h2 style="font-size: 1rem">{{ 'teams.joinATeam' | transloco }}</h2>
     <mat-form-field appearance="outline">
-      <mat-label>Team</mat-label>
+      <mat-label>{{ 'teams.team' | transloco }}</mat-label>
       <input
         type="text"
         matInput
         role="combobox"
         [formControl]="joinControl"
         [matAutocomplete]="joinAuto"
-        placeholder="Search by team name"
+        [placeholder]="'teams.searchByName' | transloco"
       />
       <mat-autocomplete
         #joinAuto="matAutocomplete"
@@ -77,12 +77,12 @@
           </mat-option>
         }
         @if (directoryLoadingMore()) {
-          <mat-option disabled>Loading more…</mat-option>
+          <mat-option disabled>{{ 'teams.loadingMore' | transloco }}</mat-option>
         }
       </mat-autocomplete>
     </mat-form-field>
-    @if (joinMessage()) {
-      <p class="muted">{{ joinMessage() }}</p>
+    @if (joinMessage(); as message) {
+      <p class="muted">{{ message | transloco }}</p>
     }
     @if (error()) {
       <p class="error">{{ error() }}</p>
@@ -94,13 +94,13 @@
       [disabled]="selectedJoin() === undefined"
       (click)="requestJoin()"
     >
-      Request to join
+      {{ 'teams.requestToJoin' | transloco }}
     </button>
 
-    <h2 style="font-size: 1rem">Invite code</h2>
-    <p class="muted">Paste a code or link from a teammate.</p>
+    <h2 style="font-size: 1rem">{{ 'teams.inviteCode' | transloco }}</h2>
+    <p class="muted">{{ 'teams.inviteCodeHint' | transloco }}</p>
     <mat-form-field appearance="outline">
-      <mat-label>Invite code</mat-label>
+      <mat-label>{{ 'teams.inviteCode' | transloco }}</mat-label>
       <input matInput [formControl]="inviteCode" />
     </mat-form-field>
     <button
@@ -109,34 +109,34 @@
       [disabled]="inviteCode.value.trim().length === 0"
       (click)="openInvite()"
     >
-      Join with code
+      {{ 'teams.joinWithCode' | transloco }}
     </button>
   } @else if (mode() === 'create') {
-    <h2 style="font-size: 1rem">Create team</h2>
+    <h2 style="font-size: 1rem">{{ 'teams.createHeading' | transloco }}</h2>
     <form class="stack" [formGroup]="form" (ngSubmit)="create()">
       <mat-form-field appearance="outline">
-        <mat-label>Name</mat-label>
+        <mat-label>{{ 'teams.name' | transloco }}</mat-label>
         <input matInput formControlName="name" />
       </mat-form-field>
       <mat-form-field appearance="outline">
-        <mat-label>Time zone</mat-label>
+        <mat-label>{{ 'teams.timeZone' | transloco }}</mat-label>
         <input
           type="text"
           matInput
           role="combobox"
           formControlName="timeZone"
           [matAutocomplete]="timeZoneAuto"
-          placeholder="Search time zones"
+          [placeholder]="'teams.searchTimeZones' | transloco"
         />
         <mat-autocomplete #timeZoneAuto="matAutocomplete" autoActiveFirstOption>
           @for (zone of timeZoneOptions(); track zone) {
             <mat-option [value]="zone">{{ zone }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-error>Pick a time zone from the list.</mat-error>
+        <mat-error>{{ 'teams.pickTimeZone' | transloco }}</mat-error>
       </mat-form-field>
       <button mat-flat-button color="primary" type="submit" [disabled]="form.invalid">
-        Create
+        {{ 'common.create' | transloco }}
       </button>
     </form>
   }

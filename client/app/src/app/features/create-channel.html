@@ -1,0 +1,14 @@
+<form class="stack" (ngSubmit)="create()">
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>{{ 'chats.channelName' | transloco }}</mat-label>
+    <input matInput [(ngModel)]="name" name="name" maxlength="100" />
+  </mat-form-field>
+
+  @if (error(); as err) {
+    <p class="error">{{ err | transloco }}</p>
+  }
+
+  <button mat-flat-button color="primary" type="submit" [disabled]="creating()">
+    {{ creating() ? ('chats.creating' | transloco) : ('chats.createChannel' | transloco) }}
+  </button>
+</form>

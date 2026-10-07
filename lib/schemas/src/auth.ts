@@ -2,7 +2,9 @@
  * Identity and session wire contracts.
  */
 
+import { displayNameSchema } from './display-name.js';
 import { accountKindSchema } from './enums.js';
+import { phoneNumberSchema } from './phone.js';
 import { z } from './zod.js';
 
 /** Body for email-and-password registration. */
@@ -10,7 +12,7 @@ export const registerBodySchema = z
   .object({
     email: z.string().email().min(3).max(320),
     password: z.string().min(8).max(256),
-    displayName: z.string().min(1).max(100),
+    displayName: displayNameSchema,
     /** Calendar date of birth (`YYYY-MM-DD`); the server derives `accountKind`. */
     birthday: z.string().date(),
   })
@@ -41,24 +43,30 @@ export const authUserSchema = z.object({
   email: z.string().email().optional(),
 });
 
+export { phoneNumberSchema } from './phone.js';
+
 /** Profile row fields that identity and other areas share. */
 export const userProfileSchema = z.object({
   userId: z.string().min(1),
   email: z.string().email().min(3).max(320),
-  displayName: z.string().min(1).max(100),
+  displayName: displayNameSchema,
   accountKind: accountKindSchema,
   birthday: z.string().date().optional(),
   /** Object key for the profile photo in the media bucket. */
   photoKey: z.string().min(1).max(512).optional(),
+  /** Contact phone teammates can see on a shared-team profile. */
+  phoneNumber: phoneNumberSchema.optional(),
   /** `true` when the caller must finish birthday (and usually display name) setup. */
   needsProfileCompletion: z.boolean().optional(),
 });
 
-/** Body for setting or clearing the caller's profile photo. */
+/** Body for updating the caller's photo and/or phone number. */
 export const updateProfileBodySchema = z
   .object({
     /** `null` removes the photo. */
-    photoKey: z.union([z.string().min(1).max(512), z.null()]),
+    photoKey: z.union([z.string().min(1).max(512), z.null()]).optional(),
+    /** `null` removes the phone number. */
+    phoneNumber: z.union([phoneNumberSchema, z.null()]).optional(),
   })
   .strict();
 
@@ -66,7 +74,7 @@ export const updateProfileBodySchema = z
 export const completeProfileBodySchema = z
   .object({
     birthday: z.string().date(),
-    displayName: z.string().min(1).max(100).optional(),
+    displayName: displayNameSchema.optional(),
   })
   .strict();
 

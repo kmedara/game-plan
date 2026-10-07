@@ -28,6 +28,7 @@ describe('mapChatError', () => {
     expect(mapChatError(new Error('forbidden'))?.statusCode).toBe(403);
     expect(mapChatError(new Error('minor_chat_rule_violated'))?.statusCode).toBe(403);
     expect(mapChatError(new Error('invalid_body'))?.statusCode).toBe(400);
+    expect(mapChatError(new Error('invalid_attachment_key'))?.statusCode).toBe(400);
 
     const conditional = new Error('x');
     conditional.name = 'ConditionalCheckFailedException';

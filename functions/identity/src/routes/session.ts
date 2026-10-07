@@ -5,7 +5,14 @@
 import type { APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import { refreshSetCookie } from '../../../lib/auth/index.js';
 import type { SessionTokens, UserProfile } from '@gameplan/types';
-import { conflict, json, notFound, unauthorized, withCookies } from '../../../lib/http.js';
+import {
+  badRequest,
+  conflict,
+  json,
+  notFound,
+  unauthorized,
+  withCookies,
+} from '../../../lib/http.js';
 import { withMappedErrors } from '../../../lib/pipeline.js';
 
 /**
@@ -77,6 +84,8 @@ export const mapError = (error: unknown): APIGatewayProxyStructuredResultV2 | un
       return unauthorized(error.message === 'unauthorized' ? 'unauthorized' : 'invalid_token');
     case 'profile_not_found':
       return notFound();
+    case 'invalid_body':
+      return badRequest('invalid_body');
     case 'invalid_photo_key':
       return json(400, { error: 'invalid_photo_key' });
     case 'seed_user_id_required':

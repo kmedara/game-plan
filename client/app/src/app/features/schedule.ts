@@ -11,6 +11,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { MatButtonModule } from '@angular/material/button';
 import { Capacitor } from '@capacitor/core';
 import { RouterLink } from '@angular/router';
@@ -24,9 +25,9 @@ import { ApiClientService } from '../core/api-client.service';
 import { LiveSocketService } from '../core/live-socket.service';
 import { ModalService } from '../core/modal.service';
 import { AddEventFormComponent, eventTypeLabel } from './add-event-form';
+import { EventDetailComponent } from './event-detail';
 import { openPlaceInMaps, type MapsProvider } from './place-search';
 import {
-  WEEKDAY_LABELS,
   buildMonthGrid,
   clockLabel,
   dayKeyInZone,
@@ -34,13 +35,14 @@ import {
   monthTitle,
   shiftCalendarMonth,
   wallTimeToIso,
+  weekdayLabelsForLocale,
   type CalendarMonth,
 } from './schedule-calendar';
 
 @Component({
   selector: 'app-schedule',
   standalone: true,
-  imports: [MatButtonModule, RouterLink],
+  imports: [MatButtonModule, RouterLink, TranslocoPipe],
   templateUrl: './schedule.html',
 })
 export class SchedulePageComponent implements OnInit {
@@ -48,9 +50,12 @@ export class SchedulePageComponent implements OnInit {
   private readonly activeTeam = inject(ActiveTeamService);
   private readonly live = inject(LiveSocketService);
   private readonly modal = inject(ModalService);
+  private readonly transloco = inject(TranslocoService);
 
-  readonly weekdayLabels = WEEKDAY_LABELS;
+  readonly weekdayLabels = weekdayLabelsForLocale();
   readonly eventTypes = EVENT_TYPES;
+  /** RSVP choices shown on every event card (selected state stays highlighted). */
+  readonly rsvpStatuses = ['going', 'maybe', 'not_going'] as const satisfies readonly RsvpStatus[];
   readonly teams = this.activeTeam.teams;
   readonly teamId = this.activeTeam.teamId;
   readonly occurrences = signal<ScheduleOccurrence[]>([]);
@@ -192,7 +197,7 @@ export class SchedulePageComponent implements OnInit {
     const key = this.selectedKey();
     if (teamId === undefined || key.length === 0) return;
     const created = await this.modal.open<boolean>(AddEventFormComponent, {
-      title: 'Add event',
+      title: this.transloco.translate('schedule.addEvent'),
       inputs: {
         teamId,
         dayKey: key,
@@ -204,6 +209,25 @@ export class SchedulePageComponent implements OnInit {
   }
 
   /**
+   * Opens the detail modal for one occurrence.
+   *
+   * @param item - The selected day's occurrence row.
+   */
+  async openEvent(item: ScheduleOccurrence): Promise<void> {
+    const teamId = this.teamId();
+    if (teamId === undefined) return;
+    const changed = await this.modal.open<boolean>(EventDetailComponent, {
+      title: item.title,
+      inputs: {
+        occurrence: item,
+        teamId,
+        timeZone: this.timeZone(),
+      },
+    });
+    if (changed) await this.loadSchedule();
+  }
+
+  /**
    * Upserts an RSVP for one occurrence.
    *
    * @param item - The occurrence row.
@@ -212,6 +236,7 @@ export class SchedulePageComponent implements OnInit {
   async rsvp(item: ScheduleOccurrence, status: RsvpStatus): Promise<void> {
     const teamId = this.teamId();
     if (teamId === undefined) return;
+    if (this.myRsvp(item) === status) return;
     try {
       await this.api.putRsvp(teamId, {
         eventId: item.eventId,
@@ -233,9 +258,32 @@ export class SchedulePageComponent implements OnInit {
   myRsvp(item: ScheduleOccurrence): string {
     const userId = this.api.user?.userId;
     if (userId === undefined) return 'none';
-    return (
-      item.rsvps.find((entry) => entry.userId === userId)?.status ?? 'none'
-    );
+    const rsvps = Array.isArray(item.rsvps) ? item.rsvps : [];
+    return rsvps.find((entry) => entry.userId === userId)?.status ?? 'none';
+  }
+
+  /**
+   * Transloco key for an RSVP choice button.
+   *
+   * @param status - going / maybe / not_going.
+   * @returns The i18n key for the button label.
+   */
+  rsvpChoiceKey(status: RsvpStatus): string {
+    if (status === 'going') return 'schedule.going';
+    if (status === 'maybe') return 'schedule.maybe';
+    return 'schedule.notGoing';
+  }
+
+  /**
+   * Localized RSVP status for the schedule line.
+   *
+   * @param item - The occurrence row.
+   * @returns A translated going / maybe / no / none label.
+   */
+  rsvpStatusLabel(item: ScheduleOccurrence): string {
+    const status = this.myRsvp(item);
+    if (status === 'none') return this.transloco.translate('schedule.rsvpNone');
+    return this.transloco.translate(this.rsvpChoiceKey(status as RsvpStatus));
   }
 
   /**
@@ -286,7 +334,7 @@ export class SchedulePageComponent implements OnInit {
 
   /** Label for a maps provider button. */
   mapsProviderLabel(provider: MapsProvider): string {
-    return provider === 'apple' ? 'Apple Maps' : 'Google Maps';
+    return provider === 'apple' ? 'maps.apple' : 'maps.google';
   }
 
   /** Points the visible month and selection at today in the team zone. */

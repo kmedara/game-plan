@@ -105,9 +105,23 @@ export const EVENT_SK_PREFIX = 'EVT#' as const;
 /**
  * Sort key for a per-occurrence RSVP.
  *
- * Embedding the occurrence instant lets a month load as a bounded range query.
+ * Occurrence-first so a month load stays a bounded range query. `eventId` is
+ * required so two events that share a start instant do not collide.
  */
-export const rsvpSk = (occurrenceStartsAt: string, userId: UserId): string =>
+export const rsvpSk = (
+  occurrenceStartsAt: string,
+  eventId: string,
+  userId: UserId,
+): string => `RSVP#${occurrenceStartsAt}#${eventId}#${userId}`;
+
+/**
+ * Pre-eventId RSVP sort key. Kept so upserts can delete colliding legacy rows.
+ *
+ * @param occurrenceStartsAt - Occurrence instant ISO string.
+ * @param userId - The RSVP owner.
+ * @returns The legacy sort key.
+ */
+export const rsvpSkLegacy = (occurrenceStartsAt: string, userId: UserId): string =>
   `RSVP#${occurrenceStartsAt}#${userId}`;
 
 /** Sort-key prefix shared by every RSVP on a team. */

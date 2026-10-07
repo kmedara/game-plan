@@ -80,6 +80,7 @@ services:
       API_BASE_URL: http://localhost:3000
       WS_BASE_URL: ws://localhost:3000/socket
       AUTH_DISABLED: "true"
+      GOOGLE_MAPS_BROWSER_API_KEY: ${GOOGLE_MAPS_BROWSER_API_KEY:-}
     develop:
       watch:
         - action: sync
