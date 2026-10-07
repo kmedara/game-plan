@@ -100,4 +100,26 @@ describe('ActiveTeamService', () => {
     expect(service.teams()).toEqual([]);
     expect(brand.clear).toHaveBeenCalled();
   });
+
+  it('ignores a slower refresh that finishes after a newer one', async () => {
+    let resolveFirst!: (teams: TeamSummary[]) => void;
+    const first = new Promise<TeamSummary[]>((resolve) => {
+      resolveFirst = resolve;
+    });
+    api.listTeams
+      .mockImplementationOnce(() => first)
+      .mockResolvedValueOnce([team('a'), team('b'), team('c')]);
+    api.restoreTeamId.mockResolvedValue(undefined);
+    api.getTeamId.mockReturnValue('a');
+    api.selectedTeamId.set('a');
+
+    const stale = service.refresh();
+    const latest = service.refresh();
+    await latest;
+    expect(service.teams()).toEqual([team('a'), team('b'), team('c')]);
+
+    resolveFirst([team('a')]);
+    await stale;
+    expect(service.teams()).toEqual([team('a'), team('b'), team('c')]);
+  });
 });

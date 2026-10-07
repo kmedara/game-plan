@@ -105,7 +105,7 @@ describe('AppLayoutComponent', () => {
     expect(text).toContain('Profile');
   });
 
-  it('refreshes teams on init when the switcher is empty', () => {
+  it('refreshes teams on init', () => {
     expect(activeTeam.refresh).toHaveBeenCalled();
   });
 

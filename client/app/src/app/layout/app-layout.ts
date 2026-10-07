@@ -65,7 +65,7 @@ export class AppLayoutComponent implements OnInit {
   );
 
   ngOnInit(): void {
-    if (this.activeTeam.teams().length === 0) void this.activeTeam.refresh();
+    void this.activeTeam.refresh();
   }
 
   /**

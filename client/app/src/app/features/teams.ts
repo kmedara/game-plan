@@ -188,14 +188,21 @@ export class TeamsPageComponent implements OnInit, OnDestroy {
       this.selectedJoin.set(undefined);
       void this.searchDirectory(value);
     });
+    document.addEventListener('visibilitychange', this.onDocumentVisible);
     void this.load();
     void this.searchDirectory('');
   }
 
   ngOnDestroy(): void {
     this.approvalSeq += 1;
+    document.removeEventListener('visibilitychange', this.onDocumentVisible);
     this.detachJoinPanelScroll();
   }
+
+  /** Reloads memberships when the tab becomes visible again (e.g. after an approve elsewhere). */
+  private readonly onDocumentVisible = (): void => {
+    if (document.visibilityState === 'visible') void this.load();
+  };
 
   /**
    * Whether this team has join requests the caller can approve.

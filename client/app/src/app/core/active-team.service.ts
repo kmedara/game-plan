@@ -14,6 +14,9 @@ export class ActiveTeamService {
   private readonly api = inject(ApiClientService);
   private readonly brand = inject(TeamBrandService);
 
+  /** Bumps on each {@link refresh} / {@link clear} so a slower in-flight reload cannot overwrite a newer one. */
+  private reloadGeneration = 0;
+
   /** Memberships available in the team switcher. */
   readonly teams = signal<TeamSummary[]>([]);
 
@@ -27,11 +30,16 @@ export class ActiveTeamService {
 
   /**
    * Reloads memberships and selects a valid team (or clears branding).
+   *
+   * Concurrent calls are safe: only the latest reload applies its result.
    */
   async refresh(): Promise<void> {
+    const generation = ++this.reloadGeneration;
     const teams = await this.api.listTeams();
+    if (generation !== this.reloadGeneration) return;
     this.teams.set(teams);
     await this.api.restoreTeamId();
+    if (generation !== this.reloadGeneration) return;
     const selected =
       teams.find((team) => team.teamId === this.api.getTeamId()) ?? teams[0];
     if (selected === undefined) {
@@ -41,6 +49,7 @@ export class ActiveTeamService {
     if (this.api.getTeamId() !== selected.teamId) {
       await this.brand.select(selected.teamId, selected.theme);
     }
+    if (generation !== this.reloadGeneration) return;
     for (const team of teams) void this.brand.rememberLogo(team.theme?.logoKey);
   }
 
@@ -57,6 +66,7 @@ export class ActiveTeamService {
 
   /** Clears memberships, the selected team, and branding. */
   async clear(): Promise<void> {
+    this.reloadGeneration += 1;
     this.teams.set([]);
     await this.brand.clear();
   }

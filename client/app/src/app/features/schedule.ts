@@ -103,7 +103,7 @@ export class SchedulePageComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    if (this.teams().length === 0) void this.activeTeam.refresh();
+    void this.activeTeam.refresh();
     this.live.subscribe((event) => {
       if (event.type === 'schedule_changed' && event.teamId === this.teamId()) {
         void this.loadSchedule();
