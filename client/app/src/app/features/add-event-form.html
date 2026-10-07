@@ -3,32 +3,32 @@
     <p class="muted">{{ dayLabel() }}</p>
   }
 
-  <div class="event-type-row" role="group" aria-label="Event type">
+  <div class="event-type-row" role="group" [attr.aria-label]="'addEvent.eventType' | transloco">
     @for (type of eventTypes; track type) {
       @if (draftType === type) {
         <button mat-flat-button type="button" aria-pressed="true" (click)="draftType = type">
-          {{ eventTypeLabel(type) }}
+          {{ eventTypeLabel(type) | transloco }}
         </button>
       } @else {
         <button mat-stroked-button type="button" aria-pressed="false" (click)="draftType = type">
-          {{ eventTypeLabel(type) }}
+          {{ eventTypeLabel(type) | transloco }}
         </button>
       }
     }
   </div>
 
   <mat-form-field appearance="outline">
-    <mat-label>Title</mat-label>
+    <mat-label>{{ 'addEvent.title' | transloco }}</mat-label>
     <input matInput name="title" [(ngModel)]="draftTitle" />
   </mat-form-field>
 
   <div class="time-row">
     <mat-form-field appearance="outline">
-      <mat-label>Start</mat-label>
+      <mat-label>{{ 'addEvent.start' | transloco }}</mat-label>
       <input matInput type="time" name="start" [(ngModel)]="draftStart" />
     </mat-form-field>
     <mat-form-field appearance="outline">
-      <mat-label>End</mat-label>
+      <mat-label>{{ 'addEvent.end' | transloco }}</mat-label>
       <input matInput type="time" name="end" [(ngModel)]="draftEnd" />
     </mat-form-field>
   </div>
@@ -40,22 +40,21 @@
   />
 
   <mat-form-field appearance="outline">
-    <mat-label>Location</mat-label>
+    <mat-label>{{ 'addEvent.location' | transloco }}</mat-label>
     <input
       matInput
       name="location"
-      [ngModel]="draftLocation"
+      [ngModel]="locationField"
       [matAutocomplete]="locationAuto"
       (ngModelChange)="onLocationInput($event)"
-      placeholder="Search for a place"
+      [placeholder]="'addEvent.searchPlace' | transloco"
     />
     <mat-autocomplete
       #locationAuto="matAutocomplete"
-      [displayWith]="displayLocation"
       (optionSelected)="onPlaceSelected($event.option.value)"
     >
       @for (suggestion of placeSuggestions(); track suggestion.id) {
-        <mat-option [value]="suggestion">
+        <mat-option [value]="suggestionLabel(suggestion)">
           {{ suggestion.primaryText }}
           @if (suggestion.secondaryText) {
             <span class="muted"> · {{ suggestion.secondaryText }}</span>
@@ -66,17 +65,17 @@
   </mat-form-field>
 
   <mat-form-field appearance="outline">
-    <mat-label>Frequency</mat-label>
+    <mat-label>{{ 'addEvent.frequency' | transloco }}</mat-label>
     <mat-select name="frequency" [(ngModel)]="draftFrequency">
       @for (option of frequencies; track option.value) {
-        <mat-option [value]="option.value">{{ option.label }}</mat-option>
+        <mat-option [value]="option.value">{{ option.labelKey | transloco }}</mat-option>
       }
     </mat-select>
   </mat-form-field>
 
   @if (draftFrequency !== 'ONCE') {
     <mat-form-field appearance="outline">
-      <mat-label>Every</mat-label>
+      <mat-label>{{ 'addEvent.every' | transloco }}</mat-label>
       <input matInput type="number" name="interval" min="1" step="1" [(ngModel)]="draftInterval" />
     </mat-form-field>
     <p class="muted">{{ repeatSummary() }}</p>
@@ -87,14 +86,14 @@
   }
 
   <div class="row">
-    <button mat-button type="button" (click)="cancel()">Cancel</button>
+    <button mat-button type="button" (click)="cancel()">{{ 'common.cancel' | transloco }}</button>
     <button
       mat-flat-button
       color="primary"
       type="submit"
       [disabled]="saving() || draftTitle.trim().length === 0"
     >
-      Add to calendar
+      {{ 'addEvent.addToCalendar' | transloco }}
     </button>
   </div>
 </form>

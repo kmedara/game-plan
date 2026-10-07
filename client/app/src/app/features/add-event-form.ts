@@ -3,6 +3,7 @@
  */
 
 import { Component, inject, input, signal } from '@angular/core';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { FormsModule } from '@angular/forms';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
@@ -28,12 +29,12 @@ import {
   wallTimeToIso,
 } from './schedule-calendar';
 
-/** Display names for the event type picker. */
+/** Transloco keys for the event type picker. */
 const EVENT_TYPE_LABELS: Record<EventType, string> = {
-  practice: 'Practice',
-  game: 'Game',
-  meeting: 'Meeting',
-  other: 'Other',
+  practice: 'eventType.practice',
+  game: 'eventType.game',
+  meeting: 'eventType.meeting',
+  other: 'eventType.other',
 };
 
 /**
@@ -50,22 +51,22 @@ export const eventTypeLabel = (eventType: string): string => {
 
 /** `rrule` `FREQ` values, plus a one-off that stores no recurrence rule. */
 const FREQUENCIES = [
-  { value: 'ONCE', label: 'Does not repeat' },
-  { value: 'DAILY', label: 'Daily' },
-  { value: 'WEEKLY', label: 'Weekly' },
-  { value: 'MONTHLY', label: 'Monthly' },
-  { value: 'YEARLY', label: 'Yearly' },
+  { value: 'ONCE', labelKey: 'addEvent.once' },
+  { value: 'DAILY', labelKey: 'addEvent.daily' },
+  { value: 'WEEKLY', labelKey: 'addEvent.weekly' },
+  { value: 'MONTHLY', labelKey: 'addEvent.monthly' },
+  { value: 'YEARLY', labelKey: 'addEvent.yearly' },
 ] as const;
 
-/** Full weekday names, Sunday first, aligned with {@link rruleWeekDay}. */
-const WEEKDAY_NAMES = [
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
+/** Weekday key suffixes, Sunday first, aligned with {@link rruleWeekDay}. */
+const WEEKDAY_KEYS = [
+  'sunday',
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
 ] as const;
 
 type RepeatFrequency = (typeof FREQUENCIES)[number]['value'];
@@ -81,6 +82,7 @@ type RepeatFrequency = (typeof FREQUENCIES)[number]['value'];
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
+    TranslocoPipe,
   ],
   templateUrl: './add-event-form.html',
   styles: [
@@ -95,6 +97,7 @@ export class AddEventFormComponent {
   private readonly api = inject(ApiClientService);
   private readonly modal = inject(ModalRef<boolean>);
   private readonly places = inject(PlaceSearchService);
+  private readonly transloco = inject(TranslocoService);
 
   /** Team that will own the event. */
   readonly teamId = input.required<string>();
@@ -121,26 +124,37 @@ export class AddEventFormComponent {
   draftTitle = '';
   draftStart = '18:00';
   draftEnd = '19:30';
-  draftLocation = '';
+  /** Location input text (always a string — avoids Material object/ngModel fights). */
+  locationField = '';
   draftLatitude: number | undefined;
   draftLongitude: number | undefined;
   draftFrequency: RepeatFrequency = 'ONCE';
   draftInterval = 1;
 
+  /** Suggestion lookup by autocomplete option value (preview label). */
+  private readonly suggestionsByLabel = new Map<string, PlaceSuggestion>();
+
   /**
-   * Label shown in the location input for typed text or a selected suggestion.
-   *
-   * @param value - Free text or an autocomplete suggestion.
-   * @returns The full text to show in the input.
+   * When true, ignore location ngModelChange side effects (clear/search). Selecting
+   * an option writes the input and would otherwise wipe the resolved place.
    */
-  displayLocation = (value: string | PlaceSuggestion | null): string => {
-    if (value === null || value === undefined) return '';
-    if (typeof value === 'string') return value;
-    if (value.secondaryText !== undefined && value.secondaryText.length > 0) {
-      return `${value.primaryText}, ${value.secondaryText}`;
+  private suppressLocationSideEffects = false;
+
+  /** Last resolved / map-picked label; ngModel echoes of this value are ignored. */
+  private committedLocation = '';
+
+  /**
+   * Preview label for a suggestion row (also used as the mat-option value).
+   *
+   * @param suggestion - An autocomplete suggestion.
+   * @returns Primary text plus secondary text when present.
+   */
+  suggestionLabel(suggestion: PlaceSuggestion): string {
+    if (suggestion.secondaryText !== undefined && suggestion.secondaryText.length > 0) {
+      return `${suggestion.primaryText}, ${suggestion.secondaryText}`;
     }
-    return value.primaryText;
-  };
+    return suggestion.primaryText;
+  }
 
   /**
    * Plain-language reading of the `rrule` frequency and interval.
@@ -150,49 +164,75 @@ export class AddEventFormComponent {
   repeatSummary(): string {
     if (this.draftFrequency === 'ONCE') return '';
     const interval = this.intervalCount();
-    const unit = this.intervalUnit(interval);
-    const every =
-      interval === 1 ? `Every ${unit}` : `Every ${interval} ${unit}`;
-    if (this.draftFrequency !== 'WEEKLY') return every;
-    const weekday =
-      WEEKDAY_NAMES[RRULE_WEEKDAYS.indexOf(rruleWeekDay(this.dayKey()))]!;
-    return `${every} on ${weekday}`;
+    if (this.draftFrequency === 'DAILY') {
+      return this.transloco.translate('addEvent.repeatEveryDays', { count: interval });
+    }
+    if (this.draftFrequency === 'WEEKLY') {
+      const weekday = this.transloco.translate(
+        `addEvent.weekday.${WEEKDAY_KEYS[RRULE_WEEKDAYS.indexOf(rruleWeekDay(this.dayKey()))]!}`,
+      );
+      return this.transloco.translate('addEvent.repeatEveryWeeks', {
+        count: interval,
+        weekday,
+      });
+    }
+    if (this.draftFrequency === 'MONTHLY') {
+      return this.transloco.translate('addEvent.repeatEveryMonths', { count: interval });
+    }
+    return this.transloco.translate('addEvent.repeatEveryYears', { count: interval });
   }
 
   /**
-   * Clears coordinates and refreshes suggestions when the user types.
+   * Updates the typed query and refreshes place suggestions.
    *
-   * @param value - The current input value from ngModel (string while typing).
+   * @param value - Current input text from ngModel.
    */
-  onLocationInput(value: string | PlaceSuggestion): void {
-    if (typeof value !== 'string') {
-      // Autocomplete briefly sets the option object; ignore until resolve finishes.
-      return;
-    }
-    this.draftLocation = value;
+  onLocationInput(value: string): void {
+    this.locationField = value;
+    if (this.suppressLocationSideEffects) return;
+    if (value === this.committedLocation) return;
+    this.committedLocation = '';
     this.clearCoordinates();
     void this.places.autocomplete(value).then((suggestions) => {
+      if (this.locationField !== value) return;
+      this.suggestionsByLabel.clear();
+      for (const suggestion of suggestions) {
+        this.suggestionsByLabel.set(this.suggestionLabel(suggestion), suggestion);
+      }
       this.placeSuggestions.set(suggestions);
     });
   }
 
   /**
-   * Resolves a picked suggestion into a full label and coordinates.
+   * Resolves a picked suggestion into the full address label and coordinates.
    *
-   * @param suggestion - The selected autocomplete row.
+   * @param previewLabel - The mat-option string value (suggestion preview).
    */
-  async onPlaceSelected(suggestion: PlaceSuggestion): Promise<void> {
-    // Keep a readable string in the input while resolve runs (avoids leaving the option object).
-    this.draftLocation = this.displayLocation(suggestion);
+  async onPlaceSelected(previewLabel: string): Promise<void> {
+    const suggestion = this.suggestionsByLabel.get(previewLabel);
+    this.suppressLocationSideEffects = true;
+    this.locationField = previewLabel;
+    if (suggestion === undefined) {
+      this.suppressLocationSideEffects = false;
+      return;
+    }
     try {
       const place = await this.places.resolve(suggestion.id);
-      this.applyPlace(place.label, place.latitude, place.longitude);
+      this.committedLocation = place.label;
+      this.locationField = place.label;
+      this.applyPlace(place.latitude, place.longitude);
       this.placeSuggestions.set([]);
+      this.suggestionsByLabel.clear();
     } catch {
+      this.committedLocation = '';
       this.clearCoordinates();
       this.error.set(
         'Could not resolve that place. Try another suggestion or type an address.',
       );
+    } finally {
+      setTimeout(() => {
+        this.suppressLocationSideEffects = false;
+      }, 0);
     }
   }
 
@@ -202,22 +242,29 @@ export class AddEventFormComponent {
    * @param pick - Coordinates from the interactive map.
    */
   async onMapPicked(pick: MapPick): Promise<void> {
+    this.suppressLocationSideEffects = true;
     this.draftLatitude = pick.latitude;
     this.draftLongitude = pick.longitude;
     this.mapLatitude.set(pick.latitude);
     this.mapLongitude.set(pick.longitude);
     try {
       const place = await this.places.reverse(pick.latitude, pick.longitude);
-      this.draftLocation = place.label;
+      this.committedLocation = place.label;
+      this.locationField = place.label;
       this.draftLatitude = place.latitude;
       this.draftLongitude = place.longitude;
       this.placeSuggestions.set([]);
       this.error.set(undefined);
     } catch {
-      this.draftLocation = `${pick.latitude.toFixed(5)}, ${pick.longitude.toFixed(5)}`;
+      this.committedLocation = `${pick.latitude.toFixed(5)}, ${pick.longitude.toFixed(5)}`;
+      this.locationField = this.committedLocation;
       this.error.set(
         'Could not look up that pin. The coordinates were still saved.',
       );
+    } finally {
+      setTimeout(() => {
+        this.suppressLocationSideEffects = false;
+      }, 0);
     }
   }
 
@@ -246,7 +293,7 @@ export class AddEventFormComponent {
     this.saving.set(true);
     this.error.set(undefined);
     try {
-      const location = this.draftLocation.trim();
+      const location = this.locationField.trim();
       const hasCoords =
         this.draftLatitude !== undefined && this.draftLongitude !== undefined;
       await this.api.createEvent(this.teamId(), {
@@ -272,12 +319,10 @@ export class AddEventFormComponent {
   /**
    * Stores a resolved place on the draft and map pin.
    *
-   * @param label - Display label for the location field.
    * @param latitude - Latitude in decimal degrees.
    * @param longitude - Longitude in decimal degrees.
    */
-  private applyPlace(label: string, latitude: number, longitude: number): void {
-    this.draftLocation = label;
+  private applyPlace(latitude: number, longitude: number): void {
     this.draftLatitude = latitude;
     this.draftLongitude = longitude;
     this.mapLatitude.set(latitude);
@@ -324,21 +369,4 @@ export class AddEventFormComponent {
     return Number.isFinite(interval) && interval >= 1 ? interval : 1;
   }
 
-  /**
-   * Unit word for the selected frequency.
-   *
-   * @param interval - The `rrule` interval.
-   * @returns A singular unit for 1, otherwise the plural.
-   */
-  private intervalUnit(interval: number): string {
-    if (this.draftFrequency === 'ONCE') return '';
-    const units: Record<RecurrenceRule['frequency'], [string, string]> = {
-      DAILY: ['day', 'days'],
-      WEEKLY: ['week', 'weeks'],
-      MONTHLY: ['month', 'months'],
-      YEARLY: ['year', 'years'],
-    };
-    const [singular, plural] = units[this.draftFrequency];
-    return interval === 1 ? singular : plural;
-  }
 }

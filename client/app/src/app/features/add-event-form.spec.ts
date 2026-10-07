@@ -8,7 +8,7 @@ import type { PlaceSuggestion } from './place-search';
 
 describe('eventTypeLabel', () => {
   it('maps known types and passes through unknown values', () => {
-    expect(eventTypeLabel('practice')).toBe('Practice');
+    expect(eventTypeLabel('practice')).toBe('eventType.practice');
     expect(eventTypeLabel('custom_type')).toBe('custom_type');
   });
 });
@@ -62,14 +62,10 @@ describe('AddEventFormComponent', () => {
     fixture.detectChanges();
   });
 
-  it('formats location display text', () => {
+  it('formats suggestion preview labels', () => {
     const component = fixture.componentInstance;
-    expect(component.displayLocation(null)).toBe('');
-    expect(component.displayLocation('Arena')).toBe('Arena');
-    expect(component.displayLocation(suggestion)).toBe('City Hall, Boston, MA');
-    expect(
-      component.displayLocation({ id: 'x', primaryText: 'Only' }),
-    ).toBe('Only');
+    expect(component.suggestionLabel(suggestion)).toBe('City Hall, Boston, MA');
+    expect(component.suggestionLabel({ id: 'x', primaryText: 'Only' })).toBe('Only');
   });
 
   it('summarizes repeat rules', () => {
@@ -82,40 +78,67 @@ describe('AddEventFormComponent', () => {
     component.draftInterval = 1;
     expect(component.repeatSummary()).toContain('Monday');
     component.draftInterval = 0;
-    expect(component.repeatSummary()).toContain('Every week');
+    expect(component.repeatSummary()).toBe('Every 1 weeks on Monday');
   });
 
-  it('ignores non-string location input and loads suggestions for typed text', async () => {
+  it('loads suggestions for typed text', async () => {
     const component = fixture.componentInstance;
-    component.onLocationInput(suggestion);
-    expect(places.autocomplete).not.toHaveBeenCalled();
     component.onLocationInput('bos');
     expect(places.autocomplete).toHaveBeenCalledWith('bos');
-    await fixture.whenStable();
     places.autocomplete.mockResolvedValue([suggestion]);
     component.onLocationInput('city');
     await fixture.whenStable();
+    expect(component.placeSuggestions()).toEqual([suggestion]);
   });
 
-  it('resolves a selected place and handles resolve failures', async () => {
+  it('resolves a selected place to the full address and handles failures', async () => {
     const component = fixture.componentInstance;
-    await component.onPlaceSelected(suggestion);
-    expect(component.draftLocation).toContain('City Hall');
+    places.autocomplete.mockResolvedValue([suggestion]);
+    component.onLocationInput('city');
+    await fixture.whenStable();
+
+    places.resolve.mockResolvedValue({
+      label: 'City Hall, 1 City Hall Square, Boston, MA',
+      latitude: 42.36,
+      longitude: -71.06,
+    });
+    await component.onPlaceSelected(component.suggestionLabel(suggestion));
+    expect(component.locationField).toBe('City Hall, 1 City Hall Square, Boston, MA');
     expect(component.mapLatitude()).toBe(42.36);
 
+    places.autocomplete.mockResolvedValue([suggestion]);
+    component.onLocationInput('city');
+    await fixture.whenStable();
     places.resolve.mockRejectedValue(new Error('fail'));
-    await component.onPlaceSelected(suggestion);
+    await component.onPlaceSelected(component.suggestionLabel(suggestion));
     expect(component.error()).toContain('Could not resolve');
+  });
+
+  it('does not clear the resolved place when ngModel echoes the selection', async () => {
+    const component = fixture.componentInstance;
+    places.autocomplete.mockResolvedValue([suggestion]);
+    component.onLocationInput('city');
+    await fixture.whenStable();
+
+    places.resolve.mockResolvedValue({
+      label: 'City Hall, 1 City Hall Square, Boston, MA',
+      latitude: 42.36,
+      longitude: -71.06,
+    });
+    await component.onPlaceSelected(component.suggestionLabel(suggestion));
+    component.onLocationInput('City Hall, 1 City Hall Square, Boston, MA');
+    expect(component.mapLatitude()).toBe(42.36);
+    expect(component.locationField).toBe('City Hall, 1 City Hall Square, Boston, MA');
   });
 
   it('reverse-geocodes map picks and falls back to coordinates', async () => {
     const component = fixture.componentInstance;
     await component.onMapPicked({ latitude: 42.36, longitude: -71.06 });
-    expect(component.draftLocation).toBe('Pin address');
+    expect(component.locationField).toBe('Pin address');
 
     places.reverse.mockRejectedValue(new Error('fail'));
     await component.onMapPicked({ latitude: 1.23456, longitude: 7.89012 });
-    expect(component.draftLocation).toContain('1.23456');
+    expect(component.locationField).toContain('1.23456');
     expect(component.error()).toContain('Could not look up');
   });
 
@@ -142,7 +165,7 @@ describe('AddEventFormComponent', () => {
 
     component.draftInterval = 1;
     component.draftFrequency = 'WEEKLY';
-    component.draftLocation = ' Gym ';
+    component.locationField = ' Gym ';
     component.draftLatitude = 1;
     component.draftLongitude = 2;
     await component.submit();
@@ -173,13 +196,6 @@ describe('AddEventFormComponent', () => {
     expect(body['latitude']).toBeUndefined();
     expect(body['recurrence']).toEqual({ frequency: 'MONTHLY', interval: 2 });
     expect(component.repeatSummary()).toBe('Every 2 months');
-  });
-
-  it('has no interval unit for a one-off event', () => {
-    const unit = (
-      fixture.componentInstance as unknown as { intervalUnit: (interval: number) => string }
-    ).intervalUnit(1);
-    expect(unit).toBe('');
   });
 
   it('shows a generic error when create rejects with a non-error', async () => {
