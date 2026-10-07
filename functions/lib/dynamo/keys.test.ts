@@ -17,6 +17,7 @@ import {
   profileSk,
   rolePermissionsSk,
   rsvpSk,
+  rsvpSkLegacy,
   rsvpSkRange,
   teamDirectoryPk,
   teamDirectorySk,
@@ -64,7 +65,10 @@ describe('dynamo keys', () => {
     expect(messageSk('2026-09-29T12:00:00.000Z', 'm1')).toBe(
       'MSG#2026-09-29T12:00:00.000Z#m1',
     );
-    expect(rsvpSk('2026-09-29T18:00:00.000Z', 'u1')).toBe(
+    expect(rsvpSk('2026-09-29T18:00:00.000Z', 'evt-1', 'u1')).toBe(
+      'RSVP#2026-09-29T18:00:00.000Z#evt-1#u1',
+    );
+    expect(rsvpSkLegacy('2026-09-29T18:00:00.000Z', 'u1')).toBe(
       'RSVP#2026-09-29T18:00:00.000Z#u1',
     );
     expect(rsvpSkRange('2026-09-01T00:00:00.000Z', '2026-09-30T23:59:59.999Z')).toEqual({

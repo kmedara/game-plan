@@ -249,6 +249,68 @@ describe('schedule handler (in-memory)', () => {
     expect(withRsvp?.rsvps).toEqual([{ userId: admin.userId, status: 'going' }]);
   });
 
+  it('keeps RSVPs independent for two events that share a start instant', async () => {
+    const admin = authFor();
+    const teamId = seedTeam({ userId: admin.userId, role: 'team_admin' });
+    const startsAt = '2026-09-15T18:00:00.000Z';
+
+    const createA = await handler(
+      httpEvent('POST', `/schedule/teams/${teamId}/events`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          eventType: 'practice',
+          title: 'Practice A',
+          startsAt,
+        },
+      }),
+    );
+    const createB = await handler(
+      httpEvent('POST', `/schedule/teams/${teamId}/events`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          eventType: 'meeting',
+          title: 'Meeting B',
+          startsAt,
+        },
+      }),
+    );
+    expect(createA.statusCode).toBe(201);
+    expect(createB.statusCode).toBe(201);
+    const eventA = bodyOf(createA).eventId as string;
+    const eventB = bodyOf(createB).eventId as string;
+
+    const rsvpA = await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/rsvps`, {
+        headers: { authorization: admin.authorization },
+        body: { eventId: eventA, occurrenceStartsAt: startsAt, status: 'going' },
+      }),
+    );
+    const rsvpB = await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/rsvps`, {
+        headers: { authorization: admin.authorization },
+        body: { eventId: eventB, occurrenceStartsAt: startsAt, status: 'maybe' },
+      }),
+    );
+    expect(rsvpA.statusCode).toBe(200);
+    expect(rsvpB.statusCode).toBe(200);
+
+    const window = await handler(
+      httpEvent('GET', `/schedule/teams/${teamId}`, {
+        headers: { authorization: admin.authorization },
+        query: {
+          from: '2026-09-01T00:00:00.000Z',
+          to: '2026-09-30T23:59:59.999Z',
+        },
+      }),
+    );
+    expect(window.statusCode).toBe(200);
+    const occurrences = bodyOf(window).occurrences as Array<Record<string, unknown>>;
+    const occurrenceA = occurrences.find((row) => row.eventId === eventA);
+    const occurrenceB = occurrences.find((row) => row.eventId === eventB);
+    expect(occurrenceA?.rsvps).toEqual([{ userId: admin.userId, status: 'going' }]);
+    expect(occurrenceB?.rsvps).toEqual([{ userId: admin.userId, status: 'maybe' }]);
+  });
+
   it('stores and clears event coordinates with the location', async () => {
     const admin = authFor();
     const teamId = seedTeam({ userId: admin.userId, role: 'team_admin' });

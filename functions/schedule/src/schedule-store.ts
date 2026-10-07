@@ -25,12 +25,14 @@ import {
   EVENT_SK_PREFIX,
   TABLE_PK,
   TABLE_SK,
+  deleteItem,
   eventSk,
   getItem,
   putItem,
   queryBySkBetween,
   queryBySkPrefix,
   rsvpSk,
+  rsvpSkLegacy,
   rsvpSkRange,
   teamMemberSk,
   teamMetaSk,
@@ -298,12 +300,22 @@ export const listOccurrences = async (
   const range = rsvpSkRange(from.toISOString(), to.toISOString());
   const rsvpRows = await queryBySkBetween<RsvpItem>(teamPk(teamId), range.lo, range.hi);
 
-  const rsvpsByOccurrence = new Map<string, Array<{ userId: string; status: RsvpStatus }>>();
+  const rsvpsByOccurrence = new Map<
+    string,
+    Map<string, { userId: string; status: RsvpStatus; updatedAt: string }>
+  >();
   for (const row of rsvpRows) {
     const key = `${row.eventId}\0${row.occurrenceStartsAt}`;
-    const list = rsvpsByOccurrence.get(key) ?? [];
-    list.push({ userId: row.userId, status: row.status });
-    rsvpsByOccurrence.set(key, list);
+    const byUser = rsvpsByOccurrence.get(key) ?? new Map();
+    const existing = byUser.get(row.userId);
+    if (existing === undefined || row.updatedAt >= existing.updatedAt) {
+      byUser.set(row.userId, {
+        userId: row.userId,
+        status: row.status,
+        updatedAt: row.updatedAt,
+      });
+    }
+    rsvpsByOccurrence.set(key, byUser);
   }
 
   const occurrences: ScheduleOccurrence[] = [];
@@ -312,6 +324,13 @@ export const listOccurrences = async (
     for (const start of starts) {
       const startsAt = start.toISOString();
       const endsAt = occurrenceEndsAt(event.startsAt, event.endsAt, start);
+      const byUser = rsvpsByOccurrence.get(`${event.eventId}\0${startsAt}`);
+      const rsvps: Array<{ userId: string; status: RsvpStatus }> = [];
+      if (byUser !== undefined) {
+        for (const entry of byUser.values()) {
+          rsvps.push({ userId: entry.userId, status: entry.status });
+        }
+      }
       occurrences.push({
         eventId: event.eventId,
         eventType: event.eventType,
@@ -321,7 +340,7 @@ export const listOccurrences = async (
         ...(event.location !== undefined ? { location: event.location } : {}),
         ...(event.latitude !== undefined ? { latitude: event.latitude } : {}),
         ...(event.longitude !== undefined ? { longitude: event.longitude } : {}),
-        rsvps: rsvpsByOccurrence.get(`${event.eventId}\0${startsAt}`) ?? [],
+        rsvps,
       });
     }
   }
@@ -361,9 +380,10 @@ export const upsertRsvp = async (input: {
   if (!isOccurrence) throw new Error('occurrence_not_found');
 
   const now = new Date().toISOString();
+  const pk = teamPk(input.teamId);
   const item: RsvpItem = {
-    [TABLE_PK]: teamPk(input.teamId),
-    [TABLE_SK]: rsvpSk(occurrenceIso, input.userId),
+    [TABLE_PK]: pk,
+    [TABLE_SK]: rsvpSk(occurrenceIso, input.eventId, input.userId),
     eventId: input.eventId,
     teamId: input.teamId,
     occurrenceStartsAt: occurrenceIso,
@@ -372,6 +392,8 @@ export const upsertRsvp = async (input: {
     updatedAt: now,
   };
   await putItem(item);
+  // Drop pre-eventId rows that collided across same-time events.
+  await deleteItem(pk, rsvpSkLegacy(occurrenceIso, input.userId));
 
   return {
     eventId: input.eventId,

@@ -46,6 +46,7 @@ export {
   profileSk,
   rolePermissionsSk,
   rsvpSk,
+  rsvpSkLegacy,
   rsvpSkRange,
   teamInviteSk,
   teamMemberSk,
