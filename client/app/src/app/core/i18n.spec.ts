@@ -18,7 +18,10 @@ describe('detectBrowserLang', () => {
     expect(detectBrowserLang(['de', 'fr'])).toBe('en');
   });
 
-  it('picks the first Spanish tag in the preference list', () => {
+  it('uses the first supported language in the preference list', () => {
+    expect(detectBrowserLang(['en-US', 'es'])).toBe('en');
+    expect(detectBrowserLang(['en', 'es-ES'])).toBe('en');
+    expect(detectBrowserLang(['fr-FR', 'en', 'es'])).toBe('en');
     expect(detectBrowserLang(['fr-FR', 'es-AR', 'en'])).toBe('es');
   });
 });

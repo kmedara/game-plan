@@ -27,7 +27,9 @@ registerLocaleData(localeEs);
 /**
  * Maps a BCP 47 tag (or list) to a supported app language.
  *
- * Any `es*` tag becomes Spanish; everything else falls back to English.
+ * The first supported language in the preference list wins. A later Spanish
+ * tag does not override English when English is preferred. Unsupported tags
+ * are skipped, and English is the fallback when none match.
  *
  * @param languages - Preferred languages, most preferred first.
  * @returns `en` or `es`.
@@ -39,9 +41,10 @@ export const detectBrowserLang = (
       ? navigator.languages
       : [navigator.language || 'en'],
 ): AppLang => {
+  const supported = new Set<string>(SUPPORTED_LANGS);
   for (const tag of languages) {
     const primary = tag.trim().toLowerCase().split('-')[0];
-    if (primary === 'es') return 'es';
+    if (supported.has(primary)) return primary as AppLang;
   }
   return 'en';
 };
