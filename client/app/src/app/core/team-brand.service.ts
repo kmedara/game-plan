@@ -100,7 +100,7 @@ export const teamColorOverrides = (
   if (primary === undefined) return undefined;
   const primaryTone = tone(primary);
   const accent = parseHex(theme?.accent) ?? primary;
-  const lightContainer = mix(accent, WHITE, 0.2);
+  const lightContainer = mix(primary, WHITE, 0.2);
   const darkContainer = mix(accent, BLACK, 0.62);
   const overrides: Partial<Record<TeamColorProp, string>> = {
     '--mat-sys-primary': pair(
