@@ -615,12 +615,6 @@ button.chat-message {
   background: var(--mat-sys-surface-container);
 }
 
-.calendar-day.selected {
-  border-color: var(--mat-sys-primary);
-  background: var(--mat-sys-primary-container);
-  color: var(--mat-sys-on-primary-container);
-}
-
 .calendar-day.today {
   border-color: var(--mat-sys-primary);
   background: var(--mat-sys-primary);
@@ -634,6 +628,20 @@ button.chat-message {
 
 .calendar-day.today .calendar-dot {
   box-shadow: 0 0 0 1px var(--mat-sys-on-primary);
+}
+
+.calendar-day.selected {
+  border-color: var(--mat-sys-primary);
+  background: color-mix(in srgb, var(--mat-sys-primary-container) 35%, transparent);
+  color: inherit;
+}
+
+.calendar-day.selected .calendar-day-num {
+  color: inherit;
+}
+
+.calendar-day.selected .calendar-dot {
+  box-shadow: none;
 }
 
 .calendar-day-num {
