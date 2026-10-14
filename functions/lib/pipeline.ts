@@ -34,11 +34,16 @@ export type RouteContext = {
  * A pipeline step.
  *
  * `Req` must already be on the context. `Out` is attached before `next`.
+ * The optional `__step` field exists only so TypeScript can infer `Req` and
+ * `Out`. Those parameters otherwise appear only in contravariant positions,
+ * and inference falls back to `object`.
  */
-export type Step<Req extends object, Out extends object> = (
+export type Step<Req extends object, Out extends object> = ((
   ctx: RouteContext & Req,
   next: (ctx: RouteContext & Req & Out) => HttpResult,
-) => HttpResult;
+) => HttpResult) & {
+  readonly __step?: { req: Req; out: Out };
+};
 
 /**
  * Types a step function with the context it requires and produces.

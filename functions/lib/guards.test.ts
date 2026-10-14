@@ -42,7 +42,7 @@ const event = (): APIGatewayProxyEventV2 =>
       http: { method: 'GET', path: '/' },
       authorizer: { jwt: { claims: { sub: 'guard-user' } } },
     },
-  }) as APIGatewayProxyEventV2;
+  }) as unknown as APIGatewayProxyEventV2;
 
 describe('guards', () => {
   beforeEach(() => {
@@ -106,7 +106,7 @@ describe('guards', () => {
         authorizer: { jwt: { claims: { sub: 'guard-user' } } },
       },
       body: JSON.stringify({ teamId: 'team-body' }),
-    } as APIGatewayProxyEventV2);
+    } as unknown as APIGatewayProxyEventV2);
     expect(JSON.parse(ok.body ?? '')).toEqual({ teamId: 'team-body' });
 
     mockCan.mockResolvedValueOnce(false);
@@ -118,7 +118,7 @@ describe('guards', () => {
           authorizer: { jwt: { claims: { sub: 'guard-user' } } },
         },
         body: JSON.stringify({ teamId: 'team-body' }),
-      } as APIGatewayProxyEventV2),
+      } as unknown as APIGatewayProxyEventV2),
     ).rejects.toThrow('forbidden');
 
     mockGetItem.mockResolvedValueOnce({ role: 123 });

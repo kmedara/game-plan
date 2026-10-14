@@ -19,7 +19,7 @@ describe('handleDeleteDevice', () => {
         requestContext: {
           authorizer: { jwt: { claims: { sub: 'device-route-user' } } },
         },
-      } as APIGatewayProxyEventV2,
+      } as unknown as APIGatewayProxyEventV2,
       '',
     );
     expect(result.statusCode).toBe(400);

@@ -2,7 +2,12 @@
  * Fan-out Lambda HTTP and SQS routing coverage.
  */
 
-import type { APIGatewayProxyEventV2, SQSEvent } from 'aws-lambda';
+import type {
+  APIGatewayProxyEventV2,
+  APIGatewayProxyStructuredResultV2,
+  SQSBatchResponse,
+  SQSEvent,
+} from 'aws-lambda';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const deliverFanoutJob = vi.fn();
@@ -16,6 +21,19 @@ vi.mock('./deliver.js', async (importOriginal) => {
 });
 
 const { handler } = await import('./handler.js');
+
+/**
+ * Narrows a fan-out handler result to an HTTP response.
+ *
+ * @param result - The handler return value.
+ * @returns The HTTP result.
+ */
+const httpResult = (
+  result: APIGatewayProxyStructuredResultV2 | SQSBatchResponse,
+): APIGatewayProxyStructuredResultV2 => {
+  if (!('statusCode' in result)) throw new Error('expected an HTTP response');
+  return result;
+};
 
 /**
  * Builds a minimal HTTP API event for fan-out routes.
@@ -57,31 +75,31 @@ describe('fanout handler HTTP', () => {
   });
 
   it('returns health for GET /fanout/health', async () => {
-    const result = await handler(httpEvent('GET', '/fanout/health'));
+    const result = httpResult(await handler(httpEvent('GET', '/fanout/health')));
     expect(result).toMatchObject({ statusCode: 200 });
     expect(JSON.parse(String(result.body))).toEqual({ ok: true, service: 'fanout' });
   });
 
   it('returns health for GET /health', async () => {
-    const result = await handler(httpEvent('GET', '/health'));
+    const result = httpResult(await handler(httpEvent('GET', '/health')));
     expect(result.statusCode).toBe(200);
   });
 
   it('delivers on POST /fanout/deliver', async () => {
-    const result = await handler(httpEvent('POST', '/fanout/deliver', validChatJob));
+    const result = httpResult(await handler(httpEvent('POST', '/fanout/deliver', validChatJob)));
     expect(result.statusCode).toBe(204);
     expect(deliverFanoutJob).toHaveBeenCalledWith(validChatJob);
   });
 
   it('returns 400 for an invalid deliver body', async () => {
-    const result = await handler(httpEvent('POST', '/fanout/deliver', { type: 'nope' }));
+    const result = httpResult(await handler(httpEvent('POST', '/fanout/deliver', { type: 'nope' })));
     expect(result.statusCode).toBe(400);
     expect(JSON.parse(String(result.body))).toEqual({ error: 'invalid_body' });
     expect(deliverFanoutJob).not.toHaveBeenCalled();
   });
 
   it('returns 404 for an unknown HTTP route', async () => {
-    const result = await handler(httpEvent('GET', '/fanout/unknown'));
+    const result = httpResult(await handler(httpEvent('GET', '/fanout/unknown')));
     expect(result.statusCode).toBe(404);
   });
 
@@ -91,35 +109,35 @@ describe('fanout handler HTTP', () => {
       requestContext: { http: { method: 'POST', path: '/fanout/deliver' } },
       body: JSON.stringify(validChatJob),
     } as APIGatewayProxyEventV2;
-    const result = await handler(event);
+    const result = httpResult(await handler(event));
     expect(result.statusCode).toBe(404);
   });
 
   it('returns 404 for POST on bare /fanout', async () => {
-    const result = await handler(httpEvent('POST', '/fanout', validChatJob));
+    const result = httpResult(await handler(httpEvent('POST', '/fanout', validChatJob)));
     expect(result.statusCode).toBe(404);
   });
 
   it('delivers on POST /fanout/deliver/ with a trailing slash', async () => {
-    const result = await handler(httpEvent('POST', '/fanout/deliver/', validChatJob));
+    const result = httpResult(await handler(httpEvent('POST', '/fanout/deliver/', validChatJob)));
     expect(result.statusCode).toBe(204);
     expect(deliverFanoutJob).toHaveBeenCalled();
   });
 
   it('delivers on POST /deliver without the /fanout prefix', async () => {
-    const result = await handler(httpEvent('POST', '/deliver', validChatJob));
+    const result = httpResult(await handler(httpEvent('POST', '/deliver', validChatJob)));
     expect(result.statusCode).toBe(204);
     expect(deliverFanoutJob).toHaveBeenCalled();
   });
 
   it('delivers on POST when the path has no leading slash', async () => {
-    const result = await handler(httpEvent('POST', 'deliver', validChatJob));
+    const result = httpResult(await handler(httpEvent('POST', 'deliver', validChatJob)));
     expect(result.statusCode).toBe(204);
     expect(deliverFanoutJob).toHaveBeenCalled();
   });
 
   it('returns 404 for POST on root path', async () => {
-    const result = await handler(httpEvent('POST', '/', validChatJob));
+    const result = httpResult(await handler(httpEvent('POST', '/', validChatJob)));
     expect(result.statusCode).toBe(404);
   });
 });
@@ -215,7 +233,7 @@ describe('fanout handler SQS', () => {
 
 describe('fanout handler unknown events', () => {
   it('returns 404 for a non-HTTP non-SQS event', async () => {
-    const result = await handler({ requestContext: { routeKey: '$connect' } });
+    const result = httpResult(await handler({ requestContext: { routeKey: '$connect' } }));
     expect(result.statusCode).toBe(404);
   });
 });

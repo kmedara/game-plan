@@ -162,7 +162,7 @@ describe("route pipeline", () => {
             http: { method: "POST", path: "/" },
             authorizer: { jwt: { claims: { sub: "user-1" } } },
           },
-        } as APIGatewayProxyEventV2,
+        } as unknown as APIGatewayProxyEventV2,
         "team-1",
       );
       expect(JSON.parse(result.body ?? "")).toEqual({

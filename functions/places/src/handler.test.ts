@@ -61,12 +61,14 @@ const mockResponse = (
 ): Response => {
   const status = init.status ?? 200;
   const contentType = init.contentType ?? 'application/json';
-  if (body instanceof ArrayBuffer || Buffer.isBuffer(body)) {
-    const bytes = body instanceof ArrayBuffer ? body : body.buffer.slice(
-      body.byteOffset,
-      body.byteOffset + body.byteLength,
-    );
-    return new Response(bytes, {
+  if (body instanceof ArrayBuffer) {
+    return new Response(body, {
+      status,
+      headers: { 'content-type': contentType },
+    });
+  }
+  if (Buffer.isBuffer(body)) {
+    return new Response(new Uint8Array(body), {
       status,
       headers: { 'content-type': contentType },
     });
@@ -97,7 +99,7 @@ describe('places handler', () => {
           requestContext: { http: { method: 'GET', path: '/places/autocomplete' } },
           queryStringParameters: { q: 'x' },
           headers: authHeader(),
-        } as APIGatewayProxyEventV2)
+        } as unknown as APIGatewayProxyEventV2)
       ).statusCode,
     ).toBe(404);
   });

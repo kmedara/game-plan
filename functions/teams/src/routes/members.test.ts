@@ -5,19 +5,25 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { UserProfileItem } from '../../../lib/auth/identity-provider.js';
 import { issueLocalTokens } from '../../../lib/auth/local-jwt.js';
-import { TABLE_PK, TABLE_SK, rolePermissionsSk, teamMemberSk, teamMetaSk, teamPk } from '../../../lib/dynamo/keys.js';
+import { TABLE_PK, TABLE_SK, profileSk, rolePermissionsSk, teamMemberSk, teamMetaSk, teamPk, userPk } from '../../../lib/dynamo/keys.js';
+import type { TeamMemberItem } from '../team-store.js';
 import { DEFAULT_ROLE_PERMISSIONS } from '@gameplan/types';
 
 const { store, itemKey, assignMemberRole, getProfileMock } = vi.hoisted(() => {
   const store = new Map<string, Record<string, unknown>>();
   const itemKey = (pk: string, sk: string): string => `${pk}\0${sk}`;
-  const assignMemberRole = vi.fn(async () => ({
+  const assignMemberRole = vi.fn(async (..._args: unknown[]): Promise<TeamMemberItem> => ({
+    PK: 'PK',
+    SK: 'SK',
     userId: 'member',
-    role: 'coach' as const,
+    role: 'coach',
     joinedAt: new Date().toISOString(),
   }));
-  const getProfileMock = vi.fn(async () => undefined);
+  const getProfileMock = vi.fn(
+    async (..._args: unknown[]): Promise<UserProfileItem | undefined> => undefined,
+  );
   return { store, itemKey, assignMemberRole, getProfileMock };
 });
 
@@ -117,12 +123,15 @@ describe('handleGetMember', () => {
       positions: ['Wing'],
     });
     getProfileMock.mockResolvedValueOnce({
+      PK: userPk(memberId),
+      SK: profileSk(),
       userId: memberId,
       email: `${memberId}@example.com`,
       displayName: 'Pat Player',
       accountKind: 'adult',
       phoneNumber: '555-0100',
       photoKey: `uploads/${memberId}/photo`,
+      createdAt: new Date().toISOString(),
     });
 
     const result = await handler(

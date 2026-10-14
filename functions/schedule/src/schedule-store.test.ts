@@ -183,8 +183,8 @@ describe('schedule-store', () => {
 
     const schedule = await listOccurrences(
       teamId,
-      new Date('2026-09-01T00:00:00.000Z'),
-      new Date('2026-09-02T00:00:00.000Z'),
+      new Date('2026-09-01T00:00:00.000Z').toISOString(),
+      new Date('2026-09-02T00:00:00.000Z').toISOString(),
     );
     const withEndsAt = schedule.occurrences.find((row) => row.eventId === eventId);
     const withoutEndsAt = schedule.occurrences.find((row) => row.eventId === openEndedId);

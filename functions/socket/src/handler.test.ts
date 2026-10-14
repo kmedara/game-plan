@@ -213,7 +213,7 @@ describe('socket handler', () => {
         await handler({
           requestContext: { routeKey: '$connect' },
           queryStringParameters: { ticket: 'ticket-open' },
-        } as APIGatewayProxyWebsocketEventV2)
+        } as unknown as APIGatewayProxyWebsocketEventV2)
       ).statusCode,
     ).toBe(400);
   });

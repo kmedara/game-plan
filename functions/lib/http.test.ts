@@ -168,7 +168,9 @@ describe('http helpers', () => {
       handleHealth(
         httpEvent({
           rawPath: '/teams',
-          requestContext: { http: { method: 'POST', path: '/teams' } },
+          requestContext: {
+            http: { method: 'POST', path: '/teams' },
+          } as unknown as APIGatewayProxyEventV2['requestContext'],
         }),
         'teams',
       ).statusCode,

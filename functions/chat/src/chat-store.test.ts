@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AccountKind } from '@gameplan/types';
+import type { UserProfileItem } from '../../lib/auth/identity-provider.js';
 import { DEFAULT_ROLE_PERMISSIONS } from '@gameplan/types';
 import {
   TABLE_PK,
@@ -35,8 +36,10 @@ const { store, profiles, itemKey, findProfileByEmail, fanout } = vi.hoisted(() =
     }
   >();
   const itemKey = (pk: string, sk: string): string => `${pk}\0${sk}`;
-  const findProfileByEmail = vi.fn(async () => undefined);
-  const fanout = vi.fn(async (): Promise<void> => undefined);
+  const findProfileByEmail = vi.fn(
+    async (..._args: unknown[]): Promise<UserProfileItem | undefined> => undefined,
+  );
+  const fanout = vi.fn(async (..._args: unknown[]): Promise<void> => undefined);
   return { store, profiles, itemKey, findProfileByEmail, fanout };
 });
 
@@ -464,6 +467,8 @@ describe('chat-store', () => {
     findProfileByEmail.mockResolvedValueOnce(undefined);
     await expect(searchAdultByEmail('a@example.com')).rejects.toThrow('user_not_found');
     findProfileByEmail.mockResolvedValueOnce({
+      PK: userPk('m1'),
+      SK: profileSk(),
       userId: 'm1',
       email: 'minor@example.com',
       displayName: 'Minor',

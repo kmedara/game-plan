@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const getSignedUrl = vi.fn(async () => 'https://s3.example/signed');
+const getSignedUrl = vi.fn(async (..._args: unknown[]) => 'https://s3.example/signed');
 
 vi.mock('@aws-sdk/s3-request-presigner', () => ({
   getSignedUrl: (...args: unknown[]) => getSignedUrl(...args),

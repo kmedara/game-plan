@@ -43,7 +43,7 @@ export default defineConfig({
         'functions/**/*.test.ts',
         'functions/**/local.ts',
       ],
-      reporters: ['text', 'html', 'json'],
+      reporter: ['text', 'html', 'json'],
       thresholds: {
         statements: 100,
         branches: 100,
