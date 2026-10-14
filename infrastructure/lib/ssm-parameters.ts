@@ -8,9 +8,11 @@
 /**
  * Suffix after the prefix, mapped to the environment variable CDK and the client build read.
  *
- * Website and API hostnames are derived from `DOMAIN` and the deploy environment, not this map.
+ * Website and API hostnames are derived from `HOSTED_ZONE_NAME` and the deploy environment.
  */
 export const PARAMETER_ENV: Record<string, string> = {
+  'hosted-zone-id': 'HOSTED_ZONE_ID',
+  'hosted-zone-name': 'HOSTED_ZONE_NAME',
   'google-client-id': 'GOOGLE_CLIENT_ID',
   'google-client-secret': 'GOOGLE_CLIENT_SECRET',
   'facebook-app-id': 'FACEBOOK_APP_ID',

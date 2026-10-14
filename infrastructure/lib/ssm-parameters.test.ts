@@ -14,6 +14,8 @@ import {
 describe('ssm parameters', () => {
   it('maps names under the prefix and ignores unknown keys', () => {
     const env = envFromParameters('/gameplan', [
+      { name: '/gameplan/hosted-zone-id', value: 'Z0123456789ABCDEFGHIJ' },
+      { name: '/gameplan/hosted-zone-name', value: 'example.com' },
       { name: '/gameplan/google-client-id', value: 'client-id' },
       { name: '/gameplan/google-client-secret', value: 'secret' },
       { name: '/gameplan/client-origin', value: 'https://app.example.com' },
@@ -21,6 +23,8 @@ describe('ssm parameters', () => {
       { name: '/other/google-client-id', value: 'nope' },
     ]);
     expect(env).toEqual({
+      HOSTED_ZONE_ID: 'Z0123456789ABCDEFGHIJ',
+      HOSTED_ZONE_NAME: 'example.com',
       GOOGLE_CLIENT_ID: 'client-id',
       GOOGLE_CLIENT_SECRET: 'secret',
     });

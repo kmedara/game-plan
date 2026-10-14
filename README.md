@@ -299,7 +299,7 @@ and read what they published. Re-run any workflow from the Actions tab (`workflo
 Each GitHub environment (`staging`, `production`) has one secret, `AWS_ROLE_ARN`. `AWS_REGION` defaults to `us-east-1`.
 `SSM_PREFIX` defaults to `/gameplan`.
 
-Set the repository variable `DOMAIN` to the registered domain, such as `example.com`. The deploy environment name is
+The hosted zone name in Parameter Store is the registered domain, such as `example.com`. The deploy environment name is
 inserted into the hostnames:
 
 | Environment  | Website                              | HTTP API                             |
@@ -310,8 +310,8 @@ inserted into the hostnames:
 The Cognito callback is `https://api.<environment>.example.com/identity/oauth/callback`. Logout returns to
 `https://app.<environment>.example.com/login`.
 
-`GamePlanDns` creates the certificate validation records from the repository secrets `HOSTED_ZONE_ID` and
-`HOSTED_ZONE_ROLE_ARN`. `GamePlanApi` writes the alias records with the same secrets. The role is in the account that
+`GamePlanDns` creates the certificate validation records from Parameter Store `hosted-zone-id` and `hosted-zone-name`,
+and the repository secret `HOSTED_ZONE_ROLE_ARN`. `GamePlanApi` writes the alias records with the same values. The role is in the account that
 owns the zone (the management account, when the domain was registered there). Its trust policy allows the application
 account to assume it, and it can call `route53:ChangeResourceRecordSets` on that hosted zone and `route53:GetChange` on
 `arn:aws:route53:::change/*`.
@@ -324,6 +324,7 @@ here. Each stack writes its own outputs. The client workflow fails until `api-ba
 
 | Name                                                                    | Used for                                                                                         |
 | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `hosted-zone-id`, `hosted-zone-name`                                    | Route 53 zone. The name is the registered domain used for the website and API hostnames.        |
 | `google-client-id`, `google-client-secret`                              | Optional Google IdP                                                                              |
 | `facebook-app-id`, `facebook-app-secret`                                | Optional Facebook IdP                                                                            |
 | `apple-client-id`, `apple-team-id`, `apple-key-id`, `apple-private-key` | Optional Apple IdP. Store the PEM, including line breaks.                                        |

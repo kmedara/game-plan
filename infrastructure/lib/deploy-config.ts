@@ -1,8 +1,8 @@
 /**
  * Resolves deploy settings from CDK context, then process environment.
  *
- * Context is the local override. GitHub Actions passes the environment name and
- * the registered domain. Other values come from Parameter Store.
+ * Context is the local override. GitHub Actions passes the environment name.
+ * The hosted zone id and name come from Parameter Store.
  */
 
 /**
@@ -37,7 +37,7 @@ const DNS_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
  * Staging becomes `app.staging.example.com` and `api.staging.example.com`.
  *
  * @param environment - GitHub environment name, such as `staging`.
- * @param domain - Registered domain, such as `example.com`.
+ * @param domain - Hosted zone name, such as `example.com`.
  * @returns The origin, callback, logout URL, and both hostnames.
  */
 export const publicUrlsFor = (environment: string, domain: string): PublicUrls => {
@@ -45,7 +45,7 @@ export const publicUrlsFor = (environment: string, domain: string): PublicUrls =
   const apex = domain.trim().toLowerCase().replace(/\.$/u, '');
   const labels = apex.split('.');
   if (!DNS_LABEL.test(envLabel) || labels.length < 2 || labels.some((label) => !DNS_LABEL.test(label))) {
-    throw new Error('DEPLOY_ENV and DOMAIN must be DNS names');
+    throw new Error('DEPLOY_ENV and HOSTED_ZONE_NAME must be DNS names');
   }
   const siteHostname = `app.${envLabel}.${apex}`;
   const apiHostname = `api.${envLabel}.${apex}`;

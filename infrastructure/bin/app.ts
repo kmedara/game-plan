@@ -5,7 +5,7 @@
  * Instantiates DNS, platform, and API stacks in the caller account and region.
  * Cognito OAuth callback/logout URLs and optional social IdP credentials come
  * from CDK context, then from process environment. In CI, `DEPLOY_ENV` and
- * `DOMAIN` choose `app.<environment>.<domain>` and `api.<environment>.<domain>`.
+ * `HOSTED_ZONE_NAME` choose `app.<environment>.<zone>` and `api.<environment>.<zone>`.
  * `CLIENT_ORIGIN` overrides the local website CORS default. A hosted zone id
  * adds the DNS stack and connects the website and API hostnames to it.
  */
@@ -28,7 +28,7 @@ const app = new cdk.App();
 const contextOrEnv = (contextKey: string, envKey: string): string | undefined =>
   definedString(app.node.tryGetContext(contextKey)) ?? definedString(process.env[envKey]);
 
-const domain = definedString(process.env.DOMAIN);
+const domain = definedString(process.env.HOSTED_ZONE_NAME) ?? definedString(process.env.DOMAIN);
 const deployEnv = definedString(process.env.DEPLOY_ENV);
 const derived = domain !== undefined && deployEnv !== undefined ? publicUrlsFor(deployEnv, domain) : undefined;
 
@@ -56,7 +56,7 @@ const hostedZoneId = definedString(process.env.HOSTED_ZONE_ID);
 const siteHostname = derived?.siteHostname ?? hostnameOf(definedString(process.env.CLIENT_ORIGIN));
 const apiHostname = derived?.apiHostname ?? hostnameOf(callbackUrls[0]);
 if (hostedZoneId !== undefined && (siteHostname === undefined || apiHostname === undefined)) {
-  throw new Error('HOSTED_ZONE_ID requires DOMAIN and DEPLOY_ENV');
+  throw new Error('HOSTED_ZONE_ID requires HOSTED_ZONE_NAME and DEPLOY_ENV');
 }
 
 const env = getStackEnv();

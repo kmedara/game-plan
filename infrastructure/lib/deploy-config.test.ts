@@ -29,7 +29,7 @@ describe('deploy config', () => {
       siteHostname: 'app.staging.example.com',
       apiHostname: 'api.staging.example.com',
     });
-    expect(() => publicUrlsFor('staging', 'localhost')).toThrow(/DOMAIN/);
+    expect(() => publicUrlsFor('staging', 'localhost')).toThrow(/HOSTED_ZONE_NAME/);
   });
 
   it('reads a hostname from an absolute URL', () => {
