@@ -32,9 +32,16 @@ jobs:
           node-version: 22
           cache: npm
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - id: oidc
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ steps.oidc.outputs.aws-account-id }}:role/cdk-hnb659fds-deploy-role-${{ steps.oidc.outputs.aws-account-id }}-${{ vars.AWS_REGION || 'us-east-1' }}
+          role-chaining: true
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
       - run: npm ci
