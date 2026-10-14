@@ -3,7 +3,7 @@
  */
 
 import { displayNameSchema } from './display-name.js';
-import { chatKindSchema } from './enums.js';
+import { accountKindSchema, chatKindSchema } from './enums.js';
 import { z } from './zod.js';
 
 /** Body for creating a team-visible channel. */
@@ -20,6 +20,37 @@ export const createPrivateChatBodySchema = z
     memberIds: z.array(z.string().min(1)).min(1),
   })
   .strict();
+
+/**
+ * One person in the minor chat check.
+ *
+ * This is not a wire response. The rule needs the account kind and the teams
+ * the person already belongs to.
+ */
+export const chatParticipantSchema = z
+  .object({
+    userId: z.string().min(1),
+    accountKind: accountKindSchema,
+    teamIds: z.array(z.string().min(1)),
+  })
+  .strict();
+
+/** Inferred type for {@link chatParticipantSchema}. */
+export type ChatParticipant = z.infer<typeof chatParticipantSchema>;
+
+/**
+ * Filter for who appears in user search.
+ *
+ * A later safety pass can widen the filter without a new chat model.
+ */
+export const userSearchPolicySchema = z
+  .object({
+    adultsOnly: z.boolean(),
+  })
+  .strict();
+
+/** Inferred type for {@link userSearchPolicySchema}. */
+export type UserSearchPolicy = z.infer<typeof userSearchPolicySchema>;
 
 /**
  * Query for exact-email adult search.

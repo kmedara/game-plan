@@ -24,6 +24,10 @@ export const presignUploadResponseSchema = z.object({
 /** Query for a short-lived download URL. */
 export const presignDownloadQuerySchema = z.object({
   objectKey: z.string().min(1).max(512),
+  /** Chat that contains this key as a message attachment. */
+  chatId: z.string().min(1).max(128).optional(),
+  /** Profile whose photo key is this object. */
+  userId: z.string().min(1).max(128).optional(),
 });
 
 /** Response with a short-lived download URL. */

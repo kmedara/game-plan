@@ -30,12 +30,15 @@ import {
 } from './teams.js';
 import {
   completeProfileBodySchema,
+  confirmationRequiredSchema,
+  confirmRegistrationBodySchema,
   errorBodySchema,
   loginBodySchema,
   oauthExchangeBodySchema,
   oauthExchangeResponseSchema,
   refreshBodySchema,
   registerBodySchema,
+  resendConfirmationBodySchema,
   sessionTokensSchema,
   socketTicketSchema,
   updateProfileBodySchema,
@@ -115,7 +118,23 @@ const AREAS: Record<string, AreaSpec> = {
     secured: false,
     paths: {
       '/identity/register': {
-        post: { summary: 'Create an account', body: registerBodySchema, response: sessionTokensSchema },
+        post: {
+          summary: 'Create an account. Cognito waits for the emailed confirmation code.',
+          body: registerBodySchema,
+          response: z.union([sessionTokensSchema, confirmationRequiredSchema]),
+        },
+      },
+      '/identity/confirm': {
+        post: {
+          summary: 'Confirm a signup with the emailed code',
+          body: confirmRegistrationBodySchema,
+        },
+      },
+      '/identity/confirm/resend': {
+        post: {
+          summary: 'Send another signup confirmation code',
+          body: resendConfirmationBodySchema,
+        },
       },
       '/identity/login': {
         post: { summary: 'Log in with email and password', body: loginBodySchema, response: sessionTokensSchema },

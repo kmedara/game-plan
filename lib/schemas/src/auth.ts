@@ -18,6 +18,31 @@ export const registerBodySchema = z
   })
   .strict();
 
+/** Body for confirming an email-and-password signup with the emailed code. */
+export const confirmRegistrationBodySchema = z
+  .object({
+    email: z.string().email().min(3).max(320),
+    code: z.string().trim().min(1).max(32),
+  })
+  .strict();
+
+/** Body for sending another signup confirmation code. */
+export const resendConfirmationBodySchema = z
+  .object({
+    email: z.string().email().min(3).max(320),
+  })
+  .strict();
+
+/**
+ * Register response when Cognito is waiting for the emailed code.
+ *
+ * No access token is included.
+ */
+export const confirmationRequiredSchema = z.object({
+  confirmationRequired: z.literal(true),
+  email: z.string().email(),
+});
+
 /** Body for email-and-password login. */
 export const loginBodySchema = z
   .object({
@@ -124,6 +149,15 @@ export const sessionTokensSchema = z.object({
 export const errorBodySchema = z.object({
   error: z.string(),
 });
+
+/** Inferred type for {@link confirmRegistrationBodySchema}. */
+export type ConfirmRegistrationBody = z.infer<typeof confirmRegistrationBodySchema>;
+
+/** Inferred type for {@link resendConfirmationBodySchema}. */
+export type ResendConfirmationBody = z.infer<typeof resendConfirmationBodySchema>;
+
+/** Inferred type for {@link confirmationRequiredSchema}. */
+export type ConfirmationRequired = z.infer<typeof confirmationRequiredSchema>;
 
 /** Inferred type for {@link registerBodySchema}. */
 export type RegisterBody = z.infer<typeof registerBodySchema>;

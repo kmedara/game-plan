@@ -208,6 +208,8 @@ export const teamInviteSchema = z
     role: teamRoleSchema,
     createdBy: z.string().min(1).optional(),
     createdAt: z.string().min(1),
+    /** Instant the code stops working (`YYYY-MM-DDTHH:mm:ss.sssZ`). */
+    expiresAt: z.string().datetime(),
   })
   .strict();
 
@@ -226,6 +228,8 @@ export const invitePreviewSchema = z
     teamName: z.string().min(1),
     role: teamRoleSchema,
     createdAt: z.string().min(1),
+    /** Instant the code stops working (`YYYY-MM-DDTHH:mm:ss.sssZ`). */
+    expiresAt: z.string().datetime(),
   })
   .strict();
 

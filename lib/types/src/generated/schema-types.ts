@@ -10,7 +10,7 @@ export type AcceptedInvite = {
   name: string;
   timeZone: string;
   defaultChatId: string;
-  role: 'team_admin' | 'coach' | 'parent' | 'player';
+  role: 'team_admin' | 'coach' | 'player' | 'parent';
   joinedAt: string;
 }
 
@@ -19,17 +19,17 @@ export type AccountKind = 'adult' | 'minor';
 export type ApprovedJoinRequest = {
   teamId: string;
   userId: string;
-  role: 'team_admin' | 'coach' | 'parent' | 'player';
+  role: 'team_admin' | 'coach' | 'player' | 'parent';
   joinedAt: string;
   defaultChatId: string;
 }
 
 export type ApproveJoinRequestBody = {
-  role: 'team_admin' | 'coach' | 'parent' | 'player';
+  role: 'team_admin' | 'coach' | 'player' | 'parent';
 }
 
 export type AssignRoleBody = {
-  role: 'team_admin' | 'coach' | 'parent' | 'player';
+  role: 'team_admin' | 'coach' | 'player' | 'parent';
 }
 
 export type AuthUser = {
@@ -61,6 +61,12 @@ export type ChatMessage = {
   createdAt: string;
 }
 
+export type ChatParticipant = {
+  userId: string;
+  accountKind: 'adult' | 'minor';
+  teamIds: string[];
+}
+
 export type ChatSummary = {
   chatId: string;
   kind: 'default' | 'channel' | 'private';
@@ -73,6 +79,16 @@ export type ChatSummary = {
 export type CompleteProfileBody = {
   birthday: string;
   displayName?: string;
+}
+
+export type ConfirmationRequired = {
+  confirmationRequired: true;
+  email: string;
+}
+
+export type ConfirmRegistrationBody = {
+  email: string;
+  code: string;
 }
 
 export type CreateEventBody = {
@@ -93,7 +109,7 @@ export type CreateEventBody = {
 }
 
 export type CreateInviteBody = {
-  role?: 'team_admin' | 'coach' | 'parent' | 'player';
+  role?: 'team_admin' | 'coach' | 'player' | 'parent';
 }
 
 export type CreatePrivateChatBody = {
@@ -173,8 +189,9 @@ export type InvitePreview = {
   code: string;
   teamId: string;
   teamName: string;
-  role: 'team_admin' | 'coach' | 'parent' | 'player';
+  role: 'team_admin' | 'coach' | 'player' | 'parent';
   createdAt: string;
+  expiresAt: string;
 }
 
 export type JoinRequestCreated = {
@@ -293,6 +310,8 @@ export type PlaceSuggestion = {
 
 export type PresignDownloadQuery = {
   objectKey: string;
+  chatId?: string;
+  userId?: string;
 }
 
 export type PresignDownloadResponse = {
@@ -335,9 +354,13 @@ export type RegisterDeviceBody = {
   platform: 'ios' | 'android' | 'web';
 }
 
+export type ResendConfirmationBody = {
+  email: string;
+}
+
 export type RolePermissionsResponse = {
   roles: {
-    role: 'team_admin' | 'coach' | 'parent' | 'player';
+    role: 'team_admin' | 'coach' | 'player' | 'parent';
     permissions: (
       | 'manage_permissions'
       | 'invite_members'
@@ -350,7 +373,7 @@ export type RolePermissionsResponse = {
 }
 
 export type RolePermissions = {
-  role: 'team_admin' | 'coach' | 'parent' | 'player';
+  role: 'team_admin' | 'coach' | 'player' | 'parent';
   permissions: (
     | 'manage_permissions'
     | 'invite_members'
@@ -488,18 +511,20 @@ export type TeamInviteList = {
   invites: {
     code: string;
     teamId: string;
-    role: 'team_admin' | 'coach' | 'parent' | 'player';
+    role: 'team_admin' | 'coach' | 'player' | 'parent';
     createdBy?: string;
     createdAt: string;
+    expiresAt: string;
   }[];
 }
 
 export type TeamInvite = {
   code: string;
   teamId: string;
-  role: 'team_admin' | 'coach' | 'parent' | 'player';
+  role: 'team_admin' | 'coach' | 'player' | 'parent';
   createdBy?: string;
   createdAt: string;
+  expiresAt: string;
 }
 
 export type TeamList = {
@@ -514,7 +539,7 @@ export type TeamList = {
       accent?: string;
       logoKey?: string;
     };
-    role: ('team_admin' | 'coach' | 'parent' | 'player') | string;
+    role: ('team_admin' | 'coach' | 'player' | 'parent') | string;
     positions?: string[];
     defaultChatId?: string;
     createdAt?: string;
@@ -524,7 +549,7 @@ export type TeamList = {
 export type TeamMemberList = {
   members: {
     userId: string;
-    role: 'team_admin' | 'coach' | 'parent' | 'player';
+    role: 'team_admin' | 'coach' | 'player' | 'parent';
     joinedAt: string;
     displayName?: string;
     email?: string;
@@ -534,7 +559,7 @@ export type TeamMemberList = {
 
 export type TeamMemberProfile = {
   userId: string;
-  role: 'team_admin' | 'coach' | 'parent' | 'player';
+  role: 'team_admin' | 'coach' | 'player' | 'parent';
   joinedAt: string;
   displayName?: string;
   email?: string;
@@ -546,7 +571,7 @@ export type TeamMemberProfile = {
 
 export type TeamMember = {
   userId: string;
-  role: 'team_admin' | 'coach' | 'parent' | 'player';
+  role: 'team_admin' | 'coach' | 'player' | 'parent';
   joinedAt: string;
   displayName?: string;
   email?: string;
@@ -561,7 +586,7 @@ export type TeamPermission =
   | 'manage_events'
   | 'create_team_channels';
 
-export type TeamRole = 'team_admin' | 'coach' | 'parent' | 'player';
+export type TeamRole = 'team_admin' | 'coach' | 'player' | 'parent';
 
 export type TeamSummary = {
   teamId: string;
@@ -574,7 +599,7 @@ export type TeamSummary = {
     accent?: string;
     logoKey?: string;
   };
-  role: ('team_admin' | 'coach' | 'parent' | 'player') | string;
+  role: ('team_admin' | 'coach' | 'player' | 'parent') | string;
   positions?: string[];
   defaultChatId?: string;
   createdAt?: string;
@@ -621,7 +646,7 @@ export type UpdateRolePermissionsBody = {
    */
   roles: [
     {
-      role: 'team_admin' | 'coach' | 'parent' | 'player';
+      role: 'team_admin' | 'coach' | 'player' | 'parent';
       permissions: (
         | 'manage_permissions'
         | 'invite_members'
@@ -632,7 +657,7 @@ export type UpdateRolePermissionsBody = {
       )[];
     },
     ...{
-      role: 'team_admin' | 'coach' | 'parent' | 'player';
+      role: 'team_admin' | 'coach' | 'player' | 'parent';
       permissions: (
         | 'manage_permissions'
         | 'invite_members'
@@ -668,6 +693,10 @@ export type UserProfile = {
   needsProfileCompletion?: boolean;
 }
 
+export type UserSearchPolicy = {
+  adultsOnly: boolean;
+}
+
 export const ACCOUNT_KINDS = ["adult", "minor"] as const;
 
 export const CHAT_KINDS = ["default", "channel", "private"] as const;
@@ -678,7 +707,7 @@ export const EVENT_TYPES = ["practice", "game", "meeting", "other"] as const;
 
 export const RSVP_STATUSES = ["going", "not_going", "maybe"] as const;
 
-export const TEAM_ROLES = ["team_admin", "coach", "parent", "player"] as const;
+export const TEAM_ROLES = ["team_admin", "coach", "player", "parent"] as const;
 
 export const TEAM_PERMISSIONS = ["manage_permissions", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels"] as const;
 

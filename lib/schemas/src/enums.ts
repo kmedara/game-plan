@@ -16,8 +16,8 @@ export const accountKindSchema = z.enum(ACCOUNT_KINDS);
 /** Inferred type for {@link accountKindSchema}. */
 export type AccountKind = z.infer<typeof accountKindSchema>;
 
-/** Every team role, in a stable order for the admin matrix. */
-export const TEAM_ROLES = ["team_admin", "coach", "parent", "player"] as const;
+/** Every team role, highest rank first (admin matrix and grant checks). */
+export const TEAM_ROLES = ["team_admin", "coach", "player", "parent"] as const;
 
 /** Schema for {@link TEAM_ROLES}. */
 export const teamRoleSchema = z.enum(TEAM_ROLES);
