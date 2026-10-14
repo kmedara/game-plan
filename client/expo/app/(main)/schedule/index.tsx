@@ -245,7 +245,7 @@ const AddEvent = ({
         return;
       }
       void api.autocompletePlaces(query.trim()).then(setSuggestions).catch(() => setSuggestions([]));
-    }, 300);
+    }, 500);
     return () => clearTimeout(handle);
   }, [api, query]);
 

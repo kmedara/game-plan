@@ -31,7 +31,7 @@ const ANONYMOUS_IP_LIMIT = 100;
  * This stops a client from inventing a new Authorization value on every call.
  * It sits far above normal use on a shared network.
  */
-const IP_FLOOD_LIMIT = 12000;
+const IP_FLOOD_LIMIT = 4000;
 
 /** Rate-rule window. WAF counts requests inside this span. */
 const WINDOW = cdk.Duration.minutes(5);
