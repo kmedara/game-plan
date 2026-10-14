@@ -1,0 +1,14 @@
+{
+  "name": "@gameplan/rules",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared product rules for the API and the app",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@gameplan/types": "*"
+  }
+}

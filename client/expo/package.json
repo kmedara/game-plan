@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@gameplan/client-session": "*",
+    "@gameplan/rules": "*",
     "@gameplan/types": "*",
     "expo": "~57.0.27",
     "expo-clipboard": "~57.0.2",

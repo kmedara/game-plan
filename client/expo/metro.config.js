@@ -14,6 +14,7 @@ config.resolver.nodeModulesPaths = [
 ];
 config.resolver.disableHierarchicalLookup = true;
 config.resolver.extraNodeModules = {
+  '@gameplan/rules': path.resolve(workspaceRoot, 'lib/rules'),
   '@gameplan/types': path.resolve(workspaceRoot, 'lib/types'),
   '@gameplan/client-session': path.resolve(workspaceRoot, 'client/session'),
 };
