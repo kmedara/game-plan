@@ -5,9 +5,13 @@
   "scripts": {
     "synth": "cdk synth",
     "diff": "cdk diff",
+    "bootstrap": "cdk bootstrap --require-approval never",
     "deploy": "cdk deploy --require-approval never"
   },
   "dependencies": {
+    "@aws-sdk/client-acm": "^3.1151.0",
+    "@aws-sdk/client-route-53": "^3.1151.0",
+    "@aws-sdk/client-sts": "^3.1151.0",
     "aws-cdk-lib": "^2.220.0",
     "constructs": "^10.4.2"
   },

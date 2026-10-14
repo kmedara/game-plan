@@ -1,13 +1,18 @@
 /**
  * Writes CDK stack outputs back to Parameter Store as Strings.
  *
- * Usage: `tsx infrastructure/scripts/publish-stack-outputs.ts cdk-outputs.json`
+ * Usage: `tsx infrastructure/scripts/publish-stack-outputs.ts cdk-outputs.json dns|platform|api`
  * `SSM_PREFIX` defaults to `/gameplan`. The AWS CLI performs each `PutParameter`.
  */
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { missingEnv, normalizePrefix, OUTPUT_PARAMETERS, parametersFromOutputs } from '../lib/ssm-parameters';
+import {
+  missingEnv,
+  normalizePrefix,
+  parametersFromOutputs,
+  STACK_OUTPUT_PARAMETERS,
+} from '../lib/ssm-parameters';
 
 /**
  * Writes one String parameter, overwriting an existing value.
@@ -35,16 +40,22 @@ const putString = (name: string, value: string): void => {
 
 const main = (): void => {
   const outputsPath = process.argv[2];
-  if (outputsPath === undefined || outputsPath.trim() === '') {
-    throw new Error('Usage: publish-stack-outputs.ts <cdk-outputs.json>');
+  const mode = process.argv[3];
+  if (
+    outputsPath === undefined ||
+    outputsPath.trim() === '' ||
+    (mode !== 'dns' && mode !== 'platform' && mode !== 'api')
+  ) {
+    throw new Error('Usage: publish-stack-outputs.ts <cdk-outputs.json> <dns|platform|api>');
   }
 
+  const mapping = STACK_OUTPUT_PARAMETERS[mode];
   const prefix = normalizePrefix(process.env.SSM_PREFIX ?? '/gameplan');
   const document: unknown = JSON.parse(readFileSync(outputsPath, 'utf8'));
-  const parameters = parametersFromOutputs(document);
+  const parameters = parametersFromOutputs(document, mapping);
   const missing = missingEnv(
-    Object.fromEntries(Object.values(OUTPUT_PARAMETERS).map((suffix) => [suffix, parameters[suffix] ?? ''])),
-    Object.values(OUTPUT_PARAMETERS),
+    Object.fromEntries(Object.values(mapping).map((suffix) => [suffix, parameters[suffix] ?? ''])),
+    Object.values(mapping),
   );
   if (missing.length > 0) {
     throw new Error(`CDK outputs file is missing: ${missing.join(', ')}`);

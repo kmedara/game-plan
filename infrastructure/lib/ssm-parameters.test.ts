@@ -8,20 +8,20 @@ import {
   formatGithubEnv,
   missingEnv,
   parametersFromOutputs,
-  REQUIRED_API_ENV,
   REQUIRED_CLIENT_ENV,
 } from './ssm-parameters';
 
 describe('ssm parameters', () => {
   it('maps names under the prefix and ignores unknown keys', () => {
     const env = envFromParameters('/gameplan', [
-      { name: '/gameplan/client-origin', value: 'https://app.example.com' },
+      { name: '/gameplan/google-client-id', value: 'client-id' },
       { name: '/gameplan/google-client-secret', value: 'secret' },
+      { name: '/gameplan/client-origin', value: 'https://app.example.com' },
       { name: '/gameplan/not-used', value: 'skip' },
-      { name: '/other/client-origin', value: 'nope' },
+      { name: '/other/google-client-id', value: 'nope' },
     ]);
     expect(env).toEqual({
-      CLIENT_ORIGIN: 'https://app.example.com',
+      GOOGLE_CLIENT_ID: 'client-id',
       GOOGLE_CLIENT_SECRET: 'secret',
     });
   });
@@ -33,10 +33,9 @@ describe('ssm parameters', () => {
     expect(env.API_BASE_URL).toBe('https://api.example.com');
   });
 
-  it('reports blank required API and client variables', () => {
-    expect(missingEnv({ CLIENT_ORIGIN: ' https://app.example.com ' }, REQUIRED_API_ENV)).toEqual([
-      'CALLBACK_URLS',
-      'LOGOUT_URLS',
+  it('reports blank required client variables', () => {
+    expect(missingEnv({ API_BASE_URL: ' https://api.example.com ' }, ['API_BASE_URL', 'SITE_BUCKET_NAME'])).toEqual([
+      'SITE_BUCKET_NAME',
     ]);
     expect(missingEnv({ API_BASE_URL: '' }, REQUIRED_CLIENT_ENV)).toEqual([
       'API_BASE_URL',
@@ -53,6 +52,24 @@ describe('ssm parameters', () => {
     expect(block).toContain('CLIENT_ORIGIN=https://app.example.com\n');
     expect(block).toContain('APPLE_PRIVATE_KEY<<GP_SSM_EOF\n');
     expect(block).toContain('-----BEGIN PRIVATE KEY-----\nline\n-----END PRIVATE KEY-----\nGP_SSM_EOF\n');
+  });
+
+  it('limits published outputs to one stack', () => {
+    expect(
+      parametersFromOutputs(
+        {
+          GamePlanDns: {
+            SiteCertificateArn: 'arn:aws:acm:us-east-1:1:certificate/site',
+            ApiCertificateArn: 'arn:aws:acm:us-east-1:1:certificate/api',
+            SiteBucketName: 'ignored',
+          },
+        },
+        { SiteCertificateArn: 'site-certificate-arn', ApiCertificateArn: 'api-certificate-arn' },
+      ),
+    ).toEqual({
+      'site-certificate-arn': 'arn:aws:acm:us-east-1:1:certificate/site',
+      'api-certificate-arn': 'arn:aws:acm:us-east-1:1:certificate/api',
+    });
   });
 
   it('reads stack outputs nested under the stack name', () => {

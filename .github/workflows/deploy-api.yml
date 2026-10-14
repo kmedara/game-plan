@@ -24,4 +24,5 @@ jobs:
     uses: ./.github/workflows/deploy-stack.yml
     with:
       environment: ${{ github.event_name == 'release' && 'production' || github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+      stack: api
     secrets: inherit

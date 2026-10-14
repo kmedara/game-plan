@@ -1,4 +1,4 @@
-name: Deploy infrastructure
+name: Deploy platform
 
 on:
   workflow_dispatch:
@@ -20,4 +20,5 @@ jobs:
     uses: ./.github/workflows/deploy-stack.yml
     with:
       environment: ${{ inputs.environment }}
+      stack: platform
     secrets: inherit

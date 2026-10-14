@@ -3,6 +3,7 @@
  */
 
 import * as cdk from 'aws-cdk-lib';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -12,6 +13,10 @@ import { Construct } from 'constructs';
 export type StorageProps = {
   /** Browser origin allowed to upload and download message files. */
   corsOrigin: string;
+  /** Website hostname served by this distribution. */
+  siteHostname?: string;
+  /** CloudFront certificate ARN in `us-east-1`. Required with `siteHostname`. */
+  certificateArn?: string;
 };
 
 /**
@@ -22,7 +27,7 @@ export class Storage extends Construct {
   /** Private bucket for message photos and files. */
   public readonly mediaBucket: s3.Bucket;
 
-  /** Private origin bucket for the Angular static build. */
+  /** Private origin bucket for the Expo static website export. */
   public readonly siteBucket: s3.Bucket;
 
   /** CloudFront distribution that serves the website over HTTPS. */
@@ -86,6 +91,11 @@ export class Storage extends Construct {
 
     this.distribution = new cloudfront.Distribution(this, 'SiteDistribution', {
       comment: 'GamePlan website',
+      domainNames: props.siteHostname === undefined ? undefined : [props.siteHostname],
+      certificate:
+        props.certificateArn === undefined
+          ? undefined
+          : acm.Certificate.fromCertificateArn(this, 'SiteCertificate', props.certificateArn),
       defaultRootObject: 'index.html',
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
@@ -114,7 +124,10 @@ export class Storage extends Construct {
       ],
     });
 
-    const siteUrl = `https://${this.distribution.distributionDomainName}`;
+    const siteUrl =
+      props.siteHostname === undefined
+        ? `https://${this.distribution.distributionDomainName}`
+        : `https://${props.siteHostname}`;
 
     new cdk.CfnOutput(this, 'MediaBucketName', {
       value: this.mediaBucket.bucketName,

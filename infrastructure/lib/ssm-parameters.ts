@@ -5,11 +5,12 @@
  * stack deploy writes stack outputs back under the same prefix.
  */
 
-/** Suffix after the prefix, mapped to the environment variable CDK and the client build read. */
+/**
+ * Suffix after the prefix, mapped to the environment variable CDK and the client build read.
+ *
+ * Website and API hostnames are derived from `DOMAIN` and the deploy environment, not this map.
+ */
 export const PARAMETER_ENV: Record<string, string> = {
-  'client-origin': 'CLIENT_ORIGIN',
-  'callback-urls': 'CALLBACK_URLS',
-  'logout-urls': 'LOGOUT_URLS',
   'google-client-id': 'GOOGLE_CLIENT_ID',
   'google-client-secret': 'GOOGLE_CLIENT_SECRET',
   'facebook-app-id': 'FACEBOOK_APP_ID',
@@ -27,19 +28,40 @@ export const PARAMETER_ENV: Record<string, string> = {
   'site-url': 'SITE_URL',
 };
 
-/** Environment variables the API deploy requires before `cdk deploy`. */
-export const REQUIRED_API_ENV = ['CLIENT_ORIGIN', 'CALLBACK_URLS', 'LOGOUT_URLS'] as const;
-
 /** Environment variables the website publish requires before the Expo web export. */
 export const REQUIRED_CLIENT_ENV = ['API_BASE_URL', 'SITE_BUCKET_NAME', 'SITE_DISTRIBUTION_ID'] as const;
 
-/** CloudFormation output keys written back as parameter suffixes. */
-export const OUTPUT_PARAMETERS: Record<string, string> = {
-  HttpApiUrl: 'api-base-url',
-  WebSocketUrl: 'ws-base-url',
+/** CloudFormation outputs the DNS stack writes. */
+export const DNS_OUTPUT_PARAMETERS: Record<string, string> = {
+  SiteCertificateArn: 'site-certificate-arn',
+  ApiCertificateArn: 'api-certificate-arn',
+};
+
+/** CloudFormation outputs the platform stack writes. The client workflow reads the bucket and distribution. */
+export const PLATFORM_OUTPUT_PARAMETERS: Record<string, string> = {
   SiteBucketName: 'site-bucket-name',
   SiteDistributionId: 'site-distribution-id',
   SiteUrl: 'site-url',
+};
+
+/** CloudFormation outputs the API stack writes. The client workflow reads both URLs. */
+export const API_OUTPUT_PARAMETERS: Record<string, string> = {
+  HttpApiUrl: 'api-base-url',
+  WebSocketUrl: 'ws-base-url',
+};
+
+/** Output maps keyed by the deploy workflow stack name. */
+export const STACK_OUTPUT_PARAMETERS = {
+  dns: DNS_OUTPUT_PARAMETERS,
+  platform: PLATFORM_OUTPUT_PARAMETERS,
+  api: API_OUTPUT_PARAMETERS,
+} as const;
+
+/** Every CloudFormation output key written back as a parameter suffix. */
+export const OUTPUT_PARAMETERS: Record<string, string> = {
+  ...DNS_OUTPUT_PARAMETERS,
+  ...PLATFORM_OUTPUT_PARAMETERS,
+  ...API_OUTPUT_PARAMETERS,
 };
 
 /** One Parameter Store name and its string value. */
@@ -120,14 +142,18 @@ export const formatGithubEnv = (env: Record<string, string>): string => {
  * Reads known stack outputs from a CDK `--outputs-file` document.
  *
  * @param document - Parsed JSON from the outputs file.
+ * @param mapping - Output key to parameter suffix. Defaults to every stack output.
  * @returns Parameter suffixes and values for the outputs that are present.
  */
-export const parametersFromOutputs = (document: unknown): Record<string, string> => {
+export const parametersFromOutputs = (
+  document: unknown,
+  mapping: Record<string, string> = OUTPUT_PARAMETERS,
+): Record<string, string> => {
   const found: Record<string, string> = {};
   const visit = (node: unknown): void => {
     if (node === null || typeof node !== 'object') return;
     for (const [key, value] of Object.entries(node)) {
-      const suffix = OUTPUT_PARAMETERS[key];
+      const suffix = mapping[key];
       if (suffix !== undefined && typeof value === 'string' && value.trim() !== '') {
         found[suffix] = value;
       } else if (value !== null && typeof value === 'object') {

@@ -3,6 +3,7 @@
  */
 
 import * as cdk from 'aws-cdk-lib';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpUserPoolAuthorizer, WebSocketLambdaAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
@@ -20,7 +21,7 @@ import { areaEntry, createAreaFunctions, createFunction } from './functions';
 export type ApiProps = {
   /** Cognito user pool that issues access tokens for HTTP and WebSocket clients. */
   userPool: cognito.IUserPool;
-  /** App client used by the website and the Capacitor apps. */
+  /** App client used by the website and the Expo app. */
   userPoolClient: cognito.IUserPoolClient;
   /** Cognito Hosted UI domain (no scheme), for identity OAuth redirects. */
   hostedUiDomain: string;
@@ -32,6 +33,10 @@ export type ApiProps = {
   mediaBucket: s3.IBucket;
   /** Browser origin allowed by Cross-Origin Resource Sharing (CORS). */
   corsOrigin: string;
+  /** Public API hostname. When set with `certificateArn`, the stack adds a custom domain. */
+  apiHostname?: string;
+  /** Certificate ARN in the stack region for `apiHostname`. */
+  certificateArn?: string;
 };
 
 /**
@@ -67,6 +72,9 @@ export class Api extends Construct {
 
   /** Amazon API Gateway WebSocket API used for live delivery only. */
   public readonly webSocketApi: apigwv2.WebSocketApi;
+
+  /** Custom domain for the HTTP API, when a hostname and certificate were provided. */
+  public readonly customDomain?: apigwv2.DomainName;
 
   /**
    * Creates the HTTP routes, WebSocket routes, fan-out queue, and push topic.
@@ -244,8 +252,24 @@ export class Api extends Construct {
     props.mediaBucket.grantRead(functions.media);
     props.mediaBucket.grantPut(functions.media);
 
+    if (props.apiHostname !== undefined && props.certificateArn !== undefined) {
+      if (this.httpApi.defaultStage === undefined) {
+        throw new Error('HTTP API is missing its default stage');
+      }
+      this.customDomain = new apigwv2.DomainName(this, 'ApiDomain', {
+        domainName: props.apiHostname,
+        certificate: acm.Certificate.fromCertificateArn(this, 'ApiCertificate', props.certificateArn),
+      });
+      new apigwv2.ApiMapping(this, 'ApiMapping', {
+        api: this.httpApi,
+        domainName: this.customDomain,
+        stage: this.httpApi.defaultStage,
+      });
+    }
+
     new cdk.CfnOutput(this, 'HttpApiUrl', {
-      value: this.httpApi.apiEndpoint,
+      value:
+        props.apiHostname === undefined ? this.httpApi.apiEndpoint : `https://${props.apiHostname}`,
       exportName: 'GamePlanHttpApiUrl',
     });
 

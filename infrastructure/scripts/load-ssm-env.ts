@@ -13,7 +13,6 @@ import {
   formatGithubEnv,
   missingEnv,
   normalizePrefix,
-  REQUIRED_API_ENV,
   REQUIRED_CLIENT_ENV,
   type ParameterValue,
 } from '../lib/ssm-parameters';
@@ -80,10 +79,11 @@ const main = (): void => {
 
   const prefix = process.env.SSM_PREFIX ?? '/gameplan';
   const env = envFromParameters(prefix, loadParameters(prefix));
-  const required = mode === 'api' ? REQUIRED_API_ENV : REQUIRED_CLIENT_ENV;
-  const missing = missingEnv(env, required);
-  if (missing.length > 0) {
-    throw new Error(`Missing Parameter Store values for ${mode}: ${missing.join(', ')}`);
+  if (mode === 'client') {
+    const missing = missingEnv(env, REQUIRED_CLIENT_ENV);
+    if (missing.length > 0) {
+      throw new Error(`Missing Parameter Store values for ${mode}: ${missing.join(', ')}`);
+    }
   }
 
   for (const value of Object.values(env)) {

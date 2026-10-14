@@ -1,0 +1,365 @@
+/**
+ * Issues the site and API certificates and writes their DNS records.
+ *
+ * Certificate validation CNAMEs and the alias records live in a hosted zone that
+ * may belong to another account. When a role ARN is set, Route 53 calls assume
+ * that role. Certificates stay in this account.
+ */
+
+import {
+  ACMClient,
+  DeleteCertificateCommand,
+  DescribeCertificateCommand,
+  ListCertificatesCommand,
+  RequestCertificateCommand,
+} from '@aws-sdk/client-acm';
+import {
+  ChangeResourceRecordSetsCommand,
+  GetChangeCommand,
+  Route53Client,
+} from '@aws-sdk/client-route-53';
+import { AssumeRoleCommand, STSClient } from '@aws-sdk/client-sts';
+
+/** CloudFormation custom-resource event from the CDK provider. */
+type DnsEvent = {
+  RequestType: 'Create' | 'Update' | 'Delete';
+  PhysicalResourceId?: string;
+  ResourceProperties: {
+    Mode: 'certificates' | 'aliases';
+    HostedZoneId: string;
+    RoleArn?: string;
+    SiteDomain?: string;
+    ApiDomain?: string;
+    SiteRegion?: string;
+    ApiRegion?: string;
+    SiteName?: string;
+    SiteTarget?: string;
+    SiteTargetZoneId?: string;
+    ApiName?: string;
+    ApiTarget?: string;
+    ApiTargetZoneId?: string;
+  };
+};
+
+/** Fields returned to CloudFormation. */
+type DnsData = {
+  SiteCertificateArn?: string;
+  ApiCertificateArn?: string;
+};
+
+/**
+ * Waits between Route 53 and certificate status checks.
+ *
+ * @param milliseconds - How long to wait.
+ */
+const sleep = (milliseconds: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+
+/**
+ * Returns Route 53 credentials, assuming the zone role when one is configured.
+ *
+ * @param roleArn - Role in the account that owns the hosted zone.
+ * @returns Credentials for the Route 53 client.
+ */
+const route53Credentials = async (
+  roleArn: string | undefined,
+): Promise<{ accessKeyId: string; secretAccessKey: string; sessionToken: string } | undefined> => {
+  if (roleArn === undefined || roleArn.trim() === '') return undefined;
+  const assumed = await new STSClient({}).send(
+    new AssumeRoleCommand({ RoleArn: roleArn, RoleSessionName: 'gameplan-dns' }),
+  );
+  const credentials = assumed.Credentials;
+  if (
+    credentials?.AccessKeyId === undefined ||
+    credentials.SecretAccessKey === undefined ||
+    credentials.SessionToken === undefined
+  ) {
+    throw new Error('AssumeRole did not return credentials');
+  }
+  return {
+    accessKeyId: credentials.AccessKeyId,
+    secretAccessKey: credentials.SecretAccessKey,
+    sessionToken: credentials.SessionToken,
+  };
+};
+
+/**
+ * Builds a Route 53 client that can change the hosted zone.
+ *
+ * @param roleArn - Role in the account that owns the hosted zone.
+ * @returns The Route 53 client.
+ */
+const route53Client = async (roleArn: string | undefined): Promise<Route53Client> =>
+  new Route53Client({ region: 'us-east-1', credentials: await route53Credentials(roleArn) });
+
+/**
+ * Waits until a Route 53 change is applied.
+ *
+ * @param client - The Route 53 client.
+ * @param changeId - The change id returned by `ChangeResourceRecordSets`.
+ */
+const waitForChange = async (client: Route53Client, changeId: string | undefined): Promise<void> => {
+  if (changeId === undefined) return;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const change = await client.send(new GetChangeCommand({ Id: changeId }));
+    if (change.ChangeInfo?.Status === 'INSYNC') return;
+    await sleep(2000);
+  }
+  throw new Error(`Route 53 change ${changeId} did not finish`);
+};
+
+/**
+ * Upserts or deletes one CNAME.
+ *
+ * @param client - The Route 53 client.
+ * @param hostedZoneId - The zone that owns the name.
+ * @param action - `UPSERT` or `DELETE`.
+ * @param name - The record name.
+ * @param value - The record value.
+ */
+const changeCname = async (
+  client: Route53Client,
+  hostedZoneId: string,
+  action: 'UPSERT' | 'DELETE',
+  name: string,
+  value: string,
+): Promise<void> => {
+  const change = await client.send(
+    new ChangeResourceRecordSetsCommand({
+      HostedZoneId: hostedZoneId,
+      ChangeBatch: {
+        Changes: [
+          {
+            Action: action,
+            ResourceRecordSet: {
+              Name: name,
+              Type: 'CNAME',
+              TTL: 300,
+              ResourceRecords: [{ Value: value }],
+            },
+          },
+        ],
+      },
+    }),
+  );
+  await waitForChange(client, change.ChangeInfo?.Id);
+};
+
+/**
+ * Upserts or deletes the A and AAAA aliases for one name.
+ *
+ * @param client - The Route 53 client.
+ * @param hostedZoneId - The zone that owns the name.
+ * @param action - `UPSERT` or `DELETE`.
+ * @param name - The record name.
+ * @param dnsName - The alias target.
+ * @param targetZoneId - The hosted zone id of the alias target.
+ */
+const changeAlias = async (
+  client: Route53Client,
+  hostedZoneId: string,
+  action: 'UPSERT' | 'DELETE',
+  name: string,
+  dnsName: string,
+  targetZoneId: string,
+): Promise<void> => {
+  const target = dnsName.endsWith('.') ? dnsName : `${dnsName}.`;
+  const change = await client.send(
+    new ChangeResourceRecordSetsCommand({
+      HostedZoneId: hostedZoneId,
+      ChangeBatch: {
+        Changes: (['A', 'AAAA'] as const).map((type) => ({
+          Action: action,
+          ResourceRecordSet: {
+            Name: name,
+            Type: type,
+            AliasTarget: {
+              DNSName: target,
+              HostedZoneId: targetZoneId,
+              EvaluateTargetHealth: false,
+            },
+          },
+        })),
+      },
+    }),
+  );
+  await waitForChange(client, change.ChangeInfo?.Id);
+};
+
+/**
+ * Finds an existing certificate for a domain, preferring one that is already issued.
+ *
+ * @param client - The ACM client for the certificate region.
+ * @param domain - The certificate domain name.
+ * @returns The certificate ARN, or `undefined`.
+ */
+const findCertificate = async (client: ACMClient, domain: string): Promise<string | undefined> => {
+  let nextToken: string | undefined;
+  let pending: string | undefined;
+  do {
+    const page = await client.send(
+      new ListCertificatesCommand({
+        NextToken: nextToken,
+        CertificateStatuses: ['ISSUED', 'PENDING_VALIDATION'],
+      }),
+    );
+    for (const item of page.CertificateSummaryList ?? []) {
+      if (item.DomainName !== domain || item.CertificateArn === undefined) continue;
+      if (item.Status === 'ISSUED') return item.CertificateArn;
+      pending ??= item.CertificateArn;
+    }
+    nextToken = page.NextToken;
+  } while (nextToken !== undefined);
+  return pending;
+};
+
+/**
+ * Requests a certificate and publishes its validation CNAME.
+ *
+ * @param region - The certificate region.
+ * @param domain - The certificate domain name.
+ * @param route53 - The Route 53 client.
+ * @param hostedZoneId - The zone that receives the validation record.
+ * @returns The certificate ARN.
+ */
+const issueCertificate = async (
+  region: string,
+  domain: string,
+  route53: Route53Client,
+  hostedZoneId: string,
+): Promise<string> => {
+  const acm = new ACMClient({ region });
+  const existing = await findCertificate(acm, domain);
+  const arn =
+    existing ??
+    (
+      await acm.send(
+        new RequestCertificateCommand({
+          DomainName: domain,
+          ValidationMethod: 'DNS',
+          IdempotencyToken: domain.replace(/[^0-9A-Za-z]/gu, '').slice(0, 32),
+        }),
+      )
+    ).CertificateArn;
+  if (arn === undefined) throw new Error(`Certificate request for ${domain} returned no ARN`);
+
+  let published = false;
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const described = await acm.send(new DescribeCertificateCommand({ CertificateArn: arn }));
+    const status = described.Certificate?.Status;
+    const record = described.Certificate?.DomainValidationOptions?.find(
+      (option) => option.ResourceRecord?.Name !== undefined && option.ResourceRecord.Value !== undefined,
+    )?.ResourceRecord;
+    if (!published && record?.Name !== undefined && record.Value !== undefined) {
+      await changeCname(route53, hostedZoneId, 'UPSERT', record.Name, record.Value);
+      published = true;
+    }
+    if (status === 'ISSUED') return arn;
+    if (status === 'FAILED' || status === 'REVOKED' || status === 'VALIDATION_TIMED_OUT') {
+      throw new Error(`Certificate for ${domain} is ${status}`);
+    }
+    await sleep(10000);
+  }
+  throw new Error(`Certificate for ${domain} was not issued in time`);
+};
+
+/**
+ * Deletes certificates for a domain in one region.
+ *
+ * @param region - The certificate region.
+ * @param domain - The certificate domain name.
+ */
+const deleteCertificates = async (region: string, domain: string): Promise<void> => {
+  const acm = new ACMClient({ region });
+  let nextToken: string | undefined;
+  do {
+    const page = await clientPage(acm, nextToken);
+    nextToken = page.nextToken;
+    for (const arn of page.arns.filter((item) => item.domain === domain).map((item) => item.arn)) {
+      await acm.send(new DeleteCertificateCommand({ CertificateArn: arn }));
+    }
+  } while (nextToken !== undefined);
+};
+
+/**
+ * Lists certificate ARNs and domain names from one page.
+ *
+ * @param client - The ACM client.
+ * @param nextToken - The pagination token.
+ * @returns ARNs on this page and the next token.
+ */
+const clientPage = async (
+  client: ACMClient,
+  nextToken: string | undefined,
+): Promise<{ arns: { arn: string; domain: string }[]; nextToken?: string }> => {
+  const page = await client.send(new ListCertificatesCommand({ NextToken: nextToken }));
+  return {
+    arns: (page.CertificateSummaryList ?? []).flatMap((item) =>
+      item.CertificateArn !== undefined && item.DomainName !== undefined
+        ? [{ arn: item.CertificateArn, domain: item.DomainName }]
+        : [],
+    ),
+    nextToken: page.NextToken,
+  };
+};
+
+/**
+ * Handles certificate and alias custom resources.
+ *
+ * @param event - The CloudFormation custom-resource event.
+ * @returns The physical id and certificate ARNs.
+ */
+export const handler = async (event: DnsEvent): Promise<{ PhysicalResourceId: string; Data?: DnsData }> => {
+  const props = event.ResourceProperties;
+  const route53 = await route53Client(props.RoleArn);
+  const physicalResourceId = event.PhysicalResourceId ?? `${props.Mode}:${props.SiteDomain ?? props.SiteName}`;
+
+  if (props.Mode === 'aliases') {
+    const action = event.RequestType === 'Delete' ? 'DELETE' : 'UPSERT';
+    if (props.SiteName && props.SiteTarget && props.SiteTargetZoneId) {
+      await changeAlias(
+        route53,
+        props.HostedZoneId,
+        action,
+        props.SiteName,
+        props.SiteTarget,
+        props.SiteTargetZoneId,
+      );
+    }
+    if (props.ApiName && props.ApiTarget && props.ApiTargetZoneId) {
+      await changeAlias(
+        route53,
+        props.HostedZoneId,
+        action,
+        props.ApiName,
+        props.ApiTarget,
+        props.ApiTargetZoneId,
+      );
+    }
+    return { PhysicalResourceId: physicalResourceId };
+  }
+
+  const siteDomain = props.SiteDomain ?? '';
+  const apiDomain = props.ApiDomain ?? '';
+  const siteRegion = props.SiteRegion ?? 'us-east-1';
+  const apiRegion = props.ApiRegion ?? siteRegion;
+  if (event.RequestType === 'Delete') {
+    await deleteCertificates(siteRegion, siteDomain);
+    if (apiRegion !== siteRegion || apiDomain !== siteDomain) {
+      await deleteCertificates(apiRegion, apiDomain);
+    }
+    return { PhysicalResourceId: physicalResourceId };
+  }
+
+  const siteCertificateArn = await issueCertificate(siteRegion, siteDomain, route53, props.HostedZoneId);
+  const apiCertificateArn =
+    apiDomain === siteDomain && apiRegion === siteRegion
+      ? siteCertificateArn
+      : await issueCertificate(apiRegion, apiDomain, route53, props.HostedZoneId);
+  return {
+    PhysicalResourceId: physicalResourceId,
+    Data: { SiteCertificateArn: siteCertificateArn, ApiCertificateArn: apiCertificateArn },
+  };
+};

@@ -1,8 +1,8 @@
 /**
  * Resolves deploy settings from CDK context, then process environment.
  *
- * Context is the local override. GitHub Actions sets the environment from
- * Parameter Store before `cdk deploy`.
+ * Context is the local override. GitHub Actions passes the environment name and
+ * the registered domain. Other values come from Parameter Store.
  */
 
 /**
@@ -13,6 +13,67 @@
  */
 export const definedString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim() !== '' ? value : undefined;
+
+/** Public website and API URLs for one deploy environment. */
+export type PublicUrls = {
+  /** Website origin, with no path and no trailing slash. */
+  clientOrigin: string;
+  /** Identity OAuth callback on the API hostname. */
+  callbackUrl: string;
+  /** Browser URL after Cognito logout. */
+  logoutUrl: string;
+  /** Website hostname, `app.<environment>.<domain>`. */
+  siteHostname: string;
+  /** HTTP API hostname, `api.<environment>.<domain>`. */
+  apiHostname: string;
+};
+
+/** One DNS label: letters, digits, and inner hyphens. */
+const DNS_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
+
+/**
+ * Builds the website and API URLs for one environment under a registered domain.
+ *
+ * Staging becomes `app.staging.example.com` and `api.staging.example.com`.
+ *
+ * @param environment - GitHub environment name, such as `staging`.
+ * @param domain - Registered domain, such as `example.com`.
+ * @returns The origin, callback, logout URL, and both hostnames.
+ */
+export const publicUrlsFor = (environment: string, domain: string): PublicUrls => {
+  const envLabel = environment.trim().toLowerCase();
+  const apex = domain.trim().toLowerCase().replace(/\.$/u, '');
+  const labels = apex.split('.');
+  if (!DNS_LABEL.test(envLabel) || labels.length < 2 || labels.some((label) => !DNS_LABEL.test(label))) {
+    throw new Error('DEPLOY_ENV and DOMAIN must be DNS names');
+  }
+  const siteHostname = `app.${envLabel}.${apex}`;
+  const apiHostname = `api.${envLabel}.${apex}`;
+  const clientOrigin = `https://${siteHostname}`;
+  return {
+    clientOrigin,
+    callbackUrl: `https://${apiHostname}/identity/oauth/callback`,
+    logoutUrl: `${clientOrigin}/login`,
+    siteHostname,
+    apiHostname,
+  };
+};
+
+/**
+ * Reads the hostname from an absolute URL.
+ *
+ * @param value - A URL such as `https://app.example.com/login`.
+ * @returns The hostname, or `undefined` when the value is blank or not a URL.
+ */
+export const hostnameOf = (value: string | undefined): string | undefined => {
+  const raw = definedString(value);
+  if (raw === undefined) return undefined;
+  try {
+    return new URL(raw).hostname;
+  } catch {
+    return undefined;
+  }
+};
 
 /**
  * Splits a comma-separated URL list.

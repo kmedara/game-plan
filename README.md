@@ -24,7 +24,7 @@ npm run up
 
 That starts DynamoDB, the API, and the website, and publishes the ports above.
 `docker compose up --watch` syncs `functions/`, `local/`, `config/`, and `client/` into the
-containers. The API restarts via `tsx watch`; the website reloads via `ng serve`.
+containers. The API restarts via `tsx watch`; the website reloads via Expo.
 Stop with `npm run down`.
 
 ### Breakpoints (API in Compose)
@@ -62,7 +62,7 @@ npm run up:build
 
 Compose builds separate images from [`local/Dockerfile.api`](local/Dockerfile.api) and
 [`local/Dockerfile.client`](local/Dockerfile.client). Each rewrites root `workspaces` before
-install so the API skips Angular and CDK, and the client installs only `lib/types` plus
+install so the API skips the Expo client and CDK, and the client installs only `lib/types` plus
 `client/*` (no schemas, functions, or CDK). Filtered workspaces no longer match the full
 lockfile, so the images use `npm install` (with a BuildKit npm cache mount) instead of
 `npm ci`. Workspace `package.json` files are copied before source, so code-only edits keep
@@ -76,7 +76,7 @@ into [`lib/types/src/generated/schema-types.ts`](lib/types/src/generated/schema-
 so the client image never needs the schemas package or Zod.
 
 Live reload deliberately avoids **Chokidar** polling and bind-mounted watchers (`CHOKIDAR_USEPOLLING`,
-`ng serve --poll`, nodemon `--legacy-watch`). Polling is slow under load and keeps CPU high. Compose
+Expo web polling, nodemon `--legacy-watch`). Polling is slow under load and keeps CPU high. Compose
 Watch copies edits into the container filesystem so `tsx watch` and Expo can use normal file
 events instead.
 
@@ -146,8 +146,9 @@ Client config is read from `EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_WS_BASE_URL`
 redeem a one-time code from `POST /identity/oauth/exchange`.
 
 Place autocomplete and reverse geocode use `GOOGLE_MAPS_API_KEY` on the **API**.
-The interactive map uses `GOOGLE_MAPS_BROWSER_API_KEY` (web) and
-`GOOGLE_MAPS_ANDROID_API_KEY` (Android). See [`docs/maps/README.md`](docs/maps/README.md).
+The interactive map uses `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` on the web (copied from
+`GOOGLE_MAPS_BROWSER_API_KEY` by [`client/expo/scripts/run.mjs`](client/expo/scripts/run.mjs))
+and the Android key in the Expo app config. See [`docs/maps/README.md`](docs/maps/README.md).
 
 | Method | Path                            | Notes                                              |
 | ------ | ------------------------------- | -------------------------------------------------- |
@@ -274,53 +275,71 @@ npm run client:start
 
 ## Cloud
 
-`npm run synth` prints the AWS CloudFormation (CloudFormation) template for `GamePlanStack`.
+`npm run synth` prints the AWS CloudFormation (CloudFormation) templates.
 
-Staging and production are the same stack in **separate AWS accounts**. Resource names stay
-`GamePlanStack` in both. GitHub Actions deploys them:
+Staging and production use the same three stacks in **separate AWS accounts**. Resource names stay `GamePlanDns`,
+`GamePlanPlatform`, and `GamePlanApi` in both. GitHub Actions deploys them in that order:
 
-| Workflow | When |
-| --- | --- |
-| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Pull requests and pushes to `master`. Typecheck and tests. No AWS credentials. |
-| [`.github/workflows/deploy-infra.yml`](.github/workflows/deploy-infra.yml) | Manual. First stack in an account, and any later run that should refresh stack outputs in Parameter Store. |
-| [`.github/workflows/deploy-api.yml`](.github/workflows/deploy-api.yml) | Push to `master` updates the **staging** stack. A published GitHub release updates **production**. |
-| [`.github/workflows/deploy-client.yml`](.github/workflows/deploy-client.yml) | Same triggers as the API workflow. Builds the Expo site and syncs it to the site bucket. |
+| Workflow | Stack | When |
+| --- | --- | --- |
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | | Pull requests and pushes to `master`. Typecheck and tests. No AWS credentials. |
+| [`.github/workflows/deploy-dns.yml`](.github/workflows/deploy-dns.yml) | `GamePlanDns` | Manual. Certificates and the Route 53 validation records. Run this first. |
+| [`.github/workflows/deploy-platform.yml`](.github/workflows/deploy-platform.yml) | `GamePlanPlatform` | Manual. Cognito, DynamoDB, the file buckets, and CloudFront. Run this after DNS. |
+| [`.github/workflows/deploy-api.yml`](.github/workflows/deploy-api.yml) | `GamePlanApi` | Push to `master` updates **staging**. A published GitHub release updates **production**. Also writes the alias records. |
+| [`.github/workflows/deploy-client.yml`](.github/workflows/deploy-client.yml) | | Same triggers as the API workflow. Builds the Expo site and syncs it to the site bucket. |
 
-The infrastructure workflow is the one to run before the client workflow has a bucket and an API URL. Later API deploys
-update the same stack and write the same outputs. The API and client workflows stay independent of each other. Re-run
-any of them from the Actions tab (`workflow_dispatch` chooses `staging` or `production`).
+DNS and platform stay manual because they change rarely. The API and client workflows assume those stacks already exist
+and read what they published. Re-run any workflow from the Actions tab (`workflow_dispatch` chooses `staging` or
+`production`).
+
+### GitHub environment
+
+Each GitHub environment (`staging`, `production`) has one secret, `AWS_ROLE_ARN`. `AWS_REGION` defaults to `us-east-1`.
+`SSM_PREFIX` defaults to `/gameplan`.
+
+Set the repository variable `DOMAIN` to the registered domain, such as `example.com`. The deploy environment name is
+inserted into the hostnames:
+
+| Environment | Website | HTTP API |
+| --- | --- | --- |
+| `staging` | `https://app.staging.example.com` | `https://api.staging.example.com` |
+| `production` | `https://app.production.example.com` | `https://api.production.example.com` |
+
+The Cognito callback is `https://api.<environment>.example.com/identity/oauth/callback`. Logout returns to
+`https://app.<environment>.example.com/login`.
+
+`GamePlanDns` creates the certificate validation records from the repository secrets `HOSTED_ZONE_ID` and
+`HOSTED_ZONE_ROLE_ARN`. `GamePlanApi` writes the alias records with the same secrets. The role is in the account that
+owns the zone (the management account, when the domain was registered there). Its trust policy allows the application
+account to assume it, and it can call `route53:ChangeResourceRecordSets` on that hosted zone and `route53:GetChange` on
+`arn:aws:route53:::change/*`.
 
 ### Parameter Store
 
-Both accounts use the same prefix, `/gameplan/` (override with the `SSM_PREFIX` environment variable). Every parameter is a **String**. GitHub does not store these values. Each GitHub environment (`staging`, `production`) has one secret, `AWS_ROLE_ARN`, and optional variables `AWS_REGION` (default `us-east-1`) and `SSM_PREFIX` (default `/gameplan`).
+Both accounts use the same prefix, `/gameplan/`. Every parameter is a **String**. Social credentials and map keys stay
+here. Each stack writes its own outputs. The client workflow fails until `api-base-url`, `site-bucket-name`, and
+`site-distribution-id` exist, which means the platform workflow and an API deploy have both run.
 
 | Name | Used for |
 | --- | --- |
-| `client-origin` | Browser origin for CORS and OAuth redirects (`CLIENT_ORIGIN`) |
-| `callback-urls` | Comma-separated Cognito callback URLs |
-| `logout-urls` | Comma-separated Cognito logout URLs |
 | `google-client-id`, `google-client-secret` | Optional Google IdP |
 | `facebook-app-id`, `facebook-app-secret` | Optional Facebook IdP |
 | `apple-client-id`, `apple-team-id`, `apple-key-id`, `apple-private-key` | Optional Apple IdP. Store the PEM, including line breaks. |
 | `google-maps-api-key` | Places Lambda |
 | `google-maps-browser-api-key` | Website map |
-| `api-base-url`, `ws-base-url`, `site-bucket-name`, `site-distribution-id`, `site-url` | Written when the stack deploys. The client workflow reads the API URL, bucket, and distribution id. |
+| `site-certificate-arn`, `api-certificate-arn` | Written by the DNS workflow. Later stacks read the certificate ARNs from CloudFormation exports. |
+| `site-bucket-name`, `site-distribution-id`, `site-url` | Written by the platform workflow. The client workflow reads the bucket and distribution id. |
+| `api-base-url`, `ws-base-url` | Written by the API workflow. The client workflow reads both. |
 
-An identity provider is created only when every field for that provider is set. CDK context still overrides these environment variables for a local `cdk deploy`.
-
-Before the first infrastructure deploy in an account, set `client-origin`, `callback-urls`, and `logout-urls`. When the
-CloudFront or API Gateway host is not known yet, use placeholders, run the infrastructure workflow, then copy
-`HttpApiUrl` into `callback-urls` and `SiteUrl` into `client-origin` and `logout-urls` and run that workflow again.
-Those hosts do not change on later deploys. The client workflow fails until `api-base-url`, `site-bucket-name`, and
-`site-distribution-id` exist.
+An identity provider is created only when every field for that provider is set. CDK context still overrides these
+environment variables for a local `cdk deploy`.
 
 ### One-time account setup
 
 In each account:
 
-1. `npx cdk bootstrap` from `infrastructure/` (the CDK toolkit stack).
-2. Add the GitHub OpenID Connect (OIDC) provider `token.actions.githubusercontent.com` (audience `sts.amazonaws.com`).
-3. Create a deploy role trusted only for this repository’s GitHub environment:
+1. Add the GitHub OpenID Connect (OIDC) provider `token.actions.githubusercontent.com` (audience `sts.amazonaws.com`).
+2. Create a deploy role trusted only for this repository’s GitHub environment:
 
 ```json
 {
@@ -336,10 +355,17 @@ In each account:
 }
 ```
 
-Use `environment:production` on the production account’s role. Give the role CloudFormation deploy rights for this stack (including the roles CDK creates) plus `ssm:GetParametersByPath` and `ssm:PutParameter` on `/gameplan/*`. Parameter Store Strings do not need a KMS decrypt permission. Store that role ARN as the `AWS_ROLE_ARN` secret on the matching GitHub environment. Protect **production** with required reviewers.
+Use `environment:production` on the production account’s role. Give the role CloudFormation deploy rights for these stacks
+(including the roles CDK creates) plus permission to bootstrap the toolkit stack (its asset bucket and those roles).
+Also grant `ssm:GetParametersByPath` and `ssm:PutParameter` on `/gameplan/*`. Parameter Store Strings do not need a
+Key Management Service (KMS) decrypt permission. Each stack workflow runs `cdk bootstrap` before the deploy. Store
+that role ARN as the `AWS_ROLE_ARN` secret on the matching GitHub environment. Protect **production** with required
+reviewers.
 
-The stack creates:
+The stacks create:
 
+- Certificates for the website and the HTTP API, plus the Route 53 validation records. The API stack adds the alias records
+  after CloudFront and the API domain exist.
 - A Cognito user pool with Hosted UI (email/password plus optional Google / Apple / Facebook IdPs from CDK context or Parameter Store).
   OAuth callback URLs default to the identity BFF (`/identity/oauth/callback`).
 - One DynamoDB table, `gameplan`, with partition key `PK` and sort key `SK`. Billing is on-demand.
