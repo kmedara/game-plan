@@ -193,7 +193,7 @@ describe('handleAssignRole', () => {
     store.clear();
   });
 
-  it('returns role fields without a user block when the profile row is missing', async () => {
+  it('assigns a role after the caller outranks the target', async () => {
     const adminId = randomUUID();
     const memberId = randomUUID();
     const teamId = randomUUID();
@@ -215,6 +215,22 @@ describe('handleAssignRole', () => {
       userId: adminId,
       role: 'team_admin',
       joinedAt: new Date().toISOString(),
+    });
+    store.set(itemKey(teamPk(teamId), teamMemberSk(memberId)), {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: teamMemberSk(memberId),
+      userId: memberId,
+      role: 'player',
+      joinedAt: new Date().toISOString(),
+    });
+    getProfileMock.mockResolvedValue({
+      PK: userPk(memberId),
+      SK: profileSk(),
+      userId: memberId,
+      email: `${memberId}@example.com`,
+      displayName: 'Pat Player',
+      accountKind: 'adult',
+      createdAt: new Date().toISOString(),
     });
     for (const role of Object.keys(DEFAULT_ROLE_PERMISSIONS)) {
       store.set(itemKey(teamPk(teamId), rolePermissionsSk(role)), {
@@ -243,6 +259,6 @@ describe('handleAssignRole', () => {
     const body = JSON.parse(result.body ?? '{}') as Record<string, unknown>;
     expect(body.userId).toBe(memberId);
     expect(body.role).toBe('coach');
-    expect(body.user).toBeUndefined();
+    expect(body.user).toMatchObject({ displayName: 'Pat Player' });
   });
 });

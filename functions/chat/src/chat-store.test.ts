@@ -13,7 +13,6 @@ import {
   chatMemberSk,
   chatMetaSk,
   chatPk,
-  profileSk,
   rolePermissionsSk,
   teamMemberSk,
   teamMetaSk,
@@ -143,7 +142,7 @@ const {
   listMessages,
   listUserChats,
   requireChat,
-  searchAdultByEmail,
+  loadChatParticipants,
   sendMessage,
 } = await import('./chat-store.js');
 
@@ -277,7 +276,7 @@ describe('chat-store', () => {
     ).rejects.toThrow('invalid_body');
   });
 
-  it('createTeamChannel rejects rosters that violate minor chat rules', async () => {
+  it('createTeamChannel writes a channel without applying chat membership rules', async () => {
     const teamId = randomUUID();
     const adminId = randomUUID();
     const minorId = randomUUID();
@@ -315,12 +314,11 @@ describe('chat-store', () => {
         joinedAt: new Date().toISOString(),
       });
     }
-    await expect(
-      createTeamChannel({
-        userId: adminId,
-        body: { teamId, name: 'Parents' },
-      }),
-    ).rejects.toThrow('minor_chat_rule_violated');
+    const created = await createTeamChannel({
+      userId: adminId,
+      body: { teamId, name: 'Parents' },
+    });
+    expect(created.name).toBe('Parents');
   });
 
   it('skips broken memberships and missing chat metadata when listing chats', async () => {
@@ -409,7 +407,7 @@ describe('chat-store', () => {
     await expect(requireChat(randomUUID())).rejects.toThrow('chat_not_found');
   });
 
-  it('requireTeamMembership and toParticipant enforce roster and profiles', async () => {
+  it('requireTeamMembership and loadChatParticipants enforce roster and profiles', async () => {
     const userId = randomUUID();
     const otherId = randomUUID();
     seedProfile(userId, 'adult');
@@ -428,9 +426,7 @@ describe('chat-store', () => {
       createTeamChannel({ userId, body: { teamId, name: 'General' } }),
     ).rejects.toThrow('not_a_member');
 
-    await expect(
-      createPrivateChat({ userId, body: { memberIds: [otherId] } }),
-    ).rejects.toThrow('profile_not_found');
+    await expect(loadChatParticipants([otherId])).rejects.toThrow('profile_not_found');
   });
 
   it('createTeamChannel rejects missing teams and bad roster rows', async () => {
@@ -463,18 +459,4 @@ describe('chat-store', () => {
     ).rejects.toThrow('not_a_member');
   });
 
-  it('searchAdultByEmail hides minors and missing profiles', async () => {
-    findProfileByEmail.mockResolvedValueOnce(undefined);
-    await expect(searchAdultByEmail('a@example.com')).rejects.toThrow('user_not_found');
-    findProfileByEmail.mockResolvedValueOnce({
-      PK: userPk('m1'),
-      SK: profileSk(),
-      userId: 'm1',
-      email: 'minor@example.com',
-      displayName: 'Minor',
-      accountKind: 'minor',
-      createdAt: new Date().toISOString(),
-    });
-    await expect(searchAdultByEmail('minor@example.com')).rejects.toThrow('user_not_found');
-  });
 });

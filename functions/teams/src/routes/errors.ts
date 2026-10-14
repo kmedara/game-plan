@@ -40,6 +40,7 @@ export const mapTeamsError: ErrorMappingFn = (
     case "minor_cannot_create_team":
     case "minor_cannot_be_team_admin":
     case "minor_cannot_hold_manage_permissions":
+    case "role_outranks_caller":
       return forbidden(error.message);
     case "already_a_member":
     case "join_request_exists":

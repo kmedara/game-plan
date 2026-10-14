@@ -6,6 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { eventWindowIsValid } from '@gameplan/rules';
 import { EVENT_TYPES, RSVP_STATUSES, type EventType, type RsvpStatus, type ScheduleOccurrence } from '@gameplan/types';
 import { appLocale } from '@/src/i18n';
 import { MapPicker } from '@/src/map-picker';
@@ -250,8 +251,10 @@ const AddEvent = ({
 
   const submit = async (): Promise<void> => {
     if (title.trim().length === 0) return;
-    if (end.length > 0 && end < start) {
-      setError('End time is before the start time.');
+    const startsAt = wallTimeToIso(timeZone, dayKey, start);
+    const endsAt = end.length > 0 ? wallTimeToIso(timeZone, dayKey, end) : undefined;
+    if (!eventWindowIsValid(startsAt, endsAt)) {
+      setError('invalid_ends_at');
       return;
     }
     setError(undefined);
@@ -259,8 +262,8 @@ const AddEvent = ({
       await onCreate({
         eventType,
         title: title.trim(),
-        startsAt: wallTimeToIso(timeZone, dayKey, start),
-        ...(end.length > 0 ? { endsAt: wallTimeToIso(timeZone, dayKey, end) } : {}),
+        startsAt,
+        ...(endsAt !== undefined ? { endsAt } : {}),
         ...(location.trim().length > 0 ? { location: location.trim() } : {}),
         ...(coords !== undefined ? coords : {}),
         ...(weekly ? { recurrence: { frequency: 'WEEKLY' as const, interval: 1, byWeekDay: [rruleWeekDay(dayKey)] } } : {}),

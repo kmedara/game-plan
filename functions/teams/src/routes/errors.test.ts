@@ -25,6 +25,7 @@ describe('mapTeamsError', () => {
     expect(mapTeamsError(new Error('minor_cannot_create_team'))?.statusCode).toBe(403);
     expect(mapTeamsError(new Error('minor_cannot_be_team_admin'))?.statusCode).toBe(403);
     expect(mapTeamsError(new Error('minor_cannot_hold_manage_permissions'))?.statusCode).toBe(403);
+    expect(mapTeamsError(new Error('role_outranks_caller'))?.statusCode).toBe(403);
     expect(mapTeamsError(new Error('already_a_member'))?.statusCode).toBe(409);
     expect(mapTeamsError(new Error('join_request_exists'))?.statusCode).toBe(409);
     expect(mapTeamsError(new Error('manage_permissions_required_for_team_admin'))?.statusCode).toBe(

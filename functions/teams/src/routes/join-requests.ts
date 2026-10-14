@@ -11,9 +11,11 @@ import {
 } from "../../../lib/guards.js";
 import { json } from "../../../lib/http.js";
 import { route, withBodyValidation } from "../../../lib/pipeline.js";
+import { assertAccountMayHoldRole } from "../../../lib/role-rules.js";
 import {
   approveJoinRequest,
   createJoinRequest,
+  getJoinRequest,
   listJoinRequests,
   rejectJoinRequest,
 } from "../team-store.js";
@@ -92,6 +94,9 @@ export const handleApproveJoinRequest = route(
   requireUser(),
   requirePermission("approve_join_requests"),
   async ({ teamId, requestId, body }) => {
+    const request = await getJoinRequest(teamId, requestId);
+    if (request === undefined) throw new Error("join_request_not_found");
+    await assertAccountMayHoldRole(request.userId, teamId, body.role);
     const { team, member } = await approveJoinRequest(
       teamId,
       requestId,

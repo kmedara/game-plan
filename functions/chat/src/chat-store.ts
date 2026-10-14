@@ -3,7 +3,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { findProfileByEmail, getProfile, toUserProfile } from '../../lib/auth/index.js';
+import { getProfile } from '../../lib/auth/index.js';
 import type {
   CreatePrivateChatBody,
   CreateTeamChannelBody,
@@ -15,7 +15,6 @@ import type {
   ChatSummary,
   MessageHistoryQuery,
   MessagePage,
-  UserProfile,
 } from '@gameplan/types';
 import {
   MESSAGE_SK_PREFIX,
@@ -38,13 +37,10 @@ import {
   transactWrite,
   userChatSk,
   userPk,
-} from '../../lib/dynamo/index.js';import { enqueueFanout } from '../../lib/fanout-enqueue.js';
-import {
-  isMinorChatMembershipAllowed,
-  type ChatParticipant,
-} from '../../lib/minor-chat.js';
+} from '../../lib/dynamo/index.js';
+import { enqueueFanout } from '../../lib/fanout-enqueue.js';
+import type { ChatParticipant } from '@gameplan/types';
 import { TABLE_NAME } from '../../lib/names.js';
-import { matchesUserSearchPolicy, V1_USER_SEARCH_POLICY } from '../../lib/search-policy.js';
 
 /** Default page size for reverse message history. */
 const DEFAULT_MESSAGE_PAGE = 50;
@@ -230,6 +226,19 @@ export const requireTeamMembership = async (teamId: string, userId: string): Pro
 };
 
 /**
+ * Loads the roster user ids for a team channel.
+ *
+ * @param teamId - The team id.
+ * @returns User ids on the roster.
+ */
+export const listTeamMemberIds = async (teamId: string): Promise<string[]> => {
+  const roster = await queryBySkPrefix<TeamMemberItem>(teamPk(teamId), TEAM_MEMBER_SK_PREFIX);
+  return roster
+    .map((row) => row.userId)
+    .filter((id): id is string => typeof id === 'string');
+};
+
+/**
  * Builds a {@link ChatParticipant} from the profile and team memberships.
  *
  * @param userId - The user id.
@@ -247,6 +256,16 @@ const toParticipant = async (userId: string): Promise<ChatParticipant> => {
       .filter((teamId): teamId is string => typeof teamId === 'string'),
   };
 };
+
+/**
+ * Loads the profile and team ids the minor-chat rule needs.
+ *
+ * @param userIds - Members of the proposed chat.
+ * @returns One participant per user id.
+ */
+export const loadChatParticipants = async (
+  userIds: readonly string[],
+): Promise<ChatParticipant[]> => Promise.all(userIds.map((userId) => toParticipant(userId)));
 
 /**
  * Builds Put items for chat and user-side membership of one person.
@@ -359,11 +378,6 @@ export const createTeamChannel = async (input: {
     .filter((id): id is string => typeof id === 'string');
   if (!memberIds.includes(input.userId)) throw new Error('not_a_member');
 
-  const participants = await Promise.all(memberIds.map((id) => toParticipant(id)));
-  if (!isMinorChatMembershipAllowed(participants)) {
-    throw new Error('minor_chat_rule_violated');
-  }
-
   const chatId = randomUUID();
   const createdAt = new Date().toISOString();
   const name = input.body.name.trim();
@@ -400,11 +414,6 @@ export const createPrivateChat = async (input: {
   const memberIds = [...new Set([input.userId, ...input.body.memberIds])];
   if (memberIds.length < 2) throw new Error('invalid_body');
 
-  const participants = await Promise.all(memberIds.map((id) => toParticipant(id)));
-  if (!isMinorChatMembershipAllowed(participants)) {
-    throw new Error('minor_chat_rule_violated');
-  }
-
   const chatId = randomUUID();
   const createdAt = new Date().toISOString();
   const name = 'Private chat';
@@ -421,26 +430,6 @@ export const createPrivateChat = async (input: {
   await putItem(meta);
   await writeMemberships({ chatId, kind: 'private', name }, memberIds, createdAt);
   return toChatResponse(meta);
-};
-
-/**
- * Exact-email user search under the v1 adults-only policy.
- *
- * Minors and missing emails look the same to the caller (`user_not_found`).
- *
- * @param email - The email from the query string.
- * @returns The public profile when the policy allows it.
- */
-export const searchAdultByEmail = async (email: string): Promise<UserProfile> => {
-  const normalized = email.trim().toLowerCase();
-  const profile = await findProfileByEmail(normalized);
-  if (profile === undefined) throw new Error('user_not_found');
-  if (!matchesUserSearchPolicy(profile.accountKind, V1_USER_SEARCH_POLICY)) {
-    throw new Error('user_not_found');
-  }
-  // Phone is teammate-only; email search must not expose it.
-  const { phoneNumber: _phone, ...safe } = toUserProfile(profile);
-  return safe;
 };
 
 /**

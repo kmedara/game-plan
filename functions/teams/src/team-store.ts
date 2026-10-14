@@ -3,9 +3,8 @@
  */
 
 import { randomBytes, randomUUID } from "node:crypto";
-import type { AccountKind, TeamPermission, TeamRole, TeamTheme } from "@gameplan/types";
+import type { TeamPermission, TeamRole, TeamTheme } from "@gameplan/types";
 import { DEFAULT_ROLE_PERMISSIONS, TEAM_ROLES } from "@gameplan/types";
-import { getProfile } from "../../lib/auth/profile.js";
 import {
   JOIN_REQUEST_SK_PREFIX,
   TABLE_PK,
@@ -36,16 +35,8 @@ import {
   userPk,
   userTeamSk,
 } from "../../lib/dynamo/index.js";
-import {
-  canBeTeamAdmin,
-  canCreateTeam,
-  canHoldManagePermissions,
-} from "../../lib/minor-chat.js";
 import { TABLE_NAME } from "../../lib/names.js";
-import {
-  loadRolePermissionMatrix,
-  normalizeRolePermissions,
-} from "../../lib/permissions.js";
+import { loadRolePermissionMatrix, normalizeRolePermissions } from "../../lib/permissions.js";
 
 /** Team metadata row under `TEAM#id` / `META`. */
 export type TeamMetaItem = {
@@ -84,6 +75,9 @@ export type UserTeamItem = {
   positions?: string[];
 };
 
+/** How long an invite code stays usable. DynamoDB TTL deletes the rows later. */
+const INVITE_TTL_SECONDS = 24 * 60 * 60;
+
 /** Invite row shared by the team partition and the code lookup partition. */
 export type InviteItem = {
   PK: string;
@@ -93,6 +87,10 @@ export type InviteItem = {
   role: TeamRole;
   createdBy: string;
   createdAt: string;
+  /** ISO instant after which the code is rejected. */
+  expiresAt: string;
+  /** Unix seconds for the table TTL attribute. */
+  ttl: number;
 };
 
 /** Pending join request under `TEAM#id` / `JOIN#requestId`. */
@@ -187,7 +185,6 @@ const normalizePositions = (positions: readonly string[]): string[] => {
     seen.add(key);
     next.push(position);
   }
-  if (next.length > 8) throw new Error('too_many_positions');
   return next;
 };
 
@@ -231,30 +228,6 @@ export const requireMembership = async (
   const member = await getMembership(teamId, userId);
   if (member === undefined) throw new Error("not_a_member");
   return member;
-};
-
-/**
- * Rejects assigning a role that a minor account cannot hold.
- *
- * @param accountKind - The member's account kind.
- * @param role - The proposed role.
- * @param matrix - The team's role-permission matrix.
- */
-export const assertRoleAllowedForAccount = (
-  accountKind: AccountKind,
-  role: TeamRole,
-  matrix: Readonly<Partial<Record<TeamRole, readonly TeamPermission[]>>>,
-): void => {
-  if (role === "team_admin" && !canBeTeamAdmin(accountKind)) {
-    throw new Error("minor_cannot_be_team_admin");
-  }
-  const permissions = matrix[role] ?? [];
-  if (
-    permissions.includes("manage_permissions") &&
-    !canHoldManagePermissions(accountKind)
-  ) {
-    throw new Error("minor_cannot_hold_manage_permissions");
-  }
 };
 
 /**
@@ -337,11 +310,6 @@ export const createTeam = async (input: {
   name: string;
   timeZone: string;
 }): Promise<TeamMetaItem> => {
-  const profile = await getProfile(input.userId);
-  if (profile === undefined) throw new Error("profile_not_found");
-  if (!canCreateTeam(profile.accountKind))
-    throw new Error("minor_cannot_create_team");
-
   const teamId = randomUUID();
   const chatId = randomUUID();
   const createdAt = new Date().toISOString();
@@ -606,7 +574,7 @@ export const listMembers = async (teamId: string): Promise<TeamMemberItem[]> =>
   queryBySkPrefix<TeamMemberItem>(teamPk(teamId), TEAM_MEMBER_SK_PREFIX);
 
 /**
- * Assigns a roster role after permission and minor-rule checks in the route.
+ * Writes a roster role. The route checks rank and account rules first.
  *
  * @param teamId - The team id.
  * @param userId - The member whose role changes.
@@ -618,11 +586,6 @@ export const assignMemberRole = async (
   role: TeamRole,
 ): Promise<TeamMemberItem> => {
   const member = await requireMembership(teamId, userId);
-  const profile = await getProfile(userId);
-  if (profile === undefined) throw new Error("profile_not_found");
-  const matrix = await loadRolePermissionMatrix(teamId);
-  assertRoleAllowedForAccount(profile.accountKind, role, matrix);
-
   const joinedAt = member.joinedAt;
   const positions = positionsField(member.positions);
   const updated: TeamMemberItem = {
@@ -714,23 +677,10 @@ export const updateRolePermissions = async (
   roles: Array<{ role: TeamRole; permissions: readonly TeamPermission[] }>,
 ): Promise<Record<TeamRole, TeamPermission[]>> => {
   await requireTeam(teamId);
-  const members = await listMembers(teamId);
   const next = await loadRolePermissionMatrix(teamId);
 
   for (const entry of roles) {
     next[entry.role] = normalizeRolePermissions(entry.role, entry.permissions);
-  }
-
-  for (const role of TEAM_ROLES) {
-    if (!next[role].includes("manage_permissions")) continue;
-    for (const member of members) {
-      if (member.role !== role) continue;
-      const profile = await getProfile(member.userId);
-      if (profile === undefined) continue;
-      if (!canHoldManagePermissions(profile.accountKind)) {
-        throw new Error("minor_cannot_hold_manage_permissions");
-      }
-    }
   }
 
   await transactWrite(
@@ -764,12 +714,15 @@ export const createInvite = async (input: {
   await requireTeam(input.teamId);
   const code = newInviteCode();
   const createdAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + INVITE_TTL_SECONDS * 1000).toISOString();
   const shared = {
     code,
     teamId: input.teamId,
     role: input.role,
     createdBy: input.createdBy,
     createdAt,
+    expiresAt,
+    ttl: Math.floor(Date.parse(expiresAt) / 1000),
   };
   const teamRow: InviteItem = {
     [TABLE_PK]: teamPk(input.teamId),
@@ -824,11 +777,6 @@ export const acceptInvite = async (
   const team = await requireTeam(invite.teamId);
   const existing = await getMembership(team.teamId, userId);
   if (existing !== undefined) throw new Error("already_a_member");
-
-  const profile = await getProfile(userId);
-  if (profile === undefined) throw new Error("profile_not_found");
-  const matrix = await loadRolePermissionMatrix(team.teamId);
-  assertRoleAllowedForAccount(profile.accountKind, invite.role, matrix);
 
   const joinedAt = new Date().toISOString();
   await transactWrite(membershipPuts(team, userId, invite.role, joinedAt));
@@ -894,6 +842,19 @@ export const listJoinRequests = async (
   queryBySkPrefix<JoinRequestItem>(teamPk(teamId), JOIN_REQUEST_SK_PREFIX);
 
 /**
+ * Loads one pending join request.
+ *
+ * @param teamId - The team id.
+ * @param requestId - The join request id.
+ * @returns The row when it is still pending.
+ */
+export const getJoinRequest = async (
+  teamId: string,
+  requestId: string,
+): Promise<JoinRequestItem | undefined> =>
+  getItem<JoinRequestItem>(teamPk(teamId), joinRequestSk(requestId));
+
+/**
  * Approves a join request and assigns a role.
  *
  * @param teamId - The team id.
@@ -917,11 +878,6 @@ export const approveJoinRequest = async (
     await deleteItem(teamPk(teamId), joinRequestSk(requestId));
     throw new Error("already_a_member");
   }
-
-  const profile = await getProfile(request.userId);
-  if (profile === undefined) throw new Error("profile_not_found");
-  const matrix = await loadRolePermissionMatrix(teamId);
-  assertRoleAllowedForAccount(profile.accountKind, role, matrix);
 
   const joinedAt = new Date().toISOString();
   await transactWrite([

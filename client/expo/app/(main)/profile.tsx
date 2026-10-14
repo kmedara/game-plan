@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Image, Platform, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { positionsWithinLimit } from '@gameplan/rules';
 import type { UserProfile } from '@gameplan/types';
 import { config } from '@/src/config';
 import { useApp } from '@/src/state';
@@ -73,8 +74,13 @@ export default function ProfileScreen() {
   const addPosition = async (teamId: string, current: readonly string[]): Promise<void> => {
     const value = position.trim();
     if (value.length === 0) return;
+    const next = [...current, value];
+    if (!positionsWithinLimit(next)) {
+      setError('too_many_positions');
+      return;
+    }
     try {
-      await api.setPositions(teamId, [...current, value]);
+      await api.setPositions(teamId, next);
       setPosition('');
       await refreshTeams();
     } catch (err) {

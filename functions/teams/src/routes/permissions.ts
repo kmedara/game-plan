@@ -12,6 +12,7 @@ import {
 import { json } from "../../../lib/http.js";
 import { loadRolePermissionMatrix } from "../../../lib/permissions.js";
 import { route, withBodyValidation } from "../../../lib/pipeline.js";
+import { assertProposedRolePermissions } from "../../../lib/role-rules.js";
 import { updateRolePermissions } from "../team-store.js";
 import { withTeamsErrors } from "./errors.js";
 
@@ -52,6 +53,7 @@ export const handleUpdatePermissions = route(
   requireUser(),
   requirePermission("manage_permissions"),
   async ({ teamId, body }) => {
+    await assertProposedRolePermissions(teamId, body.roles);
     const matrix = await updateRolePermissions(teamId, body.roles);
     return json(200, {
       roles: TEAM_ROLES.map((role) => ({

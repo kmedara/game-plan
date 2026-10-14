@@ -8,8 +8,8 @@ import type { TeamRole } from '@gameplan/types';
 const ROLE_LABEL_KEYS: Record<TeamRole, string> = {
   team_admin: 'role.team_admin',
   coach: 'role.coach',
-  parent: 'role.parent',
   player: 'role.player',
+  parent: 'role.parent',
 };
 
 /**

@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { canCreateTeam } from '@gameplan/rules';
 import type { TeamDirectoryHit } from '@gameplan/types';
 import { inviteCodeFromInput } from '@/src/roles';
 import { useApp } from '@/src/state';
@@ -15,6 +16,7 @@ export default function TeamsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { api, teams, refreshTeams, selectTeam } = useApp();
+  const showCreate = api.user === undefined || canCreateTeam(api.user.accountKind);
   const [mode, setMode] = useState<'join' | 'create' | undefined>();
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<TeamDirectoryHit[]>([]);
@@ -91,9 +93,11 @@ export default function TeamsScreen() {
         <View className="mr-2 flex-1">
           <Button label={t('teams.joinTeam')} onPress={() => setMode('join')} />
         </View>
-        <View className="flex-1">
-          <Button label={t('teams.createTeam')} onPress={() => setMode('create')} />
-        </View>
+        {showCreate ? (
+          <View className="flex-1">
+            <Button label={t('teams.createTeam')} onPress={() => setMode('create')} />
+          </View>
+        ) : null}
       </View>
       {mode === 'join' ? (
         <View className="mb-6">
@@ -107,7 +111,7 @@ export default function TeamsScreen() {
           <Button label={t('invite.joinTeam')} onPress={openInvite} />
         </View>
       ) : null}
-      {mode === 'create' ? (
+      {showCreate && mode === 'create' ? (
         <View className="mb-6">
           <Field label={t('teams.team')} value={name} onChangeText={setName} />
           <Field label={t('teams.timeZone')} value={timeZone} onChangeText={setTimeZone} />

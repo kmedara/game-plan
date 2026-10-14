@@ -11,6 +11,7 @@ import {
   requirePermission,
   requireUser,
 } from "../../../lib/guards.js";
+import { assertEventEndsAfterStart } from "@gameplan/rules";
 import { badRequest, json } from "../../../lib/http.js";
 import { route, withBodyValidation } from "../../../lib/pipeline.js";
 import {
@@ -35,6 +36,7 @@ export const handleCreateEvent = route(
   requireUser(),
   requirePermission("manage_events"),
   async ({ teamId, user, body }) => {
+    assertEventEndsAfterStart(body.startsAt, body.endsAt);
     const created = await createEvent({
       teamId,
       userId: user.userId,
@@ -81,6 +83,11 @@ export const handleUpdateEvent = route(
     if (Object.keys(body).length === 0) {
       return badRequest("invalid_body");
     }
+
+    const existing = await requireEvent(teamId, eventId);
+    const nextEndsAt =
+      body.endsAt === null ? undefined : (body.endsAt ?? existing.endsAt);
+    assertEventEndsAfterStart(body.startsAt ?? existing.startsAt, nextEndsAt);
 
     const updated = await updateEvent({ teamId, eventId, body });
     return json(200, updated);

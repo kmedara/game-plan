@@ -128,19 +128,6 @@ export const requireMembership = async (teamId: string, userId: string): Promise
 };
 
 /**
- * Validates that endsAt is not before startsAt when both are present.
- *
- * @param startsAt - Series start ISO.
- * @param endsAt - Series end ISO, when set.
- */
-const assertEndsAfterStarts = (startsAt: string, endsAt: string | undefined): void => {
-  if (endsAt === undefined) return;
-  const start = parseInstant(startsAt, 'starts_at');
-  const end = parseInstant(endsAt, 'ends_at');
-  if (end.getTime() < start.getTime()) throw new Error('invalid_ends_at');
-};
-
-/**
  * Creates a practice or game under the team partition.
  *
  * @param input - Caller, team, and create body.
@@ -152,7 +139,6 @@ export const createEvent = async (input: {
   body: CreateEventBody;
 }): Promise<EventResponse> => {
   await requireTeam(input.teamId);
-  assertEndsAfterStarts(input.body.startsAt, input.body.endsAt);
   if (input.body.recurrence !== undefined) {
     // Fail fast when byWeekDay codes are invalid.
     buildRRule(parseInstant(input.body.startsAt, 'starts_at'), input.body.recurrence);
@@ -245,7 +231,6 @@ export const updateEvent = async (input: {
   if (input.body.recurrence === null) nextRecurrence = undefined;
   else if (input.body.recurrence !== undefined) nextRecurrence = input.body.recurrence;
 
-  assertEndsAfterStarts(nextStartsAt, nextEndsAt);
   if (nextRecurrence !== undefined) {
     buildRRule(parseInstant(nextStartsAt, 'starts_at'), nextRecurrence);
   }

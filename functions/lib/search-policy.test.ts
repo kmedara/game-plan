@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { matchesUserSearchPolicy, V1_USER_SEARCH_POLICY } from './search-policy.js';
+import { matchesUserSearchPolicy, V1_USER_SEARCH_POLICY } from '@gameplan/rules';
 
 describe('user search policy', () => {
   it('returns adults only under the v1 policy', () => {

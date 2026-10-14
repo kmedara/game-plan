@@ -6,6 +6,7 @@ import { createTeamBodySchema } from '@gameplan/schemas';
 import { requireUser } from '../../../lib/auth/index.js';
 import { json } from '../../../lib/http.js';
 import { route, withBodyValidation } from '../../../lib/pipeline.js';
+import { assertCanCreateTeam } from '../../../lib/role-rules.js';
 import { createTeam, toTeamSummary } from '../team-store.js';
 import { withTeamsErrors } from './errors.js';
 
@@ -20,6 +21,7 @@ export const handleCreateTeam = route(
   withBodyValidation(createTeamBodySchema),
   requireUser(),
   async ({ user, body }) => {
+    await assertCanCreateTeam(user.userId);
     const team = await createTeam({
       userId: user.userId,
       name: body.name,

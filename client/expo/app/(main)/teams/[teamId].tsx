@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { callerCanGrant, roleAllowedForAccount } from '@gameplan/rules';
 import {
   TEAM_PERMISSIONS,
   TEAM_ROLES,
@@ -34,10 +35,12 @@ export default function TeamAdminScreen() {
   const [invites, setInvites] = useState<TeamInvite[]>([]);
   const [roles, setRoles] = useState<RolePermissions[]>([]);
   const [joinRoles, setJoinRoles] = useState<Record<string, TeamRole>>({});
+  const [callerRole, setCallerRole] = useState<TeamRole>('player');
   const [error, setError] = useState<string | undefined>();
 
   const load = async (): Promise<void> => {
     const team = await api.getTeam(id);
+    if (TEAM_ROLES.includes(team.role as TeamRole)) setCallerRole(team.role as TeamRole);
     setName(team.name);
     setTimeZone(team.timeZone);
     setPrimary(team.theme?.primary ?? '');
@@ -79,8 +82,20 @@ export default function TeamAdminScreen() {
     }
   };
 
+  const rolesFor = (request: JoinRequest): TeamRole[] =>
+    TEAM_ROLES.filter((role) => {
+      if (!callerCanGrant(callerRole, role)) return false;
+      if (request.accountKind === undefined) return true;
+      const permissions = roles.find((row) => row.role === role)?.permissions ?? [];
+      return roleAllowedForAccount(request.accountKind, role, permissions);
+    });
+
   const approve = async (request: JoinRequest): Promise<void> => {
-    const role = joinRoles[request.requestId] ?? 'player';
+    const allowed = rolesFor(request);
+    const role =
+      joinRoles[request.requestId] ??
+      (allowed.includes('player') ? 'player' : allowed[allowed.length - 1]);
+    if (role === undefined) return;
     try {
       await api.approveJoinRequest(id, request.requestId, role);
       await load();
@@ -120,6 +135,18 @@ export default function TeamAdminScreen() {
   };
 
   const savePermissions = async (): Promise<void> => {
+    const blocked = roles.some((row) =>
+      members.some(
+        (member) =>
+          member.role === row.role &&
+          member.accountKind !== undefined &&
+          !roleAllowedForAccount(member.accountKind, row.role, row.permissions),
+      ),
+    );
+    if (blocked) {
+      setError('minor_cannot_hold_manage_permissions');
+      return;
+    }
     try {
       const saved = await api.putPermissions(id, roles);
       setRoles(saved.roles);
@@ -153,7 +180,7 @@ export default function TeamAdminScreen() {
         <View key={request.requestId} className="mb-3 rounded bg-white p-3">
           <Text>{request.displayName ?? request.userId}</Text>
           <View className="my-2 flex-row flex-wrap">
-            {TEAM_ROLES.map((role) => (
+            {rolesFor(request).map((role) => (
               <Pressable key={role} className="mr-2" onPress={() => setJoinRoles((current) => ({ ...current, [request.requestId]: role }))}>
                 <Text className={(joinRoles[request.requestId] ?? 'player') === role ? 'font-bold' : ''}>{t(roleLabel(role))}</Text>
               </Pressable>

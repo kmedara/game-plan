@@ -3,7 +3,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import type { ChatParticipant } from '@gameplan/types';
 import {
+  accountKindForProfile,
   accountKindFromBirthday,
   canAddChatMember,
   canBeTeamAdmin,
@@ -11,8 +13,7 @@ import {
   canHoldManagePermissions,
   isMinorChatMembershipAllowed,
   sharesTeam,
-  type ChatParticipant,
-} from './minor-chat.js';
+} from '@gameplan/rules';
 
 /** Builds a chat participant for the minor-rule tests. */
 const person = (
@@ -37,6 +38,14 @@ describe('account rules', () => {
     expect(accountKindFromBirthday('2008-10-01', now)).toBe('minor');
     expect(accountKindFromBirthday('2010-01-01', now)).toBe('minor');
     expect(accountKindFromBirthday('1990-05-15', now)).toBe('adult');
+  });
+
+  it('keeps the stored kind when the birthday is missing or unreadable', () => {
+    expect(accountKindForProfile(undefined, 'adult')).toBe('adult');
+    expect(accountKindForProfile('not-a-date', 'minor')).toBe('minor');
+    expect(accountKindForProfile('2010-01-01', 'adult', new Date('2026-10-13T00:00:00.000Z'))).toBe(
+      'minor',
+    );
   });
 
   it('rejects a future or malformed birthday', () => {

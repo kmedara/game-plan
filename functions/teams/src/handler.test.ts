@@ -570,6 +570,15 @@ describe('teams handler (in-memory)', () => {
     expect(updated.statusCode).toBe(200);
     expect(bodyOf(updated).positions).toEqual(['Fly-half', 'Wing']);
 
+    const tooMany = await handler(
+      httpEvent('PUT', `/teams/${teamId}/positions`, {
+        headers: { authorization: admin.authorization },
+        body: { positions: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'] },
+      }),
+    );
+    expect(tooMany.statusCode).toBe(400);
+    expect(bodyOf(tooMany)).toEqual({ error: 'too_many_positions' });
+
     const listed = await handler(
       httpEvent('GET', '/teams', { headers: { authorization: admin.authorization } }),
     );

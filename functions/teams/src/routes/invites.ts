@@ -3,9 +3,11 @@
  */
 
 import { createInviteBodySchema } from '@gameplan/schemas';
-import { requirePermission, requireUser } from '../../../lib/auth/index.js';
+import { assertCallerCanGrant } from '@gameplan/rules';
+import { requireMembership, requirePermission, requireUser } from '../../../lib/auth/index.js';
 import { json } from '../../../lib/http.js';
 import { route, withBodyValidation } from '../../../lib/pipeline.js';
+import { assertAccountMayHoldRole } from '../../../lib/role-rules.js';
 import {
   acceptInvite,
   createInvite,
@@ -28,11 +30,14 @@ export const handleCreateInvite = route(
   withBodyValidation(createInviteBodySchema),
   requireUser(),
   requirePermission('invite_members'),
-  async ({ teamId, user, body }) => {
+  requireMembership(),
+  async ({ teamId, user, member, body }) => {
+    const role = body.role ?? 'player';
+    assertCallerCanGrant(member.role, role);
     const invite = await createInvite({
       teamId,
       createdBy: user.userId,
-      role: body.role ?? 'player',
+      role,
     });
 
     return json(201, {
@@ -107,6 +112,8 @@ export const handleAcceptInvite = route(
   withTeamsErrors(),
   requireUser(),
   async ({ code, user }) => {
+    const invite = await getInviteByCode(code);
+    await assertAccountMayHoldRole(user.userId, invite.teamId, invite.role);
     const { team, member } = await acceptInvite(code, user.userId);
     return json(200, {
       teamId: team.teamId,

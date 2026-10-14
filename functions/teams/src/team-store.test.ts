@@ -87,9 +87,13 @@ vi.mock('../../lib/dynamo/access.js', () => ({
   decodeCursor: () => undefined,
 }));
 
+const { assertRoleAllowedForAccount, callerCanGrant } = await import('@gameplan/rules');
+
+const { assertAccountMayHoldRole, assertCanCreateTeam, assertProposedRolePermissions } =
+  await import('../../lib/role-rules.js');
+
 const {
   acceptInvite,
-  assertRoleAllowedForAccount,
   approveJoinRequest,
   createJoinRequest,
   createTeam,
@@ -98,7 +102,6 @@ const {
   searchTeamDirectory,
   setMemberPositions,
   toTeamSummary,
-  updateRolePermissions,
   updateTeamSettings,
 } = await import('./team-store.js');
 
@@ -261,7 +264,7 @@ describe('team-store edge cases', () => {
     await expect(createJoinRequest(randomUUID(), randomUUID())).rejects.toThrow('team_not_found');
   });
 
-  it('normalizePositions rejects more than eight unique entries', async () => {
+  it('setMemberPositions stores every distinct position', async () => {
     const adminId = randomUUID();
     seedProfile(adminId, 'adult');
     const team = await createTeam({
@@ -270,15 +273,12 @@ describe('team-store edge cases', () => {
       userId: adminId,
     });
     const tooMany = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
-    await expect(setMemberPositions(team.teamId, adminId, tooMany)).rejects.toThrow(
-      'too_many_positions',
-    );
+    const member = await setMemberPositions(team.teamId, adminId, tooMany);
+    expect(member.positions).toEqual(tooMany);
   });
 
-  it('createTeam rejects missing creator profiles', async () => {
-    await expect(
-      createTeam({ name: 'Hawks', timeZone: 'UTC', userId: randomUUID() }),
-    ).rejects.toThrow('profile_not_found');
+  it('assertCanCreateTeam rejects a missing creator profile', async () => {
+    await expect(assertCanCreateTeam(randomUUID())).rejects.toThrow('profile_not_found');
   });
 
   it('listUserTeams skips missing teams and recovers teamId from the sort key', async () => {
@@ -348,7 +348,12 @@ describe('team-store edge cases', () => {
       createdAt: new Date().toISOString(),
     });
     const outsider = randomUUID();
-    await expect(acceptInvite(code, outsider)).rejects.toThrow('profile_not_found');
+    await expect(assertAccountMayHoldRole(outsider, team.teamId, 'player')).rejects.toThrow(
+      'profile_not_found',
+    );
+    await expect(acceptInvite(code, outsider)).resolves.toMatchObject({
+      member: { role: 'player', userId: outsider },
+    });
 
     const requestId = randomUUID();
     store.set(itemKey(teamPk(team.teamId), joinRequestSk(requestId)), {
@@ -359,7 +364,7 @@ describe('team-store edge cases', () => {
       createdAt: new Date().toISOString(),
     });
     await expect(approveJoinRequest(team.teamId, requestId, 'player')).rejects.toThrow(
-      'profile_not_found',
+      'already_a_member',
     );
     await expect(rejectJoinRequest(team.teamId, randomUUID())).rejects.toThrow(
       'join_request_not_found',
@@ -372,7 +377,12 @@ describe('team-store edge cases', () => {
     ).not.toThrow();
   });
 
-  it('updateRolePermissions skips members without profiles when checking manage_permissions', async () => {
+  it('callerCanGrant ranks player above parent', () => {
+    expect(callerCanGrant('player', 'parent')).toBe(true);
+    expect(callerCanGrant('parent', 'player')).toBe(false);
+  });
+
+  it('assertProposedRolePermissions skips members without profiles', async () => {
     const adminId = randomUUID();
     seedProfile(adminId, 'adult');
     const team = await createTeam({
@@ -389,13 +399,13 @@ describe('team-store edge cases', () => {
       joinedAt: new Date().toISOString(),
     });
     await expect(
-      updateRolePermissions(team.teamId, [
+      assertProposedRolePermissions(team.teamId, [
         {
           role: 'coach',
           permissions: [...DEFAULT_ROLE_PERMISSIONS.coach, 'manage_permissions'],
         },
       ]),
-    ).resolves.toBeDefined();
+    ).resolves.toBeUndefined();
   });
 
   it('approveJoinRequest rejects missing join requests', async () => {
@@ -411,7 +421,7 @@ describe('team-store edge cases', () => {
     );
   });
 
-  it('updateRolePermissions rejects minors holding manage_permissions', async () => {
+  it('assertProposedRolePermissions rejects minors holding manage_permissions', async () => {
     const adminId = randomUUID();
     seedProfile(adminId, 'adult');
     const team = await createTeam({
@@ -429,7 +439,7 @@ describe('team-store edge cases', () => {
       joinedAt: new Date().toISOString(),
     });
     await expect(
-      updateRolePermissions(team.teamId, [
+      assertProposedRolePermissions(team.teamId, [
         { role: 'coach', permissions: [...DEFAULT_ROLE_PERMISSIONS.coach, 'manage_permissions'] },
       ]),
     ).rejects.toThrow('minor_cannot_hold_manage_permissions');

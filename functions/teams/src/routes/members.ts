@@ -3,6 +3,7 @@
  */
 
 import { assignRoleBodySchema } from "@gameplan/schemas";
+import { assertCallerCanGrant } from "@gameplan/rules";
 import { getProfile, toUserProfile } from "../../../lib/auth/index.js";
 import {
   requireMembership,
@@ -11,7 +12,13 @@ import {
 } from "../../../lib/guards.js";
 import { json } from "../../../lib/http.js";
 import { route, withBodyValidation } from "../../../lib/pipeline.js";
-import { assignMemberRole, getMembership, listMembers } from "../team-store.js";
+import { assertAccountMayHoldRole } from "../../../lib/role-rules.js";
+import {
+  assignMemberRole,
+  getMembership,
+  listMembers,
+  requireMembership as loadMembership,
+} from "../team-store.js";
 import { withTeamsErrors } from "./errors.js";
 
 /**
@@ -103,13 +110,18 @@ export const handleAssignRole = route(
   withBodyValidation(assignRoleBodySchema),
   requireUser(),
   requirePermission("assign_roles"),
-  async ({ teamId, memberUserId, body }) => {
-    const member = await assignMemberRole(teamId, memberUserId, body.role);
-    const profile = await getProfile(member.userId);
+  requireMembership(),
+  async ({ teamId, memberUserId, member, body }) => {
+    const target = await loadMembership(teamId, memberUserId);
+    assertCallerCanGrant(member.role, target.role);
+    assertCallerCanGrant(member.role, body.role);
+    await assertAccountMayHoldRole(memberUserId, teamId, body.role);
+    const updated = await assignMemberRole(teamId, memberUserId, body.role);
+    const profile = await getProfile(updated.userId);
     return json(200, {
-      userId: member.userId,
-      role: member.role,
-      joinedAt: member.joinedAt,
+      userId: updated.userId,
+      role: updated.role,
+      joinedAt: updated.joinedAt,
       ...(profile !== undefined ? { user: toUserProfile(profile) } : {}),
     });
   },
