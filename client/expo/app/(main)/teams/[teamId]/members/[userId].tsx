@@ -32,7 +32,7 @@ export default function MemberProfileScreen() {
       .then(async (next) => {
         setMember(next);
         if (next.photoKey !== undefined) {
-          const download = await api.presignDownload(next.photoKey);
+          const download = await api.presignDownload(next.photoKey, { userId: memberId });
           setPhotoUrl(download.downloadUrl);
         }
       })

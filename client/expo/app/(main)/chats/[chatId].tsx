@@ -101,7 +101,7 @@ export default function ChatThreadScreen() {
             <Text className="text-xs text-slate-500">{item.senderDisplayName ?? item.senderId}</Text>
             {item.body.length > 0 ? <Text>{item.body}</Text> : null}
             {item.attachmentKeys?.map((key) => (
-              <Attachment key={key} objectKey={key} />
+              <Attachment key={key} chatId={id} objectKey={key} />
             ))}
           </View>
         )}
@@ -127,12 +127,15 @@ export default function ChatThreadScreen() {
   );
 }
 
-const Attachment = ({ objectKey }: { objectKey: string }) => {
+const Attachment = ({ chatId, objectKey }: { chatId: string; objectKey: string }) => {
   const { api } = useApp();
   const [uri, setUri] = useState<string | undefined>();
   useEffect(() => {
-    void api.presignDownload(objectKey).then((download) => setUri(download.downloadUrl)).catch(() => undefined);
-  }, [api, objectKey]);
+    void api
+      .presignDownload(objectKey, { chatId })
+      .then((download) => setUri(download.downloadUrl))
+      .catch(() => undefined);
+  }, [api, chatId, objectKey]);
   if (uri === undefined) return null;
   return <Image source={{ uri }} className="mt-2 h-40 w-full rounded" />;
 };

@@ -8,7 +8,16 @@ import { join } from 'node:path';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { issueLocalTokens } from '../../lib/auth/local-jwt.js';
-import { TABLE_PK, TABLE_SK } from '../../lib/dynamo/keys.js';
+import {
+  TABLE_PK,
+  TABLE_SK,
+  chatMemberSk,
+  chatPk,
+  messageSk,
+  profileSk,
+  userPk,
+  userTeamSk,
+} from '../../lib/dynamo/keys.js';
 
 const store = new Map<string, Record<string, unknown>>();
 
@@ -303,5 +312,74 @@ describe('media handler', () => {
         )
       ).statusCode,
     ).toBe(200);
+  });
+
+  it('presigns a download only when the caller can see the key', async () => {
+    const caller = randomUUID();
+    const owner = randomUUID();
+    const { accessToken } = issueLocalTokens(caller, `${caller}@example.com`);
+    const otherKey = `uploads/${owner}/secret.png`;
+    const chatId = randomUUID();
+    const teamId = randomUUID();
+
+    const denied = await handler(
+      httpEvent('GET', '/media/presign-download', {
+        headers: { authorization: `Bearer ${accessToken}` },
+        query: { objectKey: otherKey },
+      }),
+    );
+    expect(denied.statusCode).toBe(403);
+
+    store.set(itemKey(chatPk(chatId), chatMemberSk(caller)), {
+      [TABLE_PK]: chatPk(chatId),
+      [TABLE_SK]: chatMemberSk(caller),
+      userId: caller,
+    });
+    store.set(itemKey(chatPk(chatId), messageSk('2026-01-01T00:00:00.000Z', 'm1')), {
+      [TABLE_PK]: chatPk(chatId),
+      [TABLE_SK]: messageSk('2026-01-01T00:00:00.000Z', 'm1'),
+      attachmentKeys: [otherKey],
+    });
+    const fromChat = await handler(
+      httpEvent('GET', '/media/presign-download', {
+        headers: { authorization: `Bearer ${accessToken}` },
+        query: { objectKey: otherKey, chatId },
+      }),
+    );
+    expect(fromChat.statusCode).toBe(200);
+
+    const photoKey = `uploads/${owner}/face.png`;
+    store.set(itemKey(userPk(owner), profileSk()), {
+      [TABLE_PK]: userPk(owner),
+      [TABLE_SK]: profileSk(),
+      userId: owner,
+      email: `${owner}@example.com`,
+      displayName: 'Owner',
+      accountKind: 'adult',
+      photoKey,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    const stranger = await handler(
+      httpEvent('GET', '/media/presign-download', {
+        headers: { authorization: `Bearer ${accessToken}` },
+        query: { objectKey: photoKey, userId: owner },
+      }),
+    );
+    expect(stranger.statusCode).toBe(403);
+
+    for (const userId of [caller, owner]) {
+      store.set(itemKey(userPk(userId), userTeamSk(teamId)), {
+        [TABLE_PK]: userPk(userId),
+        [TABLE_SK]: userTeamSk(teamId),
+        teamId,
+      });
+    }
+    const teammate = await handler(
+      httpEvent('GET', '/media/presign-download', {
+        headers: { authorization: `Bearer ${accessToken}` },
+        query: { objectKey: photoKey, userId: owner },
+      }),
+    );
+    expect(teammate.statusCode).toBe(200);
   });
 });

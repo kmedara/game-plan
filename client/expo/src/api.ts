@@ -29,6 +29,7 @@ import type {
   JoinRequestList,
   MessagePage,
   OauthExchangeResponse,
+  PresignDownloadQuery,
   PresignDownloadResponse,
   PresignUploadBody,
   PresignUploadResponse,
@@ -145,8 +146,13 @@ export class ApiClient {
     return this.request('POST', '/media/presign-upload', { contentType, contentLength });
   }
 
-  async presignDownload(objectKey: string): Promise<PresignDownloadResponse> {
+  async presignDownload(
+    objectKey: string,
+    context: Pick<PresignDownloadQuery, 'chatId' | 'userId'> = {},
+  ): Promise<PresignDownloadResponse> {
     const params = new URLSearchParams({ objectKey });
+    if (context.chatId !== undefined) params.set('chatId', context.chatId);
+    if (context.userId !== undefined) params.set('userId', context.userId);
     return this.request('GET', `/media/presign-download?${params}`);
   }
 

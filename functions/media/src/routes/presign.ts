@@ -6,6 +6,7 @@ import { presignDownloadQuerySchema, presignUploadBodySchema } from '@gameplan/s
 import { requireUser } from '../../../lib/auth/index.js';
 import { json } from '../../../lib/http.js';
 import { route, withBodyValidation, withQueryValidation } from '../../../lib/pipeline.js';
+import { assertCanDownload } from '../download-access.js';
 import { createDownloadUrl, createUploadUrl } from '../media-store.js';
 import { withMediaErrors } from './errors.js';
 
@@ -35,7 +36,11 @@ export const handlePresignDownload = route(
   withMediaErrors(),
   withQueryValidation(presignDownloadQuerySchema),
   requireUser(),
-  async ({ query }) => {
+  async ({ user, query }) => {
+    await assertCanDownload(user.userId, query.objectKey, {
+      ...(query.chatId !== undefined ? { chatId: query.chatId } : {}),
+      ...(query.userId !== undefined ? { userId: query.userId } : {}),
+    });
     const result = await createDownloadUrl(query.objectKey);
     return json(200, result);
   },
