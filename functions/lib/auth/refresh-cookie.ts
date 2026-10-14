@@ -1,7 +1,7 @@
 /**
  * HttpOnly refresh-token cookie for the website session.
  *
- * The Capacitor app stores the refresh token in secure storage instead and asks
+ * The Expo app stores the refresh token in secure storage instead and asks
  * for body delivery via the `x-refresh-delivery: body` header.
  */
 
@@ -15,7 +15,7 @@ export const REFRESH_DELIVERY_HEADER = 'x-refresh-delivery';
  * Returns whether the client wants the refresh token in the JSON body.
  *
  * @param headerValue - The `x-refresh-delivery` header value, if any.
- * @returns `true` when the client asked for body delivery (Capacitor).
+ * @returns `true` when the client asked for body delivery (the Expo app).
  */
 export const wantsBodyRefreshToken = (headerValue?: string): boolean =>
   headerValue?.trim().toLowerCase() === 'body';

@@ -53,12 +53,12 @@ Free-text event locations still work without autocomplete.
 
 ## Browser environment
 
-Set `GOOGLE_MAPS_BROWSER_API_KEY` when starting or building the Angular app.
-[`write-environment.mjs`](../../client/app/scripts/write-environment.mjs) writes it
-to `environment.googleMapsApiKey`.
+Set `GOOGLE_MAPS_BROWSER_API_KEY` when starting or building the Expo app.
+[`run.mjs`](../../client/expo/scripts/run.mjs) copies that value onto
+`EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`, which the web bundle reads at build time.
 
 ```bash
-GOOGLE_MAPS_BROWSER_API_KEY=browser-key-here npm start
+GOOGLE_MAPS_BROWSER_API_KEY=browser-key-here npm run client:start
 ```
 
 If the browser key is missing, the web map shows an unavailable state (no OSM
@@ -66,18 +66,13 @@ fallback).
 
 ## Android environment
 
-Set `GOOGLE_MAPS_ANDROID_API_KEY` for the native build. Gradle reads it from the
-environment, `android/local.properties`, or a Gradle property, and injects it into
-`AndroidManifest.xml` as `com.google.android.geo.API_KEY`. The Angular bundle does
-not include this key; the app reads it from the manifest at runtime.
-
-```bash
-# android/local.properties (do not commit secrets)
-GOOGLE_MAPS_ANDROID_API_KEY=android-key-here
-```
+Put the Android key in the Expo app config (`android.config.googleMaps.apiKey` in
+[`app.json`](../../client/expo/app.json)). Expo prebuild writes it into
+`AndroidManifest.xml` as `com.google.android.geo.API_KEY`. The JavaScript bundle
+does not include this key; `react-native-maps` reads it from the manifest.
 
 Package name for key restriction: **`com.gameplan.app`**. Add the debug and
-release SHA-1 fingerprints from the signing keystore.
+release SHA-1 fingerprints from the signing certificate.
 
 ## API routes
 

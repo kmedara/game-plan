@@ -31,7 +31,7 @@ export type AuthProps = {
 /**
  * User pool, Hosted UI domain, and public OAuth app client.
  *
- * The Angular app does not talk to Cognito directly. Identity exchanges the
+ * The Expo app does not talk to Cognito directly. Identity exchanges the
  * authorization code and issues GamePlan session tokens.
  */
 export class Auth extends Construct {

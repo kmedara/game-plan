@@ -10,9 +10,6 @@ coverage
 *.tsbuildinfo
 .env
 .env.*
-client/app/android
-client/app/ios
-client/app/.vscode
 **/infrastructure
 **/.DS_Store
 **/.cursor

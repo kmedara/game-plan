@@ -2,8 +2,8 @@
  * Session client for the identity Lambda.
  *
  * Holds the access token in memory. Website sessions refresh via the HttpOnly
- * cookie (`credentials: 'include'`). Capacitor sessions store the refresh token
- * in Preferences and send it in the refresh body.
+ * cookie (`credentials: 'include'`). Expo sessions store the refresh token in
+ * secure storage and send it in the refresh body.
  */
 
 import type { RefreshStore } from './refresh-store.js';
@@ -24,7 +24,7 @@ export type SessionMode = 'web' | 'native';
 export type SessionServiceOptions = {
   /** Base URL of the identity API, e.g. `http://127.0.0.1:3000/identity`. */
   baseUrl: string;
-  /** Refresh-token store (web no-op or Capacitor Preferences). */
+  /** Refresh-token store (web no-op or the Expo secure store). */
   refreshStore: RefreshStore;
   /**
    * `web` uses cookies only. `native` asks for body refresh tokens and stores them.

@@ -2,13 +2,7 @@
  * Public surface of the client session package.
  */
 
-export {
-  CAPACITOR_REFRESH_KEY,
-  CapacitorRefreshStore,
-  WebRefreshStore,
-  type PreferencesLike,
-  type RefreshStore,
-} from './refresh-store.js';
+export { WebRefreshStore, type RefreshStore } from './refresh-store.js';
 
 export {
   SessionService,

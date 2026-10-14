@@ -3,38 +3,13 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import {
-  CapacitorRefreshStore,
-  SessionService,
-  WebRefreshStore,
-  type PreferencesLike,
-} from './index.js';
+import { SessionService, WebRefreshStore, type RefreshStore } from './index.js';
 
 describe('WebRefreshStore', () => {
   it('never persists a readable refresh token', async () => {
     const store = new WebRefreshStore();
     await store.set('secret');
     expect(await store.get()).toBeNull();
-    await store.clear();
-    expect(await store.get()).toBeNull();
-  });
-});
-
-describe('CapacitorRefreshStore', () => {
-  it('reads and writes through Preferences', async () => {
-    const memory = new Map<string, string>();
-    const preferences: PreferencesLike = {
-      get: async ({ key }) => ({ value: memory.get(key) ?? null }),
-      set: async ({ key, value }) => {
-        memory.set(key, value);
-      },
-      remove: async ({ key }) => {
-        memory.delete(key);
-      },
-    };
-    const store = new CapacitorRefreshStore(preferences);
-    await store.set('rt-1');
-    expect(await store.get()).toBe('rt-1');
     await store.clear();
     expect(await store.get()).toBeNull();
   });
@@ -110,13 +85,13 @@ describe('SessionService', () => {
 
   it('stores refresh token for native and sends it on refresh', async () => {
     const memory = new Map<string, string>();
-    const preferences: PreferencesLike = {
-      get: async ({ key }) => ({ value: memory.get(key) ?? null }),
-      set: async ({ key, value }) => {
-        memory.set(key, value);
+    const store: RefreshStore = {
+      get: async () => memory.get('refresh') ?? null,
+      set: async (token) => {
+        memory.set('refresh', token);
       },
-      remove: async ({ key }) => {
-        memory.delete(key);
+      clear: async () => {
+        memory.delete('refresh');
       },
     };
 
@@ -160,7 +135,6 @@ describe('SessionService', () => {
       throw new Error(`unexpected ${url}`);
     });
 
-    const store = new CapacitorRefreshStore(preferences);
     const session = new SessionService({
       baseUrl: 'http://127.0.0.1:3000/identity',
       refreshStore: store,

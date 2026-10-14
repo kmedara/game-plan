@@ -82,7 +82,7 @@ export const completeProfileBodySchema = z
  * Session response for register, login, and refresh.
  *
  * `refreshToken` is present only when the client asks for a body delivery
- * (Capacitor). The website relies on the HttpOnly cookie instead.
+ * (the Expo app). The website relies on the HttpOnly cookie instead.
  */
 /** One-time WebSocket connect ticket. The value is not an access token. */
 export const socketTicketSchema = z.object({

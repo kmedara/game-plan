@@ -10,4 +10,3 @@ coverage/
 infrastructure/cdk.context.json
 cdk-outputs.json
 /.media-test*
-client/app/.angular/cache
