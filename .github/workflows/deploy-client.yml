@@ -35,22 +35,17 @@ jobs:
           node-version: 22
           cache: npm
 
-      - id: oidc
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ steps.oidc.outputs.aws-account-id }}:role/cdk-hnb659fds-deploy-role-${{ steps.oidc.outputs.aws-account-id }}-${{ vars.AWS_REGION || 'us-east-1' }}
-          role-chaining: true
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
       - run: npm ci
 
       - name: Load Parameter Store
-        run: npx tsx infrastructure/scripts/load-ssm-env.ts client
+        run: |
+          set -o pipefail
+          npx tsx infrastructure/scripts/load-ssm-env.ts client 2>&1 | awk -f .github/scripts/redact-aws-log.awk
         env:
           SSM_PREFIX: ${{ vars.SSM_PREFIX || '/gameplan' }}
 
@@ -65,5 +60,8 @@ jobs:
 
       - name: Publish website
         run: |
-          aws s3 sync client/expo/dist "s3://${SITE_BUCKET_NAME}" --delete
-          aws cloudfront create-invalidation --distribution-id "${SITE_DISTRIBUTION_ID}" --paths "/*"
+          set -o pipefail
+          {
+            aws s3 sync client/expo/dist "s3://${SITE_BUCKET_NAME}" --delete
+            aws cloudfront create-invalidation --distribution-id "${SITE_DISTRIBUTION_ID}" --paths "/*"
+          } 2>&1 | awk -f .github/scripts/redact-aws-log.awk
