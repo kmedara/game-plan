@@ -5,7 +5,6 @@
   "scripts": {
     "synth": "cdk synth",
     "diff": "cdk diff",
-    "bootstrap": "cdk bootstrap --require-approval never",
     "deploy": "cdk deploy --require-approval never"
   },
   "dependencies": {

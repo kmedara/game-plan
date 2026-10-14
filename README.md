@@ -11,12 +11,12 @@ The website and the phone apps are the same Expo app under `client/expo`. Day-to
 Docker Compose runs DynamoDB Local, the API proxy (every area Lambda), and the Expo
 website with live reload.
 
-| Service    | URL                         |
-| ---------- | --------------------------- |
-| Website    | http://localhost:4200       |
-| API proxy  | http://localhost:3000       |
-| API docs   | http://localhost:3000/docs  |
-| DynamoDB   | http://localhost:8000       |
+| Service   | URL                        |
+| --------- | -------------------------- |
+| Website   | http://localhost:4200      |
+| API proxy | http://localhost:3000      |
+| API docs  | http://localhost:3000/docs |
+| DynamoDB  | http://localhost:8000      |
 
 ```bash
 npm run up
@@ -150,20 +150,20 @@ The interactive map uses `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` on the web (copied fr
 `GOOGLE_MAPS_BROWSER_API_KEY` by [`client/expo/scripts/run.mjs`](client/expo/scripts/run.mjs))
 and the Android key in the Expo app config. See [`docs/maps/README.md`](docs/maps/README.md).
 
-| Method | Path                            | Notes                                              |
-| ------ | ------------------------------- | -------------------------------------------------- |
-| `GET`  | `/identity/oauth/login`         | Start Cognito Hosted UI                           |
-| `GET`  | `/identity/oauth/callback`      | Code exchange; sets refresh cookie; redirects      |
-| `GET`  | `/identity/oauth/logout`        | Clear cookie and redirect to Cognito logout       |
-| `POST` | `/identity/oauth/exchange`      | Redeem a native handoff code for a session        |
-| `POST` | `/identity/profile/complete`    | Birthday + display name after social sign-in       |
-| `POST` | `/identity/register`            | Email/password. Cognito returns `confirmationRequired` and no session until the email code is confirmed |
-| `POST` | `/identity/confirm`             | Submit the emailed signup code                     |
-| `POST` | `/identity/confirm/resend`      | Send another signup code                           |
-| `POST` | `/identity/login`               | Email/password session. Unconfirmed Cognito users get `email_not_confirmed` |
-| `POST` | `/identity/refresh`             | Cookie and/or `{ "refreshToken" }` body            |
-| `POST` | `/identity/logout`              | Clears the refresh cookie                          |
-| `GET`  | `/identity/me`                  | Bearer access token; returns the profile           |
+| Method | Path                         | Notes                                                                                                   |
+| ------ | ---------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/identity/oauth/login`      | Start Cognito Hosted UI                                                                                 |
+| `GET`  | `/identity/oauth/callback`   | Code exchange; sets refresh cookie; redirects                                                           |
+| `GET`  | `/identity/oauth/logout`     | Clear cookie and redirect to Cognito logout                                                             |
+| `POST` | `/identity/oauth/exchange`   | Redeem a native handoff code for a session                                                              |
+| `POST` | `/identity/profile/complete` | Birthday + display name after social sign-in                                                            |
+| `POST` | `/identity/register`         | Email/password. Cognito returns `confirmationRequired` and no session until the email code is confirmed |
+| `POST` | `/identity/confirm`          | Submit the emailed signup code                                                                          |
+| `POST` | `/identity/confirm/resend`   | Send another signup code                                                                                |
+| `POST` | `/identity/login`            | Email/password session. Unconfirmed Cognito users get `email_not_confirmed`                             |
+| `POST` | `/identity/refresh`          | Cookie and/or `{ "refreshToken" }` body                                                                 |
+| `POST` | `/identity/logout`           | Clears the refresh cookie                                                                               |
+| `GET`  | `/identity/me`               | Bearer access token; returns the profile                                                                |
 
 Both clients send the **access token** as `Authorization: Bearer …`.
 
@@ -178,25 +178,25 @@ Adults create a team (and its default chat) in one write. Roster joins use an in
 request. The admin screen updates the team name, time zone, and location, and reads and writes the role-permission
 matrix. A minor cannot create a team, cannot be `team_admin`, and cannot hold `manage_permissions`.
 
-| Method  | Path                                              | Notes                                      |
-| ------- | ------------------------------------------------- | ------------------------------------------ |
-| `POST`  | `/teams`                                          | Create team + default chat; caller is admin |
-| `GET`   | `/teams`                                          | Teams the caller belongs to                |
-| `GET`   | `/teams/directory?q=`                             | Name-prefix search for join autocomplete   |
-| `GET`   | `/teams/:teamId`                                  | Team details for a member                  |
-| `PATCH` | `/teams/:teamId`                                  | Update name, time zone, and location (`manage_permissions`) |
-| `GET`   | `/teams/:teamId/members`                          | Roster                                     |
-| `PATCH` | `/teams/:teamId/members/:userId`                  | Assign role (`assign_roles`)               |
-| `GET`   | `/teams/:teamId/permissions`                      | Role-permission matrix                     |
-| `PUT`   | `/teams/:teamId/permissions`                      | Replace matrix (`manage_permissions`)      |
-| `POST`  | `/teams/:teamId/invites`                          | Create invite code (`invite_members`)      |
-| `GET`   | `/teams/:teamId/invites`                          | List invites (`invite_members`)            |
-| `GET`   | `/teams/invite/:code`                             | Preview invite from a shared code          |
-| `POST`  | `/teams/invite/:code/accept`                      | Join via invite                            |
-| `POST`  | `/teams/:teamId/join-requests`                    | Request to join                            |
-| `GET`   | `/teams/:teamId/join-requests`                    | List requests (`approve_join_requests`)    |
-| `POST`  | `/teams/:teamId/join-requests/:id/approve`        | Approve and assign role                    |
-| `POST`  | `/teams/:teamId/join-requests/:id/reject`         | Reject a request                           |
+| Method  | Path                                       | Notes                                                       |
+| ------- | ------------------------------------------ | ----------------------------------------------------------- |
+| `POST`  | `/teams`                                   | Create team + default chat; caller is admin                 |
+| `GET`   | `/teams`                                   | Teams the caller belongs to                                 |
+| `GET`   | `/teams/directory?q=`                      | Name-prefix search for join autocomplete                    |
+| `GET`   | `/teams/:teamId`                           | Team details for a member                                   |
+| `PATCH` | `/teams/:teamId`                           | Update name, time zone, and location (`manage_permissions`) |
+| `GET`   | `/teams/:teamId/members`                   | Roster                                                      |
+| `PATCH` | `/teams/:teamId/members/:userId`           | Assign role (`assign_roles`)                                |
+| `GET`   | `/teams/:teamId/permissions`               | Role-permission matrix                                      |
+| `PUT`   | `/teams/:teamId/permissions`               | Replace matrix (`manage_permissions`)                       |
+| `POST`  | `/teams/:teamId/invites`                   | Create invite code (`invite_members`)                       |
+| `GET`   | `/teams/:teamId/invites`                   | List invites (`invite_members`)                             |
+| `GET`   | `/teams/invite/:code`                      | Preview invite from a shared code                           |
+| `POST`  | `/teams/invite/:code/accept`               | Join via invite                                             |
+| `POST`  | `/teams/:teamId/join-requests`             | Request to join                                             |
+| `GET`   | `/teams/:teamId/join-requests`             | List requests (`approve_join_requests`)                     |
+| `POST`  | `/teams/:teamId/join-requests/:id/approve` | Approve and assign role                                     |
+| `POST`  | `/teams/:teamId/join-requests/:id/reject`  | Reject a request                                            |
 
 Teams routes require a bearer access token (or Cognito JWT claims from API Gateway in the cloud).
 
@@ -206,13 +206,13 @@ Practices and games live on the team partition. Recurrence stays on the event ro
 for a visible window (capped at about three months). Each occurrence has its own RSVP. Creating or
 editing an event requires `manage_events`; every member can read the schedule and RSVP.
 
-| Method  | Path                                          | Notes                                         |
-| ------- | --------------------------------------------- | --------------------------------------------- |
-| `GET`   | `/schedule/teams/:teamId?from=&to=`           | Expand occurrences and attach RSVPs           |
-| `POST`  | `/schedule/teams/:teamId/events`              | Create practice or game (`manage_events`)     |
-| `GET`   | `/schedule/teams/:teamId/events/:eventId`     | Event definition                              |
-| `PATCH` | `/schedule/teams/:teamId/events/:eventId`     | Edit practice or game (`manage_events`)       |
-| `PUT`   | `/schedule/teams/:teamId/rsvps`               | Upsert RSVP for one occurrence                |
+| Method  | Path                                      | Notes                                     |
+| ------- | ----------------------------------------- | ----------------------------------------- |
+| `GET`   | `/schedule/teams/:teamId?from=&to=`       | Expand occurrences and attach RSVPs       |
+| `POST`  | `/schedule/teams/:teamId/events`          | Create practice or game (`manage_events`) |
+| `GET`   | `/schedule/teams/:teamId/events/:eventId` | Event definition                          |
+| `PATCH` | `/schedule/teams/:teamId/events/:eventId` | Edit practice or game (`manage_events`)   |
+| `PUT`   | `/schedule/teams/:teamId/rsvps`           | Upsert RSVP for one occurrence            |
 
 Schedule routes require a bearer access token (or Cognito JWT claims from API Gateway in the cloud).
 
@@ -224,14 +224,14 @@ permission; the minor chat rule still applies. Adult search is exact email on th
 and returns adults only under the v1 search policy. Sending a message writes the row, then
 enqueues fan-out.
 
-| Method | Path                         | Notes                                              |
-| ------ | ---------------------------- | -------------------------------------------------- |
-| `GET`  | `/chat`                      | Chats the caller belongs to                        |
-| `POST` | `/chat/channels`             | Create a team channel (`create_team_channels`)     |
-| `POST` | `/chat/private`              | Create a private chat with one or more other people |
-| `GET`  | `/chat/users/search?email=`  | Exact-email adult search                           |
-| `GET`  | `/chat/:chatId/messages`     | Newest-first history (`limit`, `cursor`)           |
-| `POST` | `/chat/:chatId/messages`     | Persist a message and enqueue fan-out              |
+| Method | Path                        | Notes                                               |
+| ------ | --------------------------- | --------------------------------------------------- |
+| `GET`  | `/chat`                     | Chats the caller belongs to                         |
+| `POST` | `/chat/channels`            | Create a team channel (`create_team_channels`)      |
+| `POST` | `/chat/private`             | Create a private chat with one or more other people |
+| `GET`  | `/chat/users/search?email=` | Exact-email adult search                            |
+| `GET`  | `/chat/:chatId/messages`    | Newest-first history (`limit`, `cursor`)            |
+| `POST` | `/chat/:chatId/messages`    | Persist a message and enqueue fan-out               |
 
 Chat routes require a bearer access token (or Cognito JWT claims from API Gateway in the cloud).
 
@@ -254,12 +254,12 @@ Lambda. The default size cap is 15 MB. Device tokens live on the user partition 
 fan-out can push when no socket is open. On the laptop, DynamoDB Local mode stores
 objects in memory behind `/media/local-objects/…`.
 
-| Method   | Path                              | Notes                                      |
-| -------- | --------------------------------- | ------------------------------------------ |
-| `POST`   | `/media/presign-upload`           | Returns `uploadUrl`, `objectKey`, `maxBytes` |
-| `GET`    | `/media/presign-download?objectKey=` | Short-lived download URL                |
-| `PUT`    | `/media/devices/:deviceId`        | Register push token (`ios` / `android` / `web`) |
-| `DELETE` | `/media/devices/:deviceId`        | Remove a device token                      |
+| Method   | Path                                 | Notes                                           |
+| -------- | ------------------------------------ | ----------------------------------------------- |
+| `POST`   | `/media/presign-upload`              | Returns `uploadUrl`, `objectKey`, `maxBytes`    |
+| `GET`    | `/media/presign-download?objectKey=` | Short-lived download URL                        |
+| `PUT`    | `/media/devices/:deviceId`           | Register push token (`ios` / `android` / `web`) |
+| `DELETE` | `/media/devices/:deviceId`           | Remove a device token                           |
 
 ## Client
 
@@ -282,13 +282,13 @@ npm run client:start
 Staging and production use the same three stacks in **separate AWS accounts**. Resource names stay `GamePlanDns`,
 `GamePlanPlatform`, and `GamePlanApi` in both. GitHub Actions deploys them in that order:
 
-| Workflow | Stack | When |
-| --- | --- | --- |
-| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | | Pull requests and pushes to `master`. Typecheck and tests. No AWS credentials. |
-| [`.github/workflows/deploy-dns.yml`](.github/workflows/deploy-dns.yml) | `GamePlanDns` | Manual. Certificates and the Route 53 validation records. Run this first. |
-| [`.github/workflows/deploy-platform.yml`](.github/workflows/deploy-platform.yml) | `GamePlanPlatform` | Manual. Cognito, DynamoDB, the file buckets, and CloudFront. Run this after DNS. |
-| [`.github/workflows/deploy-api.yml`](.github/workflows/deploy-api.yml) | `GamePlanApi` | Push to `master` updates **staging**. A published GitHub release updates **production**. Also writes the alias records. |
-| [`.github/workflows/deploy-client.yml`](.github/workflows/deploy-client.yml) | | Same triggers as the API workflow. Builds the Expo site and syncs it to the site bucket. |
+| Workflow                                                                         | Stack              | When                                                                                                                    |
+| -------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml)                           |                    | Pull requests and pushes to `master`. Typecheck and tests. No AWS credentials.                                          |
+| [`.github/workflows/deploy-dns.yml`](.github/workflows/deploy-dns.yml)           | `GamePlanDns`      | Manual. Certificates and the Route 53 validation records. Run this first.                                               |
+| [`.github/workflows/deploy-platform.yml`](.github/workflows/deploy-platform.yml) | `GamePlanPlatform` | Manual. Cognito, DynamoDB, the file buckets, and CloudFront. Run this after DNS.                                        |
+| [`.github/workflows/deploy-api.yml`](.github/workflows/deploy-api.yml)           | `GamePlanApi`      | Push to `master` updates **staging**. A published GitHub release updates **production**. Also writes the alias records. |
+| [`.github/workflows/deploy-client.yml`](.github/workflows/deploy-client.yml)     |                    | Same triggers as the API workflow. Builds the Expo site and syncs it to the site bucket.                                |
 
 DNS and platform stay manual because they change rarely. The API and client workflows assume those stacks already exist
 and read what they published. Re-run any workflow from the Actions tab (`workflow_dispatch` chooses `staging` or
@@ -302,9 +302,9 @@ Each GitHub environment (`staging`, `production`) has one secret, `AWS_ROLE_ARN`
 Set the repository variable `DOMAIN` to the registered domain, such as `example.com`. The deploy environment name is
 inserted into the hostnames:
 
-| Environment | Website | HTTP API |
-| --- | --- | --- |
-| `staging` | `https://app.staging.example.com` | `https://api.staging.example.com` |
+| Environment  | Website                              | HTTP API                             |
+| ------------ | ------------------------------------ | ------------------------------------ |
+| `staging`    | `https://app.staging.example.com`    | `https://api.staging.example.com`    |
 | `production` | `https://app.production.example.com` | `https://api.production.example.com` |
 
 The Cognito callback is `https://api.<environment>.example.com/identity/oauth/callback`. Logout returns to
@@ -322,47 +322,19 @@ Both accounts use the same prefix, `/gameplan/`. Every parameter is a **String**
 here. Each stack writes its own outputs. The client workflow fails until `api-base-url`, `site-bucket-name`, and
 `site-distribution-id` exist, which means the platform workflow and an API deploy have both run.
 
-| Name | Used for |
-| --- | --- |
-| `google-client-id`, `google-client-secret` | Optional Google IdP |
-| `facebook-app-id`, `facebook-app-secret` | Optional Facebook IdP |
-| `apple-client-id`, `apple-team-id`, `apple-key-id`, `apple-private-key` | Optional Apple IdP. Store the PEM, including line breaks. |
-| `google-maps-api-key` | Places Lambda |
-| `google-maps-browser-api-key` | Website map |
-| `site-certificate-arn`, `api-certificate-arn` | Written by the DNS workflow. Later stacks read the certificate ARNs from CloudFormation exports. |
-| `site-bucket-name`, `site-distribution-id`, `site-url` | Written by the platform workflow. The client workflow reads the bucket and distribution id. |
-| `api-base-url`, `ws-base-url` | Written by the API workflow. The client workflow reads both. |
+| Name                                                                    | Used for                                                                                         |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `google-client-id`, `google-client-secret`                              | Optional Google IdP                                                                              |
+| `facebook-app-id`, `facebook-app-secret`                                | Optional Facebook IdP                                                                            |
+| `apple-client-id`, `apple-team-id`, `apple-key-id`, `apple-private-key` | Optional Apple IdP. Store the PEM, including line breaks.                                        |
+| `google-maps-api-key`                                                   | Places Lambda                                                                                    |
+| `google-maps-browser-api-key`                                           | Website map                                                                                      |
+| `site-certificate-arn`, `api-certificate-arn`                           | Written by the DNS workflow. Later stacks read the certificate ARNs from CloudFormation exports. |
+| `site-bucket-name`, `site-distribution-id`, `site-url`                  | Written by the platform workflow. The client workflow reads the bucket and distribution id.      |
+| `api-base-url`, `ws-base-url`                                           | Written by the API workflow. The client workflow reads both.                                     |
 
 An identity provider is created only when every field for that provider is set. CDK context still overrides these
 environment variables for a local `cdk deploy`.
-
-### One-time account setup
-
-In each account:
-
-1. Add the GitHub OpenID Connect (OIDC) provider `token.actions.githubusercontent.com` (audience `sts.amazonaws.com`).
-2. Create a deploy role trusted only for this repository’s GitHub environment:
-
-```json
-{
-  "Effect": "Allow",
-  "Principal": { "Federated": "arn:aws:iam::<account>:oidc-provider/token.actions.githubusercontent.com" },
-  "Action": "sts:AssumeRoleWithWebIdentity",
-  "Condition": {
-    "StringEquals": {
-      "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-      "token.actions.githubusercontent.com:sub": "repo:<owner>/<repo>:environment:staging"
-    }
-  }
-}
-```
-
-Use `environment:production` on the production account’s role. Give the role CloudFormation deploy rights for these stacks
-(including the roles CDK creates) plus permission to bootstrap the toolkit stack (its asset bucket and those roles).
-Also grant `ssm:GetParametersByPath` and `ssm:PutParameter` on `/gameplan/*`. Parameter Store Strings do not need a
-Key Management Service (KMS) decrypt permission. Each stack workflow runs `cdk bootstrap` before the deploy. Store
-that role ARN as the `AWS_ROLE_ARN` secret on the matching GitHub environment. Protect **production** with required
-reviewers.
 
 The stacks create:
 
