@@ -5,8 +5,7 @@
  * local proxy stay on the same table name, indexes, and ports.
  */
 
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import resourcesFile from '../../config/resources.json' with { type: 'json' };
 
 /** Shape of `config/resources.json`. */
 type Resources = {
@@ -27,10 +26,13 @@ type Resources = {
   firstAreaPort: number;
 };
 
-/** Parsed resource constants from the repository config file. */
-const resources = JSON.parse(
-  readFileSync(fileURLToPath(new URL('../../config/resources.json', import.meta.url)), 'utf8'),
-) as Resources;
+/**
+ * Parsed resource constants from the repository config file.
+ *
+ * Imported so the Lambda bundler inlines the JSON. A filesystem read relative to
+ * `import.meta.url` points at `/config/resources.json` once the bundle is `/var/task/index.mjs`.
+ */
+const resources = resourcesFile as Resources;
 
 /**
  * Area ids that match the Lambda functions and the local proxy prefixes.
