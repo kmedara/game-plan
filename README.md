@@ -166,8 +166,8 @@ Both clients send the **access token** as `Authorization: Bearer …`.
 
 - **Website:** identity sets an HttpOnly `ts_refresh` cookie. Refresh calls use `credentials: 'include'` and omit the
   body token. The `@gameplan/client-session` package uses `WebRefreshStore` for this path.
-- **Capacitor:** send `X-Refresh-Delivery: body` so the refresh token is also returned in JSON. Store it with
-  `CapacitorRefreshStore` (Preferences). Refresh sends that token in the body.
+- **Native app:** send `X-Refresh-Delivery: body` so the refresh token is also returned in JSON. Store it with
+  `ExpoRefreshStore` (secure store). Refresh sends that token in the body.
 
 ### Teams
 
@@ -262,7 +262,7 @@ objects in memory behind `/media/local-objects/…`.
 
 The Expo app lives in `client/expo`. Schedule, chats, and teams share one Router
 tree on web, iOS, and Android. Store binaries are built with `expo prebuild` and
-the native toolchains (or GitHub Actions); this repo does not keep a Capacitor shell.
+the native toolchains (or GitHub Actions).
 
 Shared wire types live in [`lib/types`](lib/types) (`@gameplan/types`). Zod
 request schemas live in [`lib/schemas`](lib/schemas) (`@gameplan/schemas`). API
