@@ -179,13 +179,13 @@ export class GamePlanApi extends cdk.Stack {
       certificateArn: props.certificateArn,
     });
 
-    if (props.dns !== undefined && api.customDomain !== undefined) {
+    if (props.dns !== undefined && api.distribution !== undefined) {
       const dns = new ZoneDns(this, 'Dns', {
         ...props.dns,
         certificates: false,
         handlerId: 'dns-aliases',
       });
-      dns.addAliases({ distribution: props.distribution, apiDomain: api.customDomain });
+      dns.addAliases({ distribution: props.distribution, apiDistribution: api.distribution });
     }
   }
 }

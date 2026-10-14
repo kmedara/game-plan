@@ -219,6 +219,31 @@ export const readCookie = (
 };
 
 /**
+ * Header CloudFront adds on the way to API Gateway.
+ *
+ * Callers cannot see it. The matching check is {@link rejectDirectOrigin}.
+ */
+export const ORIGIN_VERIFY_HEADER = "x-origin-verify";
+
+/**
+ * Rejects a request that reached a Lambda without the CloudFront origin header.
+ *
+ * Laptop runs and deploys without a public hostname leave `ORIGIN_VERIFY_SECRET`
+ * unset, so those calls pass through.
+ *
+ * @param event - The HTTP API event.
+ * @returns A `403` when the secret is configured and the header does not match.
+ */
+export const rejectDirectOrigin = (
+  event: APIGatewayProxyEventV2,
+): APIGatewayProxyStructuredResultV2 | undefined => {
+  const expected = process.env.ORIGIN_VERIFY_SECRET?.trim() ?? "";
+  if (expected.length === 0) return undefined;
+  if (headerOf(event, ORIGIN_VERIFY_HEADER) === expected) return undefined;
+  return forbidden();
+};
+
+/**
  * Reads a case-insensitive request header value.
  *
  * @param event - The HTTP API event.

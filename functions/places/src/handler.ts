@@ -6,7 +6,7 @@
  */
 
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
-import { handleHealth, notFound } from '../../lib/http.js';
+import { handleHealth, notFound, rejectDirectOrigin } from '../../lib/http.js';
 import { handleAutocomplete, handleMapPreview, handleResolve, handleReverse } from './routes/index.js';
 
 /**
@@ -32,6 +32,9 @@ const routeOf = (path: string): string => {
 export const handler = async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyStructuredResultV2> => {
+  const rejected = rejectDirectOrigin(event);
+  if (rejected !== undefined) return rejected;
+
   const path = event.rawPath ?? '';
   const method = event.requestContext.http.method;
 

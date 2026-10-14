@@ -9,7 +9,6 @@ import * as path from 'node:path';
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import type * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
-import type * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import { CloudFrontTarget } from 'aws-cdk-lib/aws-route53-targets';
 import { Provider } from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
@@ -41,7 +40,12 @@ export class ZoneDns extends Construct {
   /** Issued certificate ARN in `us-east-1` for CloudFront. Absent when certificates are skipped. */
   public readonly siteCertificateArn?: string;
 
-  /** Issued certificate ARN in the stack region for the HTTP API. Absent when certificates are skipped. */
+  /**
+   * Issued certificate ARN for the HTTP API hostname.
+   *
+   * CloudFront requires this certificate in `us-east-1`. The DNS handler requests it in the stack
+   * region, and the API edge refuses any other region.
+   */
   public readonly apiCertificateArn?: string;
 
   private readonly provider: Provider;
@@ -117,13 +121,13 @@ export class ZoneDns extends Construct {
   }
 
   /**
-   * Points the site and API hostnames at the distribution and the API domain.
+   * Points the site and API hostnames at their CloudFront distributions.
    *
-   * @param targets - CloudFront distribution and the HTTP API custom domain.
+   * @param targets - Website distribution and the API distribution.
    */
   addAliases(targets: {
     distribution: cloudfront.Distribution;
-    apiDomain: apigwv2.IDomainName;
+    apiDistribution: cloudfront.Distribution;
   }): void {
     new cdk.CustomResource(this, 'Aliases', {
       serviceToken: this.provider.serviceToken,
@@ -135,8 +139,8 @@ export class ZoneDns extends Construct {
         SiteTarget: targets.distribution.distributionDomainName,
         SiteTargetZoneId: CloudFrontTarget.getHostedZoneId(targets.distribution),
         ApiName: this.zone.apiHostname,
-        ApiTarget: targets.apiDomain.regionalDomainName,
-        ApiTargetZoneId: targets.apiDomain.regionalHostedZoneId,
+        ApiTarget: targets.apiDistribution.distributionDomainName,
+        ApiTargetZoneId: CloudFrontTarget.getHostedZoneId(targets.apiDistribution),
       },
     });
   }

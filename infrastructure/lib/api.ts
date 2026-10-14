@@ -5,6 +5,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import type * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import { HttpUserPoolAuthorizer, WebSocketLambdaAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import type * as cognito from 'aws-cdk-lib/aws-cognito';
@@ -14,7 +15,18 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import type * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+import { attachApiEdge } from './api-edge';
 import { AREAS, type Area } from './names';
+import {
+  CHAT_PREFIX,
+  DIRECTORY_KEY,
+  HANDOFF_PREFIX,
+  INVITE_PREFIX,
+  TEAM_PREFIX,
+  TICKET_PREFIX,
+  USER_PREFIX,
+  grantPartitions,
+} from './table-access';
 import { areaEntry, createAreaFunctions, createFunction } from './functions';
 
 /** Inputs the API construct needs from the auth, database, and storage constructs. */
@@ -35,7 +47,11 @@ export type ApiProps = {
   corsOrigin: string;
   /** Public API hostname. When set with `certificateArn`, the stack adds a custom domain. */
   apiHostname?: string;
-  /** Certificate ARN in the stack region for `apiHostname`. */
+  /**
+   * Certificate ARN in `us-east-1` for `apiHostname`.
+   *
+   * CloudFront and the API Gateway custom domain both use it when the stack is in that region.
+   */
   certificateArn?: string;
 };
 
@@ -44,20 +60,8 @@ export type ApiProps = {
  */
 const PUBLIC_HTTP = new Set<Area>(['identity']);
 
-/**
- * Areas that read and write the product DynamoDB table.
- *
- * Media stores device tokens on the user partition and signs S3 URLs.
- */
-const TABLE_AREAS: readonly Area[] = [
-  'identity',
-  'teams',
-  'schedule',
-  'chat',
-  'media',
-  'socket',
-  'fanout',
-];
+/** HTTP areas that must see the CloudFront origin header. Socket and fan-out are not HTTP. */
+const EDGE_AREAS: readonly Area[] = ['identity', 'teams', 'schedule', 'chat', 'media', 'places'];
 
 /**
  * HTTP API plus the WebSocket API. Each area is its own function.
@@ -75,6 +79,9 @@ export class Api extends Construct {
 
   /** Custom domain for the HTTP API, when a hostname and certificate were provided. */
   public readonly customDomain?: apigwv2.DomainName;
+
+  /** CloudFront distribution that serves the public API hostname. */
+  public readonly distribution?: cloudfront.Distribution;
 
   /**
    * Creates the HTTP routes, WebSocket routes, fan-out queue, and push topic.
@@ -199,7 +206,7 @@ export class Api extends Construct {
       tableEnv,
       5,
     );
-    props.table.grantReadWriteData(socketAuthorizerFn);
+    grantPartitions(props.table, socketAuthorizerFn, { write: [TICKET_PREFIX] });
     const socketAuthorizer = new WebSocketLambdaAuthorizer('SocketAuthorizer', socketAuthorizerFn, {
       identitySource: ['route.request.querystring.ticket'],
     });
@@ -244,11 +251,45 @@ export class Api extends Construct {
       new SqsEventSource(queue, { batchSize: 10, reportBatchItemFailures: true }),
     );
 
-    for (const area of TABLE_AREAS) {
-      props.table.grantReadWriteData(functions[area]);
-    }
-    // Identity confirms new Cognito signups so login works without an email-code UI in v1.
-    props.userPool.grant(functions.identity, 'cognito-idp:AdminConfirmSignUp');
+    grantPartitions(props.table, functions.identity, {
+      read: [USER_PREFIX, TICKET_PREFIX, HANDOFF_PREFIX],
+      write: [USER_PREFIX, TICKET_PREFIX, HANDOFF_PREFIX],
+      emailIndex: true,
+    });
+    grantPartitions(props.table, functions.teams, {
+      read: [TEAM_PREFIX, USER_PREFIX, CHAT_PREFIX, INVITE_PREFIX, DIRECTORY_KEY],
+      write: [TEAM_PREFIX, USER_PREFIX, CHAT_PREFIX, INVITE_PREFIX, DIRECTORY_KEY],
+      transact: true,
+    });
+    grantPartitions(props.table, functions.schedule, {
+      read: [TEAM_PREFIX],
+      write: [TEAM_PREFIX],
+    });
+    grantPartitions(props.table, functions.chat, {
+      read: [CHAT_PREFIX, USER_PREFIX, TEAM_PREFIX],
+      write: [CHAT_PREFIX, USER_PREFIX],
+      transact: true,
+      emailIndex: true,
+    });
+    grantPartitions(props.table, functions.media, {
+      read: [USER_PREFIX, CHAT_PREFIX],
+      write: [USER_PREFIX],
+    });
+    grantPartitions(props.table, functions.socket, {
+      read: [USER_PREFIX, TICKET_PREFIX],
+      write: [USER_PREFIX, TICKET_PREFIX],
+      connectionIndex: true,
+    });
+    grantPartitions(props.table, functions.fanout, {
+      read: [CHAT_PREFIX, TEAM_PREFIX, USER_PREFIX],
+    });
+    // Replace an unconfirmed signup so a later register can prove the same inbox.
+    // Confirmed users are not deleted. Sign-up confirmation uses the public client API.
+    props.userPool.grant(
+      functions.identity,
+      'cognito-idp:AdminGetUser',
+      'cognito-idp:AdminDeleteUser',
+    );
     props.mediaBucket.grantRead(functions.media);
     props.mediaBucket.grantPut(functions.media);
 
@@ -265,6 +306,17 @@ export class Api extends Construct {
         domainName: this.customDomain,
         stage: this.httpApi.defaultStage,
       });
+      const edge = attachApiEdge(this, {
+        customDomain: this.customDomain,
+        apiHostname: props.apiHostname,
+        certificateArn: props.certificateArn,
+      });
+      this.distribution = edge.distribution;
+      const cfnApi = this.httpApi.node.defaultChild as apigwv2.CfnApi;
+      cfnApi.disableExecuteApiEndpoint = true;
+      for (const area of EDGE_AREAS) {
+        functions[area].addEnvironment('ORIGIN_VERIFY_SECRET', edge.originVerify);
+      }
     }
 
     new cdk.CfnOutput(this, 'HttpApiUrl', {
