@@ -310,11 +310,9 @@ inserted into the hostnames:
 The Cognito callback is `https://api.<environment>.example.com/identity/oauth/callback`. Logout returns to
 `https://app.<environment>.example.com/login`.
 
-`GamePlanDns` creates the certificate validation records from Parameter Store `hosted-zone-id` and `hosted-zone-name`,
-and the repository secret `HOSTED_ZONE_ROLE_ARN`. `GamePlanApi` writes the alias records with the same values. The role is in the account that
-owns the zone (the management account, when the domain was registered there). Its trust policy allows the application
-account to assume it, and it can call `route53:ChangeResourceRecordSets` on that hosted zone and `route53:GetChange` on
-`arn:aws:route53:::change/*`.
+`GamePlanDns` creates the certificate validation records in the hosted zone from Parameter Store
+`hosted-zone-id` and `hosted-zone-name`. The zone id is the delegated zone in this account, and the name is the
+registered domain used to build `app.<environment>.<name>`. `GamePlanApi` writes the alias records in that same zone.
 
 ### Parameter Store
 

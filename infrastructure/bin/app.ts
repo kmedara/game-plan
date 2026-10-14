@@ -66,7 +66,6 @@ const dns =
     ? undefined
     : {
         hostedZoneId,
-        roleArn: definedString(process.env.HOSTED_ZONE_ROLE_ARN),
         siteHostname,
         apiHostname,
       };
