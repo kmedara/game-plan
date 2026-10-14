@@ -13,8 +13,10 @@ function redact_accounts(line, out, rest, start, before, after) {
     start = RSTART
     before = (start == 1) ? "" : substr(rest, start - 1, 1)
     after = substr(rest, start + RLENGTH, 1)
+    match_str = substr(rest, start, RLENGTH)
     if ((before !~ /[0-9]/) && (after !~ /[0-9]/)) {
-      out = out substr(rest, 1, start - 1) "<account>"
+      masked = "**********" substr(match_str,11,2)
+      out = out substr(rest, 1, start - 1) masked
     } else {
       out = out substr(rest, 1, start + RLENGTH - 1)
     }
