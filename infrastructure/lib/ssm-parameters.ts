@@ -141,10 +141,36 @@ export const formatGithubEnv = (env: Record<string, string>): string => {
 };
 
 /**
+ * Resolves a CloudFormation output key to a parameter suffix.
+ *
+ * An output declared on the stack uses the mapping key as its logical id.
+ * An output declared on a nested construct keeps the construct path and an
+ * eight-character hash, such as `StorageSiteBucketNameA0602231`.
+ *
+ * @param outputKey - Key from a CDK `--outputs-file` document.
+ * @param mapping - Output id to parameter suffix.
+ * @returns The parameter suffix, when the key is one of the mapped outputs.
+ */
+const suffixForOutputKey = (outputKey: string, mapping: Record<string, string>): string | undefined => {
+  const exact = mapping[outputKey];
+  if (exact !== undefined) return exact;
+
+  const hash = outputKey.slice(-8);
+  if (!/^[A-F0-9]{8}$/u.test(hash)) return undefined;
+  const human = outputKey.slice(0, -8);
+  let match: { name: string; suffix: string } | undefined;
+  for (const [name, suffix] of Object.entries(mapping)) {
+    if (!human.endsWith(name) || human.length === name.length) continue;
+    if (match === undefined || name.length > match.name.length) match = { name, suffix };
+  }
+  return match?.suffix;
+};
+
+/**
  * Reads known stack outputs from a CDK `--outputs-file` document.
  *
  * @param document - Parsed JSON from the outputs file.
- * @param mapping - Output key to parameter suffix. Defaults to every stack output.
+ * @param mapping - Output id to parameter suffix. Defaults to every stack output.
  * @returns Parameter suffixes and values for the outputs that are present.
  */
 export const parametersFromOutputs = (
@@ -155,9 +181,9 @@ export const parametersFromOutputs = (
   const visit = (node: unknown): void => {
     if (node === null || typeof node !== 'object') return;
     for (const [key, value] of Object.entries(node)) {
-      const suffix = mapping[key];
+      const suffix = suffixForOutputKey(key, mapping);
       if (suffix !== undefined && typeof value === 'string' && value.trim() !== '') {
-        found[suffix] = value;
+        if (mapping[key] !== undefined || found[suffix] === undefined) found[suffix] = value;
       } else if (value !== null && typeof value === 'object') {
         visit(value);
       }

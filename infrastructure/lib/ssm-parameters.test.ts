@@ -2,12 +2,16 @@
  * Unit tests for Parameter Store name mapping and stack-output publishing.
  */
 
+import * as cdk from 'aws-cdk-lib';
+import { Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
+import { GamePlanPlatform } from './gameplan-stack';
 import {
   envFromParameters,
   formatGithubEnv,
   missingEnv,
   parametersFromOutputs,
+  PLATFORM_OUTPUT_PARAMETERS,
   REQUIRED_CLIENT_ENV,
 } from './ssm-parameters';
 
@@ -94,5 +98,41 @@ describe('ssm parameters', () => {
       'site-distribution-id': 'E123',
       'site-url': 'https://app.example.com',
     });
+  });
+
+  it('reads nested construct outputs whose logical ids include a hash', () => {
+    expect(
+      parametersFromOutputs(
+        {
+          GamePlanPlatform: {
+            StorageSiteBucketNameA0602231: 'site-bucket',
+            StorageSiteDistributionIdC5FF3B81: 'E123',
+            StorageSiteUrl67006B64: 'https://app.example.com',
+            AuthUserPoolIdC0605E59: 'pool',
+          },
+        },
+        PLATFORM_OUTPUT_PARAMETERS,
+      ),
+    ).toEqual({
+      'site-bucket-name': 'site-bucket',
+      'site-distribution-id': 'E123',
+      'site-url': 'https://app.example.com',
+    });
+  });
+
+  it('finds the site outputs in the platform template', () => {
+    const app = new cdk.App();
+    const stack = new GamePlanPlatform(app, 'GamePlanPlatform', {
+      corsOrigin: 'https://app.example.com',
+      callbackUrls: ['https://api.example.com/identity/oauth/callback'],
+      logoutUrls: ['https://app.example.com/login'],
+    });
+    const keys = Object.keys(Template.fromStack(stack).toJSON().Outputs as object);
+    const document = { GamePlanPlatform: Object.fromEntries(keys.map((key) => [key, 'value'])) };
+    expect(Object.keys(parametersFromOutputs(document, PLATFORM_OUTPUT_PARAMETERS)).sort()).toEqual([
+      'site-bucket-name',
+      'site-distribution-id',
+      'site-url',
+    ]);
   });
 });
