@@ -15,6 +15,7 @@
     "db:create": "tsx local/src/create-table.ts",
     "db:seed": "tsx local/src/seed-demo-teams.ts --reset",
     "up": "docker compose up --watch",
+    "env:local": "node fetch-local-env.mjs",
     "up:build": "docker compose up --build --watch",
     "down": "docker compose down",
     "test": "vitest run",

@@ -11,6 +11,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY lib/schemas/package.json ./lib/schemas/package.json
 COPY lib/types/package.json ./lib/types/package.json
+COPY lib/rules/package.json ./lib/rules/package.json
 COPY local/package.json ./local/package.json
 COPY functions/lib/package.json ./functions/lib/package.json
 COPY functions/identity/package.json ./functions/identity/package.json

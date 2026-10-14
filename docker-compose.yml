@@ -90,6 +90,9 @@ services:
         - action: sync
           path: ./lib/types
           target: /app/lib/types
+        - action: sync
+          path: ./lib/rules
+          target: /app/lib/rules
 
 volumes:
   dynamodb-data:

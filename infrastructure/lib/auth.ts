@@ -41,7 +41,7 @@ export class Auth extends Construct {
   /** Public app client used by the Hosted UI OAuth flow. */
   public readonly userPoolClient: cognito.UserPoolClient;
 
-  /** Cognito Hosted UI domain name (without scheme). */
+  /** Cognito Hosted UI hostname (no scheme), including the `auth.<region>.amazoncognito.com` suffix. */
   public readonly hostedUiDomain: string;
 
   /**
@@ -163,7 +163,8 @@ export class Auth extends Construct {
     const domain = this.userPool.addDomain('HostedUi', {
       cognitoDomain: { domainPrefix },
     });
-    this.hostedUiDomain = domain.domainName;
+    // `domainName` is only the prefix (`gameplan-<account>`). Hosted UI lives on the full hostname.
+    this.hostedUiDomain = cdk.Fn.select(1, cdk.Fn.split('://', domain.baseUrl()));
 
     const issuer = `https://cognito-idp.${cdk.Stack.of(this).region}.amazonaws.com/${this.userPool.userPoolId}`;
 
