@@ -1,8 +1,8 @@
 /**
  * Maps Parameter Store names under a shared prefix to process environment variables.
  *
- * Every parameter is a String. The deploy workflows load the path, and the API
- * workflow writes stack outputs back under the same prefix.
+ * Every parameter is a String. The deploy workflows load the path, and the
+ * stack deploy writes stack outputs back under the same prefix.
  */
 
 /** Suffix after the prefix, mapped to the environment variable CDK and the client build read. */

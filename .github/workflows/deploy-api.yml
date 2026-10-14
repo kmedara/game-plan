@@ -19,38 +19,9 @@ permissions:
   id-token: write
   contents: read
 
-concurrency:
-  group: deploy-api-${{ github.event_name == 'release' && 'production' || github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
-  cancel-in-progress: false
-
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'release' && 'production' || github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-
-      - run: npm ci
-
-      - name: Load Parameter Store
-        run: npx tsx infrastructure/scripts/load-ssm-env.ts api
-        env:
-          SSM_PREFIX: ${{ vars.SSM_PREFIX || '/gameplan' }}
-
-      - name: Deploy GamePlanStack
-        run: npm run deploy -w @gameplan/infrastructure -- --outputs-file "$GITHUB_WORKSPACE/cdk-outputs.json"
-
-      - name: Publish stack URLs
-        run: npx tsx infrastructure/scripts/publish-stack-outputs.ts "$GITHUB_WORKSPACE/cdk-outputs.json"
-        env:
-          SSM_PREFIX: ${{ vars.SSM_PREFIX || '/gameplan' }}
+    uses: ./.github/workflows/deploy-stack.yml
+    with:
+      environment: ${{ github.event_name == 'release' && 'production' || github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+    secrets: inherit

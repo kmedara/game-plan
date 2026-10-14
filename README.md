@@ -282,10 +282,13 @@ Staging and production are the same stack in **separate AWS accounts**. Resource
 | Workflow | When |
 | --- | --- |
 | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Pull requests and pushes to `master`. Typecheck and tests. No AWS credentials. |
-| [`.github/workflows/deploy-api.yml`](.github/workflows/deploy-api.yml) | Push to `master` deploys the **staging** environment. A published GitHub release deploys **production**. |
-| [`.github/workflows/deploy-client.yml`](.github/workflows/deploy-client.yml) | Same triggers. Builds the Angular site and syncs it to the site bucket. |
+| [`.github/workflows/deploy-infra.yml`](.github/workflows/deploy-infra.yml) | Manual. First stack in an account, and any later run that should refresh stack outputs in Parameter Store. |
+| [`.github/workflows/deploy-api.yml`](.github/workflows/deploy-api.yml) | Push to `master` updates the **staging** stack. A published GitHub release updates **production**. |
+| [`.github/workflows/deploy-client.yml`](.github/workflows/deploy-client.yml) | Same triggers as the API workflow. Builds the Expo site and syncs it to the site bucket. |
 
-The API and client workflows are independent. Re-run either from the Actions tab (`workflow_dispatch` chooses `staging` or `production`).
+The infrastructure workflow is the one to run before the client workflow has a bucket and an API URL. Later API deploys
+update the same stack and write the same outputs. The API and client workflows stay independent of each other. Re-run
+any of them from the Actions tab (`workflow_dispatch` chooses `staging` or `production`).
 
 ### Parameter Store
 
@@ -301,11 +304,15 @@ Both accounts use the same prefix, `/gameplan/` (override with the `SSM_PREFIX` 
 | `apple-client-id`, `apple-team-id`, `apple-key-id`, `apple-private-key` | Optional Apple IdP. Store the PEM, including line breaks. |
 | `google-maps-api-key` | Places Lambda |
 | `google-maps-browser-api-key` | Website map |
-| `api-base-url`, `ws-base-url`, `site-bucket-name`, `site-distribution-id`, `site-url` | Written by the API workflow after deploy. The client workflow reads the API URL, bucket, and distribution id. |
+| `api-base-url`, `ws-base-url`, `site-bucket-name`, `site-distribution-id`, `site-url` | Written when the stack deploys. The client workflow reads the API URL, bucket, and distribution id. |
 
 An identity provider is created only when every field for that provider is set. CDK context still overrides these environment variables for a local `cdk deploy`.
 
-Before the first API deploy in an account, set `client-origin`, `callback-urls`, and `logout-urls`. If you do not know the CloudFront or API Gateway host yet, use placeholders, deploy, then copy `HttpApiUrl` into `callback-urls` and `SiteUrl` into `client-origin` and `logout-urls` and deploy the API again. Those hosts do not change on later deploys. The client workflow fails until `api-base-url`, `site-bucket-name`, and `site-distribution-id` exist.
+Before the first infrastructure deploy in an account, set `client-origin`, `callback-urls`, and `logout-urls`. When the
+CloudFront or API Gateway host is not known yet, use placeholders, run the infrastructure workflow, then copy
+`HttpApiUrl` into `callback-urls` and `SiteUrl` into `client-origin` and `logout-urls` and run that workflow again.
+Those hosts do not change on later deploys. The client workflow fails until `api-base-url`, `site-bucket-name`, and
+`site-distribution-id` exist.
 
 ### One-time account setup
 
