@@ -233,8 +233,9 @@ export class Api extends Construct {
     if (socketAuthorizerResource === undefined) {
       throw new Error('Socket authorizer resource was not created');
     }
-    // A cached Allow would accept a replayed ticket without running this function.
-    socketAuthorizerResource.authorizerResultTtlInSeconds = 0;
+    // WebSocket APIs reject AuthorizerResultTtlInSeconds. Omitting it means $connect
+    // invokes the authorizer every time, so a cached Allow cannot replay a ticket.
+    socketAuthorizerResource.addPropertyDeletionOverride('AuthorizerResultTtlInSeconds');
 
     const socketStage = new apigwv2.WebSocketStage(this, 'WebSocketStage', {
       webSocketApi: this.webSocketApi,
