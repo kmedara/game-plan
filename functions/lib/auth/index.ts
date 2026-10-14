@@ -45,9 +45,11 @@ export {
 
 export {
   toUserProfile,
+  type ConfirmationRequired,
   type IdentityProvider,
   type IdentityTokens,
   type RegisterInput,
+  type RegisterResult,
   type UserProfileItem,
 } from "./identity-provider.js";
 

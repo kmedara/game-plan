@@ -40,6 +40,12 @@ describe('getIdentityProvider', () => {
       async login() {
         throw new Error('stub-login');
       },
+      async confirmRegistration() {
+        throw new Error('stub-confirm');
+      },
+      async resendConfirmation() {
+        throw new Error('stub-resend');
+      },
       async refresh() {
         throw new Error('stub-refresh');
       },

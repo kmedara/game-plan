@@ -3,6 +3,7 @@
  */
 
 export { handleCompleteProfile } from './complete-profile.js';
+export { handleConfirmRegistration, handleResendConfirmation } from './confirm.js';
 export { handleLogin } from './login.js';
 export { handleLogout } from './logout.js';
 export { handleMe } from './me.js';

@@ -4,7 +4,7 @@
 
 import { completeProfileBodySchema } from '@gameplan/schemas';
 import { getProfile, putProfile, toUserProfile, verifyAuthHeader } from '../../../lib/auth/index.js';
-import { accountKindFromBirthday } from '../../../lib/minor-chat.js';
+import { accountKindFromBirthday } from '@gameplan/rules';
 import { badRequest, headerOf, json } from '../../../lib/http.js';
 import { route, withBodyValidation } from '../../../lib/pipeline.js';
 import { withIdentityErrors } from './session.js';
@@ -19,6 +19,10 @@ export const handleCompleteProfile = route(
   withIdentityErrors(),
   withBodyValidation(completeProfileBodySchema),
   async ({ event, body }) => {
+    const auth = await verifyAuthHeader(headerOf(event, 'authorization'));
+    const existing = await getProfile(auth.userId);
+    if (existing?.birthday !== undefined) throw new Error('profile_already_complete');
+
     let accountKind: 'adult' | 'minor';
     try {
       accountKind = accountKindFromBirthday(body.birthday);
@@ -26,8 +30,6 @@ export const handleCompleteProfile = route(
       return badRequest('invalid_birthday');
     }
 
-    const auth = await verifyAuthHeader(headerOf(event, 'authorization'));
-    const existing = await getProfile(auth.userId);
     const email = auth.email ?? existing?.email;
     if (email === undefined) return badRequest('email_required');
 

@@ -126,7 +126,50 @@ export class SessionService {
    * @returns The session tokens and profile.
    */
   async register(body: RegisterBody): Promise<SessionTokens> {
-    return this.authenticate('register', body);
+    const response = await this.fetchImpl(`${this.baseUrl}/register`, {
+      method: 'POST',
+      credentials: this.mode === 'web' ? 'include' : 'omit',
+      headers: identityHeaders(undefined, this.mode),
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) await throwHttpError(response);
+    const payload = (await response.json()) as SessionTokens & { confirmationRequired?: boolean };
+    if (payload.confirmationRequired === true) {
+      throw new Error('email_confirmation_required');
+    }
+    await this.applySession(payload);
+    return payload;
+  }
+
+  /**
+   * Submits the emailed Cognito confirmation code.
+   *
+   * @param email - The address used at registration.
+   * @param code - The code from the email.
+   */
+  async confirmRegistration(email: string, code: string): Promise<void> {
+    const response = await this.fetchImpl(`${this.baseUrl}/confirm`, {
+      method: 'POST',
+      credentials: this.mode === 'web' ? 'include' : 'omit',
+      headers: identityHeaders(undefined, this.mode),
+      body: JSON.stringify({ email, code }),
+    });
+    if (!response.ok) await throwHttpError(response);
+  }
+
+  /**
+   * Asks Cognito to email another confirmation code.
+   *
+   * @param email - The address used at registration.
+   */
+  async resendConfirmation(email: string): Promise<void> {
+    const response = await this.fetchImpl(`${this.baseUrl}/confirm/resend`, {
+      method: 'POST',
+      credentials: this.mode === 'web' ? 'include' : 'omit',
+      headers: identityHeaders(undefined, this.mode),
+      body: JSON.stringify({ email }),
+    });
+    if (!response.ok) await throwHttpError(response);
   }
 
   /**

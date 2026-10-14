@@ -3,13 +3,22 @@
  */
 
 import {
-  AdminConfirmSignUpCommand,
+  AdminDeleteUserCommand,
+  AdminGetUserCommand,
+  CodeMismatchException,
   CognitoIdentityProviderClient,
+  ConfirmSignUpCommand,
+  ExpiredCodeException,
   InitiateAuthCommand,
+  InvalidParameterException,
+  LimitExceededException,
+  NotAuthorizedException,
+  ResendConfirmationCodeCommand,
   RevokeTokenCommand,
   SignUpCommand,
+  TooManyRequestsException,
   UsernameExistsException,
-  NotAuthorizedException,
+  UserNotConfirmedException,
   UserNotFoundException,
 } from '@aws-sdk/client-cognito-identity-provider';
 import type { LoginBody } from '@gameplan/types';
@@ -17,6 +26,7 @@ import type {
   IdentityProvider,
   IdentityTokens,
   RegisterInput,
+  RegisterResult,
 } from './identity-provider.js';
 
 /** Cached Cognito Identity Provider client. */
@@ -91,56 +101,123 @@ const fromAuthResult = (
 };
 
 /**
+ * Maps Cognito confirmation failures to stable identity errors.
+ *
+ * @param error - The SDK error.
+ * @returns Never. Always throws a stable error or the original value.
+ */
+const throwConfirmationError = (error: unknown): never => {
+  if (
+    error instanceof CodeMismatchException ||
+    error instanceof ExpiredCodeException ||
+    error instanceof UserNotFoundException ||
+    error instanceof NotAuthorizedException
+  ) {
+    throw new Error('invalid_confirmation_code');
+  }
+  if (error instanceof LimitExceededException || error instanceof TooManyRequestsException) {
+    throw new Error('confirmation_throttled');
+  }
+  throw error;
+};
+
+/**
  * Creates the Cognito identity provider.
+ *
+ * Signup stays unconfirmed until the user submits the code Cognito emailed.
+ * This provider never calls `AdminConfirmSignUp`.
  *
  * @returns An {@link IdentityProvider} backed by the user pool.
  */
-export const createCognitoIdentityProvider = (): IdentityProvider => ({
-  async register(input: RegisterInput): Promise<IdentityTokens> {
+export const createCognitoIdentityProvider = (): IdentityProvider => {
+  /**
+   * Creates an unconfirmed Cognito user.
+   *
+   * @param clientId - The app client id.
+   * @param email - The normalized email.
+   * @param input - The registration fields.
+   * @returns The SignUp response.
+   */
+  const signUp = (clientId: string, email: string, input: RegisterInput) =>
+    getCognitoClient().send(
+      new SignUpCommand({
+        ClientId: clientId,
+        Username: email,
+        Password: input.password,
+        UserAttributes: [
+          { Name: 'email', Value: email },
+          { Name: 'name', Value: input.displayName.trim() },
+        ],
+      }),
+    );
+
+  return {
+  async register(input: RegisterInput): Promise<RegisterResult> {
     const { userPoolId, clientId } = cognitoConfig();
     const client = getCognitoClient();
     const email = input.email.trim().toLowerCase();
 
-    let userSub: string;
+    let signedUp;
     try {
-      const signedUp = await client.send(
-        new SignUpCommand({
-          ClientId: clientId,
-          Username: email,
-          Password: input.password,
-          UserAttributes: [
-            { Name: 'email', Value: email },
-            { Name: 'name', Value: input.displayName.trim() },
-          ],
-        }),
-      );
-      if (signedUp.UserSub === undefined) throw new Error('auth_failed');
-      userSub = signedUp.UserSub;
+      signedUp = await signUp(clientId, email, input);
     } catch (error) {
-      if (error instanceof UsernameExistsException) throw new Error('email_taken');
-      throw error;
+      if (!(error instanceof UsernameExistsException)) throw error;
+      const existing = await client.send(
+        new AdminGetUserCommand({ UserPoolId: userPoolId, Username: email }),
+      );
+      // A previous signup that never proved the inbox can be replaced.
+      // A confirmed account stays taken.
+      if (existing.UserStatus !== 'UNCONFIRMED') throw new Error('email_taken');
+      await client.send(
+        new AdminDeleteUserCommand({ UserPoolId: userPoolId, Username: email }),
+      );
+      try {
+        signedUp = await signUp(clientId, email, input);
+      } catch (retryError) {
+        if (retryError instanceof UsernameExistsException) throw new Error('email_taken');
+        throw retryError;
+      }
     }
 
-    // v1 has no email verification UI; confirm immediately so login works.
-    await client.send(
-      new AdminConfirmSignUpCommand({
-        UserPoolId: userPoolId,
-        Username: email,
-      }),
-    );
+    if (signedUp.UserSub === undefined) throw new Error('auth_failed');
+    if (signedUp.UserConfirmed === true) throw new Error('email_not_confirmed');
+    return { status: 'confirmation_required', userId: signedUp.UserSub, email };
+  },
 
-    const loggedIn = await client.send(
-      new InitiateAuthCommand({
-        AuthFlow: 'USER_PASSWORD_AUTH',
-        ClientId: clientId,
-        AuthParameters: {
-          USERNAME: email,
-          PASSWORD: input.password,
-        },
-      }),
-    );
+  async confirmRegistration(email: string, code: string): Promise<void> {
+    const { clientId } = cognitoConfig();
+    try {
+      await getCognitoClient().send(
+        new ConfirmSignUpCommand({
+          ClientId: clientId,
+          Username: email.trim().toLowerCase(),
+          ConfirmationCode: code.trim(),
+        }),
+      );
+    } catch (error) {
+      throwConfirmationError(error);
+    }
+  },
 
-    return fromAuthResult(userSub, email, loggedIn.AuthenticationResult ?? {});
+  async resendConfirmation(email: string): Promise<void> {
+    const { clientId } = cognitoConfig();
+    try {
+      await getCognitoClient().send(
+        new ResendConfirmationCodeCommand({
+          ClientId: clientId,
+          Username: email.trim().toLowerCase(),
+        }),
+      );
+    } catch (error) {
+      if (
+        error instanceof UserNotFoundException ||
+        error instanceof InvalidParameterException ||
+        error instanceof NotAuthorizedException
+      ) {
+        return;
+      }
+      throwConfirmationError(error);
+    }
   },
 
   async login(input: LoginBody): Promise<IdentityTokens> {
@@ -175,6 +252,7 @@ export const createCognitoIdentityProvider = (): IdentityProvider => ({
         RefreshToken: loggedIn.AuthenticationResult?.RefreshToken,
       });
     } catch (error) {
+      if (error instanceof UserNotConfirmedException) throw new Error('email_not_confirmed');
       if (
         error instanceof NotAuthorizedException ||
         error instanceof UserNotFoundException
@@ -237,4 +315,5 @@ export const createCognitoIdentityProvider = (): IdentityProvider => ({
       // Best-effort revoke; clearing the cookie still ends the website session.
     }
   },
-});
+  };
+};

@@ -129,6 +129,12 @@ const memoryProvider = (): IdentityProvider => {
       const email = claims.email ?? '';
       return tokensFor(claims.sub, email);
     },
+    async confirmRegistration() {
+      throw new Error('confirmation_not_required');
+    },
+    async resendConfirmation() {
+      throw new Error('confirmation_not_required');
+    },
     async logout() {},
   };
 };
@@ -235,7 +241,7 @@ describe('identity handler (in-memory)', () => {
   });
 
   it('returns invalid_birthday when age parsing fails after validation', async () => {
-    const minorChat = await import('../../lib/minor-chat.js');
+    const minorChat = await import('@gameplan/rules');
     const birthdaySpy = vi.spyOn(minorChat, 'accountKindFromBirthday').mockImplementationOnce(() => {
       throw new Error('invalid_birthday');
     });
@@ -374,5 +380,15 @@ describe('identity handler (in-memory)', () => {
       ticket: `ticket-${session.user.userId}`,
       expiresIn: 60,
     });
+  });
+
+  it('does not confirm a local account with an email code', async () => {
+    const result = await handler(
+      httpEvent('POST', '/identity/confirm', {
+        body: { email: 'ada@example.com', code: '123456' },
+      }),
+    );
+    expect(result.statusCode).toBe(400);
+    expect(JSON.parse(result.body ?? '')).toEqual({ error: 'confirmation_not_required' });
   });
 });

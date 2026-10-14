@@ -147,6 +147,12 @@ const memoryProvider = (): IdentityProvider => {
     async login() {
       throw new Error('unused');
     },
+    async confirmRegistration() {
+      throw new Error('unused');
+    },
+    async resendConfirmation() {
+      throw new Error('unused');
+    },
     async refresh(refreshToken) {
       const { verifyLocalJwt } = await import('../../lib/auth/local-jwt.js');
       const claims = verifyLocalJwt(refreshToken);
@@ -397,13 +403,26 @@ describe('identity oauth and session edges', () => {
     );
     expect(badBirthday.statusCode).toBe(400);
 
-    const minorChat = await import('../../lib/minor-chat.js');
+    const again = await handler(
+      httpEvent('POST', '/identity/profile/complete', {
+        headers: { authorization: `Bearer ${accessToken}` },
+        body: { birthday: '1990-01-01' },
+      }),
+    );
+    expect(again.statusCode).toBe(409);
+    expect(JSON.parse(again.body ?? '')).toEqual({ error: 'profile_already_complete' });
+
+    const freshId = randomUUID();
+    const freshEmail = `${freshId}@example.com`;
+    const freshTokens = issueLocalTokens(freshId, freshEmail);
+    seedProfile(freshId, freshEmail);
+    const minorChat = await import('@gameplan/rules');
     const birthdaySpy = vi.spyOn(minorChat, 'accountKindFromBirthday').mockImplementationOnce(() => {
       throw new Error('invalid_birthday');
     });
     const mappedBirthday = await handler(
       httpEvent('POST', '/identity/profile/complete', {
-        headers: { authorization: `Bearer ${accessToken}` },
+        headers: { authorization: `Bearer ${freshTokens.accessToken}` },
         body: { birthday: '1990-01-01' },
       }),
     );

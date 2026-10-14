@@ -8,7 +8,20 @@ import { getItem, putItem } from '../dynamo/access.js';
 import { getDocClient } from '../dynamo/client.js';
 import { GSI_EMAIL, TABLE_PK, TABLE_SK, profileSk, userPk } from '../dynamo/keys.js';
 import { EMAIL_INDEX, TABLE_NAME } from '../names.js';
+import { accountKindForProfile } from '@gameplan/rules';
 import type { UserProfileItem } from './identity-provider.js';
+
+/**
+ * Replaces a stored account kind with the kind implied by the birthday.
+ *
+ * @param item - The profile row from DynamoDB.
+ * @returns The same row, with `accountKind` derived when a birthday is present.
+ */
+const withDerivedAccountKind = (item: UserProfileItem): UserProfileItem => {
+  const accountKind = accountKindForProfile(item.birthday, item.accountKind);
+  if (accountKind === item.accountKind) return item;
+  return { ...item, accountKind };
+};
 
 /**
  * Loads a user profile by user id.
@@ -16,8 +29,10 @@ import type { UserProfileItem } from './identity-provider.js';
  * @param userId - The Cognito `sub` or local user id.
  * @returns The profile item, or `undefined` when missing.
  */
-export const getProfile = async (userId: string): Promise<UserProfileItem | undefined> =>
-  getItem<UserProfileItem>(userPk(userId), profileSk());
+export const getProfile = async (userId: string): Promise<UserProfileItem | undefined> => {
+  const item = await getItem<UserProfileItem>(userPk(userId), profileSk());
+  return item === undefined ? undefined : withDerivedAccountKind(item);
+};
 
 /**
  * Looks up a profile by exact email through the EmailIndex Global Secondary Index (GSI).
@@ -42,7 +57,8 @@ export const findProfileByEmail = async (
   );
   const key = result.Items?.[0] as { PK?: string; SK?: string } | undefined;
   if (key?.PK === undefined || key.SK === undefined) return undefined;
-  return getItem<UserProfileItem>(key.PK, key.SK);
+  const item = await getItem<UserProfileItem>(key.PK, key.SK);
+  return item === undefined ? undefined : withDerivedAccountKind(item);
 };
 
 /**

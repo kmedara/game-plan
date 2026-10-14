@@ -8,6 +8,7 @@ import type { SessionTokens, UserProfile } from '@gameplan/types';
 import {
   badRequest,
   conflict,
+  forbidden,
   json,
   notFound,
   unauthorized,
@@ -76,6 +77,15 @@ export const mapError = (error: unknown): APIGatewayProxyStructuredResultV2 | un
   switch (error.message) {
     case 'email_taken':
       return conflict('email_taken');
+    case 'profile_already_complete':
+      return conflict('profile_already_complete');
+    case 'email_not_confirmed':
+      return forbidden('email_not_confirmed');
+    case 'invalid_confirmation_code':
+    case 'confirmation_not_required':
+      return badRequest(error.message);
+    case 'confirmation_throttled':
+      return json(429, { error: 'confirmation_throttled' });
     case 'invalid_credentials':
       return unauthorized('invalid_credentials');
     case 'invalid_token':

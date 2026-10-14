@@ -157,8 +157,10 @@ and the Android key in the Expo app config. See [`docs/maps/README.md`](docs/map
 | `GET`  | `/identity/oauth/logout`        | Clear cookie and redirect to Cognito logout       |
 | `POST` | `/identity/oauth/exchange`      | Redeem a native handoff code for a session        |
 | `POST` | `/identity/profile/complete`    | Birthday + display name after social sign-in       |
-| `POST` | `/identity/register`            | Email/password (tests / legacy); stores `accountKind` |
-| `POST` | `/identity/login`               | Email/password session                             |
+| `POST` | `/identity/register`            | Email/password. Cognito returns `confirmationRequired` and no session until the email code is confirmed |
+| `POST` | `/identity/confirm`             | Submit the emailed signup code                     |
+| `POST` | `/identity/confirm/resend`      | Send another signup code                           |
+| `POST` | `/identity/login`               | Email/password session. Unconfirmed Cognito users get `email_not_confirmed` |
 | `POST` | `/identity/refresh`             | Cookie and/or `{ "refreshToken" }` body            |
 | `POST` | `/identity/logout`              | Clears the refresh cookie                          |
 | `GET`  | `/identity/me`                  | Bearer access token; returns the profile           |

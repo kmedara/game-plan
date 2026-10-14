@@ -1,13 +1,14 @@
 /**
  * Identity area Lambda.
  *
- * Dispatches register, login, refresh, logout, OAuth, profile complete, socket tickets, and `GET /me`.
+ * Dispatches register, email confirmation, login, refresh, logout, OAuth, profile complete, socket tickets, and `GET /me`.
  */
 
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
-import { handleHealth, notFound } from '../../lib/http.js';
+import { handleHealth, notFound, rejectDirectOrigin } from '../../lib/http.js';
 import {
   handleCompleteProfile,
+  handleConfirmRegistration,
   handleLogin,
   handleLogout,
   handleMe,
@@ -17,6 +18,7 @@ import {
   handleOAuthLogout,
   handleRefresh,
   handleRegister,
+  handleResendConfirmation,
   handleSocketTicket,
   handleUpdateProfile,
 } from './routes/index.js';
@@ -44,6 +46,9 @@ const routeOf = (path: string): string | undefined => {
 export const handler = async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyStructuredResultV2> => {
+  const rejected = rejectDirectOrigin(event);
+  if (rejected !== undefined) return rejected;
+
   const path = event.rawPath ?? '';
   const method = event.requestContext.http.method;
 
@@ -54,6 +59,8 @@ export const handler = async (
   const route = routeOf(path);
 
   if (method === 'POST' && route === 'register') return handleRegister(event);
+  if (method === 'POST' && route === 'confirm/resend') return handleResendConfirmation(event);
+  if (method === 'POST' && route === 'confirm') return handleConfirmRegistration(event);
   if (method === 'POST' && route === 'login') return handleLogin(event);
   if (method === 'POST' && route === 'refresh') return handleRefresh(event);
   if (method === 'POST' && route === 'logout') return handleLogout(event);

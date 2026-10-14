@@ -3,6 +3,28 @@
  */
 
 import type { AccountKind, LoginBody, UserProfile } from '@gameplan/types';
+import { accountKindForProfile } from '@gameplan/rules';
+
+/**
+ * Cognito signup that is waiting for the emailed confirmation code.
+ *
+ * No session is issued until the code is confirmed.
+ */
+export type ConfirmationRequired = {
+  status: 'confirmation_required';
+  /** Cognito `sub` for the unconfirmed account. */
+  userId: string;
+  /** Normalized email the code was sent to. */
+  email: string;
+};
+
+/** Session from a provider that does not use an email code, or a completed login. */
+export type AuthenticatedRegistration = IdentityTokens & {
+  status?: 'authenticated';
+};
+
+/** Result of {@link IdentityProvider.register}. */
+export type RegisterResult = AuthenticatedRegistration | ConfirmationRequired;
 
 /** Result of register, login, or refresh. */
 export type IdentityTokens = {
@@ -32,12 +54,33 @@ export type RegisterInput = {
  */
 export type IdentityProvider = {
   /**
-   * Registers a new account and returns tokens.
+   * Registers a new account.
+   *
+   * Cognito returns {@link ConfirmationRequired} and does not issue tokens.
+   * The local provider returns a session because it has no mail channel.
    *
    * @param input - Email, password, display name, and account kind.
-   * @returns Issued tokens and the new user id.
+   * @returns A session, or a pending email confirmation.
    */
-  register: (input: RegisterInput) => Promise<IdentityTokens>;
+  register: (input: RegisterInput) => Promise<RegisterResult>;
+
+  /**
+   * Confirms a Cognito signup with the code sent to the email address.
+   *
+   * @param email - The account email.
+   * @param code - The confirmation code from the email.
+   */
+  confirmRegistration: (email: string, code: string) => Promise<void>;
+
+  /**
+   * Sends another Cognito confirmation code.
+   *
+   * Unknown addresses are ignored so the response does not reveal whether an
+   * account exists.
+   *
+   * @param email - The account email.
+   */
+  resendConfirmation: (email: string) => Promise<void>;
 
   /**
    * Authenticates an existing account.
@@ -92,7 +135,7 @@ export const toUserProfile = (item: UserProfileItem): UserProfile => ({
   userId: item.userId,
   email: item.email,
   displayName: item.displayName,
-  accountKind: item.accountKind,
+  accountKind: accountKindForProfile(item.birthday, item.accountKind),
   ...(item.birthday !== undefined ? { birthday: item.birthday } : {}),
   ...(item.photoKey !== undefined ? { photoKey: item.photoKey } : {}),
   ...(item.phoneNumber !== undefined ? { phoneNumber: item.phoneNumber } : {}),

@@ -10,10 +10,11 @@ import {
   REFRESH_DELIVERY_HEADER,
   toUserProfile,
   wantsBodyRefreshToken,
+  type RegisterResult,
   type UserProfileItem,
 } from '../../../lib/auth/index.js';
-import { badRequest, headerOf } from '../../../lib/http.js';
-import { accountKindFromBirthday } from '../../../lib/minor-chat.js';
+import { badRequest, headerOf, json } from '../../../lib/http.js';
+import { accountKindFromBirthday } from '@gameplan/rules';
 import { route, withBodyValidation } from '../../../lib/pipeline.js';
 import { sessionResponse, withIdentityErrors } from './session.js';
 
@@ -56,25 +57,36 @@ export const handleRegister = route(
       return badRequest('invalid_birthday');
     }
 
-    const tokens = await getIdentityProvider().register({
+    const registered: RegisterResult = await getIdentityProvider().register({
       email: body.email,
       password: body.password,
       displayName: body.displayName,
       accountKind,
     });
+    if (registered.status === 'confirmation_required') {
+      await ensureProfile(
+        registered.userId,
+        registered.email,
+        body.displayName,
+        accountKind,
+        body.birthday,
+      );
+      return json(202, { confirmationRequired: true, email: registered.email });
+    }
+
     const profile = await ensureProfile(
-      tokens.userId,
-      tokens.email,
+      registered.userId,
+      registered.email,
       body.displayName,
       accountKind,
       body.birthday,
     );
     return sessionResponse(
       201,
-      tokens.accessToken,
-      tokens.expiresIn,
+      registered.accessToken,
+      registered.expiresIn,
       toUserProfile(profile),
-      tokens.refreshToken,
+      registered.refreshToken,
       wantsBodyRefreshToken(headerOf(event, REFRESH_DELIVERY_HEADER)),
     );
   },

@@ -94,6 +94,14 @@ export const createLocalIdentityProvider = (): IdentityProvider => ({
     return { ...tokens, userId, email };
   },
 
+  async confirmRegistration(): Promise<void> {
+    throw new Error('confirmation_not_required');
+  },
+
+  async resendConfirmation(): Promise<void> {
+    throw new Error('confirmation_not_required');
+  },
+
   async login(input: LoginBody): Promise<IdentityTokens> {
     const email = input.email.trim().toLowerCase();
     const profile = await findProfileByEmail(email);

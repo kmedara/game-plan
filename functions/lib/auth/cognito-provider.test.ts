@@ -3,8 +3,11 @@
  */
 
 import {
+  CodeMismatchException,
+  LimitExceededException,
   NotAuthorizedException,
   UsernameExistsException,
+  UserNotConfirmedException,
   UserNotFoundException,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -77,41 +80,27 @@ describe('createCognitoIdentityProvider', () => {
     ).rejects.toThrow('cognito_not_configured');
   });
 
-  it('registers, confirms, and logs in a new user', async () => {
-    const accessToken = fakeAccessJwt({ sub: 'cognito-sub-1' });
-    mockSend
-      .mockResolvedValueOnce({ UserSub: 'cognito-sub-1' })
-      .mockResolvedValueOnce({})
-      .mockResolvedValueOnce({
-        AuthenticationResult: {
-          AccessToken: accessToken,
-          RefreshToken: 'refresh-1',
-          ExpiresIn: 3600,
-        },
-      });
+  it('registers an unconfirmed user and does not issue tokens', async () => {
+    mockSend.mockResolvedValueOnce({ UserSub: 'cognito-sub-1', UserConfirmed: false });
 
-    const tokens = await createCognitoIdentityProvider().register({
+    const registered = await createCognitoIdentityProvider().register({
       email: '  New@Example.com ',
       password: 'Secret1!',
       displayName: '  New User ',
       accountKind: 'adult',
     });
 
-    expect(tokens).toEqual({
-      accessToken,
-      refreshToken: 'refresh-1',
-      expiresIn: 3600,
+    expect(registered).toEqual({
+      status: 'confirmation_required',
       userId: 'cognito-sub-1',
       email: 'new@example.com',
     });
-    expect(mockSend).toHaveBeenCalledTimes(3);
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(mockSend.mock.calls[0]?.[0]?.constructor?.name).toBe('SignUpCommand');
   });
 
-  it('registers when post-confirm login omits AuthenticationResult', async () => {
-    mockSend
-      .mockResolvedValueOnce({ UserSub: 'cognito-sub-2' })
-      .mockResolvedValueOnce({})
-      .mockResolvedValueOnce({ AuthenticationResult: undefined });
+  it('refuses a signup Cognito already marked confirmed', async () => {
+    mockSend.mockResolvedValueOnce({ UserSub: 'cognito-sub-2', UserConfirmed: true });
     await expect(
       createCognitoIdentityProvider().register({
         email: 'bare@example.com',
@@ -119,42 +108,62 @@ describe('createCognitoIdentityProvider', () => {
         displayName: 'Bare',
         accountKind: 'adult',
       }),
-    ).rejects.toThrow('auth_failed');
+    ).rejects.toThrow('email_not_confirmed');
   });
 
-  it('maps duplicate signup and missing auth fields to stable errors', async () => {
-    mockSend.mockRejectedValueOnce(new UsernameExistsException({ message: 'exists' } as never));
-    await expect(
-      createCognitoIdentityProvider().register({
-        email: 'dup@example.com',
-        password: 'x',
-        displayName: 'D',
-        accountKind: 'adult',
-      }),
-    ).rejects.toThrow('email_taken');
-
-    mockSend.mockResolvedValueOnce({ UserSub: undefined });
-    await expect(
-      createCognitoIdentityProvider().register({
-        email: 'bad@example.com',
-        password: 'x',
-        displayName: 'B',
-        accountKind: 'adult',
-      }),
-    ).rejects.toThrow('auth_failed');
+  it('replaces an unconfirmed duplicate and keeps a confirmed email taken', async () => {
+    const provider = createCognitoIdentityProvider();
+    const input = {
+      email: 'dup@example.com',
+      password: 'x',
+      displayName: 'D',
+      accountKind: 'adult' as const,
+    };
 
     mockSend
-      .mockResolvedValueOnce({ UserSub: 'sub' })
+      .mockRejectedValueOnce(new UsernameExistsException({ message: 'exists', $metadata: {} }))
+      .mockResolvedValueOnce({ UserStatus: 'UNCONFIRMED' })
       .mockResolvedValueOnce({})
-      .mockResolvedValueOnce({ AuthenticationResult: { AccessToken: 'only-access' } });
-    await expect(
-      createCognitoIdentityProvider().register({
-        email: 'incomplete@example.com',
-        password: 'x',
-        displayName: 'I',
-        accountKind: 'adult',
-      }),
-    ).rejects.toThrow('auth_failed');
+      .mockResolvedValueOnce({ UserSub: 'replaced-sub', UserConfirmed: false });
+    await expect(provider.register(input)).resolves.toEqual({
+      status: 'confirmation_required',
+      userId: 'replaced-sub',
+      email: 'dup@example.com',
+    });
+    expect(mockSend.mock.calls.map((call) => call[0]?.constructor?.name)).toEqual([
+      'SignUpCommand',
+      'AdminGetUserCommand',
+      'AdminDeleteUserCommand',
+      'SignUpCommand',
+    ]);
+
+    mockSend
+      .mockRejectedValueOnce(new UsernameExistsException({ message: 'exists', $metadata: {} }))
+      .mockResolvedValueOnce({ UserStatus: 'CONFIRMED' });
+    await expect(provider.register(input)).rejects.toThrow('email_taken');
+
+    mockSend.mockResolvedValueOnce({ UserSub: undefined });
+    await expect(provider.register(input)).rejects.toThrow('auth_failed');
+  });
+
+  it('confirms a signup code and hides resend misses', async () => {
+    const provider = createCognitoIdentityProvider();
+    mockSend.mockResolvedValueOnce({});
+    await expect(provider.confirmRegistration('Ada@Example.com', ' 123456 ')).resolves.toBeUndefined();
+    expect(mockSend.mock.calls[0]?.[0]?.constructor?.name).toBe('ConfirmSignUpCommand');
+
+    mockSend.mockRejectedValueOnce(new CodeMismatchException({ message: 'bad', $metadata: {} }));
+    await expect(provider.confirmRegistration('ada@example.com', '000000')).rejects.toThrow(
+      'invalid_confirmation_code',
+    );
+
+    mockSend.mockRejectedValueOnce(new LimitExceededException({ message: 'slow', $metadata: {} }));
+    await expect(provider.resendConfirmation('ada@example.com')).rejects.toThrow(
+      'confirmation_throttled',
+    );
+
+    mockSend.mockRejectedValueOnce(new UserNotFoundException({ message: 'missing', $metadata: {} }));
+    await expect(provider.resendConfirmation('missing@example.com')).resolves.toBeUndefined();
   });
 
   it('logs in and maps Cognito failures to invalid_credentials', async () => {
@@ -194,6 +203,13 @@ describe('createCognitoIdentityProvider', () => {
     await expect(
       createCognitoIdentityProvider().login({ email: 'a@example.com', password: 'x' }),
     ).rejects.toThrow('auth_failed');
+
+    mockSend.mockRejectedValueOnce(
+      new UserNotConfirmedException({ message: 'unconfirmed', $metadata: {} }),
+    );
+    await expect(
+      createCognitoIdentityProvider().login({ email: 'a@example.com', password: 'x' }),
+    ).rejects.toThrow('email_not_confirmed');
 
     mockSend.mockRejectedValueOnce(new NotAuthorizedException({ message: 'nope' } as never));
     await expect(

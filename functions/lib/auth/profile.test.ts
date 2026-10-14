@@ -31,6 +31,20 @@ describe('profile helpers', () => {
     mockPutItem.mockReset();
   });
 
+  it('derives account kind from the birthday on read', async () => {
+    mockGetItem.mockResolvedValueOnce({
+      userId: 'u1',
+      email: 'a@example.com',
+      accountKind: 'adult',
+      birthday: '2010-01-01',
+    });
+
+    await expect(getProfile('u1')).resolves.toMatchObject({
+      accountKind: 'minor',
+      birthday: '2010-01-01',
+    });
+  });
+
   it('loads a profile by user id', async () => {
     const item = { userId: 'u1', email: 'a@example.com' };
     mockGetItem.mockResolvedValueOnce(item);

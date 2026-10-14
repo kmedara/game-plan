@@ -39,5 +39,12 @@ describe('toUserProfile', () => {
     expect(toUserProfile(pending).needsProfileCompletion).toBe(true);
     expect(toUserProfile(pending).photoKey).toBeUndefined();
     expect(toUserProfile(pending).phoneNumber).toBeUndefined();
+
+    const agedOut: UserProfileItem = {
+      ...complete,
+      accountKind: 'minor',
+      birthday: '1990-01-01',
+    };
+    expect(toUserProfile(agedOut).accountKind).toBe('adult');
   });
 });
