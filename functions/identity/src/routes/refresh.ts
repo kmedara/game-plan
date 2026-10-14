@@ -2,12 +2,10 @@
  * `POST /identity/refresh`
  */
 
-import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import { refreshBodySchema } from '@gameplan/schemas';
 import {
   getIdentityProvider,
   getProfile,
-  isAuthDisabled,
   REFRESH_COOKIE,
   REFRESH_DELIVERY_HEADER,
   toUserProfile,
@@ -16,7 +14,6 @@ import {
 import { headerOf, readCookie, unauthorized } from '../../../lib/http.js';
 import { route, withBodyValidation } from '../../../lib/pipeline.js';
 import { pendingProfile } from './oauth.js';
-import { issueSeedSession } from './seed-session.js';
 import { sessionResponse, withIdentityErrors } from './session.js';
 
 /**
@@ -25,7 +22,7 @@ import { sessionResponse, withIdentityErrors } from './session.js';
  * @param event - The HTTP API event.
  * @returns A session response or an error.
  */
-const refreshSession = route(
+export const handleRefresh = route(
   withIdentityErrors(),
   withBodyValidation(refreshBodySchema),
   async ({ event, body }) => {
@@ -50,27 +47,3 @@ const refreshSession = route(
     );
   },
 );
-
-/**
- * Handles `POST /identity/refresh`.
- *
- * @param event - The HTTP API event.
- * @returns A session response or an error.
- */
-export const handleRefresh = async (
-  event: APIGatewayProxyEventV2,
-): Promise<APIGatewayProxyStructuredResultV2> => {
-  if (isAuthDisabled()) {
-    const session = await issueSeedSession();
-    return sessionResponse(
-      200,
-      session.accessToken,
-      session.expiresIn,
-      session.user,
-      session.refreshToken,
-      wantsBodyRefreshToken(headerOf(event, REFRESH_DELIVERY_HEADER)),
-    );
-  }
-
-  return refreshSession(event);
-};

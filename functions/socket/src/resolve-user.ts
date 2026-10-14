@@ -1,12 +1,12 @@
 /**
  * Resolves the authenticated user id on a WebSocket `$connect` event.
  *
- * Cloud `$connect` carries the Lambda authorizer context. Local connect passes
- * the access token as `?token=` the same way the browser WebSocket API does.
+ * Cloud `$connect` carries the Lambda authorizer context. Local connect redeems
+ * the `ticket` query parameter because the local server has no authorizer.
  */
 
 import type { APIGatewayProxyWebsocketEventV2 } from 'aws-lambda';
-import { verifyAccessToken } from '../../lib/auth/cognito.js';
+import { redeemSocketTicket } from '../../lib/socket-ticket.js';
 
 /**
  * Reads a string field from an unknown authorizer context object.
@@ -51,10 +51,11 @@ export const resolveConnectUserId = async (
     authorizerString(authorizer, 'sub') ?? authorizerString(authorizer, 'principalId');
   if (fromContext !== undefined) return fromContext;
 
-  const token = event.queryStringParameters?.token;
-  if (token === undefined || token.length === 0) {
+  const ticket = event.queryStringParameters?.ticket;
+  if (ticket === undefined || ticket.length === 0) {
     throw new Error('unauthorized');
   }
-  const user = await verifyAccessToken(token);
-  return user.userId;
+  const userId = await redeemSocketTicket(ticket);
+  if (userId === undefined) throw new Error('unauthorized');
+  return userId;
 };

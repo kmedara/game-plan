@@ -13,5 +13,6 @@
     "strictPropertyInitialization": false,
     "types": ["node"]
   },
-  "include": ["bin/**/*.ts", "lib/**/*.ts"]
+  "include": ["bin/**/*.ts", "lib/**/*.ts", "scripts/**/*.ts"],
+  "exclude": ["**/*.test.ts"]
 }

@@ -4,11 +4,11 @@ Teams keep practices, games, and chat in one product. This repository is the Ama
 product: one Cloud Development Kit (CDK) app, one function per area, and a local stand-in that does not need a cloud
 deploy.
 
-The website and the phone apps are the same Angular app under `client/app`. Day-to-day API work runs on the laptop.
+The website and the phone apps are the same Expo app under `client/expo`. Day-to-day API work runs on the laptop.
 
 ## Local stack
 
-Docker Compose runs DynamoDB Local, the API proxy (every area Lambda), and the Angular
+Docker Compose runs DynamoDB Local, the API proxy (every area Lambda), and the Expo
 website with live reload.
 
 | Service    | URL                         |
@@ -77,11 +77,11 @@ so the client image never needs the schemas package or Zod.
 
 Live reload deliberately avoids **Chokidar** polling and bind-mounted watchers (`CHOKIDAR_USEPOLLING`,
 `ng serve --poll`, nodemon `--legacy-watch`). Polling is slow under load and keeps CPU high. Compose
-Watch copies edits into the container filesystem so `tsx watch` and `ng serve` can use normal file
+Watch copies edits into the container filesystem so `tsx watch` and Expo can use normal file
 events instead.
 
-The static nginx client image ([`client/app/Dockerfile`](client/app/Dockerfile)) remains available
-for a production-like preview. Compose uses [`local/Dockerfile.client`](local/Dockerfile.client).
+Compose uses [`local/Dockerfile.client`](local/Dockerfile.client). A production website is
+`npm run client:build`, which writes a static export to `client/expo/dist`.
 
 ### Laptop API without Compose for the app
 
@@ -115,22 +115,21 @@ token as `?token=`, because a browser WebSocket cannot set an Authorization head
 
 ### Identity and session
 
-Local Compose sets **`AUTH_DISABLED=true`** and **`AUTH_SEED_USER_ID`** (required whenever auth is
-disabled). Identity skips Cognito and issues a session for that existing profile id — Compose
-defaults to the Seacoast Men's Rugby admin. `POST /identity/refresh` and `GET /identity/me` issue
-that seed session without Cognito env vars. The API entrypoint also seeds two demo clubs
-(idempotent): **Peoria Pigs** (`peoria-admin@localhost` /
+Local and deployed sign-in uses Cognito Hosted UI. Set these on the API process (Compose reads them
+from `.env`):
+
+- `COGNITO_USER_POOL_ID`
+- `COGNITO_CLIENT_ID`
+- `COGNITO_HOSTED_UI_DOMAIN`
+- `COGNITO_REGION` (defaults to `us-east-1`)
+- `AUTH_CALLBACK_URL` (`http://localhost:3000/identity/oauth/callback`)
+- `CLIENT_ORIGIN`
+
+Sign-in starts at `GET /identity/oauth/login` (PKCE → Hosted UI → `GET /identity/oauth/callback`).
+
+The API entrypoint also seeds two demo clubs (idempotent): **Peoria Pigs** (`peoria-admin@localhost` /
 `22222222-2222-4222-8222-222222222222`) and **Seacoast Men's Rugby** (`seacoast-admin@localhost` /
-`44444444-4444-4444-8444-444444444444`). Change `AUTH_SEED_USER_ID` to either admin id to Continue
-into that club.
-
-To exercise real Cognito Hosted UI locally (Google / Apple / Facebook / email once IdPs are wired):
-
-1. Deploy `GamePlanStack` (or point at an existing pool)
-2. Set `AUTH_DISABLED=false` on the API **and** the client Compose service
-3. Set `COGNITO_USER_POOL_ID`, `COGNITO_CLIENT_ID`, `COGNITO_HOSTED_UI_DOMAIN`, `COGNITO_REGION`,
-   `AUTH_CALLBACK_URL` (`http://localhost:3000/identity/oauth/callback`), and `CLIENT_ORIGIN`
-4. Sign-in starts at `GET /identity/oauth/login` (PKCE → Hosted UI → `GET /identity/oauth/callback`)
+`44444444-4444-4444-8444-444444444444`).
 
 Optional social IdP credentials can be passed as CDK context (`googleClientId` / `googleClientSecret`,
 `facebookAppId` / `facebookAppSecret`, `appleClientId` / `appleTeamId` / `appleKeyId` / `applePrivateKey`).
@@ -139,11 +138,12 @@ They can also be attached in the Cognito console after deploy.
 First social sign-in without a birthday redirects to `/complete-profile`. `POST /identity/profile/complete`
 stores birthday and derives `accountKind`.
 
-Client config is written at start/build from environment variables by
-[`client/app/scripts/write-environment.mjs`](client/app/scripts/write-environment.mjs)
-(`API_BASE_URL`, optional `WS_BASE_URL`, `AUTH_DISABLED`). Production builds require
-`API_BASE_URL` and set `BUILD_CONFIGURATION=production`. When `AUTH_DISABLED=true`,
-the API also needs `AUTH_SEED_USER_ID`.
+Client config is read from `EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_WS_BASE_URL`,
+`EXPO_PUBLIC_AUTH_DISABLED`, and `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`.
+[`client/expo/scripts/run.mjs`](client/expo/scripts/run.mjs) copies `API_BASE_URL` and
+`WS_BASE_URL` onto those names. Production builds require `API_BASE_URL` and set
+`BUILD_CONFIGURATION=production`. The website uses Cognito sign-in. The native apps
+redeem a one-time code from `POST /identity/oauth/exchange`.
 
 Place autocomplete and reverse geocode use `GOOGLE_MAPS_API_KEY` on the **API**.
 The interactive map uses `GOOGLE_MAPS_BROWSER_API_KEY` (web) and
@@ -151,9 +151,10 @@ The interactive map uses `GOOGLE_MAPS_BROWSER_API_KEY` (web) and
 
 | Method | Path                            | Notes                                              |
 | ------ | ------------------------------- | -------------------------------------------------- |
-| `GET`  | `/identity/oauth/login`         | Start Hosted UI (or seed session when auth disabled) |
+| `GET`  | `/identity/oauth/login`         | Start Cognito Hosted UI                           |
 | `GET`  | `/identity/oauth/callback`      | Code exchange; sets refresh cookie; redirects      |
-| `GET`  | `/identity/oauth/logout`        | Clear cookie; Cognito logout when enabled          |
+| `GET`  | `/identity/oauth/logout`        | Clear cookie and redirect to Cognito logout       |
+| `POST` | `/identity/oauth/exchange`      | Redeem a native handoff code for a session        |
 | `POST` | `/identity/profile/complete`    | Birthday + display name after social sign-in       |
 | `POST` | `/identity/register`            | Email/password (tests / legacy); stores `accountKind` |
 | `POST` | `/identity/login`               | Email/password session                             |
@@ -259,27 +260,80 @@ objects in memory behind `/media/local-objects/…`.
 
 ## Client
 
-The Angular app lives in `client/app`. Schedule is the home screen, with a team
-switcher, chats, and the team permission matrix. Capacitor projects for iOS and
-Android are under `client/app/ios` and `client/app/android`.
+The Expo app lives in `client/expo`. Schedule, chats, and teams share one Router
+tree on web, iOS, and Android. Store binaries are built with `expo prebuild` and
+the native toolchains (or GitHub Actions); this repo does not keep a Capacitor shell.
 
 Shared wire types live in [`lib/types`](lib/types) (`@gameplan/types`). Zod
 request schemas live in [`lib/schemas`](lib/schemas) (`@gameplan/schemas`). API
-functions import schemas for validation; the Angular app imports generated types only.
+functions import schemas for validation; the Expo app imports generated types only.
 
 ```bash
-npm start -w @gameplan/app
+npm run client:start
 ```
-
-See [client/app/README.md](client/app/README.md) for Capacitor sync and store push setup.
 
 ## Cloud
 
 `npm run synth` prints the AWS CloudFormation (CloudFormation) template for `GamePlanStack`.
 
+Staging and production are the same stack in **separate AWS accounts**. Resource names stay
+`GamePlanStack` in both. GitHub Actions deploys them:
+
+| Workflow | When |
+| --- | --- |
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Pull requests and pushes to `master`. Typecheck and tests. No AWS credentials. |
+| [`.github/workflows/deploy-api.yml`](.github/workflows/deploy-api.yml) | Push to `master` deploys the **staging** environment. A published GitHub release deploys **production**. |
+| [`.github/workflows/deploy-client.yml`](.github/workflows/deploy-client.yml) | Same triggers. Builds the Angular site and syncs it to the site bucket. |
+
+The API and client workflows are independent. Re-run either from the Actions tab (`workflow_dispatch` chooses `staging` or `production`).
+
+### Parameter Store
+
+Both accounts use the same prefix, `/gameplan/` (override with the `SSM_PREFIX` environment variable). Every parameter is a **String**. GitHub does not store these values. Each GitHub environment (`staging`, `production`) has one secret, `AWS_ROLE_ARN`, and optional variables `AWS_REGION` (default `us-east-1`) and `SSM_PREFIX` (default `/gameplan`).
+
+| Name | Used for |
+| --- | --- |
+| `client-origin` | Browser origin for CORS and OAuth redirects (`CLIENT_ORIGIN`) |
+| `callback-urls` | Comma-separated Cognito callback URLs |
+| `logout-urls` | Comma-separated Cognito logout URLs |
+| `google-client-id`, `google-client-secret` | Optional Google IdP |
+| `facebook-app-id`, `facebook-app-secret` | Optional Facebook IdP |
+| `apple-client-id`, `apple-team-id`, `apple-key-id`, `apple-private-key` | Optional Apple IdP. Store the PEM, including line breaks. |
+| `google-maps-api-key` | Places Lambda |
+| `google-maps-browser-api-key` | Website map |
+| `api-base-url`, `ws-base-url`, `site-bucket-name`, `site-distribution-id`, `site-url` | Written by the API workflow after deploy. The client workflow reads the API URL, bucket, and distribution id. |
+
+An identity provider is created only when every field for that provider is set. CDK context still overrides these environment variables for a local `cdk deploy`.
+
+Before the first API deploy in an account, set `client-origin`, `callback-urls`, and `logout-urls`. If you do not know the CloudFront or API Gateway host yet, use placeholders, deploy, then copy `HttpApiUrl` into `callback-urls` and `SiteUrl` into `client-origin` and `logout-urls` and deploy the API again. Those hosts do not change on later deploys. The client workflow fails until `api-base-url`, `site-bucket-name`, and `site-distribution-id` exist.
+
+### One-time account setup
+
+In each account:
+
+1. `npx cdk bootstrap` from `infrastructure/` (the CDK toolkit stack).
+2. Add the GitHub OpenID Connect (OIDC) provider `token.actions.githubusercontent.com` (audience `sts.amazonaws.com`).
+3. Create a deploy role trusted only for this repository’s GitHub environment:
+
+```json
+{
+  "Effect": "Allow",
+  "Principal": { "Federated": "arn:aws:iam::<account>:oidc-provider/token.actions.githubusercontent.com" },
+  "Action": "sts:AssumeRoleWithWebIdentity",
+  "Condition": {
+    "StringEquals": {
+      "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+      "token.actions.githubusercontent.com:sub": "repo:<owner>/<repo>:environment:staging"
+    }
+  }
+}
+```
+
+Use `environment:production` on the production account’s role. Give the role CloudFormation deploy rights for this stack (including the roles CDK creates) plus `ssm:GetParametersByPath` and `ssm:PutParameter` on `/gameplan/*`. Parameter Store Strings do not need a KMS decrypt permission. Store that role ARN as the `AWS_ROLE_ARN` secret on the matching GitHub environment. Protect **production** with required reviewers.
+
 The stack creates:
 
-- A Cognito user pool with Hosted UI (email/password plus optional Google / Apple / Facebook IdPs from CDK context).
+- A Cognito user pool with Hosted UI (email/password plus optional Google / Apple / Facebook IdPs from CDK context or Parameter Store).
   OAuth callback URLs default to the identity BFF (`/identity/oauth/callback`).
 - One DynamoDB table, `gameplan`, with partition key `PK` and sort key `SK`. Billing is on-demand.
 - **EmailIndex** on `email`, for an exact-email lookup that cannot start from a user partition.

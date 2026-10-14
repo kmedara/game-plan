@@ -11,6 +11,12 @@ export const OAUTH_VERIFIER_COOKIE = 'ts_oauth_verifier';
 /** Cookie that holds the post-login return URL. */
 export const OAUTH_RETURN_COOKIE = 'ts_oauth_return';
 
+/** Cookie that marks a native app handoff (`1`) instead of a website redirect. */
+export const OAUTH_NATIVE_COOKIE = 'ts_oauth_native';
+
+/** Custom-scheme redirect the native app claims after Hosted UI. */
+export const NATIVE_AUTH_REDIRECT = 'gameplan://auth';
+
 /**
  * Builds a short-lived HttpOnly cookie for the OAuth handshake.
  *

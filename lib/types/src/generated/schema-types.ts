@@ -228,6 +228,29 @@ export type MessagePage = {
   cursor?: string;
 }
 
+export type OauthExchangeBody = {
+  code: string;
+}
+
+export type OauthExchangeResponse = {
+  accessToken: string;
+  expiresIn: number;
+  user: {
+    userId: string;
+    email: string;
+    displayName: string;
+    accountKind: 'adult' | 'minor';
+    birthday?: string;
+    photoKey?: string;
+    phoneNumber?: string;
+    needsProfileCompletion?: boolean;
+  };
+  refreshToken: string;
+  next: 'teams' | 'complete-profile';
+}
+
+export type OauthNext = 'teams' | 'complete-profile';
+
 export type PhoneNumber = string;
 
 export type PlaceDetails = {
@@ -437,6 +460,11 @@ export type SessionTokens = {
     needsProfileCompletion?: boolean;
   };
   refreshToken?: string;
+}
+
+export type SocketTicket = {
+  ticket: string;
+  expiresIn: number;
 }
 
 export type TeamDirectoryHit = {

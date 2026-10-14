@@ -88,8 +88,6 @@ export const mapError = (error: unknown): APIGatewayProxyStructuredResultV2 | un
       return badRequest('invalid_body');
     case 'invalid_photo_key':
       return json(400, { error: 'invalid_photo_key' });
-    case 'seed_user_id_required':
-      return json(500, { error: 'seed_user_id_required' });
     case 'cognito_not_configured':
       return json(503, { error: 'cognito_not_configured' });
     default:

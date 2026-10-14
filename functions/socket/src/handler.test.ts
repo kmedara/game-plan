@@ -5,8 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import type { APIGatewayProxyWebsocketEventV2 } from 'aws-lambda';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { issueLocalTokens } from '../../lib/auth/local-jwt.js';
-import { TABLE_PK, TABLE_SK } from '../../lib/dynamo/keys.js';
+import { TABLE_PK, TABLE_SK, ticketPk, ticketSk } from '../../lib/dynamo/keys.js';
 
 const store = new Map<string, Record<string, unknown>>();
 const itemKey = (pk: string, sk: string): string => `${pk}\0${sk}`;
@@ -37,7 +36,23 @@ vi.mock('../../lib/dynamo/access.js', () => ({
 
 vi.mock('../../lib/dynamo/client.js', () => ({
   getDocClient: () => ({
-    send: async (command: { input?: { IndexName?: string; ExpressionAttributeValues?: Record<string, unknown> } }) => {
+    send: async (command: {
+      input?: {
+        Key?: { PK?: string; SK?: string };
+        ExpressionAttributeValues?: Record<string, unknown>;
+      };
+    }) => {
+      const key = command.input?.Key;
+      if (key?.PK !== undefined && key.SK !== undefined) {
+        const existing = store.get(itemKey(key.PK, key.SK));
+        if (existing === undefined) {
+          const error = new Error('ConditionalCheckFailed');
+          error.name = 'ConditionalCheckFailedException';
+          throw error;
+        }
+        store.delete(itemKey(key.PK, key.SK));
+        return { Attributes: existing };
+      }
       const connectionId = command.input?.ExpressionAttributeValues?.[':connectionId'];
       if (typeof connectionId !== 'string') return { Items: [] };
       for (const item of store.values()) {
@@ -58,14 +73,14 @@ const { handler } = await import('./handler.js');
  *
  * @param routeKey - The route key.
  * @param connectionId - The connection id.
- * @param token - Optional access token query parameter.
+ * @param ticket - Optional connect-ticket query parameter.
  * @returns A WebSocket event.
  */
 const wsEvent = (
   routeKey: '$connect' | '$disconnect' | '$default' | 'health',
   connectionId: string,
   options: {
-    token?: string;
+    ticket?: string;
     authorizer?: unknown;
     isHttp?: boolean;
     path?: string;
@@ -84,26 +99,48 @@ const wsEvent = (
       connectionId,
       ...(options.authorizer !== undefined ? { authorizer: options.authorizer } : {}),
     },
-    queryStringParameters: options.token === undefined ? undefined : { token: options.token },
+    queryStringParameters: options.ticket === undefined ? undefined : { ticket: options.ticket },
   } as APIGatewayProxyWebsocketEventV2;
 };
 
 describe('socket handler', () => {
   beforeEach(() => {
     store.clear();
-    process.env.LOCAL_JWT_SECRET = 'socket-handler-test-secret';
   });
+
+  /**
+   * Stores a connect ticket the local `$connect` path can redeem.
+   *
+   * @param userId - The user the ticket should authorize.
+   * @param ticket - The opaque ticket id.
+   */
+  const seedTicket = (userId: string, ticket: string): void => {
+    store.set(itemKey(ticketPk(ticket), ticketSk()), {
+      [TABLE_PK]: ticketPk(ticket),
+      [TABLE_SK]: ticketSk(),
+      userId,
+      ttl: Math.floor(Date.now() / 1000) + 60,
+    });
+  };
 
   afterEach(() => {
     store.clear();
   });
 
+  it('rejects a connect with a missing, empty, or unknown ticket', async () => {
+    expect((await handler(wsEvent('$connect', 'conn-none'))).statusCode).toBe(401);
+    expect((await handler(wsEvent('$connect', 'conn-empty', { ticket: '' }))).statusCode).toBe(401);
+    expect((await handler(wsEvent('$connect', 'conn-unknown', { ticket: 'missing' }))).statusCode).toBe(
+      401,
+    );
+  });
+
   it('stores a connection on connect and removes it on disconnect', async () => {
     const userId = randomUUID();
-    const { accessToken } = issueLocalTokens(userId, `${userId}@example.com`);
     const connectionId = 'conn-1';
+    seedTicket(userId, 'ticket-1');
 
-    const connect = await handler(wsEvent('$connect', connectionId, { token: accessToken }));
+    const connect = await handler(wsEvent('$connect', connectionId, { ticket: 'ticket-1' }));
     expect(connect.statusCode).toBe(200);
     expect(store.has(`USER#${userId}\0CONN#${connectionId}`)).toBe(true);
 
@@ -170,12 +207,12 @@ describe('socket handler', () => {
     ).toBe(200);
 
     const userId = randomUUID();
-    const { accessToken } = issueLocalTokens(userId, `${userId}@example.com`);
+    seedTicket(userId, 'ticket-open');
     expect(
       (
         await handler({
           requestContext: { routeKey: '$connect' },
-          queryStringParameters: { token: accessToken },
+          queryStringParameters: { ticket: 'ticket-open' },
         } as APIGatewayProxyWebsocketEventV2)
       ).statusCode,
     ).toBe(400);

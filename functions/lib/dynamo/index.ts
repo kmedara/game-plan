@@ -15,10 +15,13 @@ export {
   queryPage,
   queryPartition,
   transactWrite,
-} from './access.js';export {
+} from './access.js';
+export {
   CHAT_MEMBER_SK_PREFIX,
   CONNECTION_SK_PREFIX,
   CONNECTION_TTL_SECONDS,
+  SOCKET_TICKET_TTL_SECONDS,
+  OAUTH_HANDOFF_TTL_SECONDS,
   DEVICE_SK_PREFIX,
   EVENT_SK_PREFIX,
   GSI_CONNECTION_ID,
@@ -55,6 +58,10 @@ export {
   teamDirectoryPk,
   teamDirectorySk,
   teamDirectorySkPrefix,
+  ticketPk,
+  ticketSk,
+  handoffPk,
+  handoffSk,
   userChatSk,
   userPk,
   userTeamSk,

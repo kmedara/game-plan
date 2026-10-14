@@ -3,7 +3,7 @@
  */
 
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { json } from './http.js';
 import { route, withBodyValidation } from './pipeline.js';
@@ -48,13 +48,6 @@ describe('guards', () => {
   beforeEach(() => {
     mockGetItem.mockReset();
     mockCan.mockReset();
-    process.env.AUTH_DISABLED = 'true';
-    process.env.AUTH_SEED_USER_ID = 'seed-user';
-  });
-
-  afterEach(() => {
-    delete process.env.AUTH_DISABLED;
-    delete process.env.AUTH_SEED_USER_ID;
   });
 
   it('assertPermission throws when can returns false', async () => {
@@ -67,7 +60,7 @@ describe('guards', () => {
   it('requireUser attaches the authenticated user', async () => {
     const handle = route(requireUser(), async (ctx) => json(200, { userId: ctx.user.userId }));
     const result = await handle(event());
-    expect(JSON.parse(result.body ?? '')).toEqual({ userId: 'seed-user' });
+    expect(JSON.parse(result.body ?? '')).toEqual({ userId: 'guard-user' });
   });
 
   it('requireTeam and requireMembership load team rows', async () => {
@@ -108,7 +101,10 @@ describe('guards', () => {
     );
     const ok = await allowed({
       ...event(),
-      requestContext: { http: { method: 'POST', path: '/' } },
+      requestContext: {
+        http: { method: 'POST', path: '/' },
+        authorizer: { jwt: { claims: { sub: 'guard-user' } } },
+      },
       body: JSON.stringify({ teamId: 'team-body' }),
     } as APIGatewayProxyEventV2);
     expect(JSON.parse(ok.body ?? '')).toEqual({ teamId: 'team-body' });
@@ -117,7 +113,10 @@ describe('guards', () => {
     await expect(
       allowed({
         ...event(),
-        requestContext: { http: { method: 'POST', path: '/' } },
+        requestContext: {
+          http: { method: 'POST', path: '/' },
+          authorizer: { jwt: { claims: { sub: 'guard-user' } } },
+        },
         body: JSON.stringify({ teamId: 'team-body' }),
       } as APIGatewayProxyEventV2),
     ).rejects.toThrow('forbidden');

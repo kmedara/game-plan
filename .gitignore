@@ -1,5 +1,6 @@
 node_modules/
 dist/
+.expo/
 cdk.out/
 coverage/
 *.tsbuildinfo
@@ -7,3 +8,4 @@ coverage/
 .env.*
 .DS_Store
 infrastructure/cdk.context.json
+cdk-outputs.json

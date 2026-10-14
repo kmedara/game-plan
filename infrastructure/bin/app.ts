@@ -4,33 +4,42 @@
  *
  * Instantiates {@link GamePlanStack} with the caller account and region.
  * Cognito OAuth callback/logout URLs and optional social IdP credentials come
- * from CDK context. `CLIENT_ORIGIN` overrides the local Angular CORS default.
+ * from CDK context, then from process environment (Parameter Store in CI).
+ * `CLIENT_ORIGIN` overrides the local Angular CORS default.
  */
 
 import * as cdk from 'aws-cdk-lib';
+import { definedString, splitUrlList, urlListFromUnknown } from '../lib/deploy-config';
 import { getStackEnv } from '../lib/stack-env';
 import { GamePlanStack } from '../lib/gameplan-stack';
 
 /** Root CDK app. */
 const app = new cdk.App();
 
-const callbackUrls = (app.node.tryGetContext('callbackUrls') as string[] | undefined) ?? [
-  'http://localhost:3000/identity/oauth/callback',
-];
-const logoutUrls = (app.node.tryGetContext('logoutUrls') as string[] | undefined) ?? [
-  'http://localhost:4200/',
-  'http://localhost:4200/login',
-];
+/**
+ * Uses a CDK context string when one is set, otherwise the matching environment variable.
+ *
+ * @param contextKey - Context key such as `googleClientId`.
+ * @param envKey - Environment variable such as `GOOGLE_CLIENT_ID`.
+ * @returns The first non-blank value.
+ */
+const contextOrEnv = (contextKey: string, envKey: string): string | undefined =>
+  definedString(app.node.tryGetContext(contextKey)) ?? definedString(process.env[envKey]);
+
+const callbackUrls = urlListFromUnknown(app.node.tryGetContext('callbackUrls')) ??
+  splitUrlList(process.env.CALLBACK_URLS) ?? ['http://localhost:3000/identity/oauth/callback'];
+const logoutUrls = urlListFromUnknown(app.node.tryGetContext('logoutUrls')) ??
+  splitUrlList(process.env.LOGOUT_URLS) ?? ['http://localhost:4200/', 'http://localhost:4200/login'];
 
 const social = {
-  googleClientId: app.node.tryGetContext('googleClientId') as string | undefined,
-  googleClientSecret: app.node.tryGetContext('googleClientSecret') as string | undefined,
-  facebookAppId: app.node.tryGetContext('facebookAppId') as string | undefined,
-  facebookAppSecret: app.node.tryGetContext('facebookAppSecret') as string | undefined,
-  appleClientId: app.node.tryGetContext('appleClientId') as string | undefined,
-  appleTeamId: app.node.tryGetContext('appleTeamId') as string | undefined,
-  appleKeyId: app.node.tryGetContext('appleKeyId') as string | undefined,
-  applePrivateKey: app.node.tryGetContext('applePrivateKey') as string | undefined,
+  googleClientId: contextOrEnv('googleClientId', 'GOOGLE_CLIENT_ID'),
+  googleClientSecret: contextOrEnv('googleClientSecret', 'GOOGLE_CLIENT_SECRET'),
+  facebookAppId: contextOrEnv('facebookAppId', 'FACEBOOK_APP_ID'),
+  facebookAppSecret: contextOrEnv('facebookAppSecret', 'FACEBOOK_APP_SECRET'),
+  appleClientId: contextOrEnv('appleClientId', 'APPLE_CLIENT_ID'),
+  appleTeamId: contextOrEnv('appleTeamId', 'APPLE_TEAM_ID'),
+  appleKeyId: contextOrEnv('appleKeyId', 'APPLE_KEY_ID'),
+  applePrivateKey: contextOrEnv('applePrivateKey', 'APPLE_PRIVATE_KEY'),
 };
 
 new GamePlanStack(app, 'GamePlanStack', {

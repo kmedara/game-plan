@@ -1,5 +1,5 @@
 /**
- * Identity OAuth, complete-profile, seed-session, and session error coverage.
+ * Identity OAuth, complete-profile, and session error coverage.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -11,12 +11,22 @@ import { REFRESH_COOKIE } from '../../lib/auth/refresh-cookie.js';
 import { resetIdentityProvider, setIdentityProvider } from '../../lib/auth/provider.js';
 import type { IdentityProvider, IdentityTokens } from '../../lib/auth/identity-provider.js';
 import {
+  NATIVE_AUTH_REDIRECT,
+  OAUTH_NATIVE_COOKIE,
   OAUTH_RETURN_COOKIE,
   OAUTH_STATE_COOKIE,
   OAUTH_VERIFIER_COOKIE,
   oauthClearCookie,
   oauthSetCookie,
 } from './routes/oauth-cookies.js';
+const handoff = vi.hoisted(() => ({
+  issueOAuthHandoff: vi.fn(async () => 'handoff-code'),
+  redeemOAuthHandoff: vi.fn(async (): Promise<
+    { refreshToken: string; next: 'teams' | 'complete-profile' } | undefined
+  > => undefined),
+}));
+
+vi.mock('../../lib/oauth-handoff.js', () => handoff);
 import { mapError } from './routes/session.js';
 import { pendingProfile } from './routes/oauth.js';
 
@@ -85,7 +95,7 @@ const httpEvent = (
   }) as APIGatewayProxyEventV2;
 
 /**
- * Seeds a profile row for OAuth and AUTH_DISABLED tests.
+ * Seeds a profile row for OAuth tests.
  *
  * @param userId - The user id.
  * @param email - The email address.
@@ -153,8 +163,6 @@ describe('identity oauth and session edges', () => {
   beforeEach(() => {
     profiles.clear();
     fetchMock.mockReset();
-    delete process.env.AUTH_DISABLED;
-    delete process.env.AUTH_SEED_USER_ID;
     delete process.env.COGNITO_USER_POOL_ID;
     delete process.env.COGNITO_CLIENT_ID;
     delete process.env.COGNITO_HOSTED_UI_DOMAIN;
@@ -167,8 +175,6 @@ describe('identity oauth and session edges', () => {
 
   afterEach(() => {
     resetIdentityProvider();
-    delete process.env.AUTH_DISABLED;
-    delete process.env.AUTH_SEED_USER_ID;
     delete process.env.NODE_ENV;
   });
 
@@ -190,7 +196,6 @@ describe('identity oauth and session edges', () => {
     expect(mapError(new Error('token_expired'))?.statusCode).toBe(401);
     expect(mapError(new Error('unauthorized'))?.statusCode).toBe(401);
     expect(mapError(new Error('profile_not_found'))?.statusCode).toBe(404);
-    expect(mapError(new Error('seed_user_id_required'))?.statusCode).toBe(500);
     expect(mapError(new Error('cognito_not_configured'))?.statusCode).toBe(503);
     expect(mapError(new Error('unknown_thing'))).toBeUndefined();
     expect(pendingProfile('u1', undefined, undefined)).toMatchObject({
@@ -215,19 +220,6 @@ describe('identity oauth and session edges', () => {
     expect(result.cookies?.some((c) => c.startsWith(`${OAUTH_STATE_COOKIE}=`))).toBe(true);
     expect(result.cookies?.some((c) => c.startsWith(`${OAUTH_VERIFIER_COOKIE}=`))).toBe(true);
     expect(result.cookies?.some((c) => c.startsWith(`${OAUTH_RETURN_COOKIE}=`))).toBe(true);
-  });
-
-  it('oauth login with AUTH_DISABLED issues a seed session redirect', async () => {
-    const seedId = randomUUID();
-    seedProfile(seedId, 'seed@example.com', '1990-01-01');
-    process.env.AUTH_DISABLED = 'true';
-    process.env.AUTH_SEED_USER_ID = seedId;
-    process.env.CLIENT_ORIGIN = 'http://localhost:4200';
-
-    const result = await handler(httpEvent('GET', '/identity/oauth/login'));
-    expect(result.statusCode).toBe(302);
-    expect(result.headers?.location).toBe('http://localhost:4200/schedule');
-    expect(result.cookies?.some((c) => c.startsWith(`${REFRESH_COOKIE}=`))).toBe(true);
   });
 
   it('rejects unsafe or invalid returnTo values', async () => {
@@ -365,19 +357,7 @@ describe('identity oauth and session edges', () => {
     expect(badState.headers?.location).toContain('invalid_state');
   });
 
-  it('oauth callback with AUTH_DISABLED redirects with a seed session', async () => {
-    const seedId = randomUUID();
-    seedProfile(seedId, 'seed@example.com', '1990-01-01');
-    process.env.AUTH_DISABLED = 'true';
-    process.env.AUTH_SEED_USER_ID = seedId;
-    process.env.CLIENT_ORIGIN = 'http://localhost:4200';
-
-    const result = await handler(httpEvent('GET', '/identity/oauth/callback'));
-    expect(result.statusCode).toBe(302);
-    expect(result.headers?.location).toBe('http://localhost:4200/schedule');
-  });
-
-  it('oauth logout redirects to Cognito or local return when auth disabled', async () => {
+  it('oauth logout redirects to Cognito or the local return URL', async () => {
     process.env.COGNITO_CLIENT_ID = 'client';
     process.env.COGNITO_HOSTED_UI_DOMAIN = 'auth.example.com';
     process.env.CLIENT_ORIGIN = 'http://localhost:4200';
@@ -388,17 +368,6 @@ describe('identity oauth and session edges', () => {
     delete process.env.COGNITO_CLIENT_ID;
     const fallback = await handler(httpEvent('GET', '/identity/oauth/logout'));
     expect(fallback.headers?.location).toBe('http://localhost:4200/login');
-
-    process.env.AUTH_DISABLED = 'true';
-    const seedId = randomUUID();
-    seedProfile(seedId, 'seed@example.com', '1990-01-01');
-    process.env.AUTH_SEED_USER_ID = seedId;
-    const disabled = await handler(
-      httpEvent('GET', '/identity/oauth/logout', {
-        query: { returnTo: 'http://localhost:4200/login' },
-      }),
-    );
-    expect(disabled.headers?.location).toBe('http://localhost:4200/login');
   });
 
   it('completes a profile after Hosted UI sign-in', async () => {
@@ -459,26 +428,6 @@ describe('identity oauth and session edges', () => {
     expect(JSON.parse(missingEmail.body ?? '')).toEqual({ error: 'email_required' });
   });
 
-  it('serves seed session for /me and /refresh when AUTH_DISABLED', async () => {
-    const seedId = randomUUID();
-    seedProfile(seedId, 'seed@example.com', '1990-01-01');
-    process.env.AUTH_DISABLED = 'true';
-    process.env.AUTH_SEED_USER_ID = seedId;
-
-    const me = await handler(httpEvent('GET', '/identity/me'));
-    expect(me.statusCode).toBe(200);
-    expect(JSON.parse(me.body ?? '')).toMatchObject({ email: 'seed@example.com' });
-
-    const refresh = await handler(
-      httpEvent('POST', '/identity/refresh', {
-        body: {},
-        headers: { 'x-refresh-delivery': 'body' },
-      }),
-    );
-    expect(refresh.statusCode).toBe(200);
-    expect(JSON.parse(refresh.body ?? '').refreshToken).toBeTruthy();
-  });
-
   it('returns pending profile from /me and refresh when no profile row exists', async () => {
     const userId = randomUUID();
     const { accessToken, refreshToken } = issueLocalTokens(userId, `${userId}@example.com`);
@@ -525,21 +474,175 @@ describe('identity oauth and session edges', () => {
   });
 
   it('uses default CLIENT_ORIGIN when env is unset for oauth redirects', async () => {
-    const seedId = randomUUID();
-    seedProfile(seedId, 'seed@example.com', '1990-01-01');
     delete process.env.CLIENT_ORIGIN;
-    process.env.AUTH_DISABLED = 'true';
-    process.env.AUTH_SEED_USER_ID = seedId;
+    process.env.COGNITO_CLIENT_ID = 'client';
+    process.env.COGNITO_HOSTED_UI_DOMAIN = 'auth.example.com';
 
     const start = await handler(httpEvent('GET', '/identity/oauth/login'));
     expect(start.statusCode).toBe(302);
-    expect(start.headers?.location).toBe('http://localhost:4200/schedule');
+    expect(start.cookies?.find((c) => c.startsWith(`${OAUTH_RETURN_COOKIE}=`))).toContain(
+      encodeURIComponent('http://localhost:4200/schedule'),
+    );
 
-    delete process.env.AUTH_DISABLED;
-    delete process.env.AUTH_SEED_USER_ID;
+    delete process.env.COGNITO_CLIENT_ID;
     const logout = await handler(httpEvent('GET', '/identity/oauth/logout'));
     expect(logout.headers?.location).toBe('http://localhost:4200/login');
     process.env.CLIENT_ORIGIN = 'http://localhost:4200';
+  });
+
+  it('hands a native login back through a one-time code', async () => {
+    process.env.COGNITO_CLIENT_ID = 'client';
+    process.env.COGNITO_HOSTED_UI_DOMAIN = 'auth.example.com';
+    process.env.CLIENT_ORIGIN = 'http://localhost:4200';
+    handoff.issueOAuthHandoff.mockClear();
+
+    const start = await handler(
+      httpEvent('GET', '/identity/oauth/login', { query: { delivery: 'native' } }),
+    );
+    expect(start.cookies?.find((c) => c.startsWith(`${OAUTH_NATIVE_COOKIE}=`))).toContain(
+      `${OAUTH_NATIVE_COOKIE}=1`,
+    );
+
+    const userId = randomUUID();
+    seedProfile(userId, 'native@example.com', '1990-01-01');
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id_token: fakeJwt({ sub: userId, email: 'native@example.com' }),
+        access_token: 'access',
+        refresh_token: 'native-refresh',
+        expires_in: 3600,
+      }),
+    });
+    const ok = await handler(
+      httpEvent('GET', '/identity/oauth/callback', {
+        query: { code: 'code-n', state: 'state-n' },
+        cookies: [
+          `${OAUTH_STATE_COOKIE}=state-n`,
+          `${OAUTH_VERIFIER_COOKIE}=verifier-n`,
+          `${OAUTH_NATIVE_COOKIE}=1`,
+        ],
+      }),
+    );
+    expect(ok.headers?.location).toBe(`${NATIVE_AUTH_REDIRECT}?code=handoff-code`);
+    expect(ok.cookies?.some((c) => c.startsWith(`${REFRESH_COOKIE}=`))).toBe(false);
+    expect(handoff.issueOAuthHandoff).toHaveBeenCalledWith('native-refresh', 'teams');
+
+    const incompleteId = randomUUID();
+    seedProfile(incompleteId, 'new-native@example.com');
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id_token: fakeJwt({ sub: incompleteId, email: 'new-native@example.com' }),
+        access_token: 'access',
+        refresh_token: 'native-refresh-2',
+      }),
+    });
+    const incomplete = await handler(
+      httpEvent('GET', '/identity/oauth/callback', {
+        query: { code: 'c', state: 's' },
+        cookies: [
+          `${OAUTH_STATE_COOKIE}=s`,
+          `${OAUTH_VERIFIER_COOKIE}=v`,
+          `${OAUTH_NATIVE_COOKIE}=1`,
+        ],
+      }),
+    );
+    expect(incomplete.headers?.location).toBe(`${NATIVE_AUTH_REDIRECT}?code=handoff-code`);
+    expect(handoff.issueOAuthHandoff).toHaveBeenCalledWith('native-refresh-2', 'complete-profile');
+
+    const denied = await handler(
+      httpEvent('GET', '/identity/oauth/callback', {
+        query: { error: 'access_denied' },
+        cookies: [`${OAUTH_NATIVE_COOKIE}=1`],
+      }),
+    );
+    expect(denied.headers?.location).toBe(`${NATIVE_AUTH_REDIRECT}?error=access_denied`);
+
+    const badState = await handler(
+      httpEvent('GET', '/identity/oauth/callback', {
+        query: { code: 'c', state: 'wrong' },
+        cookies: [
+          `${OAUTH_STATE_COOKIE}=expected`,
+          `${OAUTH_VERIFIER_COOKIE}=v`,
+          `${OAUTH_NATIVE_COOKIE}=1`,
+        ],
+      }),
+    );
+    expect(badState.headers?.location).toContain('error=invalid_state');
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id_token: fakeJwt({ sub: userId }),
+        access_token: 'access',
+      }),
+    });
+    const missingRefresh = await handler(
+      httpEvent('GET', '/identity/oauth/callback', {
+        query: { code: 'c', state: 's' },
+        cookies: [
+          `${OAUTH_STATE_COOKIE}=s`,
+          `${OAUTH_VERIFIER_COOKIE}=v`,
+          `${OAUTH_NATIVE_COOKIE}=1`,
+        ],
+      }),
+    );
+    expect(missingRefresh.headers?.location).toContain('missing_refresh_token');
+
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 400 });
+    const exchangeFail = await handler(
+      httpEvent('GET', '/identity/oauth/callback', {
+        query: { code: 'c', state: 's' },
+        cookies: [
+          `${OAUTH_STATE_COOKIE}=s`,
+          `${OAUTH_VERIFIER_COOKIE}=v`,
+          `${OAUTH_NATIVE_COOKIE}=1`,
+        ],
+      }),
+    );
+    expect(exchangeFail.headers?.location).toContain('sign_in_failed');
+  });
+
+  it('exchanges a native handoff code for a body refresh token', async () => {
+    const userId = randomUUID();
+    seedProfile(userId, 'exchange@example.com', '1990-01-01');
+    const { refreshToken } = issueLocalTokens(userId, 'exchange@example.com');
+    handoff.redeemOAuthHandoff.mockResolvedValueOnce({
+      refreshToken,
+      next: 'teams',
+    });
+
+    const ok = await handler(
+      httpEvent('POST', '/identity/oauth/exchange', { body: { code: 'handoff-code' } }),
+    );
+    expect(ok.statusCode).toBe(200);
+    const body = JSON.parse(ok.body ?? '{}') as { next?: string; refreshToken?: string };
+    expect(body.next).toBe('teams');
+    expect(body.refreshToken).toEqual(expect.any(String));
+
+    handoff.redeemOAuthHandoff.mockResolvedValueOnce(undefined);
+    const missing = await handler(
+      httpEvent('POST', '/identity/oauth/exchange', { body: { code: 'gone' } }),
+    );
+    expect(missing.statusCode).toBe(401);
+
+    const incompleteId = randomUUID();
+    const incompleteTokens = issueLocalTokens(incompleteId, 'pending@example.com');
+    handoff.redeemOAuthHandoff.mockResolvedValueOnce({
+      refreshToken: incompleteTokens.refreshToken,
+      next: 'complete-profile',
+    });
+    const pending = await handler(
+      httpEvent('POST', '/identity/oauth/exchange', { body: { code: 'pending' } }),
+    );
+    expect(pending.statusCode).toBe(200);
+    const pendingBody = JSON.parse(pending.body ?? '{}') as {
+      next?: string;
+      user?: { needsProfileCompletion?: boolean };
+    };
+    expect(pendingBody.next).toBe('complete-profile');
+    expect(pendingBody.user?.needsProfileCompletion).toBe(true);
   });
 
   it('returns profile_not_found for profile updates without a stored row', async () => {

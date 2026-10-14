@@ -84,6 +84,35 @@ export const completeProfileBodySchema = z
  * `refreshToken` is present only when the client asks for a body delivery
  * (Capacitor). The website relies on the HttpOnly cookie instead.
  */
+/** One-time WebSocket connect ticket. The value is not an access token. */
+export const socketTicketSchema = z.object({
+  ticket: z.string().min(1),
+  expiresIn: z.number().int().min(1),
+});
+
+/** Body for redeeming a native OAuth handoff code. */
+export const oauthExchangeBodySchema = z
+  .object({
+    code: z.string().min(1),
+  })
+  .strict();
+
+/** Where the app should go after a native Hosted UI sign-in. */
+export const oauthNextSchema = z.enum(['teams', 'complete-profile']);
+
+/**
+ * Session tokens plus the post-login route for a native OAuth exchange.
+ *
+ * `refreshToken` is always present: the native app cannot read the HttpOnly cookie.
+ */
+export const oauthExchangeResponseSchema = z.object({
+  accessToken: z.string().min(1),
+  expiresIn: z.number().int().min(1),
+  user: userProfileSchema,
+  refreshToken: z.string().min(1),
+  next: oauthNextSchema,
+});
+
 export const sessionTokensSchema = z.object({
   accessToken: z.string().min(1),
   expiresIn: z.number().int().min(1),
@@ -116,6 +145,18 @@ export type CompleteProfileBody = z.infer<typeof completeProfileBodySchema>;
 
 /** Inferred type for {@link updateProfileBodySchema}. */
 export type UpdateProfileBody = z.infer<typeof updateProfileBodySchema>;
+
+/** Inferred type for {@link socketTicketSchema}. */
+export type SocketTicket = z.infer<typeof socketTicketSchema>;
+
+/** Inferred type for {@link oauthExchangeBodySchema}. */
+export type OAuthExchangeBody = z.infer<typeof oauthExchangeBodySchema>;
+
+/** Inferred type for {@link oauthNextSchema}. */
+export type OAuthNext = z.infer<typeof oauthNextSchema>;
+
+/** Inferred type for {@link oauthExchangeResponseSchema}. */
+export type OAuthExchangeResponse = z.infer<typeof oauthExchangeResponseSchema>;
 
 /** Inferred type for {@link sessionTokensSchema}. */
 export type SessionTokens = z.infer<typeof sessionTokensSchema>;

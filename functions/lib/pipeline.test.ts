@@ -3,7 +3,7 @@
  */
 
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { requirePermission, requireUser } from "./guards.js";
 import { json } from "./http.js";
@@ -142,20 +142,7 @@ describe("route pipeline", () => {
   });
 
   describe("accumulated context", () => {
-    const previousDisabled = process.env.AUTH_DISABLED;
-    const previousSeed = process.env.AUTH_SEED_USER_ID;
-
-    afterEach(() => {
-      if (previousDisabled === undefined) delete process.env.AUTH_DISABLED;
-      else process.env.AUTH_DISABLED = previousDisabled;
-      if (previousSeed === undefined) delete process.env.AUTH_SEED_USER_ID;
-      else process.env.AUTH_SEED_USER_ID = previousSeed;
-    });
-
     it("passes path args, user, and body to the handler", async () => {
-      process.env.AUTH_DISABLED = "true";
-      process.env.AUTH_SEED_USER_ID = "user-1";
-
       const handle = route(
         ["teamId"],
         withBodyValidation(z.object({ name: z.string() })),
@@ -168,7 +155,16 @@ describe("route pipeline", () => {
           }),
       );
 
-      const result = await handle(httpEvent({ name: "Wildcats" }), "team-1");
+      const result = await handle(
+        {
+          ...httpEvent({ name: "Wildcats" }),
+          requestContext: {
+            http: { method: "POST", path: "/" },
+            authorizer: { jwt: { claims: { sub: "user-1" } } },
+          },
+        } as APIGatewayProxyEventV2,
+        "team-1",
+      );
       expect(JSON.parse(result.body ?? "")).toEqual({
         teamId: "team-1",
         userId: "user-1",

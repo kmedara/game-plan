@@ -11,20 +11,21 @@ import {
   generateOAuthState,
   generatePkcePair,
   getProfile,
-  isAuthDisabled,
   readOAuthIdClaims,
   refreshSetCookie,
 } from '../../../lib/auth/index.js';
 import { readCookie, redirect } from '../../../lib/http.js';
 import type { UserProfile } from '@gameplan/types';
+import { issueOAuthHandoff } from '../../../lib/oauth-handoff.js';
 import {
+  NATIVE_AUTH_REDIRECT,
+  OAUTH_NATIVE_COOKIE,
   OAUTH_RETURN_COOKIE,
   OAUTH_STATE_COOKIE,
   OAUTH_VERIFIER_COOKIE,
   oauthClearCookie,
   oauthSetCookie,
 } from './oauth-cookies.js';
-import { issueSeedSession } from './seed-session.js';
 
 /**
  * Parses an allowlisted return URL for post-login redirects.
@@ -51,18 +52,13 @@ const resolveReturnTo = (raw: string | undefined): string => {
  * Handles `GET /identity/oauth/login`.
  *
  * @param event - The HTTP API event.
- * @returns A redirect to Cognito Hosted UI, or a seed session redirect when auth is disabled.
+ * @returns A redirect to Cognito Hosted UI.
  */
 export const handleOAuthLogin = async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyStructuredResultV2> => {
+  const native = event.queryStringParameters?.delivery === 'native';
   const returnTo = resolveReturnTo(event.queryStringParameters?.returnTo);
-
-  if (isAuthDisabled()) {
-    const session = await issueSeedSession();
-    return redirect(returnTo, [refreshSetCookie(session.refreshToken)]);
-  }
-
   const state = generateOAuthState();
   const { verifier, challenge } = generatePkcePair();
   const location = buildAuthorizeUrl({ state, challenge });
@@ -70,6 +66,7 @@ export const handleOAuthLogin = async (
     oauthSetCookie(OAUTH_STATE_COOKIE, state),
     oauthSetCookie(OAUTH_VERIFIER_COOKIE, verifier),
     oauthSetCookie(OAUTH_RETURN_COOKIE, returnTo),
+    oauthSetCookie(OAUTH_NATIVE_COOKIE, native ? '1' : '0'),
   ]);
 };
 
@@ -90,15 +87,8 @@ export const handleOAuthCallback = async (
     oauthClearCookie(OAUTH_STATE_COOKIE),
     oauthClearCookie(OAUTH_VERIFIER_COOKIE),
     oauthClearCookie(OAUTH_RETURN_COOKIE),
+    oauthClearCookie(OAUTH_NATIVE_COOKIE),
   ];
-
-  if (isAuthDisabled()) {
-    const session = await issueSeedSession();
-    return redirect(`${clientOrigin}/schedule`, [
-      ...clearHandshake,
-      refreshSetCookie(session.refreshToken),
-    ]);
-  }
 
   const code = event.queryStringParameters?.code;
   const state = event.queryStringParameters?.state;
@@ -106,8 +96,15 @@ export const handleOAuthCallback = async (
   const expectedState = readCookie(event, OAUTH_STATE_COOKIE);
   const verifier = readCookie(event, OAUTH_VERIFIER_COOKIE);
   const returnTo = resolveReturnTo(readCookie(event, OAUTH_RETURN_COOKIE));
+  const native = readCookie(event, OAUTH_NATIVE_COOKIE) === '1';
+  const nativeError = (reason: string): APIGatewayProxyStructuredResultV2 =>
+    redirect(
+      `${NATIVE_AUTH_REDIRECT}?error=${encodeURIComponent(reason)}`,
+      clearHandshake,
+    );
 
   if (error) {
+    if (native) return nativeError(error);
     return redirect(
       `${clientOrigin}/login?error=${encodeURIComponent(error)}`,
       clearHandshake,
@@ -121,6 +118,7 @@ export const handleOAuthCallback = async (
     verifier === undefined ||
     state !== expectedState
   ) {
+    if (native) return nativeError('invalid_state');
     return redirect(`${clientOrigin}/login?error=invalid_state`, clearHandshake);
   }
 
@@ -134,7 +132,19 @@ export const handleOAuthCallback = async (
       : returnTo;
 
     if (tokens.refreshToken === undefined) {
+      if (native) return nativeError('missing_refresh_token');
       return redirect(`${clientOrigin}/login?error=missing_refresh_token`, clearHandshake);
+    }
+
+    if (native) {
+      const handoff = await issueOAuthHandoff(
+        tokens.refreshToken,
+        needsProfile ? 'complete-profile' : 'teams',
+      );
+      return redirect(
+        `${NATIVE_AUTH_REDIRECT}?code=${encodeURIComponent(handoff)}`,
+        clearHandshake,
+      );
     }
 
     return redirect(destination, [
@@ -142,6 +152,7 @@ export const handleOAuthCallback = async (
       refreshSetCookie(tokens.refreshToken),
     ]);
   } catch {
+    if (native) return nativeError('sign_in_failed');
     return redirect(`${clientOrigin}/login?error=sign_in_failed`, clearHandshake);
   }
 };
@@ -150,7 +161,7 @@ export const handleOAuthCallback = async (
  * Handles `GET /identity/oauth/logout`.
  *
  * @param event - The HTTP API event.
- * @returns A redirect that clears the session cookie (and Cognito Hosted UI when enabled).
+ * @returns A redirect that clears the session cookie and sends the browser to Cognito Hosted UI.
  */
 export const handleOAuthLogout = async (
   event: APIGatewayProxyEventV2,
@@ -160,10 +171,6 @@ export const handleOAuthLogout = async (
       `${(process.env.CLIENT_ORIGIN ?? 'http://localhost:4200').replace(/\/+$/u, '')}/login`,
   );
   const clear = [clearRefreshSetCookie()];
-
-  if (isAuthDisabled()) {
-    return redirect(returnTo, clear);
-  }
 
   try {
     return redirect(buildLogoutUrl(returnTo), clear);

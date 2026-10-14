@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "GamePlan",
+    "slug": "gameplan",
+    "scheme": "gameplan",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "color": "#0f766e"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "ios": {
+      "bundleIdentifier": "com.gameplan.app",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.gameplan.app"
+    }
+  }
+}

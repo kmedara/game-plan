@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Website cookie and Capacitor secure-storage session for the identity API",
+  "description": "Refresh-token session for the identity API",
+  "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
   },

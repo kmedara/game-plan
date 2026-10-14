@@ -105,6 +105,15 @@ export class SessionService {
     return this.user;
   }
 
+  /**
+   * Replaces the cached profile after profile updates without rotating tokens.
+   *
+   * @param user - The updated profile from identity.
+   */
+  setUser(user: UserProfile): void {
+    this.user = user;
+  }
+
   /** Returns whether an access token is currently held. */
   isAuthenticated(): boolean {
     return this.accessToken !== undefined;
@@ -190,6 +199,15 @@ export class SessionService {
     const profile = (await response.json()) as UserProfile;
     this.user = profile;
     return profile;
+  }
+
+  /**
+   * Stores tokens returned outside login/refresh, such as a native OAuth exchange.
+   *
+   * @param tokens - The session payload from identity.
+   */
+  async adopt(tokens: SessionTokens): Promise<void> {
+    await this.applySession(tokens);
   }
 
   /**

@@ -57,9 +57,9 @@ const TABLE_AREAS: readonly Area[] = [
 /**
  * HTTP API plus the WebSocket API. Each area is its own function.
  *
- * The gateway checks the Cognito access token. Team permissions are checked inside the
- * function later. WebSocket APIs have no Cognito authorizer, so `$connect` uses a Lambda
- * authorizer for the same token.
+ * The gateway checks the Cognito access token on HTTP routes. WebSocket APIs have no
+ * Cognito authorizer, so `$connect` burns a one-time ticket from
+ * `POST /identity/socket-ticket`.
  */
 export class Api extends Construct {
   /** Amazon API Gateway HTTP API that fronts the area Lambdas. */
@@ -106,7 +106,6 @@ export class Api extends Construct {
       COGNITO_HOSTED_UI_DOMAIN: props.hostedUiDomain,
       COGNITO_REGION: cdk.Stack.of(this).region,
       AUTH_CALLBACK_URL: props.authCallbackUrl,
-      AUTH_DISABLED: 'false',
     };
 
     /**
@@ -189,11 +188,12 @@ export class Api extends Construct {
       this,
       'socket-authorizer',
       areaEntry('socket', 'authorize.ts'),
-      cognitoEnv,
+      tableEnv,
       5,
     );
+    props.table.grantReadWriteData(socketAuthorizerFn);
     const socketAuthorizer = new WebSocketLambdaAuthorizer('SocketAuthorizer', socketAuthorizerFn, {
-      identitySource: ['route.request.querystring.token'],
+      identitySource: ['route.request.querystring.ticket'],
     });
     const socketIntegration = new integrations.WebSocketLambdaIntegration(
       'SocketIntegration',
@@ -210,6 +210,16 @@ export class Api extends Construct {
       disconnectRouteOptions: { integration: socketIntegration },
       defaultRouteOptions: { integration: socketIntegration },
     });
+
+    const socketAuthorizerResource = this.node.findAll().find(
+      (node): node is apigwv2.CfnAuthorizer =>
+        node instanceof apigwv2.CfnAuthorizer && node.node.scope?.node.id === 'SocketAuthorizer',
+    );
+    if (socketAuthorizerResource === undefined) {
+      throw new Error('Socket authorizer resource was not created');
+    }
+    // A cached Allow would accept a replayed ticket without running this function.
+    socketAuthorizerResource.authorizerResultTtlInSeconds = 0;
 
     const socketStage = new apigwv2.WebSocketStage(this, 'WebSocketStage', {
       webSocketApi: this.webSocketApi,

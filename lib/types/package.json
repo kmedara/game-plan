@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Shared TypeScript types and domain constants for GamePlan clients and APIs",
+  "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
   }

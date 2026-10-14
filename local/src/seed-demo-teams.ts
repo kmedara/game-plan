@@ -1,8 +1,8 @@
 /**
  * Idempotent local demo teams for join autocomplete and first-signup flows.
  *
- * Seeds two clubs with one team admin each. Set `AUTH_SEED_USER_ID` to either
- * admin id to Continue as that club; Compose defaults to the Seacoast admin.
+ * Seeds two clubs with one team admin each. Sign in with Cognito; these rows
+ * are demo clubs, not a local auth bypass.
  *
  * - Peoria Pigs — Peoria, IL (`America/Chicago`)
  * - Seacoast Men's Rugby — Portsmouth, NH (`America/New_York`)

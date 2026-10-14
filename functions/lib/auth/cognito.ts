@@ -5,16 +5,14 @@
  * `$connect`. Handlers still verify (or read claims) when they need the `sub`
  * inside the function, and the local proxy has no Cognito authorizer.
  *
- * When `AUTH_DISABLED=true`, every request is treated as the env-configured seed user.
- * When Cognito env vars are unset (and auth is enabled), local HS256 access
- * tokens are accepted so laptop work does not need a cloud deploy.
+ * When Cognito env vars are unset, local HS256 access tokens are accepted so
+ * laptop work does not need a cloud deploy.
  */
 
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import type { AuthUser } from '@gameplan/types';
 import { headerOf } from '../http.js';
-import { isAuthDisabled, seedUserId } from './auth-disabled.js';
 import { verifyLocalJwt } from './local-jwt.js';
 
 /** Cached Cognito JWT verifier for warm invocations. */
@@ -81,11 +79,6 @@ export const toAuthUser = (payload: { sub: string; email?: unknown }): AuthUser 
   email: typeof payload.email === 'string' ? payload.email : undefined,
 });
 
-/** Seed auth user used when `AUTH_DISABLED=true`. */
-const seedAuthUser = (): AuthUser => ({
-  userId: seedUserId(),
-});
-
 /**
  * Verifies a raw access token (Cognito in the cloud, local HS256 on the laptop).
  *
@@ -94,7 +87,6 @@ const seedAuthUser = (): AuthUser => ({
  * @throws When the token is invalid.
  */
 export const verifyAccessToken = async (token: string): Promise<AuthUser> => {
-  if (isAuthDisabled()) return seedAuthUser();
   if (!isCognitoConfigured()) {
     const claims = verifyLocalJwt(token);
     if (claims.token_use !== 'access') throw new Error('unauthorized');
@@ -111,7 +103,6 @@ export const verifyAccessToken = async (token: string): Promise<AuthUser> => {
  * @throws When the header is missing, malformed, or the token is invalid.
  */
 export const verifyAuthHeader = async (authorization?: string): Promise<AuthUser> => {
-  if (isAuthDisabled()) return seedAuthUser();
   if (authorization === undefined || !authorization.startsWith('Bearer ')) {
     throw new Error('unauthorized');
   }
@@ -132,7 +123,6 @@ export const verifyAuthHeader = async (authorization?: string): Promise<AuthUser
 export const authenticateRequest = async (
   event: APIGatewayProxyEventV2,
 ): Promise<AuthUser> => {
-  if (isAuthDisabled()) return seedAuthUser();
   const context = event.requestContext as APIGatewayProxyEventV2['requestContext'] & {
     authorizer?: { jwt?: { claims?: Record<string, unknown> } };
   };

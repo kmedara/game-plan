@@ -30,8 +30,6 @@ describe('cognito auth', () => {
     delete process.env.COGNITO_USER_POOL_ID;
     delete process.env.COGNITO_CLIENT_ID;
     delete process.env.LOCAL_JWT_SECRET;
-    delete process.env.AUTH_DISABLED;
-    delete process.env.AUTH_SEED_USER_ID;
   });
 
   it('rejects a missing Authorization header', async () => {
@@ -129,22 +127,5 @@ describe('cognito auth', () => {
       userId: 'header-user',
       email: 'h@example.com',
     });
-  });
-
-  it('returns the seed user when AUTH_DISABLED is true', async () => {
-    process.env.AUTH_DISABLED = 'true';
-    process.env.AUTH_SEED_USER_ID = 'seed-123';
-    const { authenticateRequest, verifyAccessToken, verifyAuthHeader } = await import(
-      './cognito.js'
-    );
-    await expect(verifyAccessToken('ignored')).resolves.toEqual({ userId: 'seed-123' });
-    await expect(verifyAuthHeader(undefined)).resolves.toEqual({ userId: 'seed-123' });
-    await expect(
-      authenticateRequest({
-        version: '2.0',
-        headers: {},
-        requestContext: { http: { method: 'GET', path: '/' } },
-      } as never),
-    ).resolves.toEqual({ userId: 'seed-123' });
   });
 });

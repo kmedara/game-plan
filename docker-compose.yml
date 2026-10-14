@@ -23,6 +23,7 @@ services:
       - "3000:3000"
       - "9229-9237:9229-9237"
     environment:
+      NODE_ENV: development
       DYNAMODB_ENDPOINT: http://dynamodb:8000
       LISTEN_HOST: "0.0.0.0"
       NODE_INSPECT_HOST: "0.0.0.0"
@@ -32,9 +33,10 @@ services:
       AWS_REGION: us-east-1
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: local
-      AUTH_DISABLED: "true"
-      AUTH_SEED_USER_ID: "44444444-4444-4444-8444-444444444444"
-      #AUTH_SEED_USER_ID: "22222222-2222-4222-8222-222222222222"
+      COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID:?set COGNITO_USER_POOL_ID}
+      COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID:?set COGNITO_CLIENT_ID}
+      COGNITO_HOSTED_UI_DOMAIN: ${COGNITO_HOSTED_UI_DOMAIN:?set COGNITO_HOSTED_UI_DOMAIN}
+      COGNITO_REGION: ${COGNITO_REGION:-us-east-1}
       AUTH_CALLBACK_URL: http://localhost:3000/identity/oauth/callback
       MEDIA_LOCAL_DIR: /var/lib/gameplan/media
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
@@ -75,11 +77,10 @@ services:
       - api
     ports:
       - "4200:4200"
-      - "49153:49153"
+      - "8081:8081"
     environment:
       API_BASE_URL: http://localhost:3000
       WS_BASE_URL: ws://localhost:3000/socket
-      AUTH_DISABLED: "true"
       GOOGLE_MAPS_BROWSER_API_KEY: ${GOOGLE_MAPS_BROWSER_API_KEY:-}
     develop:
       watch:

@@ -15,6 +15,13 @@ import { resetIdentityProvider, setIdentityProvider } from '../../lib/auth/provi
 
 const profiles = new Map<string, UserProfileItem>();
 
+vi.mock('../../lib/socket-ticket.js', () => ({
+  issueSocketTicket: async (userId: string) => ({
+    ticket: `ticket-${userId}`,
+    expiresIn: 60,
+  }),
+}));
+
 vi.mock('../../lib/auth/profile.js', () => ({
   getProfile: async (userId: string) => profiles.get(userId),
   putProfile: async (input: {
@@ -335,5 +342,37 @@ describe('identity handler (in-memory)', () => {
     );
     expect(clearedPhone.statusCode).toBe(200);
     expect(JSON.parse(clearedPhone.body ?? '').phoneNumber).toBeUndefined();
+  });
+
+  it('issues a socket ticket for a bearer and rejects a missing one', async () => {
+    const email = `player-${randomUUID()}@example.com`;
+    const registered = await handler(
+      httpEvent('POST', '/identity/register', {
+        body: {
+          email,
+          password: 'Password1',
+          displayName: 'Ada Player',
+          birthday: '1990-05-15',
+        },
+      }),
+    );
+    const session = JSON.parse(registered.body ?? '') as {
+      accessToken: string;
+      user: { userId: string };
+    };
+
+    const missing = await handler(httpEvent('POST', '/identity/socket-ticket'));
+    expect(missing.statusCode).toBe(401);
+
+    const issued = await handler(
+      httpEvent('POST', '/identity/socket-ticket', {
+        headers: { authorization: `Bearer ${session.accessToken}` },
+      }),
+    );
+    expect(issued.statusCode).toBe(200);
+    expect(JSON.parse(issued.body ?? '')).toEqual({
+      ticket: `ticket-${session.user.userId}`,
+      expiresIn: 60,
+    });
   });
 });

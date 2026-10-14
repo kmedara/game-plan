@@ -1,7 +1,7 @@
 /**
  * Identity area Lambda.
  *
- * Dispatches register, login, refresh, logout, OAuth, profile complete, and `GET /me`.
+ * Dispatches register, login, refresh, logout, OAuth, profile complete, socket tickets, and `GET /me`.
  */
 
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
@@ -12,10 +12,12 @@ import {
   handleLogout,
   handleMe,
   handleOAuthCallback,
+  handleOAuthExchange,
   handleOAuthLogin,
   handleOAuthLogout,
   handleRefresh,
   handleRegister,
+  handleSocketTicket,
   handleUpdateProfile,
 } from './routes/index.js';
 
@@ -56,9 +58,11 @@ export const handler = async (
   if (method === 'POST' && route === 'refresh') return handleRefresh(event);
   if (method === 'POST' && route === 'logout') return handleLogout(event);
   if (method === 'GET' && route === 'me') return handleMe(event);
+  if (method === 'POST' && route === 'socket-ticket') return handleSocketTicket(event);
   if (method === 'GET' && route === 'oauth/login') return handleOAuthLogin(event);
   if (method === 'GET' && route === 'oauth/callback') return handleOAuthCallback(event);
   if (method === 'GET' && route === 'oauth/logout') return handleOAuthLogout(event);
+  if (method === 'POST' && route === 'oauth/exchange') return handleOAuthExchange(event);
   if (method === 'POST' && route === 'profile/complete') return handleCompleteProfile(event);
   if (method === 'PATCH' && route === 'profile') return handleUpdateProfile(event);
 

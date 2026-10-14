@@ -26,6 +26,10 @@ import {
   teamMemberSk,
   teamMetaSk,
   teamPk,
+  handoffPk,
+  handoffSk,
+  ticketPk,
+  ticketSk,
   userChatSk,
   userPk,
   userTeamSk,
@@ -39,6 +43,10 @@ describe('dynamo keys', () => {
     expect(teamPk('t1')).toBe('TEAM#t1');
     expect(chatPk('c1')).toBe('CHAT#c1');
     expect(invitePk('abc')).toBe('INVITE#abc');
+    expect(ticketPk('abc')).toBe('TICKET#abc');
+    expect(ticketSk()).toBe('TICKET');
+    expect(handoffPk('abc')).toBe('HANDOFF#abc');
+    expect(handoffSk()).toBe('HANDOFF');
     expect(teamDirectoryPk()).toBe('TEAM_DIR');
     expect(teamDirectorySk('Tigers', 't1')).toBe('NAME#tigers#t1');
     expect(teamDirectorySkPrefix('Ti')).toBe('NAME#ti');

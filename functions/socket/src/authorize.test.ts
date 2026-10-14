@@ -1,51 +1,63 @@
 /**
- * Unit tests for the WebSocket `$connect` Cognito authorizer.
+ * Unit tests for the WebSocket `$connect` ticket authorizer.
  */
 
 import type { APIGatewayRequestAuthorizerEvent } from 'aws-lambda';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { issueLocalTokens } from '../../lib/auth/local-jwt.js';
-import { handler } from './authorize.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { used } = vi.hoisted(() => ({ used: new Set<string>() }));
+
+vi.mock('../../lib/socket-ticket.js', () => ({
+  redeemSocketTicket: async (ticket: string) => {
+    if (ticket === 'fresh') return 'user-1';
+    if (ticket === 'boom') throw new Error('dynamo down');
+    if (ticket === 'odd') throw 'odd';
+    if (ticket !== 'once' || used.has(ticket)) return undefined;
+    used.add(ticket);
+    return 'user-1';
+  },
+}));
+
+const { handler } = await import('./authorize.js');
 
 /**
- * Builds a REQUEST authorizer event with an optional access token query parameter.
+ * Builds a REQUEST authorizer event with an optional ticket query parameter.
  *
- * @param token - The `token` query value, or omit to leave the map empty.
+ * @param ticket - The `ticket` query value, or omit to leave the map empty.
  * @returns An Amazon API Gateway REQUEST authorizer event.
  */
-const event = (token?: string): APIGatewayRequestAuthorizerEvent =>
+const event = (ticket?: string): APIGatewayRequestAuthorizerEvent =>
   ({
     type: 'REQUEST',
     methodArn: 'arn:aws:execute-api:us-east-1:000000000000:api/prod/$connect',
-    queryStringParameters: token === undefined ? null : { token },
+    queryStringParameters: ticket === undefined ? null : { ticket },
     headers: {},
   }) as APIGatewayRequestAuthorizerEvent;
 
 describe('socket authorizer', () => {
   beforeEach(() => {
-    delete process.env.COGNITO_USER_POOL_ID;
-    delete process.env.COGNITO_CLIENT_ID;
-    process.env.LOCAL_JWT_SECRET = 'socket-authorizer-test-secret';
+    used.clear();
   });
 
-  afterEach(() => {
-    delete process.env.AUTH_DISABLED;
-    delete process.env.AUTH_SEED_USER_ID;
-  });
-
-  it('rejects a connect that has no token', async () => {
+  it('rejects a connect that has no ticket', async () => {
     await expect(handler(event())).rejects.toThrow('Unauthorized');
+    await expect(handler(event(''))).rejects.toThrow('Unauthorized');
   });
 
-  it('rejects a token when the user pool is not configured and the JWT is invalid', async () => {
-    await expect(handler(event('not-a-jwt'))).rejects.toThrow('Unauthorized');
+  it('rejects a ticket that was already used', async () => {
+    await expect(handler(event('once'))).resolves.toMatchObject({ principalId: 'user-1' });
+    await expect(handler(event('once'))).rejects.toThrow('Unauthorized');
   });
 
-  it('allows a valid local access token', async () => {
-    const { accessToken } = issueLocalTokens('user-1', 'user-1@example.com');
-    const result = await handler(event(accessToken));
+  it('allows a fresh ticket', async () => {
+    const result = await handler(event('fresh'));
     expect(result.principalId).toBe('user-1');
     expect(result.context).toEqual({ sub: 'user-1' });
     expect(result.policyDocument.Statement[0]?.Effect).toBe('Allow');
+  });
+
+  it('hides redeem failures as unauthorized', async () => {
+    await expect(handler(event('boom'))).rejects.toThrow('Unauthorized');
+    await expect(handler(event('odd'))).rejects.toThrow('Unauthorized');
   });
 });

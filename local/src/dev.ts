@@ -91,19 +91,13 @@ process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));
 
 for (const area of AREAS) {
-  const authDisabled = (process.env.AUTH_DISABLED ?? 'true') === 'true';
   const env: Record<string, string> = {
     PORT: String(areaPort(area)),
     DYNAMODB_ENDPOINT: process.env.DYNAMODB_ENDPOINT ?? 'http://127.0.0.1:8000',
     CLIENT_ORIGIN: process.env.CLIENT_ORIGIN ?? 'http://localhost:4200',
-    AUTH_DISABLED: authDisabled ? 'true' : 'false',
     AUTH_CALLBACK_URL:
       process.env.AUTH_CALLBACK_URL ?? 'http://localhost:3000/identity/oauth/callback',
   };
-  if (authDisabled) {
-    env.AUTH_SEED_USER_ID =
-      process.env.AUTH_SEED_USER_ID?.trim() || '44444444-4444-4444-8444-444444444444';
-  }
   if (area === 'chat' || area === 'schedule') {
     env.FANOUT_DELIVER_URL =
       process.env.FANOUT_DELIVER_URL ??

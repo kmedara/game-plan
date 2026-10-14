@@ -32,9 +32,12 @@ import {
   completeProfileBodySchema,
   errorBodySchema,
   loginBodySchema,
+  oauthExchangeBodySchema,
+  oauthExchangeResponseSchema,
   refreshBodySchema,
   registerBodySchema,
   sessionTokensSchema,
+  socketTicketSchema,
   updateProfileBodySchema,
   userProfileSchema,
 } from './auth.js';
@@ -128,6 +131,13 @@ const AREAS: Record<string, AreaSpec> = {
       '/identity/me': {
         get: { summary: 'Current user profile', response: userProfileSchema, secured: true },
       },
+      '/identity/socket-ticket': {
+        post: {
+          summary: 'Issue a one-time WebSocket connect ticket',
+          response: socketTicketSchema,
+          secured: true,
+        },
+      },
       '/identity/profile': {
         patch: {
           summary: 'Update the profile photo and/or phone number',
@@ -147,7 +157,10 @@ const AREAS: Record<string, AreaSpec> = {
       '/identity/oauth/login': {
         get: {
           summary: 'Redirect to the Cognito Hosted UI',
-          query: z.object({ returnTo: z.string().optional() }),
+          query: z.object({
+            returnTo: z.string().optional(),
+            delivery: z.enum(['native']).optional(),
+          }),
           redirect: true,
         },
       },
@@ -160,6 +173,13 @@ const AREAS: Record<string, AreaSpec> = {
             error: z.string().optional(),
           }),
           redirect: true,
+        },
+      },
+      '/identity/oauth/exchange': {
+        post: {
+          summary: 'Redeem a native OAuth handoff code for a session',
+          body: oauthExchangeBodySchema,
+          response: oauthExchangeResponseSchema,
         },
       },
       '/identity/oauth/logout': {
@@ -445,7 +465,7 @@ export const openApiDocument = {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: 'Cognito access token. Not needed locally while AUTH_DISABLED=true.',
+        description: 'Cognito access token.',
       },
     },
   },

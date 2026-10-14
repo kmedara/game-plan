@@ -39,18 +39,6 @@ COPY config ./config
 COPY local/docker-entrypoint.sh /docker-entrypoint.sh
 RUN sed -i 's/\r$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 
-ENV NODE_ENV=development
-ENV LISTEN_HOST=0.0.0.0
-ENV DYNAMODB_ENDPOINT=http://dynamodb:8000
-ENV CLIENT_ORIGIN=http://localhost:4200
-ENV MEDIA_PUBLIC_ORIGIN=http://localhost:3000
-ENV AWS_REGION=us-east-1
-ENV AWS_ACCESS_KEY_ID=local
-ENV AWS_SECRET_ACCESS_KEY=local
-ENV AUTH_DISABLED=true
-ENV AUTH_SEED_USER_ID=44444444-4444-4444-8444-444444444444
-ENV AUTH_CALLBACK_URL=http://localhost:3000/identity/oauth/callback
-
 EXPOSE 3000
 
 ENTRYPOINT ["/docker-entrypoint.sh"]

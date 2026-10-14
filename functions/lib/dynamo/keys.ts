@@ -66,6 +66,42 @@ export const CONNECTION_SK_PREFIX = 'CONN#' as const;
  */
 export const CONNECTION_TTL_SECONDS = 2 * 60 * 60;
 
+/**
+ * How long a socket connect ticket stays before time-to-live removes it.
+ *
+ * The authorizer deletes the row on use. This only cleans a ticket that was
+ * issued and never redeemed.
+ */
+export const SOCKET_TICKET_TTL_SECONDS = 60;
+
+/**
+ * `TICKET#<id>` — one-time WebSocket connect ticket.
+ *
+ * The authorizer only has the ticket, so the lookup starts at this partition.
+ */
+export const ticketPk = (ticketId: string): string => `TICKET#${ticketId}`;
+
+/** Fixed sort key for a socket connect ticket. */
+export const ticketSk = (): string => 'TICKET';
+
+/**
+ * How long a native OAuth handoff code stays before time-to-live removes it.
+ *
+ * The exchange route deletes the row on use. This only cleans a code that was
+ * issued and never redeemed.
+ */
+export const OAUTH_HANDOFF_TTL_SECONDS = 60;
+
+/**
+ * `HANDOFF#<code>` — one-time native OAuth refresh handoff.
+ *
+ * The app only has the code, so the lookup starts at this partition.
+ */
+export const handoffPk = (code: string): string => `HANDOFF#${code}`;
+
+/** Fixed sort key for a native OAuth handoff. */
+export const handoffSk = (): string => 'HANDOFF';
+
 /** `TEAM#<teamId>` — team record, roles, roster, invites, events, and RSVPs. */
 export const teamPk = (teamId: TeamId): string => `TEAM#${teamId}`;
 

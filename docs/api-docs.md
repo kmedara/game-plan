@@ -24,9 +24,7 @@ The media `local-objects` routes are also left out, since they only stand in for
 ## Signing in
 
 Routes outside `identity` are marked with a **bearer** security scheme, which means they expect a Cognito access token
-in the `Authorization` header. Locally, `AUTH_DISABLED` defaults to `true`, so every request runs as the seed user and
-**Try it out** works without a token. With auth turned on, paste an access token from `POST /identity/login` into the
-**Authorize** dialog.
+in the `Authorization` header. Paste an access token into the **Authorize** dialog before using **Try it out**.
 
 ## Keeping the spec in sync
 

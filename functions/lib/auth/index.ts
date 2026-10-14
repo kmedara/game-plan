@@ -22,8 +22,6 @@ export {
   type GuardTeam,
 } from "../guards.js";
 
-export { isAuthDisabled, seedUserId } from "./auth-disabled.js";
-
 export {
   buildAuthorizeUrl,
   buildLogoutUrl,
