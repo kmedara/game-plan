@@ -72,12 +72,17 @@ const dns =
 
 const dnsStack = dns === undefined ? undefined : new GamePlanDns(app, 'GamePlanDns', { env, ...dns });
 
+const staging = deployEnv === 'staging';
+const ssmPrefix = (process.env.SSM_PREFIX ?? '/gameplan').replace(/\/+$/u, '');
+
 const platform = new GamePlanPlatform(app, 'GamePlanPlatform', {
   env,
   corsOrigin,
   callbackUrls,
   logoutUrls,
   social,
+  selfSignUpEnabled: !staging,
+  signupAllowlistParameter: staging ? `${ssmPrefix}/staging-signup-allowlist` : undefined,
   siteHostname: dns?.siteHostname,
   certificateArn: dnsStack?.siteCertificateArn,
 });

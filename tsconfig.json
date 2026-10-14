@@ -12,5 +12,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": ["functions/**/*.ts", "local/**/*.ts", "lib/**/*.ts", "vitest.config.ts"]
+  "include": ["functions/**/*.ts", "functions/identity/src/client-ssm.d.ts", "local/**/*.ts", "lib/**/*.ts", "vitest.config.ts"]
 }

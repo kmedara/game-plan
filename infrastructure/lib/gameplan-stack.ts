@@ -70,6 +70,10 @@ export type GamePlanPlatformProps = cdk.StackProps & {
   logoutUrls: string[];
   /** Optional Google / Apple / Facebook Hosted UI credentials. */
   social?: AuthSocialContext;
+  /** When false, the user pool rejects public sign-up. */
+  selfSignUpEnabled?: boolean;
+  /** Parameter Store name of the staging sign-up allowlist. */
+  signupAllowlistParameter?: string;
   /** Website hostname. Set with `certificateArn` after the DNS stack exists. */
   siteHostname?: string;
   /** CloudFront certificate ARN from {@link GamePlanDns}. */
@@ -112,6 +116,8 @@ export class GamePlanPlatform extends cdk.Stack {
       callbackUrls: props.callbackUrls,
       logoutUrls: props.logoutUrls,
       social: props.social,
+      selfSignUpEnabled: props.selfSignUpEnabled,
+      signupAllowlistParameter: props.signupAllowlistParameter,
     });
     this.userPool = auth.userPool;
     this.userPoolClient = auth.userPoolClient;

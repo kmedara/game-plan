@@ -4,7 +4,9 @@
 
 import * as cdk from 'aws-cdk-lib';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
+import { areaEntry, createFunction } from './functions';
 
 /** Optional social Identity Provider (IdP) credentials from CDK context. */
 export type AuthSocialContext = {
@@ -26,6 +28,16 @@ export type AuthProps = {
   logoutUrls: string[];
   /** Optional Google / Apple / Facebook Hosted UI providers. */
   social?: AuthSocialContext;
+  /**
+   * When false, Hosted UI and the SignUp API reject new accounts.
+   * Defaults to true.
+   */
+  selfSignUpEnabled?: boolean;
+  /**
+   * Parameter Store name of the staging email allowlist.
+   * When set, a pre sign-up Lambda rejects every address that is not listed.
+   */
+  signupAllowlistParameter?: string;
 };
 
 /**
@@ -56,7 +68,7 @@ export class Auth extends Construct {
 
     this.userPool = new cognito.UserPool(this, 'UserPool', {
       userPoolName: 'gameplan-users',
-      selfSignUpEnabled: true,
+      selfSignUpEnabled: props.selfSignUpEnabled ?? true,
       signInAliases: { email: true },
       autoVerify: { email: true },
       standardAttributes: {
@@ -157,6 +169,31 @@ export class Auth extends Construct {
 
     for (const idp of idpConstructs) {
       this.userPoolClient.node.addDependency(idp);
+    }
+
+    const allowlistParameter = props.signupAllowlistParameter?.trim();
+    if (allowlistParameter !== undefined && allowlistParameter.length > 0) {
+      const preSignUp = createFunction(
+        this,
+        'pre-signup',
+        areaEntry('identity', 'pre-signup.ts'),
+        { ALLOWLIST_PARAMETER: allowlistParameter },
+        5,
+      );
+      preSignUp.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['ssm:GetParameter'],
+          resources: [
+            cdk.Stack.of(this).formatArn({
+              service: 'ssm',
+              resource: 'parameter',
+              resourceName: allowlistParameter.replace(/^\//u, ''),
+              arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
+            }),
+          ],
+        }),
+      );
+      this.userPool.addTrigger(cognito.UserPoolOperation.PRE_SIGN_UP, preSignUp);
     }
 
     const domainPrefix = `gameplan-${cdk.Aws.ACCOUNT_ID}`;

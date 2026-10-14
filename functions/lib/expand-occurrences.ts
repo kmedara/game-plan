@@ -5,14 +5,22 @@
  * expands them in memory, same idea as Balance's expand-occurrences helper.
  */
 
-import rrule from 'rrule';
+import * as rruleNamespace from 'rrule';
+import type { RRule as RRuleClass } from 'rrule';
 import type { RecurrenceRule } from '@gameplan/types';
 
 /**
- * `rrule`'s ESM entry only exposes a default export. Named `RRule` imports throw
- * under Node's native loader (`tsx` in the local API).
+ * Node loads `rrule`'s CommonJS `main` and only synthesizes a default export.
+ * esbuild follows the `module` field and only sees named exports. Accept either shape.
  */
-const { RRule } = rrule;
+const RRule: typeof RRuleClass = (() => {
+  const record = rruleNamespace as unknown as Record<string, unknown>;
+  const named = record['RRule'] as typeof RRuleClass | undefined;
+  if (named !== undefined) return named;
+  const fromDefault = (record['default'] as { RRule?: typeof RRuleClass } | undefined)?.RRule;
+  if (fromDefault === undefined) throw new Error('rrule_unavailable');
+  return fromDefault;
+})();
 
 type Frequency = (typeof RRule)['DAILY'];
 type Weekday = (typeof RRule)['MO'];
