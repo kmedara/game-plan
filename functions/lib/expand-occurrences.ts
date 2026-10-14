@@ -5,8 +5,17 @@
  * expands them in memory, same idea as Balance's expand-occurrences helper.
  */
 
-import { RRule, type Frequency, type Weekday } from 'rrule';
+import rrule from 'rrule';
 import type { RecurrenceRule } from '@gameplan/types';
+
+/**
+ * `rrule`'s ESM entry only exposes a default export. Named `RRule` imports throw
+ * under Node's native loader (`tsx` in the local API).
+ */
+const { RRule } = rrule;
+
+type Frequency = (typeof RRule)['DAILY'];
+type Weekday = (typeof RRule)['MO'];
 
 /** Max length of a client-requested schedule window (about three months). */
 export const MAX_SCHEDULE_WINDOW_MS = 92 * 24 * 60 * 60 * 1000;
