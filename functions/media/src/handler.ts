@@ -6,7 +6,7 @@
  */
 
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
-import { handleHealth, notFound, rejectDirectOrigin } from '../../lib/http.js';
+import { handleHealth, logHttpFailure, notFound, rejectDirectOrigin } from '../../lib/http.js';
 import {
   handleDeleteDevice,
   handleLocalGetObject,
@@ -36,7 +36,7 @@ const routeOf = (path: string): string => {
  * @param event - The Amazon API Gateway HTTP API event.
  * @returns A route response, health check, or `404`.
  */
-export const handler = async (
+export const handler = logHttpFailure(async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyStructuredResultV2> => {
   const rejected = rejectDirectOrigin(event);
@@ -73,4 +73,4 @@ export const handler = async (
   }
 
   return notFound();
-};
+});

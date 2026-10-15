@@ -3,7 +3,7 @@
  */
 
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   badRequest,
   binary,
@@ -16,6 +16,7 @@ import {
   isSqsEvent,
   isWebSocketEvent,
   json,
+  logHttpFailure,
   notFound,
   parseJsonBody,
   readCookie,
@@ -200,5 +201,30 @@ describe('http helpers', () => {
         'teams',
       ).statusCode,
     ).toBe(404);
+  });
+
+  it('logs the path and error code for failed HTTP responses', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const event = httpEvent({
+      rawPath: '/identity/profile/complete',
+      routeKey: 'POST /identity/{proxy+}',
+      requestContext: {
+        requestId: 'req-1',
+        http: { method: 'POST', path: '/identity/profile/complete' },
+      } as APIGatewayProxyEventV2['requestContext'],
+    });
+    const handle = logHttpFailure(async () => badRequest('email_required'));
+    const result = await handle(event);
+    expect(result.statusCode).toBe(400);
+    expect(errorSpy).toHaveBeenCalledWith(
+      JSON.stringify({
+        requestId: 'req-1',
+        path: '/identity/profile/complete',
+        routeKey: 'POST /identity/{proxy+}',
+        status: 400,
+        error: 'email_required',
+      }),
+    );
+    errorSpy.mockRestore();
   });
 });

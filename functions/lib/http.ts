@@ -134,6 +134,57 @@ export const conflict = (error: string): APIGatewayProxyStructuredResultV2 =>
  * @param cookies - Optional `Set-Cookie` values for the HTTP API cookies array.
  * @returns A structured proxy result.
  */
+/**
+ * Reads a stable error code from a JSON response body.
+ *
+ * @param body - The proxy response body.
+ * @returns The `error` string, or `-` when the body has none.
+ */
+const errorCode = (body: string | undefined): string => {
+  if (body === undefined || body.length === 0) return "-";
+  try {
+    const parsed = JSON.parse(body) as { error?: unknown };
+    if (typeof parsed.error === "string" && parsed.error.length > 0) return parsed.error;
+  } catch {
+    return "-";
+  }
+  return "-";
+};
+
+/**
+ * Logs the path and error code when a handler returns a 4xx or 5xx response.
+ *
+ * API Gateway access logs record the route template and only fill `error` for
+ * gateway failures. A Lambda `{ error: "email_required" }` response is a
+ * successful integration, so this line is what carries that code.
+ *
+ * @param handle - The area HTTP handler.
+ * @returns The same handler, after writing one JSON line for failed responses.
+ */
+export const logHttpFailure =
+  (
+    handle: (
+      event: APIGatewayProxyEventV2,
+    ) => Promise<APIGatewayProxyStructuredResultV2>,
+  ) =>
+  async (
+    event: APIGatewayProxyEventV2,
+  ): Promise<APIGatewayProxyStructuredResultV2> => {
+    const result = await handle(event);
+    const status = result.statusCode ?? 200;
+    if (status < 400) return result;
+    console.error(
+      JSON.stringify({
+        requestId: event.requestContext.requestId,
+        path: event.rawPath,
+        routeKey: event.routeKey,
+        status,
+        error: errorCode(result.body),
+      }),
+    );
+    return result;
+  };
+
 export const redirect = (
   location: string,
   cookies: string[] = [],

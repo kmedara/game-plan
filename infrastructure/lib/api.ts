@@ -66,9 +66,16 @@ const PUBLIC_HTTP = new Set<Area>(['identity']);
 /** HTTP areas that must see the CloudFront origin header. Socket and fan-out are not HTTP. */
 const EDGE_AREAS: readonly Area[] = ['identity', 'teams', 'schedule', 'chat', 'media', 'places'];
 
-/** Access log line written for each API Gateway request. */
+/**
+ * Access log line written for each API Gateway request.
+ *
+ * `path` is the request path (`/identity/profile/complete`). `routeKey` is the
+ * matched template (`POST /identity/{proxy+}`). `error` is an API Gateway
+ * failure; a Lambda JSON `{ error }` body is logged by the function instead.
+ */
 const ACCESS_LOG_FORMAT = JSON.stringify({
   requestId: '$context.requestId',
+  path: '$context.path',
   routeKey: '$context.routeKey',
   status: '$context.status',
   error: '$context.error.message',
