@@ -83,7 +83,7 @@ export const createFunction = (
     architecture: lambda.Architecture.ARM_64,
     memorySize: 512,
     timeout: cdk.Duration.seconds(timeoutSeconds),
-    environment,
+    environment: { ...environment, AREA: id },
     logGroup,
     bundling,
   });

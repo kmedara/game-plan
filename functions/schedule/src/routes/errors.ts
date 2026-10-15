@@ -11,7 +11,7 @@ import {
   notFound,
   unauthorized,
 } from "../../../lib/http.js";
-import { logCaughtError, withMappedErrors } from "../../../lib/pipeline.js";
+import { withMappedErrors } from "../../../lib/pipeline.js";
 
 /**
  * Maps known domain errors to structured HTTP responses.
@@ -60,4 +60,4 @@ export const mapScheduleError: ErrorMappingFn = (
  * @returns A pipeline step that leaves the context unchanged.
  */
 export const withScheduleErrors = () =>
-  withMappedErrors(mapScheduleError, { onError: logCaughtError });
+  withMappedErrors(mapScheduleError);

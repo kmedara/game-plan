@@ -83,7 +83,6 @@ const platform = new GamePlanPlatform(app, 'GamePlanPlatform', {
   callbackUrls,
   logoutUrls,
   social,
-  selfSignUpEnabled: !staging,
   signupAllowlistParameter: staging ? `${ssmPrefix}/staging-signup-allowlist` : undefined,
   siteHostname: dns?.siteHostname,
   certificateArn: dnsStack?.siteCertificateArn,

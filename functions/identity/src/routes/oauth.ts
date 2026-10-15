@@ -19,6 +19,7 @@ import {
 } from "../../../lib/auth/index.js";
 import { readCookie, redirect } from "../../../lib/http.js";
 import type { UserProfile } from "@gameplan/types";
+import { errorMessage, functionArea, logError } from "../../../lib/log.js";
 import { issueOAuthHandoff } from "../../../lib/oauth-handoff.js";
 import {
   NATIVE_AUTH_REDIRECT,
@@ -160,7 +161,11 @@ export const handleOAuthCallback = async (
       refreshSetCookie(tokens.refreshToken),
     ]);
   } catch (err) {
-    console.error("oauth callback failed", err);
+    logError({
+      area: functionArea(),
+      route: "GET /identity/oauth/callback",
+      msg: errorMessage(err),
+    });
     if (native) return nativeError("sign_in_failed");
     return redirect(
       `${clientOrigin}/login?error=sign_in_failed`,

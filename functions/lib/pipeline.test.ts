@@ -9,7 +9,6 @@ import { requirePermission, requireUser } from "./guards.js";
 import { json } from "./http.js";
 import {
   asStep,
-  logCaughtError,
   route,
   withBodyValidation,
   withMappedErrors,
@@ -33,11 +32,27 @@ const httpEvent = (body?: unknown): APIGatewayProxyEventV2 =>
   }) as APIGatewayProxyEventV2;
 
 describe("route pipeline", () => {
-  it("logs caught errors as JSON", () => {
+  it("logs caught errors as area, route, and msg", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    logCaughtError(new Error("boom"));
-    expect(errorSpy).toHaveBeenCalledOnce();
+    const previous = process.env.AREA;
+    process.env.AREA = "teams";
+    const handle = route(
+      withMappedErrors(() => undefined),
+      async () => {
+        throw new Error("boom");
+      },
+    );
+    await handle({
+      ...httpEvent(),
+      rawPath: "/teams",
+      requestContext: { http: { method: "GET", path: "/teams" } },
+    } as APIGatewayProxyEventV2);
+    expect(errorSpy).toHaveBeenCalledWith(
+      JSON.stringify({ area: "teams", route: "GET /teams", msg: "boom" }),
+    );
     errorSpy.mockRestore();
+    if (previous === undefined) delete process.env.AREA;
+    else process.env.AREA = previous;
   });
 
   it("uses fallback and hooks when an error is not mapped", async () => {

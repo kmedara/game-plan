@@ -3,6 +3,7 @@
  */
 
 import type { SQSBatchResponse, SQSEvent } from 'aws-lambda';
+import { errorMessage, functionArea, logError } from '../../../lib/log.js';
 import { deliverFanoutJob, parseFanoutJob } from '../deliver.js';
 
 /**
@@ -30,14 +31,11 @@ export const handleSqs = async (event: SQSEvent): Promise<SQSBatchResponse> => {
       }
       await deliverFanoutJob(job);
     } catch (error: unknown) {
-      console.error(
-        JSON.stringify({
-          service: 'fanout',
-          event: 'deliver_failed',
-          messageId: record.messageId,
-          error: error instanceof Error ? error.message : String(error),
-        }),
-      );
+      logError({
+        area: functionArea(),
+        route: 'sqs',
+        msg: errorMessage(error),
+      });
       batchItemFailures.push({ itemIdentifier: record.messageId });
     }
   }

@@ -40,8 +40,5 @@ export const mapMediaError: ErrorMappingFn = (
  */
 export const withMediaErrors = () =>
   withMappedErrors(mapMediaError, {
-    onUnmapped: (error) => {
-      console.error(error);
-    },
     fallback: () => json(500, { error: 'internal' }),
   });

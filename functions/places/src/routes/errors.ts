@@ -40,8 +40,5 @@ export const mapPlacesError: ErrorMappingFn = (
  */
 export const withPlacesErrors = () =>
   withMappedErrors(mapPlacesError, {
-    onUnmapped: (error) => {
-      console.error(error);
-    },
     fallback: () => json(500, { error: 'internal' }),
   });

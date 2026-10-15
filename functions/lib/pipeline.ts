@@ -9,14 +9,15 @@
 import type {
   APIGatewayProxyEventV2,
   APIGatewayProxyStructuredResultV2,
-} from 'aws-lambda';
-import type { z } from 'zod';
+} from "aws-lambda";
+import type { z } from "zod";
 import {
   badRequest,
   type ErrorMappingFn,
   json,
   parseJsonBody,
-} from './http.js';
+} from "./http.js";
+import { errorMessage, functionArea, httpRoute, logError } from "./log.js";
 
 /** Promise of an API Gateway proxy result. */
 export type HttpResult = Promise<APIGatewayProxyStructuredResultV2>;
@@ -85,21 +86,6 @@ export type MappedErrorOptions = {
 };
 
 /**
- * Logs a caught route error in the shared HTTP shape.
- *
- * @param error - The thrown value.
- */
-export const logCaughtError = (error: unknown): void => {
-  console.error(
-    JSON.stringify({
-      service: 'http',
-      event: 'error',
-      error: JSON.stringify(error),
-    }),
-  );
-};
-
-/**
  * Formats Zod issues as a stable `{ errors }` payload for `400` responses.
  *
  * @param issues - The Zod issue list from a failed `safeParse`.
@@ -107,7 +93,7 @@ export const logCaughtError = (error: unknown): void => {
  */
 const zodErrorBody = (issues: z.ZodIssue[]) => ({
   errors: issues.map((issue) => ({
-    field: issue.path.join('.'),
+    field: issue.path.join("."),
     message: issue.message,
   })),
 });
@@ -130,8 +116,16 @@ export const withMappedErrors = (
       options.onError?.(error);
       const mapped = mapError(error);
       if (mapped !== undefined) return mapped;
+      logError({
+        area: functionArea(),
+        route: httpRoute(ctx.event),
+        msg: errorMessage(error),
+        error: error,
+      });
       options.onUnmapped?.(error);
-      return options.fallback?.(error) ?? json(500, { error: 'internal_error' });
+      return (
+        options.fallback?.(error) ?? json(500, { error: "internal_error" })
+      );
     }
   });
 
@@ -170,7 +164,7 @@ export const withQueryValidation = <S extends z.ZodTypeAny>(
   });
 
 const isParamList = (value: unknown): value is readonly string[] =>
-  Array.isArray(value) && value.every((entry) => typeof entry === 'string');
+  Array.isArray(value) && value.every((entry) => typeof entry === "string");
 
 /**
  * Builds a handler from path-parameter names, steps, and a final function.
@@ -351,8 +345,11 @@ export function route<
   b: Step<BReq, BOut> & Ready<PathContext<Names> & AOut, BReq>,
   c: Step<CReq, COut> & Ready<PathContext<Names> & AOut & BOut, CReq>,
   d: Step<DReq, DOut> & Ready<PathContext<Names> & AOut & BOut & COut, DReq>,
-  e: Step<EReq, EOut> & Ready<PathContext<Names> & AOut & BOut & COut & DOut, EReq>,
-  handler: (ctx: PathContext<Names> & AOut & BOut & COut & DOut & EOut) => HttpResult,
+  e: Step<EReq, EOut> &
+    Ready<PathContext<Names> & AOut & BOut & COut & DOut, EReq>,
+  handler: (
+    ctx: PathContext<Names> & AOut & BOut & COut & DOut & EOut,
+  ) => HttpResult,
 ): RouteFn<Names>;
 
 export function route(
