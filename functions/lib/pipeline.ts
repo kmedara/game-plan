@@ -270,6 +270,32 @@ export function route<
 ): (event: APIGatewayProxyEventV2) => HttpResult;
 
 export function route<
+  AReq extends object,
+  AOut extends object,
+  BReq extends object,
+  BOut extends object,
+  CReq extends object,
+  COut extends object,
+  DReq extends object,
+  DOut extends object,
+  EReq extends object,
+  EOut extends object,
+  FReq extends object,
+  FOut extends object,
+>(
+  a: Step<AReq, AOut> & Ready<RouteContext, AReq>,
+  b: Step<BReq, BOut> & Ready<RouteContext & AOut, BReq>,
+  c: Step<CReq, COut> & Ready<RouteContext & AOut & BOut, CReq>,
+  d: Step<DReq, DOut> & Ready<RouteContext & AOut & BOut & COut, DReq>,
+  e: Step<EReq, EOut> & Ready<RouteContext & AOut & BOut & COut & DOut, EReq>,
+  f: Step<FReq, FOut> &
+    Ready<RouteContext & AOut & BOut & COut & DOut & EOut, FReq>,
+  handler: (
+    ctx: RouteContext & AOut & BOut & COut & DOut & EOut & FOut,
+  ) => HttpResult,
+): (event: APIGatewayProxyEventV2) => HttpResult;
+
+export function route<
   const Names extends readonly string[],
   AReq extends object,
   AOut extends object,
