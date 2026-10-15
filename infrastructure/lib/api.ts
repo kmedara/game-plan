@@ -270,20 +270,24 @@ export class Api extends Construct {
         methods: [apigwv2.HttpMethod.GET],
         integration,
       });
-      // ANY also matches OPTIONS and is more specific than the CORS preflight route
-      // `OPTIONS /{proxy+}`, so a preflight would hit the Lambda and return 404.
-      this.httpApi.addRoutes({
-        path: `/${area}/{proxy+}`,
-        methods: [
-          apigwv2.HttpMethod.GET,
-          apigwv2.HttpMethod.POST,
-          apigwv2.HttpMethod.PUT,
-          apigwv2.HttpMethod.PATCH,
-          apigwv2.HttpMethod.DELETE,
-        ],
+      // `{proxy+}` requires a segment after the area, so `/teams` and `/chat` need
+      // their own route. ANY also matches OPTIONS and is more specific than the
+      // CORS preflight route `OPTIONS /{proxy+}`, so a preflight would hit the
+      // Lambda and return 404.
+      const areaMethods = [
+        apigwv2.HttpMethod.GET,
+        apigwv2.HttpMethod.POST,
+        apigwv2.HttpMethod.PUT,
+        apigwv2.HttpMethod.PATCH,
+        apigwv2.HttpMethod.DELETE,
+      ];
+      const areaRoute = {
+        methods: areaMethods,
         integration,
         ...(PUBLIC_HTTP.has(area) ? {} : { authorizer: httpAuthorizer }),
-      });
+      };
+      this.httpApi.addRoutes({ path: `/${area}`, ...areaRoute });
+      this.httpApi.addRoutes({ path: `/${area}/{proxy+}`, ...areaRoute });
     }
 
     const socketAuthorizerFn = createFunction(
