@@ -11,6 +11,8 @@ import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import type * as cognito from 'aws-cdk-lib/aws-cognito';
 import type * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import type * as s3 from 'aws-cdk-lib/aws-s3';
@@ -62,6 +64,48 @@ const PUBLIC_HTTP = new Set<Area>(['identity']);
 
 /** HTTP areas that must see the CloudFront origin header. Socket and fan-out are not HTTP. */
 const EDGE_AREAS: readonly Area[] = ['identity', 'teams', 'schedule', 'chat', 'media', 'places'];
+
+/** Access log line written for each API Gateway request. */
+const ACCESS_LOG_FORMAT = JSON.stringify({
+  requestId: '$context.requestId',
+  routeKey: '$context.routeKey',
+  status: '$context.status',
+  error: '$context.error.message',
+});
+
+/**
+ * Sends stage access logs to CloudWatch.
+ *
+ * Staging keeps the group for one day. Other environments keep it for one month.
+ * HTTP API stages cannot enable X-Ray; the Lambdas trace those requests instead.
+ *
+ * @param scope - The construct that owns the log group.
+ * @param stage - The HTTP or WebSocket stage.
+ * @param id - The log group construct id.
+ * @param logGroupName - The CloudWatch log group name.
+ */
+const enableAccessLogs = (
+  scope: Construct,
+  stage: apigwv2.IStage | undefined,
+  id: string,
+  logGroupName: string,
+): void => {
+  const cfnStage = stage?.node.defaultChild;
+  if (!(cfnStage instanceof apigwv2.CfnStage)) {
+    throw new Error(`${id} is missing its stage`);
+  }
+  const group = new logs.LogGroup(scope, id, {
+    logGroupName,
+    retention:
+      process.env.DEPLOY_ENV === 'staging' ? logs.RetentionDays.ONE_DAY : logs.RetentionDays.ONE_MONTH,
+    removalPolicy: cdk.RemovalPolicy.DESTROY,
+  });
+  group.grantWrite(new iam.ServicePrincipal('apigateway.amazonaws.com'));
+  cfnStage.accessLogSettings = {
+    destinationArn: group.logGroupArn,
+    format: ACCESS_LOG_FORMAT,
+  };
+};
 
 /**
  * HTTP API plus the WebSocket API. Each area is its own function.
@@ -178,6 +222,7 @@ export class Api extends Construct {
         allowOrigins: [props.corsOrigin],
       },
     });
+    enableAccessLogs(this, this.httpApi.defaultStage, 'HttpAccessLogs', '/gameplan/http-api');
 
     const httpAuthorizer = new HttpUserPoolAuthorizer('CognitoAuthorizer', props.userPool, {
       userPoolClients: [props.userPoolClient],
@@ -242,6 +287,7 @@ export class Api extends Construct {
       stageName: 'prod',
       autoDeploy: true,
     });
+    enableAccessLogs(this, socketStage, 'SocketAccessLogs', '/gameplan/websocket-api');
 
     functions.fanout.addEnvironment('WEBSOCKET_CALLBACK_URL', socketStage.callbackUrl);
     socketStage.grantManagementApiAccess(functions.fanout);
