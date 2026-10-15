@@ -10,7 +10,7 @@ import { canCreateTeam } from '@gameplan/rules';
 import type { TeamDirectoryHit } from '@gameplan/types';
 import { inviteCodeFromInput } from '@/src/roles';
 import { useApp } from '@/src/state';
-import { Button, ErrorText, Field } from '@/src/ui';
+import { Button, ErrorText, Field, TimeZoneField } from '@/src/ui';
 
 export default function TeamsScreen() {
   const { t } = useTranslation();
@@ -114,7 +114,7 @@ export default function TeamsScreen() {
       {showCreate && mode === 'create' ? (
         <View className="mb-6">
           <Field label={t('teams.team')} value={name} onChangeText={setName} />
-          <Field label={t('teams.timeZone')} value={timeZone} onChangeText={setTimeZone} />
+          <TimeZoneField label={t('teams.timeZone')} value={timeZone} onChange={setTimeZone} />
           <Button label={t('common.create')} onPress={() => void create()} />
         </View>
       ) : null}

@@ -2,7 +2,9 @@
  * Small form controls shared by the screens.
  */
 
+import { useEffect, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
+import { searchTimeZones, timeZoneLabel } from './time-zones';
 
 export const Field = ({
   label,
@@ -26,6 +28,60 @@ export const Field = ({
     />
   </View>
 );
+
+export const TimeZoneField = ({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) => {
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (open) return;
+    setQuery(value.length === 0 ? '' : timeZoneLabel(value));
+  }, [open, value]);
+
+  const choices = open ? searchTimeZones(query) : [];
+
+  return (
+    <View className="mb-3">
+      <Text className="mb-1 text-sm text-slate-600">{label}</Text>
+      <TextInput
+        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900"
+        value={query}
+        onChangeText={(next) => {
+          setQuery(next);
+          setOpen(true);
+        }}
+        onFocus={() => {
+          setQuery(value);
+          setOpen(true);
+        }}
+        onBlur={() => setOpen(false)}
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+      {choices.map((choice) => (
+        <Pressable
+          key={choice.id}
+          className="border-x border-b border-slate-200 bg-white px-3 py-2"
+          onPressIn={() => {
+            onChange(choice.id);
+            setQuery(choice.label);
+            setOpen(false);
+          }}
+        >
+          <Text className="text-slate-900">{choice.label}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+};
 
 export const Button = ({
   label,

@@ -19,7 +19,7 @@ import {
 } from '@gameplan/types';
 import { joinRequestMessage, roleLabel } from '@/src/roles';
 import { useApp } from '@/src/state';
-import { Button, ErrorText, Field } from '@/src/ui';
+import { Button, ErrorText, Field, TimeZoneField } from '@/src/ui';
 
 export default function TeamAdminScreen() {
   const { t } = useTranslation();
@@ -159,7 +159,7 @@ export default function TeamAdminScreen() {
     <ScrollView className="flex-1 px-4 pt-4">
       <ErrorText message={error} />
       <Field label={t('teams.team')} value={name} onChangeText={setName} />
-      <Field label={t('teams.timeZone')} value={timeZone} onChangeText={setTimeZone} />
+      <TimeZoneField label={t('teams.timeZone')} value={timeZone} onChange={setTimeZone} />
       <Field label={t('teamAdmin.primaryColor')} value={primary} onChangeText={setPrimary} placeholder="#0f766e" />
       <Button label={t('common.save')} onPress={() => void saveSettings()} />
 
