@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useApp } from './state';
-import { colors, fieldWash, muteColor } from './theme';
+import { colors, fieldWash, fieldWashOpacity, muteColor } from './theme';
 import { searchTimeZones, timeZoneLabel } from './time-zones';
 
 export const Field = ({
@@ -129,7 +129,7 @@ export const Button = ({
   const { brand } = useApp();
   const [pressed, setPressed] = useState(false);
   const source = color ?? brand.primary;
-  const fill = fieldWash(muteColor(source), 0.75);
+  const fill = fieldWash(muteColor(source), fieldWashOpacity.button);
   const surface = tone === 'secondary' ? 'border border-line bg-inset' : '';
   return (
     <Pressable
@@ -214,7 +214,17 @@ const initialsFor = (name: string | undefined): string =>
     .join('');
 
 /** Fixed-size avatar. Initials hold the space until the photo fades in. */
-export const ProfilePhoto = ({ name, uri }: { name: string | undefined; uri: string | undefined }) => {
+export const ProfilePhoto = ({
+  name,
+  uri,
+  size = 96,
+  resizeMode = 'cover',
+}: {
+  name: string | undefined;
+  uri: string | undefined;
+  size?: number;
+  resizeMode?: 'cover' | 'contain';
+}) => {
   const opacity = useRef(new Animated.Value(0)).current;
   const [loadedUri, setLoadedUri] = useState<string | undefined>();
   const visible = uri !== undefined && loadedUri === uri;
@@ -228,15 +238,24 @@ export const ProfilePhoto = ({ name, uri }: { name: string | undefined; uri: str
   }, [opacity, visible]);
 
   return (
-    <View className="h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-line">
-      <Text className="text-2xl font-semibold text-muted">{initialsFor(name)}</Text>
+    <View
+      className="items-center justify-center overflow-hidden rounded-full"
+      style={{ width: size, height: size }}
+    >
+      <View
+        className="absolute items-center justify-center rounded-full bg-line"
+        style={{ width: size, height: size, opacity: visible ? 0 : 1 }}
+      >
+        <Text className={size >= 96 ? 'text-2xl font-semibold text-muted' : 'text-sm font-semibold text-muted'}>{initialsFor(name)}</Text>
+      </View>
       {uri !== undefined ? (
         <Animated.View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, opacity }}>
           <Image
             source={{ uri }}
             accessibilityLabel={name}
+            resizeMode={resizeMode}
             onLoad={() => setLoadedUri(uri)}
-            style={{ width: 96, height: 96 }}
+            style={{ width: size, height: size }}
           />
         </Animated.View>
       ) : null}

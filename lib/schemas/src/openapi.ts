@@ -50,6 +50,8 @@ import {
   rsvpBodySchema,
   rsvpResponseSchema,
   scheduleListSchema,
+  exceptionEventBodySchema,
+  occurrenceTargetSchema,
   scheduleWindowQuerySchema,
   updateEventBodySchema,
 } from './schedule.js';
@@ -305,6 +307,15 @@ const AREAS: Record<string, AreaSpec> = {
       '/schedule/teams/{teamId}/events/{eventId}': {
         get: { summary: 'Get an event', response: eventResponseSchema },
         patch: { summary: 'Update an event', body: updateEventBodySchema, response: eventResponseSchema },
+        delete: { summary: 'Delete an event and its split-off dates' },
+      },
+      '/schedule/teams/{teamId}/events/{eventId}/occurrences': {
+        post: {
+          summary: 'Change one date in a series',
+          body: exceptionEventBodySchema,
+          response: eventResponseSchema,
+        },
+        delete: { summary: 'Cancel one date in a series', body: occurrenceTargetSchema },
       },
       '/schedule/teams/{teamId}/rsvps': {
         put: { summary: 'Set an RSVP for one occurrence', body: rsvpBodySchema, response: rsvpResponseSchema },

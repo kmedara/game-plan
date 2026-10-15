@@ -58,17 +58,35 @@ export const scheduleWindowQuerySchema = z.object({
   to: z.string().datetime(),
 });
 
+const eventPatchShape = {
+  eventType: eventTypeSchema.optional(),
+  title: z.string().min(1).max(200).optional(),
+  startsAt: z.string().datetime().optional(),
+  endsAt: z.union([z.string().datetime(), z.null()]).optional(),
+  location: z.union([z.string().max(500), z.null()]).optional(),
+  latitude: z.union([latitudeSchema, z.null()]).optional(),
+  longitude: z.union([longitudeSchema, z.null()]).optional(),
+  recurrence: z.union([recurrenceRuleSchema, z.null()]).optional(),
+};
+
 /** Body for editing a team event. */
 export const updateEventBodySchema = z
+  .object(eventPatchShape)
+  .strict()
+  .refine(hasPairedCoordinates, { message: 'coordinates_incomplete' });
+
+/** Identifies one expanded instant of a series. */
+export const occurrenceTargetSchema = z
   .object({
-    eventType: eventTypeSchema.optional(),
-    title: z.string().min(1).max(200).optional(),
-    startsAt: z.string().datetime().optional(),
-    endsAt: z.union([z.string().datetime(), z.null()]).optional(),
-    location: z.union([z.string().max(500), z.null()]).optional(),
-    latitude: z.union([latitudeSchema, z.null()]).optional(),
-    longitude: z.union([longitudeSchema, z.null()]).optional(),
-    recurrence: z.union([recurrenceRuleSchema, z.null()]).optional(),
+    occurrenceStartsAt: z.string().datetime(),
+  })
+  .strict();
+
+/** Body for changing one date of a series without rewriting the rest. */
+export const exceptionEventBodySchema = z
+  .object({
+    occurrenceStartsAt: z.string().datetime(),
+    ...eventPatchShape,
   })
   .strict()
   .refine(hasPairedCoordinates, { message: 'coordinates_incomplete' });
@@ -101,6 +119,9 @@ export const scheduleOccurrenceSchema = z
     location: z.string().optional(),
     latitude: latitudeSchema.optional(),
     longitude: longitudeSchema.optional(),
+    recurring: z.boolean(),
+    seriesEventId: z.string().min(1).optional(),
+    originalStartsAt: z.string().datetime().optional(),
     rsvps: z.array(scheduleOccurrenceRsvpSchema),
   })
   .strict()
@@ -129,6 +150,9 @@ export const eventResponseSchema = z
     latitude: latitudeSchema.optional(),
     longitude: longitudeSchema.optional(),
     recurrence: recurrenceRuleSchema.optional(),
+    seriesEventId: z.string().min(1).optional(),
+    originalStartsAt: z.string().datetime().optional(),
+    exdates: z.array(z.string().datetime()).optional(),
     createdBy: z.string().min(1),
     createdAt: z.string().min(1),
     updatedAt: z.string().min(1),
@@ -155,6 +179,12 @@ export type CreateEventBody = z.infer<typeof createEventBodySchema>;
 
 /** Inferred type for {@link updateEventBodySchema}. */
 export type UpdateEventBody = z.infer<typeof updateEventBodySchema>;
+
+/** Inferred type for {@link occurrenceTargetSchema}. */
+export type OccurrenceTarget = z.infer<typeof occurrenceTargetSchema>;
+
+/** Inferred type for {@link exceptionEventBodySchema}. */
+export type ExceptionEventBody = z.infer<typeof exceptionEventBodySchema>;
 
 /** Inferred type for {@link scheduleWindowQuerySchema}. */
 export type ScheduleWindowQuery = z.infer<typeof scheduleWindowQuerySchema>;

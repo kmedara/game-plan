@@ -3,7 +3,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type { CreateEventBody, UpdateEventBody } from '@gameplan/schemas';
+import type { CreateEventBody, ExceptionEventBody, UpdateEventBody } from '@gameplan/schemas';
 import type {
   EventResponse,
   EventType,
@@ -65,6 +65,12 @@ export type EventItem = {
   latitude?: number;
   longitude?: number;
   recurrence?: RecurrenceRule;
+  /** Series instants that no longer occur. */
+  exdates?: string[];
+  /** Series this one-off date was split from. */
+  seriesEventId?: string;
+  /** Series instant this exception replaced. */
+  originalStartsAt?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -99,6 +105,9 @@ export const toEventResponse = (item: EventItem): EventResponse => ({
   ...(item.latitude !== undefined ? { latitude: item.latitude } : {}),
   ...(item.longitude !== undefined ? { longitude: item.longitude } : {}),
   ...(item.recurrence !== undefined ? { recurrence: item.recurrence } : {}),
+  ...(item.seriesEventId !== undefined ? { seriesEventId: item.seriesEventId } : {}),
+  ...(item.originalStartsAt !== undefined ? { originalStartsAt: item.originalStartsAt } : {}),
+  ...(item.exdates !== undefined && item.exdates.length > 0 ? { exdates: item.exdates } : {}),
   createdBy: item.createdBy,
   createdAt: item.createdAt,
   updatedAt: item.updatedAt,
@@ -266,6 +275,198 @@ export const updateEvent = async (input: {
 };
 
 /**
+ * Loads every event row on a team.
+ *
+ * @param teamId - The team id.
+ * @returns Event items, including split-off dates.
+ */
+const listEventItems = (teamId: string): Promise<EventItem[]> =>
+  queryBySkPrefix<EventItem>(teamPk(teamId), EVENT_SK_PREFIX);
+
+/**
+ * Resolves the series row for an event or one of its split-off dates.
+ *
+ * @param teamId - The team id.
+ * @param eventId - A series id or an exception id.
+ * @returns The series item.
+ */
+const requireSeries = async (teamId: string, eventId: string): Promise<EventItem> => {
+  const event = await requireEvent(teamId, eventId);
+  if (event.seriesEventId === undefined) return event;
+  return requireEvent(teamId, event.seriesEventId);
+};
+
+/**
+ * Confirms an instant belongs to a series, including dates already cancelled.
+ *
+ * @param series - The series row.
+ * @param occurrenceIso - The original series instant.
+ */
+const assertSeriesInstant = (series: EventItem, occurrenceIso: string): void => {
+  if (series.exdates?.includes(occurrenceIso)) return;
+  const occurrence = parseInstant(occurrenceIso, 'occurrence_starts_at');
+  const dayBefore = new Date(occurrence.getTime() - 12 * 60 * 60 * 1000);
+  const dayAfter = new Date(occurrence.getTime() + 12 * 60 * 60 * 1000);
+  const matches = expandOccurrenceStarts(series.startsAt, series.recurrence, dayBefore, dayAfter);
+  if (!matches.some((date) => date.toISOString() === occurrenceIso)) {
+    throw new Error('occurrence_not_found');
+  }
+};
+
+/**
+ * Deletes a series, or a one-off event, and every date split off from it.
+ *
+ * @param teamId - The team id.
+ * @param eventId - A series id, one-off id, or exception id.
+ */
+export const deleteEvent = async (teamId: string, eventId: string): Promise<void> => {
+  await requireTeam(teamId);
+  const series = await requireSeries(teamId, eventId);
+  const events = await listEventItems(teamId);
+  const rows = events.filter(
+    (event) => event.eventId === series.eventId || event.seriesEventId === series.eventId,
+  );
+  for (const row of rows) {
+    await deleteItem(teamPk(teamId), eventSk(row.eventId));
+  }
+  await enqueueFanout({
+    type: 'schedule_changed',
+    teamId,
+    eventId: series.eventId,
+  });
+};
+
+/**
+ * Cancels one series instant and removes a split-off row for that instant.
+ *
+ * @param input - Team, event, and the original series start.
+ */
+export const cancelOccurrence = async (input: {
+  teamId: string;
+  eventId: string;
+  occurrenceStartsAt: string;
+}): Promise<void> => {
+  await requireTeam(input.teamId);
+  const series = await requireSeries(input.teamId, input.eventId);
+  const occurrenceIso = new Date(input.occurrenceStartsAt).toISOString();
+  assertSeriesInstant(series, occurrenceIso);
+
+  const events = await listEventItems(input.teamId);
+  for (const event of events) {
+    if (event.seriesEventId === series.eventId && event.originalStartsAt === occurrenceIso) {
+      await deleteItem(teamPk(input.teamId), eventSk(event.eventId));
+    }
+  }
+
+  const exdates = [...new Set([...(series.exdates ?? []), occurrenceIso])];
+  const now = new Date().toISOString();
+  await putItem({ ...series, exdates, updatedAt: now });
+  await enqueueFanout({
+    type: 'schedule_changed',
+    teamId: input.teamId,
+    eventId: series.eventId,
+  });
+};
+
+/**
+ * Writes a one-off replacement for a single series instant.
+ *
+ * A second edit of the same instant updates the existing replacement.
+ *
+ * @param input - Team, series or exception id, and the patch.
+ * @returns The split-off event.
+ */
+export const saveOccurrenceException = async (input: {
+  teamId: string;
+  userId: string;
+  eventId: string;
+  body: ExceptionEventBody;
+}): Promise<EventResponse> => {
+  await requireTeam(input.teamId);
+  const series = await requireSeries(input.teamId, input.eventId);
+  const occurrenceIso = new Date(input.body.occurrenceStartsAt).toISOString();
+  assertSeriesInstant(series, occurrenceIso);
+
+  const { occurrenceStartsAt: _ignored, ...patch } = input.body;
+  const nextStartsAt = patch.startsAt ?? occurrenceIso;
+  const durationMs =
+    series.endsAt === undefined
+      ? undefined
+      : new Date(series.endsAt).getTime() - new Date(series.startsAt).getTime();
+  const inheritedEnd =
+    durationMs === undefined ? undefined : new Date(new Date(nextStartsAt).getTime() + durationMs).toISOString();
+  const nextEndsAt = patch.endsAt === null ? undefined : (patch.endsAt ?? inheritedEnd);
+  if (nextEndsAt !== undefined && new Date(nextEndsAt).getTime() <= new Date(nextStartsAt).getTime()) {
+    throw new Error('invalid_ends_at');
+  }
+
+  const events = await listEventItems(input.teamId);
+  const existing = events.find(
+    (event) => event.seriesEventId === series.eventId && event.originalStartsAt === occurrenceIso,
+  );
+  if (existing !== undefined) {
+    return updateEvent({
+      teamId: input.teamId,
+      eventId: existing.eventId,
+      body: { ...patch, recurrence: null },
+    });
+  }
+
+  const draft = await createEvent({
+    teamId: input.teamId,
+    userId: input.userId,
+    body: {
+      eventType: patch.eventType ?? series.eventType,
+      title: patch.title ?? series.title,
+      startsAt: nextStartsAt,
+      ...(patch.endsAt === null
+        ? {}
+        : patch.endsAt !== undefined
+          ? { endsAt: patch.endsAt }
+          : inheritedEnd !== undefined
+            ? { endsAt: inheritedEnd }
+            : {}),
+      ...(patch.location === null
+        ? {}
+        : patch.location !== undefined
+          ? { location: patch.location }
+          : series.location !== undefined
+            ? { location: series.location }
+            : {}),
+      ...(patch.latitude === null || patch.longitude === null
+        ? {}
+        : patch.latitude !== undefined && patch.longitude !== undefined
+          ? { latitude: patch.latitude, longitude: patch.longitude }
+          : series.latitude !== undefined && series.longitude !== undefined
+            ? { latitude: series.latitude, longitude: series.longitude }
+            : {}),
+    },
+  });
+
+  const created = await requireEvent(input.teamId, draft.eventId);
+  const now = new Date().toISOString();
+  await putItem({
+    ...created,
+    seriesEventId: series.eventId,
+    originalStartsAt: occurrenceIso,
+    updatedAt: now,
+  });
+  const exdates = [...new Set([...(series.exdates ?? []), occurrenceIso])];
+  await putItem({ ...series, exdates, updatedAt: now });
+  await enqueueFanout({
+    type: 'schedule_changed',
+    teamId: input.teamId,
+    eventId: series.eventId,
+  });
+  return toEventResponse({
+    ...created,
+    seriesEventId: series.eventId,
+    originalStartsAt: occurrenceIso,
+    updatedAt: now,
+  });
+};
+
+/**
  * Expands every team event into occurrences for a visible window, with RSVPs.
  *
  * @param teamId - The team id.
@@ -303,11 +504,20 @@ export const listOccurrences = async (
     rsvpsByOccurrence.set(key, byUser);
   }
 
+  const replaced = new Set(
+    events
+      .filter((event) => event.seriesEventId !== undefined && event.originalStartsAt !== undefined)
+      .map((event) => `${event.seriesEventId}\0${event.originalStartsAt}`),
+  );
+
   const occurrences: ScheduleOccurrence[] = [];
   for (const event of events) {
+    const cancelled = new Set(event.exdates ?? []);
     const starts = expandOccurrenceStarts(event.startsAt, event.recurrence, from, to);
     for (const start of starts) {
       const startsAt = start.toISOString();
+      if (cancelled.has(startsAt)) continue;
+      if (replaced.has(`${event.eventId}\0${startsAt}`)) continue;
       const endsAt = occurrenceEndsAt(event.startsAt, event.endsAt, start);
       const byUser = rsvpsByOccurrence.get(`${event.eventId}\0${startsAt}`);
       const rsvps: Array<{ userId: string; status: RsvpStatus }> = [];
@@ -316,6 +526,10 @@ export const listOccurrences = async (
           rsvps.push({ userId: entry.userId, status: entry.status });
         }
       }
+      const recurring = event.recurrence !== undefined || event.seriesEventId !== undefined;
+      const seriesEventId = event.seriesEventId ?? (event.recurrence !== undefined ? event.eventId : undefined);
+      const originalStartsAt =
+        event.originalStartsAt ?? (event.recurrence !== undefined ? startsAt : undefined);
       occurrences.push({
         eventId: event.eventId,
         eventType: event.eventType,
@@ -325,6 +539,9 @@ export const listOccurrences = async (
         ...(event.location !== undefined ? { location: event.location } : {}),
         ...(event.latitude !== undefined ? { latitude: event.latitude } : {}),
         ...(event.longitude !== undefined ? { longitude: event.longitude } : {}),
+        recurring,
+        ...(seriesEventId !== undefined ? { seriesEventId } : {}),
+        ...(originalStartsAt !== undefined ? { originalStartsAt } : {}),
         rsvps,
       });
     }
@@ -361,7 +578,9 @@ export const upsertRsvp = async (input: {
   const dayBefore = new Date(occurrence.getTime() - 12 * 60 * 60 * 1000);
   const dayAfter = new Date(occurrence.getTime() + 12 * 60 * 60 * 1000);
   const matches = expandOccurrenceStarts(event.startsAt, event.recurrence, dayBefore, dayAfter);
-  const isOccurrence = matches.some((date) => date.toISOString() === occurrenceIso);
+  const cancelled = new Set(event.exdates ?? []);
+  const isOccurrence =
+    matches.some((date) => date.toISOString() === occurrenceIso) && !cancelled.has(occurrenceIso);
   if (!isOccurrence) throw new Error('occurrence_not_found');
 
   const now = new Date().toISOString();

@@ -20,7 +20,9 @@ vi.mock('../../lib/dynamo/access.js', () => ({
   putItem: async (item: Record<string, unknown>): Promise<void> => {
     store.set(itemKey(String(item[TABLE_PK]), String(item[TABLE_SK])), item);
   },
-  deleteItem: async (): Promise<void> => undefined,
+  deleteItem: async (pk: string, sk: string): Promise<void> => {
+    store.delete(itemKey(pk, sk));
+  },
   transactWrite: async (): Promise<void> => undefined,
   queryBySkPrefix: async <T extends Record<string, unknown>>(pk: string, skPrefix: string) => {
     const items: T[] = [];
@@ -38,9 +40,16 @@ vi.mock('../../lib/dynamo/access.js', () => ({
   decodeCursor: () => undefined,
 }));
 
-const { createEvent, listOccurrences, requireMembership, requireTeam, updateEvent } = await import(
-  './schedule-store.js',
-);
+const {
+  cancelOccurrence,
+  createEvent,
+  deleteEvent,
+  listOccurrences,
+  requireMembership,
+  requireTeam,
+  saveOccurrenceException,
+  updateEvent,
+} = await import('./schedule-store.js');
 
 describe('schedule-store', () => {
   beforeEach(() => store.clear());
@@ -228,5 +237,68 @@ describe('schedule-store', () => {
       },
     });
     expect(store.has(itemKey(teamPk(teamId), eventSk(created.eventId)))).toBe(true);
+  });
+
+  it('cancels one date, edits one date, edits the series, and deletes the series', async () => {
+    const teamId = randomUUID();
+    store.set(itemKey(teamPk(teamId), teamMetaSk()), {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: teamMetaSk(),
+      teamId,
+      name: 'Hawks',
+      timeZone: 'UTC',
+      defaultChatId: randomUUID(),
+      createdBy: 'admin',
+      createdAt: new Date().toISOString(),
+    });
+    const created = await createEvent({
+      teamId,
+      userId: 'admin',
+      body: {
+        eventType: 'practice',
+        title: 'Practice',
+        startsAt: '2026-09-02T17:00:00.000Z',
+        endsAt: '2026-09-02T18:00:00.000Z',
+        recurrence: { frequency: 'WEEKLY', interval: 1, byWeekDay: ['WE'] },
+      },
+    });
+    const from = '2026-09-01T00:00:00.000Z';
+    const to = '2026-09-30T23:59:59.999Z';
+    const second = '2026-09-09T17:00:00.000Z';
+
+    await cancelOccurrence({ teamId, eventId: created.eventId, occurrenceStartsAt: second });
+    const cancelled = await listOccurrences(teamId, from, to);
+    expect(cancelled.occurrences.map((row) => row.startsAt)).not.toContain(second);
+    expect(cancelled.occurrences.length).toBe(4);
+
+    const exception = await saveOccurrenceException({
+      teamId,
+      userId: 'admin',
+      eventId: created.eventId,
+      body: {
+        occurrenceStartsAt: '2026-09-16T17:00:00.000Z',
+        title: 'Moved practice',
+        startsAt: '2026-09-16T19:00:00.000Z',
+      },
+    });
+    const edited = await listOccurrences(teamId, from, to);
+    const moved = edited.occurrences.find((row) => row.eventId === exception.eventId);
+    expect(moved).toMatchObject({
+      title: 'Moved practice',
+      startsAt: '2026-09-16T19:00:00.000Z',
+      recurring: true,
+      seriesEventId: created.eventId,
+      originalStartsAt: '2026-09-16T17:00:00.000Z',
+    });
+    expect(edited.occurrences.some((row) => row.startsAt === '2026-09-16T17:00:00.000Z')).toBe(false);
+
+    await updateEvent({ teamId, eventId: created.eventId, body: { title: 'Team practice' } });
+    const series = await listOccurrences(teamId, from, to);
+    expect(series.occurrences.find((row) => row.eventId === created.eventId)?.title).toBe('Team practice');
+    expect(series.occurrences.find((row) => row.eventId === exception.eventId)?.title).toBe('Moved practice');
+
+    await deleteEvent(teamId, exception.eventId);
+    const gone = await listOccurrences(teamId, from, to);
+    expect(gone.occurrences).toEqual([]);
   });
 });

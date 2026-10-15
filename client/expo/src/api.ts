@@ -18,6 +18,8 @@ import type {
   ChatSummary,
   CompleteProfileBody,
   CreateEventBody,
+  ExceptionEventBody,
+  OccurrenceTarget,
   CreateInviteBody,
   CreatePrivateChatBody,
   CreateTeamBody,
@@ -48,6 +50,7 @@ import type {
   TeamMemberList,
   TeamMemberProfile,
   TeamSummary,
+  UpdateEventBody,
   UpdatePositionsBody,
   UpdateProfileBody,
   UpdateTeamBody,
@@ -148,11 +151,12 @@ export class ApiClient {
 
   async presignDownload(
     objectKey: string,
-    context: Pick<PresignDownloadQuery, 'chatId' | 'userId'> = {},
+    context: Pick<PresignDownloadQuery, 'chatId' | 'userId' | 'teamId'> = {},
   ): Promise<PresignDownloadResponse> {
     const params = new URLSearchParams({ objectKey });
     if (context.chatId !== undefined) params.set('chatId', context.chatId);
     if (context.userId !== undefined) params.set('userId', context.userId);
+    if (context.teamId !== undefined) params.set('teamId', context.teamId);
     return this.request('GET', `/media/presign-download?${params}`);
   }
 
@@ -320,6 +324,34 @@ export class ApiClient {
 
   async createEvent(teamId: string, body: CreateEventBody): Promise<EventResponse> {
     return this.request('POST', `/schedule/teams/${teamId}/events`, body);
+  }
+
+  async getEvent(teamId: string, eventId: string): Promise<EventResponse> {
+    return this.request('GET', `/schedule/teams/${teamId}/events/${encodeURIComponent(eventId)}`);
+  }
+
+  async updateEvent(teamId: string, eventId: string, body: UpdateEventBody): Promise<EventResponse> {
+    return this.request('PATCH', `/schedule/teams/${teamId}/events/${encodeURIComponent(eventId)}`, body);
+  }
+
+  async deleteEvent(teamId: string, eventId: string): Promise<void> {
+    await this.request('DELETE', `/schedule/teams/${teamId}/events/${encodeURIComponent(eventId)}`);
+  }
+
+  async saveOccurrence(teamId: string, eventId: string, body: ExceptionEventBody): Promise<EventResponse> {
+    return this.request(
+      'POST',
+      `/schedule/teams/${teamId}/events/${encodeURIComponent(eventId)}/occurrences`,
+      body,
+    );
+  }
+
+  async cancelOccurrence(teamId: string, eventId: string, body: OccurrenceTarget): Promise<void> {
+    await this.request(
+      'DELETE',
+      `/schedule/teams/${teamId}/events/${encodeURIComponent(eventId)}/occurrences`,
+      body,
+    );
   }
 
   async putRsvp(teamId: string, body: RsvpBody): Promise<RsvpResponse> {

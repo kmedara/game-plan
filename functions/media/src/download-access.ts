@@ -3,7 +3,8 @@
  *
  * Own uploads are allowed from the key prefix. A profile photo needs the
  * subject user id and a shared team. A chat attachment needs the chat id,
- * membership, and the key on a message in that chat.
+ * membership, and the key on a message in that chat. A team logo needs
+ * membership and the key stored on that team's theme.
  */
 
 import { getProfile } from '../../lib/auth/index.js';
@@ -15,12 +16,14 @@ import {
   chatPk,
   getItem,
   queryBySkPrefix,
+  teamMetaSk,
+  teamPk,
   userPk,
   userTeamSk,
 } from '../../lib/dynamo/index.js';
 
-/** Chat or profile fields from {@link PresignDownloadQuery}. */
-export type DownloadContext = Pick<PresignDownloadQuery, 'chatId' | 'userId'>;
+/** Chat, profile, or team fields from {@link PresignDownloadQuery}. */
+export type DownloadContext = Pick<PresignDownloadQuery, 'chatId' | 'userId' | 'teamId'>;
 
 /**
  * Returns whether the key is an upload stored under this user.
@@ -127,6 +130,17 @@ export const assertCanDownload = async (
     if (profile?.photoKey !== objectKey) throw new Error('forbidden');
     if (context.userId === callerId) return;
     if (await sharesTeam(callerId, context.userId)) return;
+    throw new Error('forbidden');
+  }
+
+  if (context.teamId !== undefined) {
+    const member = await getItem(userPk(callerId), userTeamSk(context.teamId));
+    if (member === undefined) throw new Error('forbidden');
+    const team = await getItem<{ theme?: { logoKey?: string; chatBackgroundKey?: string } }>(
+      teamPk(context.teamId),
+      teamMetaSk(),
+    );
+    if (team?.theme?.logoKey === objectKey || team?.theme?.chatBackgroundKey === objectKey) return;
     throw new Error('forbidden');
   }
 

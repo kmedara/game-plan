@@ -44,6 +44,8 @@ export const teamThemeSchema = z
     secondary: hexColorSchema.optional(),
     accent: hexColorSchema.optional(),
     logoKey: teamLogoKeySchema.optional(),
+    /** Wallpaper for the team's default chat. */
+    chatBackgroundKey: teamLogoKeySchema.optional(),
   })
   .strict()
   .refine(
@@ -51,7 +53,8 @@ export const teamThemeSchema = z
       theme.primary !== undefined ||
       theme.secondary !== undefined ||
       theme.accent !== undefined ||
-      theme.logoKey !== undefined,
+      theme.logoKey !== undefined ||
+      theme.chatBackgroundKey !== undefined,
     { message: "theme_empty" },
   );
 

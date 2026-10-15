@@ -28,6 +28,8 @@ export const presignDownloadQuerySchema = z.object({
   chatId: z.string().min(1).max(128).optional(),
   /** Profile whose photo key is this object. */
   userId: z.string().min(1).max(128).optional(),
+  /** Team whose theme logo is this object. */
+  teamId: z.string().min(1).max(128).optional(),
 });
 
 /** Response with a short-lived download URL. */

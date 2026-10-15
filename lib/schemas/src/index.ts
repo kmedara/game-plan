@@ -127,6 +127,8 @@ export {
 export {
   createEventBodySchema,
   eventResponseSchema,
+  exceptionEventBodySchema,
+  occurrenceTargetSchema,
   recurrenceRuleSchema,
   rsvpBodySchema,
   rsvpResponseSchema,
@@ -136,6 +138,8 @@ export {
   updateEventBodySchema,
   type CreateEventBody,
   type EventResponse,
+  type ExceptionEventBody,
+  type OccurrenceTarget,
   type RecurrenceRule,
   type RsvpBody,
   type RsvpResponse,

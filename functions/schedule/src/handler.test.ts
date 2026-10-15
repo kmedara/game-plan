@@ -616,6 +616,65 @@ describe('schedule handler (in-memory)', () => {
     const { requireMembership } = await import('./schedule-store.js');
     await expect(requireMembership(teamId, randomUUID())).rejects.toThrow('not_a_member');
   });
+
+  it('cancels one occurrence, edits one date, and deletes the series over HTTP', async () => {
+    const admin = authFor();
+    const teamId = seedTeam({ userId: admin.userId, role: 'team_admin' });
+    const created = await handler(
+      httpEvent('POST', `/schedule/teams/${teamId}/events`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          eventType: 'practice',
+          title: 'Practice',
+          startsAt: '2026-09-02T17:00:00.000Z',
+          recurrence: { frequency: 'WEEKLY', interval: 1, byWeekDay: ['WE'] },
+        },
+      }),
+    );
+    const eventId = bodyOf(created).eventId as string;
+    const list = async () => {
+      const window = await handler(
+        httpEvent('GET', `/schedule/teams/${teamId}`, {
+          headers: { authorization: admin.authorization },
+          query: { from: '2026-09-01T00:00:00.000Z', to: '2026-09-30T23:59:59.999Z' },
+        }),
+      );
+      return bodyOf(window).occurrences as Array<{ startsAt: string; title: string; eventId: string }>;
+    };
+
+    const cancelled = await handler(
+      httpEvent('DELETE', `/schedule/teams/${teamId}/events/${eventId}/occurrences`, {
+        headers: { authorization: admin.authorization },
+        body: { occurrenceStartsAt: '2026-09-09T17:00:00.000Z' },
+      }),
+    );
+    expect(cancelled.statusCode).toBe(204);
+    expect((await list()).map((row) => row.startsAt)).not.toContain('2026-09-09T17:00:00.000Z');
+
+    const saved = await handler(
+      httpEvent('POST', `/schedule/teams/${teamId}/events/${eventId}/occurrences`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          occurrenceStartsAt: '2026-09-16T17:00:00.000Z',
+          title: 'Late practice',
+          startsAt: '2026-09-16T20:00:00.000Z',
+        },
+      }),
+    );
+    expect(saved.statusCode).toBe(200);
+    const rows = await list();
+    expect(rows.some((row) => row.title === 'Late practice' && row.startsAt === '2026-09-16T20:00:00.000Z')).toBe(
+      true,
+    );
+
+    const removed = await handler(
+      httpEvent('DELETE', `/schedule/teams/${teamId}/events/${eventId}`, {
+        headers: { authorization: admin.authorization },
+      }),
+    );
+    expect(removed.statusCode).toBe(204);
+    expect(await list()).toEqual([]);
+  });
 });
 
 describe('mapScheduleError', () => {

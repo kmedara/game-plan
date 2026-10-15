@@ -4,11 +4,20 @@
 
 import { Redirect, Slot, usePathname, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Calendar, ChevronLeft, MessageCircle, User, Users } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Image, Platform, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { canCreateTeam } from '@gameplan/rules';
 import { useApp } from '@/src/state';
+import { colors } from '@/src/theme';
+
+const tabIcons = {
+  '/schedule': Calendar,
+  '/chats': MessageCircle,
+  '/teams': Users,
+  '/profile': User,
+} as const;
 
 const titles: Record<string, string> = {
   '/schedule': 'title.schedule',
@@ -32,6 +41,9 @@ export default function MainLayout() {
   const { api, teams, refreshTeams, brand, live } = useApp();
   const [ready, setReady] = useState(api.isAuthenticated());
   const [canCreateChannel, setCanCreateChannel] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | undefined>();
+  const activeTeamId = api.selectedTeamId;
+  const activeLogoKey = teams.find((team) => team.teamId === activeTeamId)?.theme?.logoKey;
   const onChats = pathname === '/chats';
 
   useEffect(() => {
@@ -43,6 +55,22 @@ export default function MainLayout() {
       }
     });
   }, [api, live]);
+
+  useEffect(() => {
+    if (activeTeamId === undefined || activeLogoKey === undefined) {
+      setLogoUrl(undefined);
+      return;
+    }
+    let cancelled = false;
+    void api.presignDownload(activeLogoKey, { teamId: activeTeamId }).then((download) => {
+      if (!cancelled) setLogoUrl(download.downloadUrl);
+    }).catch(() => {
+      if (!cancelled) setLogoUrl(undefined);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, activeTeamId, activeLogoKey]);
 
   useEffect(() => {
     const teamId = api.selectedTeamId;
@@ -91,23 +119,33 @@ export default function MainLayout() {
         end={{ x: 1, y: 0 }}
         style={{ paddingTop: Platform.OS === 'web' ? 0 : 48 }}
       >
-      <View className="h-14 items-center justify-center px-12">
+      <View className="h-20 items-center justify-center">
         {nested ? (
           <Pressable
-            className="absolute bottom-0 left-4 top-0 justify-center"
+            className="absolute bottom-0 left-2 top-0 w-11 items-center justify-center"
             onPress={() => router.replace(parentPath(pathname))}
             accessibilityRole="button"
           >
-            <Text className="text-lg font-semibold" style={{ color: brand.onPrimary, fontSize: 18, lineHeight: 22 }}>❮</Text>
+            <ChevronLeft color={brand.onPrimary} size={24} strokeWidth={2} />
           </Pressable>
         ) : null}
-        <Text
-          className="text-lg font-semibold"
-          numberOfLines={1}
-          style={{ color: brand.onPrimary, fontSize: 18, lineHeight: 22 }}
-        >
-          {activeTeam?.name ?? ''}
-        </Text>
+        <View className="max-w-full justify-center">
+          {logoUrl !== undefined ? (
+            <Image
+              source={{ uri: logoUrl }}
+              accessibilityLabel={t('teamAdmin.teamLogo')}
+              resizeMode="contain"
+              style={{ position: 'absolute', right: '100%', top: -17, width: 56, height: 56, marginRight: 8 }}
+            />
+          ) : null}
+          <Text
+            className="text-lg font-semibold"
+            numberOfLines={1}
+            style={{ color: brand.onPrimary, fontSize: 18, lineHeight: 22 }}
+          >
+            {activeTeam?.name ?? ''}
+          </Text>
+        </View>
       </View>
       {onTeams ? (
         <HeaderLinks
@@ -128,16 +166,19 @@ export default function MainLayout() {
         <Slot />
       </View>
       <View className="flex-row border-t border-line bg-raised pb-6 pt-2">
-        {tabs.map((tab) => (
-          <Pressable key={tab.href} className="flex-1 items-center" onPress={() => router.push(tab.href)}>
-            <Text
-              className={pathname.startsWith(tab.href) ? 'font-bold' : 'text-muted'}
-              style={pathname.startsWith(tab.href) ? { color: brand.accent } : undefined}
-            >
-              {tab.label}
-            </Text>
-          </Pressable>
-        ))}
+        {tabs.map((tab) => {
+          const Icon = tabIcons[tab.href];
+          const active = pathname.startsWith(tab.href);
+          const color = active ? brand.accent : colors.muted;
+          return (
+            <Pressable key={tab.href} className="flex-1 items-center" onPress={() => router.push(tab.href)}>
+              <Icon color={color} size={24} strokeWidth={2} />
+              <Text className={active ? 'font-bold' : 'text-muted'} style={active ? { color } : undefined}>
+                {tab.label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );

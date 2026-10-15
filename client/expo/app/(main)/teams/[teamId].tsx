@@ -20,6 +20,8 @@ import { TeamInvites } from '@/src/team-invites';
 import { TeamPermissions } from '@/src/team-permissions';
 import { TeamRoster } from '@/src/team-roster';
 import { TeamColors } from '@/src/team-colors';
+import { TeamChatBackground } from '@/src/team-chat-background';
+import { TeamLogo } from '@/src/team-logo';
 import { ErrorText, Field, SubmitButton, TimeZoneField } from '@/src/ui';
 
 export default function TeamAdminScreen() {
@@ -32,6 +34,8 @@ export default function TeamAdminScreen() {
   const [primary, setPrimary] = useState('');
   const [secondary, setSecondary] = useState('');
   const [accent, setAccent] = useState('');
+  const [logoKey, setLogoKey] = useState<string | undefined>();
+  const [chatBackgroundKey, setChatBackgroundKey] = useState<string | undefined>();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [requests, setRequests] = useState<JoinRequest[]>([]);
   const [invites, setInvites] = useState<TeamInvite[]>([]);
@@ -48,6 +52,8 @@ export default function TeamAdminScreen() {
     setPrimary(team.theme?.primary ?? '');
     setSecondary(team.theme?.secondary ?? '');
     setAccent(team.theme?.accent ?? '');
+    setLogoKey(team.theme?.logoKey);
+    setChatBackgroundKey(team.theme?.chatBackgroundKey);
     setMembers(await api.listMembers(id));
     try {
       setRequests(await api.listJoinRequests(id));
@@ -90,7 +96,7 @@ export default function TeamAdminScreen() {
     await api.updateTeam(id, {
       name: name.trim(),
       timeZone: timeZone.trim(),
-      ...themePatch(primary, secondary, accent),
+      ...themePatch(primary, secondary, accent, logoKey, chatBackgroundKey),
     });
     await load();
   };
@@ -109,6 +115,17 @@ export default function TeamAdminScreen() {
           setSecondary(next.secondary);
           setAccent(next.accent);
         }}
+      />
+      <TeamLogo
+        teamId={id}
+        name={name}
+        theme={currentTheme(primary, secondary, accent, logoKey, chatBackgroundKey)}
+        onSaved={(theme) => setLogoKey(theme?.logoKey)}
+      />
+      <TeamChatBackground
+        teamId={id}
+        theme={currentTheme(primary, secondary, accent, logoKey, chatBackgroundKey)}
+        onSaved={(theme) => setChatBackgroundKey(theme?.chatBackgroundKey)}
       />
       <SubmitButton label={t('common.save')} onPress={saveSettings} />
       <TeamRoster teamId={id} members={members} />
@@ -132,11 +149,30 @@ export default function TeamAdminScreen() {
   );
 };
 
-const themePatch = (primary: string, secondary: string, accent: string): { theme?: { primary?: string; secondary?: string; accent?: string } } => {
+const currentTheme = (
+  primary: string,
+  secondary: string,
+  accent: string,
+  logoKey: string | undefined,
+  chatBackgroundKey: string | undefined,
+): { primary?: string; secondary?: string; accent?: string; logoKey?: string; chatBackgroundKey?: string } | undefined => {
   const theme = {
     ...(primary.trim().length > 0 ? { primary: primary.trim() } : {}),
     ...(secondary.trim().length > 0 ? { secondary: secondary.trim() } : {}),
     ...(accent.trim().length > 0 ? { accent: accent.trim() } : {}),
+    ...(logoKey !== undefined ? { logoKey } : {}),
+    ...(chatBackgroundKey !== undefined ? { chatBackgroundKey } : {}),
   };
-  return Object.keys(theme).length > 0 ? { theme } : {};
+  return Object.keys(theme).length > 0 ? theme : undefined;
+};
+
+const themePatch = (
+  primary: string,
+  secondary: string,
+  accent: string,
+  logoKey: string | undefined,
+  chatBackgroundKey: string | undefined,
+): { theme?: { primary?: string; secondary?: string; accent?: string; logoKey?: string; chatBackgroundKey?: string } | null } => {
+  const theme = currentTheme(primary, secondary, accent, logoKey, chatBackgroundKey);
+  return theme !== undefined ? { theme } : { theme: null };
 };

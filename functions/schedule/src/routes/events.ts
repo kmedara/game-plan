@@ -4,6 +4,8 @@
 
 import {
   createEventBodySchema,
+  exceptionEventBodySchema,
+  occurrenceTargetSchema,
   updateEventBodySchema,
 } from "@gameplan/schemas";
 import {
@@ -15,8 +17,11 @@ import { assertEventEndsAfterStart } from "@gameplan/rules";
 import { badRequest, json } from "../../../lib/http.js";
 import { route, withBodyValidation } from "../../../lib/pipeline.js";
 import {
+  cancelOccurrence,
   createEvent,
+  deleteEvent,
   requireEvent,
+  saveOccurrenceException,
   toEventResponse,
   updateEvent,
 } from "../schedule-store.js";
@@ -91,5 +96,73 @@ export const handleUpdateEvent = route(
 
     const updated = await updateEvent({ teamId, eventId, body });
     return json(200, updated);
+  },
+);
+
+/**
+ * Handles `DELETE /schedule/teams/:teamId/events/:eventId`.
+ *
+ * @param event - The HTTP API event.
+ * @param teamId - The team id from the path.
+ * @param eventId - The event id from the path.
+ * @returns An empty response when the series is gone.
+ */
+export const handleDeleteEvent = route(
+  ["teamId", "eventId"],
+  withScheduleErrors(),
+  requireUser(),
+  requirePermission("manage_events"),
+  async ({ teamId, eventId }) => {
+    await deleteEvent(teamId, eventId);
+    return { statusCode: 204 };
+  },
+);
+
+/**
+ * Handles `DELETE /schedule/teams/:teamId/events/:eventId/occurrences`.
+ *
+ * @param event - The HTTP API event.
+ * @param teamId - The team id from the path.
+ * @param eventId - The series or exception id from the path.
+ * @returns An empty response when that date is cancelled.
+ */
+export const handleCancelOccurrence = route(
+  ["teamId", "eventId"],
+  withScheduleErrors(),
+  withBodyValidation(occurrenceTargetSchema),
+  requireUser(),
+  requirePermission("manage_events"),
+  async ({ teamId, eventId, body }) => {
+    await cancelOccurrence({
+      teamId,
+      eventId,
+      occurrenceStartsAt: body.occurrenceStartsAt,
+    });
+    return { statusCode: 204 };
+  },
+);
+
+/**
+ * Handles `POST /schedule/teams/:teamId/events/:eventId/occurrences`.
+ *
+ * @param event - The HTTP API event.
+ * @param teamId - The team id from the path.
+ * @param eventId - The series or exception id from the path.
+ * @returns The split-off event for that date.
+ */
+export const handleSaveOccurrence = route(
+  ["teamId", "eventId"],
+  withScheduleErrors(),
+  withBodyValidation(exceptionEventBodySchema),
+  requireUser(),
+  requirePermission("manage_events"),
+  async ({ teamId, eventId, user, body }) => {
+    const saved = await saveOccurrenceException({
+      teamId,
+      userId: user.userId,
+      eventId,
+      body,
+    });
+    return json(200, saved);
   },
 );

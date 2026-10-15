@@ -6,11 +6,23 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { createElement, useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useApp } from './state';
+import { colors } from './theme';
 
 const HUE_STOPS = ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#ff0000'] as const;
+const DEFAULT_PRIMARY = colors.field;
 const DEFAULT_SECONDARY = '#1e3a8a';
 const DEFAULT_ACCENT = '#ea580c';
+
+const TrashIcon = () => (
+  <View className="mt-1 h-4 w-3.5 items-center">
+    <View className="h-0.5 w-1.5 rounded-full bg-muted" />
+    <View className="mt-px h-0.5 w-3.5 rounded-full bg-muted" />
+    <View className="mt-px h-2 w-2.5 flex-row justify-evenly rounded-b-sm border-x border-b border-muted pt-px">
+      <View className="h-full w-px bg-muted" />
+      <View className="h-full w-px bg-muted" />
+    </View>
+  </View>
+);
 
 const hslToHex = (hue: number, lightness: number): string => {
   const saturation = 0.72;
@@ -37,7 +49,7 @@ const WebWell = ({
   label: string;
   onChange: (value: string) => void;
 }) => {
-  const shown = /^#[0-9a-fA-F]{6}$/.test(value) ? value : '#0a6e38';
+  const shown = /^#[0-9a-fA-F]{6}$/.test(value) ? value : DEFAULT_PRIMARY;
   return (
     <View className="h-9 w-9 overflow-hidden rounded-full border border-line" style={{ backgroundColor: shown }}>
       {createElement('input', {
@@ -87,7 +99,7 @@ const NativeBars = ({
       <Pressable
         accessibilityLabel={label}
         onPress={(event) => {
-          const nextLightness = 0.9 - fraction(event.nativeEvent.locationX, width) * 0.75;
+          const nextLightness = 0.9 - fraction(event.nativeEvent.locationX, width) * 0.1;
           setLightness(nextLightness);
           onChange(hslToHex(hue, nextLightness));
         }}
@@ -108,17 +120,15 @@ const ColorWell = ({
   value,
   onChange,
   onClear,
-  linkColor,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  onClear?: () => void;
-  linkColor: string;
+  onClear: () => void;
 }) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const shown = /^#[0-9a-fA-F]{6}$/.test(value) ? value : '#0a6e38';
+  const shown = /^#[0-9a-fA-F]{6}$/.test(value) ? value : DEFAULT_PRIMARY;
   return (
     <View className="items-center">
       {Platform.OS === 'web' ? (
@@ -133,11 +143,9 @@ const ColorWell = ({
         />
       )}
       <Text className="mt-1 text-sm text-ink">{label}</Text>
-      {onClear !== undefined ? (
-        <Pressable onPress={onClear} accessibilityRole="button">
-          <Text className="text-sm" style={{ color: linkColor }}>{t('teamAdmin.removeColor')}</Text>
-        </Pressable>
-      ) : null}
+      <Pressable onPress={onClear} accessibilityRole="button" accessibilityLabel={t('teamAdmin.removeColor')}>
+        <TrashIcon />
+      </Pressable>
       {Platform.OS !== 'web' && open ? <NativeBars label={label} onChange={onChange} /> : null}
     </View>
   );
@@ -155,18 +163,21 @@ export const TeamColors = ({
   onChange: (next: { primary: string; secondary: string; accent: string }) => void;
 }) => {
   const { t } = useTranslation();
-  const { brand } = useApp();
 
   return (
     <View className="mb-3 w-full flex-row items-start justify-around">
-      <ColorWell label={t('teamAdmin.primary')} value={primary} linkColor={brand.secondary} onChange={(value) => onChange({ primary: value, secondary, accent })} />
+      <ColorWell
+        label={t('teamAdmin.primary')}
+        value={primary}
+        onChange={(value) => onChange({ primary: value, secondary, accent })}
+        onClear={() => onChange({ primary: DEFAULT_PRIMARY, secondary, accent })}
+      />
       {secondary.length > 0 ? (
         <ColorWell
           label={t('teamAdmin.secondary')}
           value={secondary}
-          linkColor={brand.secondary}
           onChange={(value) => onChange({ primary, secondary: value, accent })}
-          onClear={() => onChange({ primary, secondary: '', accent })}
+          onClear={() => onChange({ primary, secondary: DEFAULT_SECONDARY, accent })}
         />
       ) : (
         <Pressable className="items-center" onPress={() => onChange({ primary, secondary: DEFAULT_SECONDARY, accent })} accessibilityRole="button">
@@ -183,9 +194,8 @@ export const TeamColors = ({
         <ColorWell
           label={t('teamAdmin.accent')}
           value={accent}
-          linkColor={brand.secondary}
           onChange={(value) => onChange({ primary, secondary, accent: value })}
-          onClear={() => onChange({ primary, secondary, accent: '' })}
+          onClear={() => onChange({ primary, secondary, accent: DEFAULT_ACCENT })}
         />
       ) : (
         <Pressable className="items-center" onPress={() => onChange({ primary, secondary, accent: DEFAULT_ACCENT })} accessibilityRole="button">

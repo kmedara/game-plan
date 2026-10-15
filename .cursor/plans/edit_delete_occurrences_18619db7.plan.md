@@ -4,13 +4,13 @@ overview: Managers can edit or delete a scheduled event. For a repeating series,
 todos:
   - id: schema-store
     content: Add exdates and exception fields, expansion skips, delete and single-occurrence routes
-    status: pending
+    status: completed
   - id: client
     content: Schedule row edit/delete with this-occurrence vs all-occurrences prompt
-    status: pending
+    status: completed
   - id: tests
     content: Store and handler tests for cancel, exception edit, series edit, and series delete
-    status: pending
+    status: completed
 isProject: false
 ---
 

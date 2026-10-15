@@ -66,8 +66,14 @@ const chosen = (hex: string | undefined): string | undefined =>
 const hexChannel = (value: number): string =>
   value.toString(16).padStart(2, "0");
 
+/** How much of a color `fieldWash` keeps. Higher means more of the color. */
+export const fieldWashOpacity = {
+  button: 0.75,
+  chip: 0.28,
+} as const;
+
 /** Draws a fill so the surface behind it shows through a little. */
-export const fieldWash = (hex: string, opacity = 0.8): string => {
+export const fieldWash = (hex: string, opacity: number): string => {
   const color = parseHex(hex);
   if (color === undefined) return hex;
   return `rgba(${color.r}, ${color.g}, ${color.b}, ${opacity})`;

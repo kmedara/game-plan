@@ -7,9 +7,12 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import { handleHealth, logHttpFailure, notFound, rejectDirectOrigin } from '../../lib/http.js';
 import {
+  handleCancelOccurrence,
   handleCreateEvent,
+  handleDeleteEvent,
   handleGetEvent,
   handleListSchedule,
+  handleSaveOccurrence,
   handleUpdateEvent,
   handleUpsertRsvp,
 } from './routes/index.js';
@@ -65,6 +68,12 @@ export const handler = logHttpFailure(async (
         const eventId = parts[3];
         if (method === 'GET') return handleGetEvent(event, teamId, eventId);
         if (method === 'PATCH') return handleUpdateEvent(event, teamId, eventId);
+        if (method === 'DELETE') return handleDeleteEvent(event, teamId, eventId);
+      }
+      if (parts.length === 5 && parts[3] !== undefined && parts[4] === 'occurrences') {
+        const eventId = parts[3];
+        if (method === 'POST') return handleSaveOccurrence(event, teamId, eventId);
+        if (method === 'DELETE') return handleCancelOccurrence(event, teamId, eventId);
       }
     }
 

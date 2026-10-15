@@ -40,6 +40,7 @@ export const handlePresignDownload = route(
     await assertCanDownload(user.userId, query.objectKey, {
       ...(query.chatId !== undefined ? { chatId: query.chatId } : {}),
       ...(query.userId !== undefined ? { userId: query.userId } : {}),
+      ...(query.teamId !== undefined ? { teamId: query.teamId } : {}),
     });
     const result = await createDownloadUrl(query.objectKey);
     return json(200, result);

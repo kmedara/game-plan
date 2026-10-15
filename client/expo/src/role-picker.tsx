@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import type { TeamRole } from '@gameplan/types';
 import { roleLabel } from '@/src/roles';
 import { useApp } from '@/src/state';
+import { fieldWash, fieldWashOpacity } from '@/src/theme';
 
 export const RolePicker = ({
   roles,
@@ -27,11 +28,11 @@ export const RolePicker = ({
         return (
           <Pressable
             key={role}
-            className={`mb-2 mr-2 rounded-full px-3 py-1 ${selected ? '' : 'border border-line bg-paper'}`}
-            style={selected ? { backgroundColor: brand.primary } : undefined}
+            className={`mb-2 mr-2 px-3 py-1 ${selected ? 'rounded-full' : ''}`}
+            style={selected ? { backgroundColor: fieldWash(brand.primary, fieldWashOpacity.chip) } : undefined}
             onPress={() => onChange(role)}
           >
-            <Text className={selected ? 'text-sm font-semibold' : 'text-sm text-ink'} style={selected ? { color: brand.onPrimary } : undefined}>
+            <Text className="text-sm text-ink">
               {t(roleLabel(role))}
             </Text>
           </Pressable>

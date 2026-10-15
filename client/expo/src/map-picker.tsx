@@ -15,10 +15,12 @@ export const MapPicker = ({
   latitude,
   longitude,
   onPick,
+  readOnly = false,
 }: {
   latitude?: number;
   longitude?: number;
-  onPick: (pick: MapPick) => void;
+  onPick?: (pick: MapPick) => void;
+  readOnly?: boolean;
 }) => {
   const host = useRef<HTMLDivElement | null>(null);
   const onPickRef = useRef(onPick);
@@ -37,12 +39,13 @@ export const MapPicker = ({
       if (maps === undefined) return;
       const map = new maps.Map(node, { center: start, zoom: 12 });
       const marker = new maps.Marker({ position: start, map });
+      if (readOnly) return;
       map.addListener('click', (event: { latLng?: { lat: () => number; lng: () => number } }) => {
         const lat = event.latLng?.lat();
         const lng = event.latLng?.lng();
         if (lat === undefined || lng === undefined) return;
         marker.setPosition({ lat, lng });
-        onPickRef.current({ latitude: lat, longitude: lng });
+        onPickRef.current?.({ latitude: lat, longitude: lng });
       });
     };
 
@@ -62,7 +65,7 @@ export const MapPicker = ({
     return () => {
       cancelled = true;
     };
-  }, [latitude, longitude]);
+  }, [latitude, longitude, readOnly]);
 
   if (config.googleMapsApiKey.length === 0) {
     return <Text className="mb-2 text-muted">Map unavailable</Text>;

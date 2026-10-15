@@ -155,6 +155,18 @@ export const dayKeyInZone = (instant: Date, timeZone: string): string => {
 };
 
 /**
+ * Returns minutes from midnight for an instant in a time zone.
+ *
+ * @param instant - The UTC instant.
+ * @param timeZone - An IANA time zone.
+ * @returns Minutes from local midnight.
+ */
+export const minutesInZone = (instant: Date, timeZone: string): number => {
+  const parts = zonedParts(instant, timeZone);
+  return parts.hour * 60 + parts.minute;
+};
+
+/**
  * Returns how many days are in a calendar month.
  *
  * @param year - The full year.

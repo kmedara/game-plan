@@ -160,12 +160,33 @@ export type EventResponse = {
     count?: number;
     byWeekDay?: string[];
   };
+  seriesEventId?: string;
+  originalStartsAt?: string;
+  exdates?: string[];
   createdBy: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export type EventType = 'practice' | 'game' | 'meeting' | 'other';
+
+export type ExceptionEventBody = {
+  occurrenceStartsAt: string;
+  eventType?: 'practice' | 'game' | 'meeting' | 'other';
+  title?: string;
+  startsAt?: string;
+  endsAt?: string | null;
+  location?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  recurrence?: {
+    frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+    interval?: number;
+    until?: string;
+    count?: number;
+    byWeekDay?: string[];
+  } | null;
+}
 
 export type FanoutJob =
   | {
@@ -275,6 +296,10 @@ export type OauthExchangeResponse = {
 
 export type OauthNext = 'teams' | 'complete-profile';
 
+export type OccurrenceTarget = {
+  occurrenceStartsAt: string;
+}
+
 export type PhoneNumber = string;
 
 export type PlaceDetails = {
@@ -319,6 +344,7 @@ export type PresignDownloadQuery = {
   objectKey: string;
   chatId?: string;
   userId?: string;
+  teamId?: string;
 }
 
 export type PresignDownloadResponse = {
@@ -420,6 +446,9 @@ export type ScheduleList = {
     location?: string;
     latitude?: number;
     longitude?: number;
+    recurring: boolean;
+    seriesEventId?: string;
+    originalStartsAt?: string;
     rsvps: {
       userId: string;
       status: ('going' | 'not_going' | 'maybe') | string;
@@ -436,6 +465,9 @@ export type ScheduleOccurrence = {
   location?: string;
   latitude?: number;
   longitude?: number;
+  recurring: boolean;
+  seriesEventId?: string;
+  originalStartsAt?: string;
   rsvps: {
     userId: string;
     status: ('going' | 'not_going' | 'maybe') | string;
@@ -545,6 +577,7 @@ export type TeamList = {
       secondary?: string;
       accent?: string;
       logoKey?: string;
+      chatBackgroundKey?: string;
     };
     role: ('team_admin' | 'coach' | 'player' | 'parent') | string;
     positions?: string[];
@@ -605,6 +638,7 @@ export type TeamSummary = {
     secondary?: string;
     accent?: string;
     logoKey?: string;
+    chatBackgroundKey?: string;
   };
   role: ('team_admin' | 'coach' | 'player' | 'parent') | string;
   positions?: string[];
@@ -617,6 +651,7 @@ export type TeamTheme = {
   secondary?: string;
   accent?: string;
   logoKey?: string;
+  chatBackgroundKey?: string;
 }
 
 export type TimeZone = string;
@@ -686,6 +721,7 @@ export type UpdateTeamBody = {
     secondary?: string;
     accent?: string;
     logoKey?: string;
+    chatBackgroundKey?: string;
   } | null;
 }
 

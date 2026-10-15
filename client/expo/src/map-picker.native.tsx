@@ -15,10 +15,12 @@ export const MapPicker = ({
   latitude,
   longitude,
   onPick,
+  readOnly = false,
 }: {
   latitude?: number;
   longitude?: number;
-  onPick: (pick: MapPick) => void;
+  onPick?: (pick: MapPick) => void;
+  readOnly?: boolean;
 }) => {
   const [pin, setPin] = useState<MapPick>({
     latitude: latitude ?? 40.7,
@@ -28,7 +30,7 @@ export const MapPicker = ({
   const press = (event: MapPressEvent): void => {
     const next = event.nativeEvent.coordinate;
     setPin(next);
-    onPick(next);
+    onPick?.(next);
   };
 
   return (
@@ -36,7 +38,9 @@ export const MapPicker = ({
       <MapView
         style={{ height: 192, width: '100%' }}
         initialRegion={{ ...pin, latitudeDelta: 0.08, longitudeDelta: 0.08 }}
-        onPress={press}
+        onPress={readOnly ? undefined : press}
+        scrollEnabled={!readOnly}
+        zoomEnabled={!readOnly}
       >
         <Marker coordinate={pin} />
       </MapView>

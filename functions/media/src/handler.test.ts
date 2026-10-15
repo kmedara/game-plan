@@ -15,6 +15,8 @@ import {
   chatPk,
   messageSk,
   profileSk,
+  teamMetaSk,
+  teamPk,
   userPk,
   userTeamSk,
 } from '../../lib/dynamo/keys.js';
@@ -381,5 +383,20 @@ describe('media handler', () => {
       }),
     );
     expect(teammate.statusCode).toBe(200);
+
+    const logoKey = `uploads/${owner}/logo.png`;
+    store.set(itemKey(teamPk(teamId), teamMetaSk()), {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: teamMetaSk(),
+      teamId,
+      theme: { logoKey },
+    });
+    const logo = await handler(
+      httpEvent('GET', '/media/presign-download', {
+        headers: { authorization: `Bearer ${accessToken}` },
+        query: { objectKey: logoKey, teamId },
+      }),
+    );
+    expect(logo.statusCode).toBe(200);
   });
 });
