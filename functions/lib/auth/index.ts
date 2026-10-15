@@ -45,7 +45,6 @@ export {
 
 export {
   toUserProfile,
-  type ConfirmationRequired,
   type IdentityProvider,
   type IdentityTokens,
   type RegisterInput,

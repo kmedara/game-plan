@@ -43,6 +43,9 @@ describe('createLocalIdentityProvider', () => {
 
     expect(tokens.email).toBe('ada@example.com');
     expect(tokens.userId).toMatch(/^[a-f0-9]{32}$/u);
+    if (tokens.status === 'confirmation_required') {
+      throw new Error('expected_session');
+    }
     expect(verifyLocalJwt(tokens.accessToken).token_use).toBe('access');
     expect(mockPutItem).toHaveBeenCalledOnce();
     const stored = mockPutItem.mock.calls[0][0] as UserProfileItem;
