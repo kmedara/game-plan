@@ -31,6 +31,7 @@ export {
   getAuthCallbackUrl,
   getCognitoOAuthConfig,
   readOAuthIdClaims,
+  usableDisplayName,
   type OAuthIdClaims,
   type OAuthTokens,
 } from "./oauth.js";

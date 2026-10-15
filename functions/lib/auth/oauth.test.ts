@@ -115,6 +115,34 @@ describe('oauth module', () => {
       displayName: 'AdaUsername',
     });
 
+    const idPayload = Buffer.from(
+      JSON.stringify({
+        sub: '11111111-1111-4111-8111-111111111111',
+        email: 'ada@example.com',
+        name: '11111111-1111-4111-8111-111111111111',
+        'cognito:username': '11111111-1111-4111-8111-111111111111',
+      }),
+    ).toString('base64url');
+    expect(readOAuthIdClaims(`h.${idPayload}.s`)).toEqual({
+      userId: '11111111-1111-4111-8111-111111111111',
+      email: 'ada@example.com',
+      displayName: undefined,
+    });
+
+    const givenPayload = Buffer.from(
+      JSON.stringify({
+        sub: 'u3',
+        given_name: 'Ada',
+        family_name: 'Lovelace',
+        'cognito:username': 'Google_123',
+      }),
+    ).toString('base64url');
+    expect(readOAuthIdClaims(`h.${givenPayload}.s`)).toEqual({
+      userId: 'u3',
+      email: undefined,
+      displayName: 'Ada Lovelace',
+    });
+
     const missingSub = Buffer.from(JSON.stringify({ email: 'a@example.com' })).toString(
       'base64url',
     );

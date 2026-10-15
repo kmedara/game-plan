@@ -136,7 +136,8 @@ export const handleOAuthCallback = async (
       profile = await putProfile({
         userId: claims.userId,
         email: claims.email,
-        displayName: claims.displayName?.trim() || claims.email.split('@')[0] || 'Player',
+        displayName:
+          claims.displayName?.trim() || claims.email.split('@')[0] || 'Player',
         accountKind: 'adult',
       });
     }

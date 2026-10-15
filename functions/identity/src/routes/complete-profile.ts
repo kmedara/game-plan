@@ -3,7 +3,13 @@
  */
 
 import { completeProfileBodySchema } from '@gameplan/schemas';
-import { getProfile, putProfile, toUserProfile, verifyAuthHeader } from '../../../lib/auth/index.js';
+import {
+  getProfile,
+  putProfile,
+  toUserProfile,
+  usableDisplayName,
+  verifyAuthHeader,
+} from '../../../lib/auth/index.js';
 import { accountKindFromBirthday } from '@gameplan/rules';
 import { badRequest, headerOf, json } from '../../../lib/http.js';
 import { route, withBodyValidation } from '../../../lib/pipeline.js';
@@ -41,7 +47,10 @@ export const handleCompleteProfile = route(
     if (email === undefined) return badRequest('email_required');
 
     const displayName =
-      body.displayName?.trim() || existing?.displayName || email.split('@')[0] || 'Player';
+      usableDisplayName(body.displayName, auth.userId) ||
+      usableDisplayName(existing?.displayName, auth.userId) ||
+      email.split('@')[0] ||
+      'Player';
 
     const profile = await putProfile({
       userId: auth.userId,

@@ -179,11 +179,37 @@ export const readOAuthIdClaims = (idToken: string): OAuthIdClaims => {
   const userId = typeof payload.sub === 'string' ? payload.sub : undefined;
   if (userId === undefined || userId.length === 0) throw new Error('invalid_token');
   const email = typeof payload.email === 'string' ? payload.email : undefined;
+  const given = typeof payload.given_name === 'string' ? payload.given_name : '';
+  const family = typeof payload.family_name === 'string' ? payload.family_name : '';
+  const combined = `${given} ${family}`.trim();
+  const name = typeof payload.name === 'string' ? payload.name : undefined;
+  const username =
+    typeof payload['cognito:username'] === 'string' ? payload['cognito:username'] : undefined;
   const displayName =
-    typeof payload.name === 'string'
-      ? payload.name
-      : typeof payload['cognito:username'] === 'string'
-        ? payload['cognito:username']
-        : undefined;
+    usableDisplayName(combined, userId) ??
+    usableDisplayName(name, userId) ??
+    usableDisplayName(username, userId);
   return { userId, email, displayName };
+};
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Keeps a human name and drops Cognito ids that social sign-in stores as the username.
+ *
+ * @param value - A name claim or stored display name.
+ * @param userId - The Cognito `sub`, which must not be shown as a name.
+ * @returns The trimmed name, or `undefined` when the value is an id.
+ */
+export const usableDisplayName = (
+  value: string | undefined,
+  userId: string | undefined,
+): string | undefined => {
+  const trimmed = value?.trim();
+  if (trimmed === undefined || trimmed.length === 0) return undefined;
+  if (userId !== undefined && trimmed === userId) return undefined;
+  if (UUID_PATTERN.test(trimmed)) return undefined;
+  if (/^(Google|Facebook|SignInWithApple|LoginWithAmazon)_/i.test(trimmed)) return undefined;
+  return trimmed;
 };
