@@ -8,6 +8,7 @@ import {
   rruleWeekDay,
   shiftCalendarMonth,
   wallTimeToIso,
+  clockLabel,
 } from './schedule-calendar';
 
 describe('schedule calendar', () => {
@@ -33,6 +34,13 @@ describe('schedule calendar', () => {
     expect(january.some((cell) => cell.key.startsWith('2025-12-'))).toBe(true);
     const december = buildMonthGrid(2026, 12, 'America/New_York');
     expect(december.some((cell) => cell.key.startsWith('2027-01-'))).toBe(true);
+  });
+
+  it('formats 6:00pm as 12-hour or 24-hour when asked', () => {
+    const iso = '2026-10-05T22:00:00.000Z';
+    expect(clockLabel(iso, 'America/New_York', 'en-US', true)).toMatch(/6:00/);
+    expect(clockLabel(iso, 'America/New_York', 'en-US', true)).toMatch(/PM/i);
+    expect(clockLabel(iso, 'America/New_York', 'en-US', false)).toBe('18:00');
   });
 
   it('stores 6:00pm Eastern as 22:00 UTC during daylight time', () => {

@@ -21,6 +21,8 @@ export const MapPicker = ({
   onPick: (pick: MapPick) => void;
 }) => {
   const host = useRef<HTMLDivElement | null>(null);
+  const onPickRef = useRef(onPick);
+  onPickRef.current = onPick;
 
   useEffect(() => {
     const key = config.googleMapsApiKey;
@@ -40,7 +42,7 @@ export const MapPicker = ({
         const lng = event.latLng?.lng();
         if (lat === undefined || lng === undefined) return;
         marker.setPosition({ lat, lng });
-        onPick({ latitude: lat, longitude: lng });
+        onPickRef.current({ latitude: lat, longitude: lng });
       });
     };
 
@@ -60,10 +62,10 @@ export const MapPicker = ({
     return () => {
       cancelled = true;
     };
-  }, [latitude, longitude, onPick]);
+  }, [latitude, longitude]);
 
   if (config.googleMapsApiKey.length === 0) {
-    return <Text className="mb-2 text-slate-500">Map unavailable</Text>;
+    return <Text className="mb-2 text-muted">Map unavailable</Text>;
   }
 
   return (

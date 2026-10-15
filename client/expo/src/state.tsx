@@ -2,11 +2,11 @@
  * App-wide API client, selected team, and live socket.
  */
 
-import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { TeamSummary, TeamTheme } from '@gameplan/types';
 import { ApiClient } from './api';
 import { LiveSocket } from './live-socket';
-import { brandColors } from './theme';
+import { brandColors, type Brand } from './theme';
 
 type AppState = {
   api: ApiClient;
@@ -14,7 +14,9 @@ type AppState = {
   teams: TeamSummary[];
   refreshTeams: () => Promise<void>;
   selectTeam: (teamId: string) => void;
-  brand: { primary: string; onPrimary: string };
+  /** Draft colors for the team settings page. The header uses these until cleared. */
+  setPreviewTheme: (theme: TeamTheme | undefined) => void;
+  brand: Brand;
 };
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -32,6 +34,7 @@ const setTeams = (teams: TeamSummary[]): void => {
 export const AppStateProvider = ({ children }: { children: ReactNode }) => {
   const api = useMemo(() => new ApiClient(), []);
   const live = useMemo(() => new LiveSocket(api), [api]);
+  const [previewTheme, setPreviewTheme] = useState<TeamTheme | undefined>();
   const snapshot = useSyncExternalStore(api.subscribe, () => api.selectedTeamId);
   const teams = useSyncExternalStore(
     (listener) => {
@@ -57,15 +60,15 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const active = teams.find((team) => team.teamId === snapshot);
-  const brand = brandColors(active?.theme?.primary);
+  const brand = brandColors(previewTheme ?? active?.theme);
 
   useEffect(() => {
     void api.restoreTeamId();
   }, [api]);
 
   const value = useMemo(
-    () => ({ api, live, teams, refreshTeams, selectTeam, brand }),
-    [api, live, teams, snapshot, brand.primary],
+    () => ({ api, live, teams, refreshTeams, selectTeam, setPreviewTheme, brand }),
+    [api, live, teams, snapshot, previewTheme, brand.primary, brand.secondary, brand.accent, brand.stops.join()],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

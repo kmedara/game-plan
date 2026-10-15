@@ -2,12 +2,16 @@
  * Month calendar, day list, RSVP, and add-event form.
  */
 
+import { useCalendars } from 'expo-localization';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { eventWindowIsValid } from '@gameplan/rules';
-import { EVENT_TYPES, RSVP_STATUSES, type EventType, type RsvpStatus, type ScheduleOccurrence } from '@gameplan/types';
+import { EVENT_TYPES, RSVP_STATUSES, type EventType, type RecurrenceRule, type RsvpStatus, type ScheduleOccurrence } from '@gameplan/types';
+import { EventTimeFields } from '@/src/event-time';
+import { RecurrenceFields } from '@/src/recurrence-fields';
+import { recurrenceFromForm, type RepeatEnd, type RepeatFrequency } from '@/src/recurrence-form';
+import { DEFAULT_START_MINUTES, eventWindow, type EndChoice } from '@/src/event-window';
 import { appLocale } from '@/src/i18n';
 import { MapPicker } from '@/src/map-picker';
 import { mapsUrl, type MapsProvider } from '@/src/maps';
@@ -23,8 +27,10 @@ import {
   weekdayLabelsForLocale,
   type CalendarMonth,
 } from '@/src/schedule-calendar';
+import { Sheet } from '@/src/sheet';
 import { useActiveTeam, useApp } from '@/src/state';
-import { Button, ErrorText, Field } from '@/src/ui';
+import { colors, fieldWash } from '@/src/theme';
+import { Button, ErrorText, Field, SubmitButton } from '@/src/ui';
 
 const monthRange = (month: CalendarMonth, timeZone: string): { from: string; to: string } => {
   const cells = buildMonthGrid(month.year, month.month, timeZone);
@@ -35,7 +41,7 @@ const monthRange = (month: CalendarMonth, timeZone: string): { from: string; to:
 
 export default function ScheduleScreen() {
   const { t } = useTranslation();
-  const { api, live } = useApp();
+  const { api, live, brand } = useApp();
   const { team } = useActiveTeam();
   const zone = team?.timeZone ?? 'UTC';
   const [month, setMonth] = useState<CalendarMonth>(() => {
@@ -91,13 +97,27 @@ export default function ScheduleScreen() {
     <ScrollView className="flex-1 px-3 pt-3">
       <ErrorText message={error} />
       <View className="mb-2 flex-row items-center justify-between">
-        <Button label={t('schedule.prevMonth')} onPress={() => setMonth((current) => shiftCalendarMonth(current, -1))} />
-        <Text className="mx-2 font-semibold">{monthTitle(month, zone, appLocale)}</Text>
-        <Button label={t('schedule.nextMonth')} onPress={() => setMonth((current) => shiftCalendarMonth(current, 1))} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('schedule.prevMonth')}
+          className="px-3 py-2"
+          onPress={() => setMonth((current) => shiftCalendarMonth(current, -1))}
+        >
+          <Text className="text-2xl font-semibold text-ink">{'<'}</Text>
+        </Pressable>
+        <Text className="mx-2 font-semibold text-ink">{monthTitle(month, zone, appLocale)}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('schedule.nextMonth')}
+          className="px-3 py-2"
+          onPress={() => setMonth((current) => shiftCalendarMonth(current, 1))}
+        >
+          <Text className="text-2xl font-semibold text-ink">{'>'}</Text>
+        </Pressable>
       </View>
       <View className="mb-2 flex-row">
         {weekdayLabelsForLocale(appLocale).map((label) => (
-          <Text key={label} className="flex-1 text-center text-xs text-slate-500">
+          <Text key={label} className="flex-1 text-center text-xs text-muted">
             {label}
           </Text>
         ))}
@@ -107,16 +127,22 @@ export default function ScheduleScreen() {
           const has = events.some((item) => dayKeyInZone(new Date(item.startsAt), zone) === cell.key);
           return (
             <Pressable key={cell.key} className="w-[14.28%] items-center py-2" onPress={() => setSelected(cell.key)}>
-              <Text className={cell.key === selected ? 'font-bold text-teal-800' : cell.inMonth ? 'text-slate-900' : 'text-slate-400'}>
+              <Text
+                className={cell.key === selected ? 'font-bold' : cell.inMonth ? 'text-ink' : 'text-muted'}
+                style={cell.key === selected ? { color: brand.accent } : undefined}
+              >
                 {cell.day}
-                {has ? ' •' : ''}
               </Text>
+              <View
+                className="mt-1 h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: has ? brand.accent : 'transparent' }}
+              />
             </Pressable>
           );
         })}
       </View>
-      <Text className="mb-2 text-lg font-semibold">{dayTitle(selected, zone, appLocale)}</Text>
-      {dayEvents.length === 0 ? <Text className="mb-3 text-slate-500">{t('schedule.nothingScheduled')}</Text> : null}
+      <Text className="mb-2 text-lg font-semibold text-ink">{dayTitle(selected, zone, appLocale)}</Text>
+      {dayEvents.length === 0 ? <Text className="mb-3 text-muted">{t('schedule.nothingScheduled')}</Text> : null}
       {dayEvents.map((item) => (
         <EventRow
           key={`${item.eventId}-${item.startsAt}`}
@@ -138,22 +164,23 @@ export default function ScheduleScreen() {
           }}
         />
       ))}
-      {canManage ? (
-        adding ? (
-          <AddEvent
-            dayKey={selected}
-            timeZone={zone}
-            onCancel={() => setAdding(false)}
-            onCreate={async (body) => {
-              await api.createEvent(team.teamId, body);
-              setAdding(false);
-              await load(team.teamId, month, zone);
-            }}
-          />
-        ) : (
-          <Button label={t('schedule.addEvent')} onPress={() => setAdding(true)} />
-        )
-      ) : null}
+      {canManage ? <Button label={t('schedule.addEvent')} onPress={() => setAdding(true)} /> : null}
+      <Sheet
+        visible={adding}
+        title={t('schedule.addEvent')}
+        closeLabel={t('common.cancel')}
+        onClose={() => setAdding(false)}
+      >
+        <AddEvent
+          dayKey={selected}
+          timeZone={zone}
+          onCreate={async (body) => {
+            await api.createEvent(team.teamId, body);
+            setAdding(false);
+            await load(team.teamId, month, zone);
+          }}
+        />
+      </Sheet>
     </ScrollView>
   );
 }
@@ -172,6 +199,8 @@ const EventRow = ({
   onRsvp: (status: RsvpStatus) => Promise<void>;
 }) => {
   const { t } = useTranslation();
+  const uses24 = useCalendars()[0].uses24hourClock;
+  const hour12 = uses24 === null ? undefined : !uses24;
   const mine = item.rsvps.find((rsvp) => rsvp.userId === userId)?.status;
   const openMaps = (): void => {
     if (item.location === undefined && item.latitude === undefined) return;
@@ -182,20 +211,25 @@ const EventRow = ({
     void WebBrowser.openBrowserAsync(url);
   };
   return (
-    <View className="mb-3 rounded-lg bg-white p-3">
-      <Text className="font-semibold">{item.title}</Text>
-      <Text className="text-slate-600">
-        {t(`eventType.${item.eventType}`)} · {clockLabel(item.startsAt, zone, appLocale)}
+    <View className="mb-3 rounded-xl bg-inset p-3">
+      <Text className="font-semibold text-ink">{item.title}</Text>
+      <Text className="text-muted">
+        {t(`eventType.${item.eventType}`)} · {clockLabel(item.startsAt, zone, appLocale, hour12)}
       </Text>
       {item.location !== undefined ? (
         <Pressable onPress={openMaps}>
-          <Text className="text-teal-800">{item.location}</Text>
+          <Text className="text-link">{item.location}</Text>
         </Pressable>
       ) : null}
       <View className="mt-2 flex-row">
         {RSVP_STATUSES.map((status) => (
-          <Pressable key={status} className="mr-3" onPress={() => void onRsvp(status)}>
-            <Text className={mine === status ? 'font-bold text-teal-800' : 'text-slate-700'}>
+          <Pressable
+            key={status}
+            className="mr-2 rounded-full px-3 py-1"
+            style={mine === status ? { backgroundColor: fieldWash(rsvpColor(status), 0.28) } : undefined}
+            onPress={() => void onRsvp(status)}
+          >
+            <Text className="text-ink">
               {t(status === 'not_going' ? 'schedule.notGoing' : `schedule.${status}`)}
             </Text>
           </Pressable>
@@ -205,15 +239,19 @@ const EventRow = ({
   );
 };
 
+const rsvpColor = (status: RsvpStatus): string => {
+  if (status === 'going') return colors.safety;
+  if (status === 'not_going') return colors.danger;
+  return colors.caution;
+};
+
 const AddEvent = ({
   dayKey,
   timeZone,
-  onCancel,
   onCreate,
 }: {
   dayKey: string;
   timeZone: string;
-  onCancel: () => void;
   onCreate: (body: {
     eventType: EventType;
     title: string;
@@ -222,22 +260,23 @@ const AddEvent = ({
     location?: string;
     latitude?: number;
     longitude?: number;
-    recurrence?: { frequency: 'WEEKLY'; interval: number; byWeekDay: string[] };
+    recurrence?: RecurrenceRule;
   }) => Promise<void>;
 }) => {
   const { t } = useTranslation();
   const { api } = useApp();
   const [eventType, setEventType] = useState<EventType>('practice');
   const [title, setTitle] = useState('');
-  const [start, setStart] = useState('18:00');
-  const [end, setEnd] = useState('');
+  const [startMinutes, setStartMinutes] = useState(DEFAULT_START_MINUTES);
+  const [end, setEnd] = useState<EndChoice>({ kind: 'none' });
   const [location, setLocation] = useState('');
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<Array<{ id: string; primaryText: string; secondaryText?: string }>>([]);
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | undefined>();
-  const [weekly, setWeekly] = useState(false);
-  const [error, setError] = useState<string | undefined>();
-
+  const [frequency, setFrequency] = useState<RepeatFrequency>('once');
+  const [interval, setInterval] = useState('1');
+  const [byWeekDay, setByWeekDay] = useState<string[]>(() => [rruleWeekDay(dayKey)]);
+  const [repeatEnd, setRepeatEnd] = useState<RepeatEnd>({ kind: 'never' });
   useEffect(() => {
     const handle = setTimeout(() => {
       if (query.trim().length === 0) {
@@ -251,31 +290,35 @@ const AddEvent = ({
 
   const submit = async (): Promise<void> => {
     if (title.trim().length === 0) return;
-    const startsAt = wallTimeToIso(timeZone, dayKey, start);
-    const endsAt = end.length > 0 ? wallTimeToIso(timeZone, dayKey, end) : undefined;
-    if (!eventWindowIsValid(startsAt, endsAt)) {
-      setError('invalid_ends_at');
-      return;
-    }
-    setError(undefined);
+    const window = eventWindow(timeZone, dayKey, startMinutes, end);
+    const { startsAt, endsAt } = window;
+    let recurrence: RecurrenceRule | undefined;
     try {
-      await onCreate({
-        eventType,
-        title: title.trim(),
-        startsAt,
-        ...(endsAt !== undefined ? { endsAt } : {}),
-        ...(location.trim().length > 0 ? { location: location.trim() } : {}),
-        ...(coords !== undefined ? coords : {}),
-        ...(weekly ? { recurrence: { frequency: 'WEEKLY' as const, interval: 1, byWeekDay: [rruleWeekDay(dayKey)] } } : {}),
+      recurrence = recurrenceFromForm({
+        frequency,
+        interval: Number(interval),
+        byWeekDay,
+        end: repeatEnd,
+        timeZone,
+        dayKey,
+        startMinutes,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'create_failed');
+      throw new Error(err instanceof Error ? err.message : 'invalid_recurrence');
     }
+    await onCreate({
+      eventType,
+      title: title.trim(),
+      startsAt,
+      ...(endsAt !== undefined ? { endsAt } : {}),
+      ...(location.trim().length > 0 ? { location: location.trim() } : {}),
+      ...(coords !== undefined ? coords : {}),
+      ...(recurrence !== undefined ? { recurrence } : {}),
+    });
   };
 
   return (
     <View className="mb-8">
-      <ErrorText message={error} />
       <View className="mb-2 flex-row flex-wrap">
         {EVENT_TYPES.map((type) => (
           <Pressable key={type} className="mr-3" onPress={() => setEventType(type)}>
@@ -284,8 +327,14 @@ const AddEvent = ({
         ))}
       </View>
       <Field label={t('addEvent.title')} value={title} onChangeText={setTitle} />
-      <Field label={t('addEvent.start')} value={start} onChangeText={setStart} placeholder="HH:mm" />
-      <Field label={t('addEvent.end')} value={end} onChangeText={setEnd} placeholder="HH:mm" />
+      <EventTimeFields
+        dayKey={dayKey}
+        timeZone={timeZone}
+        startMinutes={startMinutes}
+        end={end}
+        onChangeStart={setStartMinutes}
+        onChangeEnd={setEnd}
+      />
       <Field label={t('addEvent.location')} value={query} onChangeText={(value) => { setQuery(value); setLocation(value); setCoords(undefined); }} />
       {suggestions.map((suggestion) => (
         <Pressable
@@ -314,11 +363,24 @@ const AddEvent = ({
           }).catch(() => setLocation(`${pick.latitude}, ${pick.longitude}`));
         }}
       />
-      <Pressable className="mb-3" onPress={() => setWeekly((value) => !value)}>
-        <Text>{weekly ? '☑' : '☐'} {t('addEvent.weekly')}</Text>
-      </Pressable>
-      <Button label={t('common.save')} onPress={() => void submit()} />
-      <Button label={t('common.cancel')} onPress={onCancel} color="#64748b" />
+      <RecurrenceFields
+        frequency={frequency}
+        interval={interval}
+        byWeekDay={byWeekDay}
+        end={repeatEnd}
+        onChangeFrequency={(next) => {
+          setFrequency(next);
+          if (next === 'WEEKLY' && byWeekDay.length === 0) setByWeekDay([rruleWeekDay(dayKey)]);
+        }}
+        onChangeInterval={setInterval}
+        onChangeWeekDays={setByWeekDay}
+        onChangeEnd={setRepeatEnd}
+      />
+      <SubmitButton
+        label={t('common.save')}
+        onPress={submit}
+        message={(err) => (err instanceof Error ? err.message : 'create_failed')}
+      />
     </View>
   );
 };

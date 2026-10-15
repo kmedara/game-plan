@@ -29,6 +29,7 @@ jest.mock('@/src/state', () => ({
       user: undefined,
     },
     live: { connect: jest.fn() },
+    brand: { primary: '#0a6e38', onPrimary: '#ffffff', secondary: '#0a6e38', accent: '#0a6e38', stops: ['#0a6e38', '#064e28'] },
   }),
 }));
 

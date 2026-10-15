@@ -6,6 +6,7 @@ import { Redirect } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useApp } from '@/src/state';
+import { colors } from '@/src/theme';
 
 export default function Index() {
   const { api } = useApp();
@@ -21,8 +22,8 @@ export default function Index() {
 
   if (!ready) {
     return (
-      <View className="flex-1 items-center justify-center">
-        <ActivityIndicator />
+      <View className="flex-1 items-center justify-center bg-canvas">
+        <ActivityIndicator color={colors.field} />
       </View>
     );
   }

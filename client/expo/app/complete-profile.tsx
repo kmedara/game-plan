@@ -6,54 +6,59 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { BirthdayField } from '@/src/birthday-field';
 import { useApp } from '@/src/state';
-import { Button, ErrorText, Field } from '@/src/ui';
+import { Field, SubmitButton } from '@/src/ui';
+
+/** Cognito social sign-in stores the user id as the username. That is not a name. */
+const isIdShapedName = (value: string): boolean =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim());
+
+const prefilledName = (value: string | undefined): string => {
+  if (value === undefined || value.trim().length === 0 || isIdShapedName(value)) return '';
+  return value;
+};
 
 export default function CompleteProfileScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { api } = useApp();
-  const [displayName, setDisplayName] = useState(api.user?.displayName ?? '');
+  const [displayName, setDisplayName] = useState(prefilledName(api.user?.displayName));
   const [birthday, setBirthday] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
     void api.refreshSession().then((ok) => {
-      const name = api.user?.displayName;
-      if (ok && name !== undefined && name.length > 0) setDisplayName(name);
+      const name = prefilledName(api.user?.displayName);
+      if (ok && name.length > 0) setDisplayName(name);
     });
   }, [api]);
 
   const submit = async (): Promise<void> => {
     if (displayName.trim().length === 0 || birthday.trim().length === 0) return;
     setBusy(true);
-    setError(undefined);
     try {
       if (!api.isAuthenticated()) {
         const restored = await api.refreshSession();
-        if (!restored) {
-          setError('unauthorized');
-          return;
-        }
+        if (!restored) throw new Error('unauthorized');
       }
       await api.completeProfile({ birthday: birthday.trim(), displayName: displayName.trim() });
       router.replace('/teams');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'request_failed');
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <View className="flex-1 justify-center px-6">
-      <Text className="mb-2 text-2xl font-bold">{t('completeProfile.title')}</Text>
-      <Text className="mb-4 text-slate-600">{t('completeProfile.hint')}</Text>
-      <ErrorText message={error} />
-      <Field label={t('completeProfile.displayName')} value={displayName} onChangeText={setDisplayName} />
-      <Field label={t('completeProfile.birthday')} value={birthday} onChangeText={setBirthday} placeholder="YYYY-MM-DD" />
-      <Button label={t('common.save')} onPress={() => void submit()} disabled={busy} />
+    <View className="flex-1 justify-center bg-canvas px-6">
+      <View className="rounded-2xl border border-line bg-paper px-5 py-6 shadow-md">
+        <Text className="mb-1 text-sm font-semibold uppercase tracking-widest text-field">GamePlan</Text>
+        <Text className="mb-2 text-2xl font-bold text-ink">{t('completeProfile.title')}</Text>
+        <Text className="mb-4 text-muted">{t('completeProfile.hint')}</Text>
+        <Field label={t('completeProfile.displayName')} value={displayName} onChangeText={setDisplayName} />
+        <BirthdayField label={t('completeProfile.birthday')} value={birthday} onChange={setBirthday} />
+        <SubmitButton label={t('common.save')} onPress={submit} disabled={busy} />
+      </View>
     </View>
   );
 }

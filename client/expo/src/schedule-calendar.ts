@@ -103,6 +103,30 @@ const zonedParts = (instant: Date, timeZone: string): ZonedParts => {
  * @param time - An `HH:mm` wall time.
  * @returns The UTC ISO string.
  */
+/**
+ * Shifts a wall date by a number of civil days.
+ *
+ * @param dayKey - A `YYYY-MM-DD` wall date.
+ * @param days - Days to add. Negative moves backward.
+ * @returns The resulting wall date.
+ */
+export const shiftDayKey = (dayKey: string, days: number): string => {
+  const [year, month, day] = dayKey.split('-').map(Number) as [number, number, number];
+  const shifted = new Date(Date.UTC(year, month - 1, day + days));
+  return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}`;
+};
+
+/**
+ * Formats minutes-from-midnight as `HH:mm`, wrapping into a single day.
+ *
+ * @param minutes - Minutes from midnight. Values past 24 hours wrap.
+ * @returns An `HH:mm` wall time.
+ */
+export const clockFromMinutes = (minutes: number): string => {
+  const wrapped = ((minutes % 1440) + 1440) % 1440;
+  return `${pad(Math.floor(wrapped / 60))}:${pad(wrapped % 60)}`;
+};
+
 export const wallTimeToIso = (timeZone: string, dayKey: string, time: string): string => {
   const [year, month, day] = dayKey.split('-').map(Number) as [number, number, number];
   const [hour, minute] = time.split(':').map(Number) as [number, number];
@@ -265,13 +289,18 @@ export const dayTitle = (
  * @param iso - A UTC ISO instant.
  * @param timeZone - An IANA time zone.
  * @param locale - BCP 47 locale tag (defaults to the app language).
+ * @param hour12 - When set, forces 12-hour or 24-hour. Omit to follow the locale.
  * @returns A short clock time.
  */
 export const clockLabel = (
   iso: string,
   timeZone: string,
   locale: string = APP_LOCALE_ID,
+  hour12?: boolean,
 ): string =>
-  new Intl.DateTimeFormat(locale, { timeZone, hour: 'numeric', minute: '2-digit' }).format(
-    new Date(iso),
-  );
+  new Intl.DateTimeFormat(locale, {
+    timeZone,
+    hour: 'numeric',
+    minute: '2-digit',
+    ...(hour12 === undefined ? {} : { hour12 }),
+  }).format(new Date(iso));

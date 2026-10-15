@@ -2,14 +2,11 @@
  * Team admin: settings, roster, join requests, invites, and permissions.
  */
 
-import * as Clipboard from 'expo-clipboard';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ScrollView } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { callerCanGrant, roleAllowedForAccount } from '@gameplan/rules';
 import {
-  TEAM_PERMISSIONS,
   TEAM_ROLES,
   type JoinRequest,
   type RolePermissions,
@@ -17,26 +14,31 @@ import {
   type TeamMember,
   type TeamRole,
 } from '@gameplan/types';
-import { joinRequestMessage, roleLabel } from '@/src/roles';
+import { JoinRequests } from '@/src/join-requests';
 import { useApp } from '@/src/state';
-import { Button, ErrorText, Field, TimeZoneField } from '@/src/ui';
+import { TeamInvites } from '@/src/team-invites';
+import { TeamPermissions } from '@/src/team-permissions';
+import { TeamRoster } from '@/src/team-roster';
+import { TeamColors } from '@/src/team-colors';
+import { ErrorText, Field, SubmitButton, TimeZoneField } from '@/src/ui';
 
 export default function TeamAdminScreen() {
   const { t } = useTranslation();
-  const router = useRouter();
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
-  const { api } = useApp();
+  const { api, setPreviewTheme } = useApp();
   const id = teamId ?? '';
   const [name, setName] = useState('');
   const [timeZone, setTimeZone] = useState('');
   const [primary, setPrimary] = useState('');
+  const [secondary, setSecondary] = useState('');
+  const [accent, setAccent] = useState('');
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [requests, setRequests] = useState<JoinRequest[]>([]);
   const [invites, setInvites] = useState<TeamInvite[]>([]);
   const [roles, setRoles] = useState<RolePermissions[]>([]);
-  const [joinRoles, setJoinRoles] = useState<Record<string, TeamRole>>({});
   const [callerRole, setCallerRole] = useState<TeamRole>('player');
   const [error, setError] = useState<string | undefined>();
+  const [ready, setReady] = useState(false);
 
   const load = async (): Promise<void> => {
     const team = await api.getTeam(id);
@@ -44,6 +46,8 @@ export default function TeamAdminScreen() {
     setName(team.name);
     setTimeZone(team.timeZone);
     setPrimary(team.theme?.primary ?? '');
+    setSecondary(team.theme?.secondary ?? '');
+    setAccent(team.theme?.accent ?? '');
     setMembers(await api.listMembers(id));
     try {
       setRequests(await api.listJoinRequests(id));
@@ -61,98 +65,34 @@ export default function TeamAdminScreen() {
     } catch {
       setRoles([]);
     }
+    setReady(true);
   };
 
   useEffect(() => {
     if (id.length === 0) return;
+    setReady(false);
     void load().catch((err: unknown) => setError(err instanceof Error ? err.message : 'load_failed'));
   }, [id]);
 
+  useEffect(() => {
+    if (!ready) return;
+    const theme = {
+      ...(primary.trim().length > 0 ? { primary: primary.trim() } : {}),
+      ...(secondary.trim().length > 0 ? { secondary: secondary.trim() } : {}),
+      ...(accent.trim().length > 0 ? { accent: accent.trim() } : {}),
+    };
+    setPreviewTheme(Object.keys(theme).length > 0 ? theme : undefined);
+  }, [ready, primary, secondary, accent, setPreviewTheme]);
+
+  useEffect(() => () => setPreviewTheme(undefined), [setPreviewTheme]);
+
   const saveSettings = async (): Promise<void> => {
-    setError(undefined);
-    try {
-      await api.updateTeam(id, {
-        name: name.trim(),
-        timeZone: timeZone.trim(),
-        ...(primary.trim().length > 0 ? { theme: { primary: primary.trim() } } : {}),
-      });
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'request_failed');
-    }
-  };
-
-  const rolesFor = (request: JoinRequest): TeamRole[] =>
-    TEAM_ROLES.filter((role) => {
-      if (!callerCanGrant(callerRole, role)) return false;
-      if (request.accountKind === undefined) return true;
-      const permissions = roles.find((row) => row.role === role)?.permissions ?? [];
-      return roleAllowedForAccount(request.accountKind, role, permissions);
+    await api.updateTeam(id, {
+      name: name.trim(),
+      timeZone: timeZone.trim(),
+      ...themePatch(primary, secondary, accent),
     });
-
-  const approve = async (request: JoinRequest): Promise<void> => {
-    const allowed = rolesFor(request);
-    const role =
-      joinRoles[request.requestId] ??
-      (allowed.includes('player') ? 'player' : allowed[allowed.length - 1]);
-    if (role === undefined) return;
-    try {
-      await api.approveJoinRequest(id, request.requestId, role);
-      await load();
-    } catch (err) {
-      setError(t(joinRequestMessage(err)));
-    }
-  };
-
-  const decline = async (request: JoinRequest): Promise<void> => {
-    try {
-      await api.rejectJoinRequest(id, request.requestId);
-      await load();
-    } catch (err) {
-      setError(t(joinRequestMessage(err)));
-    }
-  };
-
-  const createInvite = async (): Promise<void> => {
-    try {
-      const invite = await api.createInvite(id, 'player');
-      setInvites((current) => [invite, ...current]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'request_failed');
-    }
-  };
-
-  const toggle = (role: string, permission: RolePermissions['permissions'][number], checked: boolean): void => {
-    setRoles((current) =>
-      current.map((row) => {
-        if (row.role !== role) return row;
-        const permissions = checked
-          ? [...row.permissions, permission]
-          : row.permissions.filter((item) => item !== permission);
-        return { ...row, permissions };
-      }),
-    );
-  };
-
-  const savePermissions = async (): Promise<void> => {
-    const blocked = roles.some((row) =>
-      members.some(
-        (member) =>
-          member.role === row.role &&
-          member.accountKind !== undefined &&
-          !roleAllowedForAccount(member.accountKind, row.role, row.permissions),
-      ),
-    );
-    if (blocked) {
-      setError('minor_cannot_hold_manage_permissions');
-      return;
-    }
-    try {
-      const saved = await api.putPermissions(id, roles);
-      setRoles(saved.roles);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'request_failed');
-    }
+    await load();
   };
 
   return (
@@ -160,69 +100,43 @@ export default function TeamAdminScreen() {
       <ErrorText message={error} />
       <Field label={t('teams.team')} value={name} onChangeText={setName} />
       <TimeZoneField label={t('teams.timeZone')} value={timeZone} onChange={setTimeZone} />
-      <Field label={t('teamAdmin.primaryColor')} value={primary} onChangeText={setPrimary} placeholder="#0f766e" />
-      <Button label={t('common.save')} onPress={() => void saveSettings()} />
-
-      <Text className="mb-2 mt-4 text-lg font-semibold">{t('teamAdmin.roster')}</Text>
-      {members.map((member) => (
-        <Pressable
-          key={member.userId}
-          className="mb-2 rounded bg-white p-3"
-          onPress={() => router.push(`/teams/${id}/members/${member.userId}`)}
-        >
-          <Text>{member.displayName ?? member.userId}</Text>
-          <Text className="text-slate-500">{t(roleLabel(member.role))}</Text>
-        </Pressable>
-      ))}
-
-      <Text className="mb-2 mt-4 text-lg font-semibold">{t('teamAdmin.joinRequests')}</Text>
-      {requests.map((request) => (
-        <View key={request.requestId} className="mb-3 rounded bg-white p-3">
-          <Text>{request.displayName ?? request.userId}</Text>
-          <View className="my-2 flex-row flex-wrap">
-            {rolesFor(request).map((role) => (
-              <Pressable key={role} className="mr-2" onPress={() => setJoinRoles((current) => ({ ...current, [request.requestId]: role }))}>
-                <Text className={(joinRoles[request.requestId] ?? 'player') === role ? 'font-bold' : ''}>{t(roleLabel(role))}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <Button label={t('teamAdmin.approve')} onPress={() => void approve(request)} />
-          <Button label={t('teamAdmin.decline')} onPress={() => void decline(request)} color="#b91c1c" />
-        </View>
-      ))}
-
-      <Text className="mb-2 mt-2 text-lg font-semibold">{t('teamAdmin.inviteMembers')}</Text>
-      <Button label={t('teamAdmin.createInviteLink')} onPress={() => void createInvite()} />
-      {invites.map((invite) => (
-        <Pressable
-          key={invite.code}
-          className="mb-2 rounded bg-white p-3"
-          onPress={() => void Clipboard.setStringAsync(`${invite.code}`)}
-        >
-          <Text>{invite.code}</Text>
-          <Text className="text-slate-500">{t('common.copyLink')}</Text>
-        </Pressable>
-      ))}
-
-      {roles.length > 0 ? (
-        <View className="mb-8 mt-4">
-          <Text className="mb-2 text-lg font-semibold">{t('teamAdmin.permissions')}</Text>
-          {roles.map((row) => (
-            <View key={row.role} className="mb-3">
-              <Text className="font-semibold">{t(roleLabel(row.role))}</Text>
-              {TEAM_PERMISSIONS.map((permission) => {
-                const checked = row.permissions.includes(permission);
-                return (
-                  <Pressable key={permission} onPress={() => toggle(row.role, permission, !checked)}>
-                    <Text>{checked ? '☑' : '☐'} {permission}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          ))}
-          <Button label={t('common.save')} onPress={() => void savePermissions()} />
-        </View>
-      ) : null}
+      <TeamColors
+        primary={primary}
+        secondary={secondary}
+        accent={accent}
+        onChange={(next) => {
+          setPrimary(next.primary);
+          setSecondary(next.secondary);
+          setAccent(next.accent);
+        }}
+      />
+      <SubmitButton label={t('common.save')} onPress={saveSettings} />
+      <TeamRoster teamId={id} members={members} />
+      <JoinRequests
+        teamId={id}
+        requests={requests}
+        roles={roles}
+        callerRole={callerRole}
+        reload={load}
+        onError={setError}
+      />
+      <TeamInvites
+        teamId={id}
+        invites={invites}
+        setInvites={setInvites}
+        callerRole={callerRole}
+        onError={setError}
+      />
+      <TeamPermissions teamId={id} roles={roles} setRoles={setRoles} members={members} />
     </ScrollView>
   );
-}
+};
+
+const themePatch = (primary: string, secondary: string, accent: string): { theme?: { primary?: string; secondary?: string; accent?: string } } => {
+  const theme = {
+    ...(primary.trim().length > 0 ? { primary: primary.trim() } : {}),
+    ...(secondary.trim().length > 0 ? { secondary: secondary.trim() } : {}),
+    ...(accent.trim().length > 0 ? { accent: accent.trim() } : {}),
+  };
+  return Object.keys(theme).length > 0 ? { theme } : {};
+};

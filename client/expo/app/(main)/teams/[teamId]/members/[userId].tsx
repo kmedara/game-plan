@@ -4,12 +4,12 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { TeamMemberProfile } from '@gameplan/types';
 import { roleLabel } from '@/src/roles';
 import { useApp } from '@/src/state';
-import { ErrorText } from '@/src/ui';
+import { ErrorText, ProfilePhoto } from '@/src/ui';
 
 export default function MemberProfileScreen() {
   const { t } = useTranslation();
@@ -42,12 +42,14 @@ export default function MemberProfileScreen() {
   return (
     <View className="flex-1 px-4 pt-4">
       <ErrorText message={error} />
-      {photoUrl !== undefined ? <Image source={{ uri: photoUrl }} className="mb-3 h-24 w-24 rounded-full" /> : null}
-      <Text className="text-2xl font-bold">{member?.displayName}</Text>
-      <Text className="text-slate-600">{member === undefined ? '' : t(roleLabel(member.role))}</Text>
-      {member?.phoneNumber !== undefined ? <Text className="mt-2">{member.phoneNumber}</Text> : null}
+      <View className="mb-3">
+        <ProfilePhoto name={member?.displayName} uri={photoUrl} />
+      </View>
+      <Text className="text-2xl font-bold text-ink">{member?.displayName}</Text>
+      <Text className="text-muted">{member === undefined ? '' : t(roleLabel(member.role))}</Text>
+      {member?.phoneNumber !== undefined ? <Text className="mt-2 text-ink">{member.phoneNumber}</Text> : null}
       {member?.positions !== undefined && member.positions.length > 0 ? (
-        <Text className="mt-2">{member.positions.join(', ')}</Text>
+        <Text className="mt-2 text-ink">{member.positions.join(', ')}</Text>
       ) : null}
     </View>
   );

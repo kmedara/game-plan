@@ -13,10 +13,12 @@
     "@gameplan/client-session": "*",
     "@gameplan/rules": "*",
     "@gameplan/types": "*",
+    "@react-native-community/datetimepicker": "^9.2.1",
     "expo": "~57.0.27",
     "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.21",
     "expo-image-picker": "~57.0.20",
+    "expo-linear-gradient": "~57.0.2",
     "expo-linking": "~57.0.12",
     "expo-localization": "~57.0.2",
     "expo-notifications": "~57.0.22",
@@ -42,9 +44,9 @@
     "@testing-library/react-native": "^13.3.3",
     "@types/jest": "^29.5.14",
     "@types/react": "~19.2.2",
-    "react-test-renderer": "19.2.3",
     "jest": "^29.7.0",
     "jest-expo": "~57.0.0",
+    "react-test-renderer": "19.2.3",
     "typescript": "~5.9.2"
   }
 }

@@ -32,7 +32,7 @@ export const MapPicker = ({
   };
 
   return (
-    <View className="mb-3 h-48 overflow-hidden rounded-lg">
+    <View className="mb-3 h-48 overflow-hidden rounded-xl border border-line">
       <MapView
         style={{ height: 192, width: '100%' }}
         initialRegion={{ ...pin, latitudeDelta: 0.08, longitudeDelta: 0.08 }}
