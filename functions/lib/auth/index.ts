@@ -60,7 +60,6 @@ export {
 export { createLocalIdentityProvider } from "./local-provider.js";
 export {
   createCognitoIdentityProvider,
-  emailForAccessToken,
   resetCognitoClient,
 } from "./cognito-provider.js";
 export {
