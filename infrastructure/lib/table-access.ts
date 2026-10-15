@@ -47,8 +47,9 @@ export type PartitionGrant = {
 /**
  * Allows item actions only when every partition key matches `prefixes`.
  *
- * `StringLike` rejects a call that omits the key. `ForAllValues` rejects a
- * transaction that mixes in a prefix outside the list.
+ * `Null` rejects a call that omits the key. `ForAllValues` rejects a
+ * transaction that mixes in a prefix outside the list. A plain `StringLike`
+ * never matches this multi-value key, so it would deny every item action.
  *
  * @param fn - The function role to extend.
  * @param table - The product table.
@@ -67,8 +68,8 @@ const allowPrefixes = (
       actions: [...actions],
       resources: [table.tableArn],
       conditions: {
-        StringLike: { 'dynamodb:LeadingKeys': [...prefixes] },
         'ForAllValues:StringLike': { 'dynamodb:LeadingKeys': [...prefixes] },
+        Null: { 'dynamodb:LeadingKeys': 'false' },
       },
     }),
   );
