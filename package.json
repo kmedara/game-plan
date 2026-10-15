@@ -25,6 +25,8 @@
     "typecheck": "npm run generate:types && tsc -p tsconfig.json --noEmit && tsc -p infrastructure/tsconfig.json --noEmit && tsc -p client/session/tsconfig.json --noEmit && npm run typecheck -w @gameplan/expo",
     "client:start": "npm start -w @gameplan/expo -- --web --port 4200",
     "client:build": "npm run build -w @gameplan/expo",
+    "inspect:api": "node scripts/inspect-bundles.mjs api",
+    "inspect:client": "node scripts/inspect-bundles.mjs client",
     "local-dynamo": "npx dynamodb-admin --dynamo-endpoint http://localhost:8000",
     "synth": "npm run synth -w @gameplan/infrastructure"
   },
