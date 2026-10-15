@@ -2,7 +2,10 @@
  * Cognito Hosted UI OAuth routes under `/identity/oauth/*`.
  */
 
-import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
+import type {
+  APIGatewayProxyEventV2,
+  APIGatewayProxyStructuredResultV2,
+} from "aws-lambda";
 import {
   buildAuthorizeUrl,
   buildLogoutUrl,
@@ -13,10 +16,10 @@ import {
   getProfile,
   readOAuthIdClaims,
   refreshSetCookie,
-} from '../../../lib/auth/index.js';
-import { readCookie, redirect } from '../../../lib/http.js';
-import type { UserProfile } from '@gameplan/types';
-import { issueOAuthHandoff } from '../../../lib/oauth-handoff.js';
+} from "../../../lib/auth/index.js";
+import { readCookie, redirect } from "../../../lib/http.js";
+import type { UserProfile } from "@gameplan/types";
+import { issueOAuthHandoff } from "../../../lib/oauth-handoff.js";
 import {
   NATIVE_AUTH_REDIRECT,
   OAUTH_NATIVE_COOKIE,
@@ -25,7 +28,7 @@ import {
   OAUTH_VERIFIER_COOKIE,
   oauthClearCookie,
   oauthSetCookie,
-} from './oauth-cookies.js';
+} from "./oauth-cookies.js";
 
 /**
  * Parses an allowlisted return URL for post-login redirects.
@@ -34,10 +37,9 @@ import {
  * @returns A safe absolute URL on the client origin.
  */
 const resolveReturnTo = (raw: string | undefined): string => {
-  const clientOrigin = (process.env.CLIENT_ORIGIN ?? 'http://localhost:4200').replace(
-    /\/+$/u,
-    '',
-  );
+  const clientOrigin = (
+    process.env.CLIENT_ORIGIN ?? "http://localhost:4200"
+  ).replace(/\/+$/u, "");
   if (raw === undefined || raw.length === 0) return `${clientOrigin}/schedule`;
   try {
     const url = new URL(raw);
@@ -57,7 +59,7 @@ const resolveReturnTo = (raw: string | undefined): string => {
 export const handleOAuthLogin = async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyStructuredResultV2> => {
-  const native = event.queryStringParameters?.delivery === 'native';
+  const native = event.queryStringParameters?.delivery === "native";
   const returnTo = resolveReturnTo(event.queryStringParameters?.returnTo);
   const state = generateOAuthState();
   const { verifier, challenge } = generatePkcePair();
@@ -66,7 +68,7 @@ export const handleOAuthLogin = async (
     oauthSetCookie(OAUTH_STATE_COOKIE, state),
     oauthSetCookie(OAUTH_VERIFIER_COOKIE, verifier),
     oauthSetCookie(OAUTH_RETURN_COOKIE, returnTo),
-    oauthSetCookie(OAUTH_NATIVE_COOKIE, native ? '1' : '0'),
+    oauthSetCookie(OAUTH_NATIVE_COOKIE, native ? "1" : "0"),
   ]);
 };
 
@@ -79,10 +81,9 @@ export const handleOAuthLogin = async (
 export const handleOAuthCallback = async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyStructuredResultV2> => {
-  const clientOrigin = (process.env.CLIENT_ORIGIN ?? 'http://localhost:4200').replace(
-    /\/+$/u,
-    '',
-  );
+  const clientOrigin = (
+    process.env.CLIENT_ORIGIN ?? "http://localhost:4200"
+  ).replace(/\/+$/u, "");
   const clearHandshake = [
     oauthClearCookie(OAUTH_STATE_COOKIE),
     oauthClearCookie(OAUTH_VERIFIER_COOKIE),
@@ -96,7 +97,7 @@ export const handleOAuthCallback = async (
   const expectedState = readCookie(event, OAUTH_STATE_COOKIE);
   const verifier = readCookie(event, OAUTH_VERIFIER_COOKIE);
   const returnTo = resolveReturnTo(readCookie(event, OAUTH_RETURN_COOKIE));
-  const native = readCookie(event, OAUTH_NATIVE_COOKIE) === '1';
+  const native = readCookie(event, OAUTH_NATIVE_COOKIE) === "1";
   const nativeError = (reason: string): APIGatewayProxyStructuredResultV2 =>
     redirect(
       `${NATIVE_AUTH_REDIRECT}?error=${encodeURIComponent(reason)}`,
@@ -118,28 +119,35 @@ export const handleOAuthCallback = async (
     verifier === undefined ||
     state !== expectedState
   ) {
-    if (native) return nativeError('invalid_state');
-    return redirect(`${clientOrigin}/login?error=invalid_state`, clearHandshake);
+    if (native) return nativeError("invalid_state");
+    return redirect(
+      `${clientOrigin}/login?error=invalid_state`,
+      clearHandshake,
+    );
   }
 
   try {
     const tokens = await exchangeAuthorizationCode({ code, verifier });
     const claims = readOAuthIdClaims(tokens.idToken);
     const profile = await getProfile(claims.userId);
-    const needsProfile = profile === undefined || profile.birthday === undefined;
+    const needsProfile =
+      profile === undefined || profile.birthday === undefined;
     const destination = needsProfile
       ? `${clientOrigin}/complete-profile`
       : returnTo;
 
     if (tokens.refreshToken === undefined) {
-      if (native) return nativeError('missing_refresh_token');
-      return redirect(`${clientOrigin}/login?error=missing_refresh_token`, clearHandshake);
+      if (native) return nativeError("missing_refresh_token");
+      return redirect(
+        `${clientOrigin}/login?error=missing_refresh_token`,
+        clearHandshake,
+      );
     }
 
     if (native) {
       const handoff = await issueOAuthHandoff(
         tokens.refreshToken,
-        needsProfile ? 'complete-profile' : 'teams',
+        needsProfile ? "complete-profile" : "teams",
       );
       return redirect(
         `${NATIVE_AUTH_REDIRECT}?code=${encodeURIComponent(handoff)}`,
@@ -151,9 +159,13 @@ export const handleOAuthCallback = async (
       ...clearHandshake,
       refreshSetCookie(tokens.refreshToken),
     ]);
-  } catch {
-    if (native) return nativeError('sign_in_failed');
-    return redirect(`${clientOrigin}/login?error=sign_in_failed`, clearHandshake);
+  } catch (err) {
+    console.error("oauth callback failed", err);
+    if (native) return nativeError("sign_in_failed");
+    return redirect(
+      `${clientOrigin}/login?error=sign_in_failed`,
+      clearHandshake,
+    );
   }
 };
 
@@ -168,7 +180,7 @@ export const handleOAuthLogout = async (
 ): Promise<APIGatewayProxyStructuredResultV2> => {
   const returnTo = resolveReturnTo(
     event.queryStringParameters?.returnTo ??
-      `${(process.env.CLIENT_ORIGIN ?? 'http://localhost:4200').replace(/\/+$/u, '')}/login`,
+      `${(process.env.CLIENT_ORIGIN ?? "http://localhost:4200").replace(/\/+$/u, "")}/login`,
   );
   const clear = [clearRefreshSetCookie()];
 
@@ -194,7 +206,7 @@ export const pendingProfile = (
 ): UserProfile => ({
   userId,
   email: email ?? `${userId}@users.local`,
-  displayName: displayName ?? 'New user',
-  accountKind: 'adult',
+  displayName: displayName ?? "New user",
+  accountKind: "adult",
   needsProfileCompletion: true,
 });
