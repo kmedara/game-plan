@@ -8,6 +8,7 @@ export { handleGetTeam } from './get.js';
 export {
   handleAcceptInvite,
   handleCreateInvite,
+  handleDeleteInvite,
   handleGetInvite,
   handleListInvites,
 } from './invites.js';

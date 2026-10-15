@@ -31,6 +31,7 @@ describe('mapTeamsError', () => {
     expect(mapTeamsError(new Error('manage_permissions_required_for_team_admin'))?.statusCode).toBe(
       400,
     );
+    expect(mapTeamsError(new Error('team_admin_permissions_locked'))?.statusCode).toBe(400);
     expect(mapTeamsError(new Error('invalid_body'))?.statusCode).toBe(400);
     expect(mapTeamsError(new Error('too_many_positions'))?.statusCode).toBe(400);
     expect(mapTeamsError(new Error('TransactionCanceledException'))?.statusCode).toBe(409);

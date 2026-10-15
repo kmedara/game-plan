@@ -9,7 +9,7 @@ import { createReadStream } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { openApiDocument } from '@gameplan/schemas';
+import { openApiDocument } from '@gameplan/schemas/openapi';
 
 /** Folder that holds the prebuilt Swagger UI files. */
 const require = createRequire(import.meta.url);

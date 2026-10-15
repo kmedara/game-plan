@@ -120,8 +120,8 @@ export const teamMemberSk = (userId: UserId): string => `MEMBER#${userId}`;
 /** Sort-key prefix for every roster member on a team. */
 export const TEAM_MEMBER_SK_PREFIX = 'MEMBER#' as const;
 
-/** Sort key for an invite row under the team partition. */
-export const teamInviteSk = (code: InviteCode): string => `INVITE#${code}`;
+/** Sort key for the one invite row of a role under the team partition. */
+export const teamInviteSk = (role: string): string => `INVITE#${role}`;
 
 /** Sort-key prefix for every invite on a team. */
 export const TEAM_INVITE_SK_PREFIX = 'INVITE#' as const;

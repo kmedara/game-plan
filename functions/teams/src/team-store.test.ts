@@ -197,7 +197,25 @@ describe('team-store edge cases', () => {
 
     const outsider = randomUUID();
     seedProfile(outsider, 'adult');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
+    process.env.FANOUT_DELIVER_URL = 'http://127.0.0.1:9/fanout/deliver';
     await createJoinRequest(team.teamId, outsider);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:9/fanout/deliver',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    const sent = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      type: string;
+      teamName: string;
+      requesterDisplayName: string;
+    };
+    expect(sent).toMatchObject({
+      type: 'join_requested',
+      teamName: 'Hawks',
+      requesterDisplayName: 'Test User',
+    });
+    delete process.env.FANOUT_DELIVER_URL;
+    fetchMock.mockRestore();
     await expect(createJoinRequest(team.teamId, outsider)).rejects.toThrow('join_request_exists');
   });
 

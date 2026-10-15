@@ -4,13 +4,15 @@
 
 import { createInviteBodySchema } from '@gameplan/schemas';
 import { assertCallerCanGrant } from '@gameplan/rules';
+import { TEAM_ROLES, type TeamRole } from '@gameplan/types';
 import { requireMembership, requirePermission, requireUser } from '../../../lib/auth/index.js';
-import { json } from '../../../lib/http.js';
+import { badRequest, json } from '../../../lib/http.js';
 import { route, withBodyValidation } from '../../../lib/pipeline.js';
 import { assertAccountMayHoldRole } from '../../../lib/role-rules.js';
 import {
   acceptInvite,
   createInvite,
+  deleteInvite,
   getInviteByCode,
   listInvites,
   requireTeam,
@@ -73,6 +75,29 @@ export const handleListInvites = route(
         createdAt: invite.createdAt,
       })),
     });
+  },
+);
+
+/**
+ * Handles `DELETE /teams/:teamId/invites/:role`.
+ *
+ * @param event - The HTTP API event.
+ * @param teamId - The team id from the path.
+ * @param role - The role whose invite code to delete.
+ * @returns An empty response when the code is gone.
+ */
+export const handleDeleteInvite = route(
+  ['teamId', 'role'],
+  withTeamsErrors(),
+  requireUser(),
+  requirePermission('invite_members'),
+  requireMembership(),
+  async ({ teamId, role, member }) => {
+    if (!TEAM_ROLES.includes(role as TeamRole)) return badRequest('invalid_body');
+    const inviteRole = role as TeamRole;
+    assertCallerCanGrant(member.role, inviteRole);
+    await deleteInvite(teamId, inviteRole);
+    return { statusCode: 204 };
   },
 );
 

@@ -396,7 +396,7 @@ describe('teams handler (in-memory)', () => {
     );
     expect(stripManage.statusCode).toBe(400);
     expect(bodyOf(stripManage)).toEqual({
-      error: 'manage_permissions_required_for_team_admin',
+      error: 'team_admin_permissions_locked',
     });
   });
 
@@ -605,16 +605,23 @@ describe('teams handler (in-memory)', () => {
     );
     const teamId = bodyOf(created).teamId as string;
 
-    await handler(
+    const parent = await handler(
       httpEvent('POST', `/teams/${teamId}/invites`, {
         headers: { authorization: admin.authorization },
         body: { role: 'parent' },
       }),
     );
+    const parentAgain = await handler(
+      httpEvent('POST', `/teams/${teamId}/invites`, {
+        headers: { authorization: admin.authorization },
+        body: { role: 'parent' },
+      }),
+    );
+    expect(bodyOf(parentAgain).code).toBe(bodyOf(parent).code);
     await handler(
       httpEvent('POST', `/teams/${teamId}/invites`, {
         headers: { authorization: admin.authorization },
-        body: {},
+        body: { role: 'player' },
       }),
     );
     const invites = await handler(
@@ -624,6 +631,24 @@ describe('teams handler (in-memory)', () => {
     );
     expect(invites.statusCode).toBe(200);
     expect((bodyOf(invites).invites as unknown[]).length).toBe(2);
+    expect((bodyOf(invites).invites as Array<{ role: string }>).map((invite) => invite.role).sort()).toEqual([
+      'parent',
+      'player',
+    ]);
+    const removed = await handler(
+      httpEvent('DELETE', `/teams/${teamId}/invites/parent`, {
+        headers: { authorization: admin.authorization },
+      }),
+    );
+    expect(removed.statusCode).toBe(204);
+    const afterDelete = await handler(
+      httpEvent('GET', `/teams/${teamId}/invites`, {
+        headers: { authorization: admin.authorization },
+      }),
+    );
+    expect((bodyOf(afterDelete).invites as Array<{ role: string }>).map((invite) => invite.role)).toEqual([
+      'player',
+    ]);
 
     const join = await handler(
       httpEvent('POST', `/teams/${teamId}/join-requests`, {

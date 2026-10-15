@@ -4,7 +4,6 @@
 
 export { z, type ZodType } from './zod.js';
 export { MAX_UPLOAD_BYTES } from './limits.js';
-export { openApiDocument } from './openapi.js';
 export {
   DEFAULT_ROLE_PERMISSIONS,
   TEAM_PERMISSIONS,

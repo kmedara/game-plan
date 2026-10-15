@@ -269,6 +269,9 @@ const AREAS: Record<string, AreaSpec> = {
           response: teamInviteSchema,
         },
       },
+      '/teams/{teamId}/invites/{role}': {
+        delete: { summary: 'Delete the invite code for a role' },
+      },
       '/teams/{teamId}/join-requests': {
         get: { summary: 'List pending join requests', response: joinRequestListSchema },
         post: { summary: 'Ask to join the team', response: joinRequestCreatedSchema },

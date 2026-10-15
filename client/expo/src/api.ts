@@ -275,6 +275,10 @@ export class ApiClient {
     return this.request('POST', `/teams/${teamId}/invites`, role === undefined ? {} : { role });
   }
 
+  async deleteInvite(teamId: string, role: TeamInvite['role']): Promise<void> {
+    await this.request('DELETE', `/teams/${teamId}/invites/${encodeURIComponent(role)}`);
+  }
+
   async getInvite(code: string): Promise<InvitePreview> {
     return this.request('GET', `/teams/invite/${encodeURIComponent(code)}`);
   }

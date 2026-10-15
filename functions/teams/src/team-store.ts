@@ -35,6 +35,8 @@ import {
   userPk,
   userTeamSk,
 } from "../../lib/dynamo/index.js";
+import { getProfile } from "../../lib/auth/profile.js";
+import { enqueueFanout } from "../../lib/fanout-enqueue.js";
 import { TABLE_NAME } from "../../lib/names.js";
 import { loadRolePermissionMatrix, normalizeRolePermissions } from "../../lib/permissions.js";
 
@@ -680,6 +682,14 @@ export const updateRolePermissions = async (
   const next = await loadRolePermissionMatrix(teamId);
 
   for (const entry of roles) {
+    if (entry.role === 'team_admin') {
+      const proposed = [...new Set(entry.permissions)];
+      const current = next.team_admin;
+      const unchanged =
+        proposed.length === current.length && proposed.every((permission) => current.includes(permission));
+      if (!unchanged) throw new Error('team_admin_permissions_locked');
+      continue;
+    }
     next[entry.role] = normalizeRolePermissions(entry.role, entry.permissions);
   }
 
@@ -702,6 +712,7 @@ export const updateRolePermissions = async (
 
 /**
  * Creates a multi-use invite under the team and the code lookup partition.
+ * A team keeps one invite per role; a second create returns the existing link.
  *
  * @param input - Team, creator, and role granted on accept.
  * @returns The invite rows' shared fields.
@@ -712,6 +723,8 @@ export const createInvite = async (input: {
   role: TeamRole;
 }): Promise<InviteItem> => {
   await requireTeam(input.teamId);
+  const existing = (await listInvites(input.teamId)).find((invite) => invite.role === input.role);
+  if (existing !== undefined) return existing;
   const code = newInviteCode();
   const createdAt = new Date().toISOString();
   const expiresAt = new Date(Date.now() + INVITE_TTL_SECONDS * 1000).toISOString();
@@ -726,7 +739,7 @@ export const createInvite = async (input: {
   };
   const teamRow: InviteItem = {
     [TABLE_PK]: teamPk(input.teamId),
-    [TABLE_SK]: teamInviteSk(code),
+    [TABLE_SK]: teamInviteSk(input.role),
     ...shared,
   };
   const lookupRow: InviteItem = {
@@ -734,10 +747,23 @@ export const createInvite = async (input: {
     [TABLE_SK]: inviteMetaSk(),
     ...shared,
   };
-  await transactWrite([
-    { Put: { TableName: TABLE_NAME, Item: teamRow } },
-    { Put: { TableName: TABLE_NAME, Item: lookupRow } },
-  ]);
+  try {
+    await transactWrite([
+      {
+        Put: {
+          TableName: TABLE_NAME,
+          Item: teamRow,
+          ConditionExpression: "attribute_not_exists(#pk)",
+          ExpressionAttributeNames: { "#pk": TABLE_PK },
+        },
+      },
+      { Put: { TableName: TABLE_NAME, Item: lookupRow } },
+    ]);
+  } catch (err) {
+    const raced = (await listInvites(input.teamId)).find((invite) => invite.role === input.role);
+    if (raced !== undefined) return raced;
+    throw err;
+  }
   return teamRow;
 };
 
@@ -761,6 +787,34 @@ export const getInviteByCode = async (code: string): Promise<InviteItem> => {
  */
 export const listInvites = async (teamId: string): Promise<InviteItem[]> =>
   queryBySkPrefix<InviteItem>(teamPk(teamId), TEAM_INVITE_SK_PREFIX);
+
+/**
+ * Deletes every invite for a role, including older rows stored under the code.
+ *
+ * @param teamId - The team id.
+ * @param role - The role whose code should stop working.
+ */
+export const deleteInvite = async (teamId: string, role: TeamRole): Promise<void> => {
+  await requireTeam(teamId);
+  const invites = (await listInvites(teamId)).filter((invite) => invite.role === role);
+  if (invites.length === 0) throw new Error("invite_not_found");
+  await transactWrite(
+    invites.flatMap((invite) => [
+      {
+        Delete: {
+          TableName: TABLE_NAME,
+          Key: { [TABLE_PK]: invite.PK, [TABLE_SK]: invite.SK },
+        },
+      },
+      {
+        Delete: {
+          TableName: TABLE_NAME,
+          Key: { [TABLE_PK]: invitePk(invite.code), [TABLE_SK]: inviteMetaSk() },
+        },
+      },
+    ]),
+  );
+};
 
 /**
  * Redeems an invite: adds the user to the roster and the default chat.
@@ -804,7 +858,7 @@ export const createJoinRequest = async (
   teamId: string,
   userId: string,
 ): Promise<JoinRequestItem> => {
-  await requireTeam(teamId);
+  const team = await requireTeam(teamId);
   if ((await getMembership(teamId, userId)) !== undefined) {
     throw new Error("already_a_member");
   }
@@ -826,6 +880,16 @@ export const createJoinRequest = async (
   await putItem(item, {
     conditionExpression: "attribute_not_exists(#pk)",
     expressionAttributeNames: { "#pk": TABLE_PK },
+  });
+
+  const profile = await getProfile(userId);
+  const requesterDisplayName = profile?.displayName?.trim() || "Someone";
+  await enqueueFanout({
+    type: "join_requested",
+    teamId,
+    requestId,
+    teamName: team.name.slice(0, 200),
+    requesterDisplayName: requesterDisplayName.slice(0, 100),
   });
   return item;
 };

@@ -13,6 +13,7 @@ import {
   handleAssignRole,
   handleCreateInvite,
   handleCreateJoinRequest,
+  handleDeleteInvite,
   handleCreateTeam,
   handleGetInvite,
   handleGetMember,
@@ -107,6 +108,9 @@ export const handler = logHttpFailure(async (
     if (parts[1] === 'invites') {
       if (method === 'POST' && parts.length === 2) return handleCreateInvite(event, teamId);
       if (method === 'GET' && parts.length === 2) return handleListInvites(event, teamId);
+      if (method === 'DELETE' && parts.length === 3 && parts[2] !== undefined) {
+        return handleDeleteInvite(event, teamId, parts[2]);
+      }
     }
 
     if (parts[1] === 'join-requests') {

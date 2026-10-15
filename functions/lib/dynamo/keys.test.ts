@@ -58,7 +58,7 @@ describe('dynamo keys', () => {
     expect(teamMetaSk()).toBe('META');
     expect(rolePermissionsSk('coach')).toBe('ROLE#coach');
     expect(teamMemberSk('u1')).toBe('MEMBER#u1');
-    expect(teamInviteSk('code')).toBe('INVITE#code');
+    expect(teamInviteSk('player')).toBe('INVITE#player');
     expect(joinRequestSk('req-1')).toBe('JOIN#req-1');
     expect(eventSk('evt-1')).toBe('EVT#evt-1');
     expect(userChatSk('c1')).toBe('CHAT#c1');

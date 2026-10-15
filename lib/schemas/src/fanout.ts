@@ -30,6 +30,15 @@ export const fanoutJobSchema = z.discriminatedUnion('type', [
       attachmentKeys: z.array(z.string().min(1).max(512)).optional(),
     })
     .strict(),
+  z
+    .object({
+      type: z.literal('join_requested'),
+      teamId: z.string().min(1),
+      requestId: z.string().min(1),
+      teamName: z.string().min(1).max(200),
+      requesterDisplayName: displayNameSchema,
+    })
+    .strict(),
 ]);
 
 /** Inferred type for {@link fanoutJobSchema}. */

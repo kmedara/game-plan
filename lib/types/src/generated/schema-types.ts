@@ -183,6 +183,13 @@ export type FanoutJob =
       body: string;
       createdAt: string;
       attachmentKeys?: string[];
+    }
+  | {
+      type: 'join_requested';
+      teamId: string;
+      requestId: string;
+      teamName: string;
+      requesterDisplayName: string;
     };
 
 export type InvitePreview = {
