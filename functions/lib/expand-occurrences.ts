@@ -6,7 +6,7 @@
  */
 
 import * as rruleNamespace from 'rrule';
-import type { RRule as RRuleClass } from 'rrule';
+import type { Frequency, RRule as RRuleClass, Weekday } from 'rrule';
 import type { RecurrenceRule } from '@gameplan/types';
 
 /**
@@ -21,9 +21,6 @@ const RRule: typeof RRuleClass = (() => {
   if (fromDefault === undefined) throw new Error('rrule_unavailable');
   return fromDefault;
 })();
-
-type Frequency = (typeof RRule)['DAILY'];
-type Weekday = (typeof RRule)['MO'];
 
 /** Max length of a client-requested schedule window (about three months). */
 export const MAX_SCHEDULE_WINDOW_MS = 92 * 24 * 60 * 60 * 1000;
