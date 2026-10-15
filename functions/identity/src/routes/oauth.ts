@@ -165,6 +165,7 @@ export const handleOAuthCallback = async (
       area: functionArea(),
       route: "GET /identity/oauth/callback",
       msg: errorMessage(err),
+      error: err,
     });
     if (native) return nativeError("sign_in_failed");
     return redirect(

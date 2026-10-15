@@ -48,7 +48,12 @@ describe("route pipeline", () => {
       requestContext: { http: { method: "GET", path: "/teams" } },
     } as APIGatewayProxyEventV2);
     expect(errorSpy).toHaveBeenCalledWith(
-      JSON.stringify({ area: "teams", route: "GET /teams", msg: "boom" }),
+      JSON.stringify({
+        area: "teams",
+        route: "GET /teams",
+        msg: "boom",
+        error: JSON.stringify(new Error("boom")),
+      }),
     );
     errorSpy.mockRestore();
     if (previous === undefined) delete process.env.AREA;
@@ -95,6 +100,7 @@ describe("route pipeline", () => {
   });
 
   it("maps a throw from a later step", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const handle = route(
       withMappedErrors(() => json(418, { error: "mapped" })),
       async () => {
@@ -105,6 +111,15 @@ describe("route pipeline", () => {
     await expect(handle(httpEvent())).resolves.toEqual(
       json(418, { error: "mapped" }),
     );
+    expect(errorSpy).toHaveBeenCalledWith(
+      JSON.stringify({
+        area: "unknown",
+        route: "POST /",
+        msg: "nope",
+        error: JSON.stringify(new Error("nope")),
+      }),
+    );
+    errorSpy.mockRestore();
   });
 
   it("returns 400 and does not call the handler when the body is invalid", async () => {

@@ -35,6 +35,7 @@ export const handleSqs = async (event: SQSEvent): Promise<SQSBatchResponse> => {
         area: functionArea(),
         route: 'sqs',
         msg: errorMessage(error),
+        error,
       });
       batchItemFailures.push({ itemIdentifier: record.messageId });
     }

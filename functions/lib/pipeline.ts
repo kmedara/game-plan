@@ -113,15 +113,15 @@ export const withMappedErrors = (
     try {
       return await next(ctx);
     } catch (error) {
-      options.onError?.(error);
-      const mapped = mapError(error);
-      if (mapped !== undefined) return mapped;
       logError({
         area: functionArea(),
         route: httpRoute(ctx.event),
         msg: errorMessage(error),
-        error: error,
+        error,
       });
+      options.onError?.(error);
+      const mapped = mapError(error);
+      if (mapped !== undefined) return mapped;
       options.onUnmapped?.(error);
       return (
         options.fallback?.(error) ?? json(500, { error: "internal_error" })

@@ -204,7 +204,12 @@ describe('fanout handler SQS', () => {
 
     expect(result).toEqual({ batchItemFailures: [{ itemIdentifier: 'fail-1' }] });
     expect(errorLog).toHaveBeenCalledWith(
-      JSON.stringify({ area: 'unknown', route: 'sqs', msg: 'boom' }),
+      JSON.stringify({
+        area: 'unknown',
+        route: 'sqs',
+        msg: 'boom',
+        error: JSON.stringify(new Error('boom')),
+      }),
     );
     errorLog.mockRestore();
   });
@@ -225,7 +230,12 @@ describe('fanout handler SQS', () => {
     await handler(event);
 
     expect(errorLog).toHaveBeenCalledWith(
-      JSON.stringify({ area: 'unknown', route: 'sqs', msg: 'plain failure' }),
+      JSON.stringify({
+        area: 'unknown',
+        route: 'sqs',
+        msg: 'plain failure',
+        error: JSON.stringify('plain failure'),
+      }),
     );
     errorLog.mockRestore();
   });
