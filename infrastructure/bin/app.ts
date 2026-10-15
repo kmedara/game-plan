@@ -32,14 +32,16 @@ const domain = definedString(process.env.HOSTED_ZONE_NAME) ?? definedString(proc
 const deployEnv = definedString(process.env.DEPLOY_ENV);
 const derived = domain !== undefined && deployEnv !== undefined ? publicUrlsFor(deployEnv, domain) : undefined;
 
+const localCallback = 'http://localhost:3000/identity/oauth/callback';
+const localLogout = 'http://localhost:4200/login';
 const callbackUrls = derived !== undefined
-  ? [derived.callbackUrl]
+  ? [derived.callbackUrl, localCallback]
   : (urlListFromUnknown(app.node.tryGetContext('callbackUrls')) ??
-    splitUrlList(process.env.CALLBACK_URLS) ?? ['http://localhost:3000/identity/oauth/callback']);
+    splitUrlList(process.env.CALLBACK_URLS) ?? [localCallback]);
 const logoutUrls = derived !== undefined
-  ? [derived.logoutUrl]
+  ? [derived.logoutUrl, localLogout]
   : (urlListFromUnknown(app.node.tryGetContext('logoutUrls')) ??
-    splitUrlList(process.env.LOGOUT_URLS) ?? ['http://localhost:4200/', 'http://localhost:4200/login']);
+    splitUrlList(process.env.LOGOUT_URLS) ?? ['http://localhost:4200/', localLogout]);
 
 const social = {
   googleClientId: contextOrEnv('googleClientId', 'GOOGLE_CLIENT_ID'),
