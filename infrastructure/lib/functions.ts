@@ -47,6 +47,7 @@ export const areaEntry = (area: string, file = "handler.ts"): string =>
  * Creates one Node.js 22 Lambda with a dedicated log group.
  *
  * Staging keeps logs for one day. Other environments keep them for one month.
+ * Active tracing records each invocation because HTTP API stages cannot enable X-Ray.
  *
  * @param scope - The CDK construct that owns the function.
  * @param id - The construct id and the suffix of the function name.
@@ -85,6 +86,7 @@ export const createFunction = (
     timeout: cdk.Duration.seconds(timeoutSeconds),
     environment: { ...environment, AREA: id },
     logGroup,
+    tracing: lambda.Tracing.ACTIVE,
     bundling,
   });
 };
