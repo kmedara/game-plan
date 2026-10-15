@@ -110,6 +110,11 @@ const fetched = new Map();
 for (const [exportName, key] of Object.entries(EXPORTS)) {
   fetched.set(key, exportValue(exportName));
 }
+const hostedUi = fetched.get('COGNITO_HOSTED_UI_DOMAIN') ?? '';
+if (hostedUi !== '' && !hostedUi.includes('.')) {
+  const cognitoRegion = fetched.get('COGNITO_REGION') || region;
+  fetched.set('COGNITO_HOSTED_UI_DOMAIN', `${hostedUi}.auth.${cognitoRegion}.amazoncognito.com`);
+}
 const missingMaps = [];
 for (const [suffix, key] of Object.entries(PARAMETERS)) {
   const value = parameterValue(`${prefix}/${suffix}`);
