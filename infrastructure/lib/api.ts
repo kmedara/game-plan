@@ -263,9 +263,17 @@ export class Api extends Construct {
         methods: [apigwv2.HttpMethod.GET],
         integration,
       });
+      // ANY also matches OPTIONS and is more specific than the CORS preflight route
+      // `OPTIONS /{proxy+}`, so a preflight would hit the Lambda and return 404.
       this.httpApi.addRoutes({
         path: `/${area}/{proxy+}`,
-        methods: [apigwv2.HttpMethod.ANY],
+        methods: [
+          apigwv2.HttpMethod.GET,
+          apigwv2.HttpMethod.POST,
+          apigwv2.HttpMethod.PUT,
+          apigwv2.HttpMethod.PATCH,
+          apigwv2.HttpMethod.DELETE,
+        ],
         integration,
         ...(PUBLIC_HTTP.has(area) ? {} : { authorizer: httpAuthorizer }),
       });
