@@ -9,6 +9,7 @@ import {
   CognitoIdentityProviderClient,
   ConfirmSignUpCommand,
   ExpiredCodeException,
+  GetUserCommand,
   InitiateAuthCommand,
   InvalidParameterException,
   LimitExceededException,
@@ -65,6 +66,26 @@ const getCognitoClient = (): CognitoIdentityProviderClient => {
  */
 export const resetCognitoClient = (): void => {
   cognitoClient = undefined;
+};
+
+/**
+ * Reads the email attribute for an access token.
+ *
+ * Cognito access tokens do not include `email`. Hosted UI sign-in still has
+ * the attribute on the user record, which `GetUser` returns.
+ *
+ * @param accessToken - A Cognito access token.
+ * @returns The email, or `undefined` when Cognito has none.
+ */
+export const emailForAccessToken = async (
+  accessToken: string,
+): Promise<string | undefined> => {
+  const user = await getCognitoClient().send(
+    new GetUserCommand({ AccessToken: accessToken }),
+  );
+  const email = user.UserAttributes?.find((attribute) => attribute.Name === 'email')?.Value;
+  const trimmed = email?.trim();
+  return trimmed === undefined || trimmed.length === 0 ? undefined : trimmed;
 };
 
 /**

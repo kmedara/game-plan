@@ -3,7 +3,14 @@
  */
 
 import { completeProfileBodySchema } from '@gameplan/schemas';
-import { getProfile, putProfile, toUserProfile, verifyAuthHeader } from '../../../lib/auth/index.js';
+import {
+  emailForAccessToken,
+  getProfile,
+  isCognitoConfigured,
+  putProfile,
+  toUserProfile,
+  verifyAuthHeader,
+} from '../../../lib/auth/index.js';
 import { accountKindFromBirthday } from '@gameplan/rules';
 import { badRequest, headerOf, json } from '../../../lib/http.js';
 import { route, withBodyValidation } from '../../../lib/pipeline.js';
@@ -30,7 +37,23 @@ export const handleCompleteProfile = route(
       return badRequest('invalid_birthday');
     }
 
-    const email = auth.email ?? existing?.email;
+    const tokenEmail = auth.email?.trim();
+    const storedEmail = existing?.email?.trim();
+    let email =
+      tokenEmail !== undefined && tokenEmail.length > 0
+        ? tokenEmail
+        : storedEmail !== undefined && storedEmail.length > 0
+          ? storedEmail
+          : undefined;
+    if (email === undefined && isCognitoConfigured()) {
+      const authorization = headerOf(event, 'authorization');
+      const accessToken = authorization?.startsWith('Bearer ')
+        ? authorization.slice('Bearer '.length)
+        : undefined;
+      if (accessToken !== undefined && accessToken.length > 0) {
+        email = await emailForAccessToken(accessToken);
+      }
+    }
     if (email === undefined) return badRequest('email_required');
 
     const displayName =

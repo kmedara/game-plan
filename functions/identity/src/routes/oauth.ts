@@ -14,6 +14,7 @@ import {
   generateOAuthState,
   generatePkcePair,
   getProfile,
+  putProfile,
   readOAuthIdClaims,
   refreshSetCookie,
 } from "../../../lib/auth/index.js";
@@ -130,7 +131,15 @@ export const handleOAuthCallback = async (
   try {
     const tokens = await exchangeAuthorizationCode({ code, verifier });
     const claims = readOAuthIdClaims(tokens.idToken);
-    const profile = await getProfile(claims.userId);
+    let profile = await getProfile(claims.userId);
+    if (profile === undefined && claims.email !== undefined && claims.email.length > 0) {
+      profile = await putProfile({
+        userId: claims.userId,
+        email: claims.email,
+        displayName: claims.displayName?.trim() || claims.email.split('@')[0] || 'Player',
+        accountKind: 'adult',
+      });
+    }
     const needsProfile =
       profile === undefined || profile.birthday === undefined;
     const destination = needsProfile

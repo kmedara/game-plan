@@ -23,7 +23,7 @@ vi.mock('@aws-sdk/client-cognito-identity-provider', async (importOriginal) => {
   return { ...actual, CognitoIdentityProviderClient };
 });
 
-const { createCognitoIdentityProvider, resetCognitoClient } = await import(
+const { createCognitoIdentityProvider, emailForAccessToken, resetCognitoClient } = await import(
   './cognito-provider.js'
 );
 
@@ -274,6 +274,16 @@ describe('createCognitoIdentityProvider', () => {
 
     mockSend.mockRejectedValueOnce(new Error('network'));
     await expect(provider.logout('refresh-to-revoke')).resolves.toBeUndefined();
+  });
+
+  it('reads email from Cognito when the access token omits it', async () => {
+    mockSend.mockResolvedValueOnce({
+      UserAttributes: [{ Name: 'email', Value: '  hosted@example.com ' }],
+    });
+    await expect(emailForAccessToken('access-token')).resolves.toBe('hosted@example.com');
+
+    mockSend.mockResolvedValueOnce({ UserAttributes: [{ Name: 'email', Value: '  ' }] });
+    await expect(emailForAccessToken('access-token')).resolves.toBeUndefined();
   });
 
 });
