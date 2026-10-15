@@ -2,16 +2,20 @@
  * Factory helpers that create the Node.js Lambda functions for each product area.
  */
 
-import * as path from 'node:path';
-import * as cdk from 'aws-cdk-lib';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import { NodejsFunction, OutputFormat, type BundlingOptions } from 'aws-cdk-lib/aws-lambda-nodejs';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import type { Construct } from 'constructs';
-import { AREAS, type Area } from './names';
+import * as path from "node:path";
+import * as cdk from "aws-cdk-lib";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import {
+  NodejsFunction,
+  OutputFormat,
+  type BundlingOptions,
+} from "aws-cdk-lib/aws-lambda-nodejs";
+import * as logs from "aws-cdk-lib/aws-logs";
+import type { Construct } from "constructs";
+import { AREAS, type Area } from "./names";
 
 /** Absolute path to the repository root (the parent of `infrastructure/`). */
-const repoRoot = path.join(__dirname, '../..');
+const repoRoot = path.join(__dirname, "../..");
 
 /**
  * Shared esbuild options for every area function.
@@ -21,8 +25,8 @@ const repoRoot = path.join(__dirname, '../..');
  */
 const bundling: BundlingOptions = {
   format: OutputFormat.ESM,
-  target: 'node22',
-  mainFields: ['module', 'main'],
+  target: "node22",
+  mainFields: ["module", "main"],
   minify: true,
   sourceMap: true,
   banner:
@@ -36,11 +40,13 @@ const bundling: BundlingOptions = {
  * @param file - The TypeScript file name inside `src/`. Defaults to `handler.ts`.
  * @returns An absolute path to the entry module.
  */
-export const areaEntry = (area: string, file = 'handler.ts'): string =>
-  path.join(repoRoot, 'functions', area, 'src', file);
+export const areaEntry = (area: string, file = "handler.ts"): string =>
+  path.join(repoRoot, "functions", area, "src", file);
 
 /**
  * Creates one Node.js 22 Lambda with a dedicated log group.
+ *
+ * Staging keeps logs for one day. Other environments keep them for one month.
  *
  * @param scope - The CDK construct that owns the function.
  * @param id - The construct id and the suffix of the function name.
@@ -56,9 +62,14 @@ export const createFunction = (
   environment: Record<string, string>,
   timeoutSeconds = 29,
 ): NodejsFunction => {
+  const retention =
+    process.env.DEPLOY_ENV === "staging"
+      ? logs.RetentionDays.ONE_DAY
+      : logs.RetentionDays.ONE_MONTH;
+
   const logGroup = new logs.LogGroup(scope, `${id}Logs`, {
     logGroupName: `/gameplan/${id}`,
-    retention: logs.RetentionDays.ONE_MONTH,
+    retention,
     removalPolicy: cdk.RemovalPolicy.DESTROY,
   });
 
@@ -66,8 +77,8 @@ export const createFunction = (
     functionName: `gameplan-${id}`,
     entry,
     projectRoot: repoRoot,
-    depsLockFilePath: path.join(repoRoot, 'package-lock.json'),
-    handler: 'handler',
+    depsLockFilePath: path.join(repoRoot, "package-lock.json"),
+    handler: "handler",
     runtime: lambda.Runtime.NODEJS_22_X,
     architecture: lambda.Architecture.ARM_64,
     memorySize: 512,
@@ -91,7 +102,12 @@ export const createAreaFunctions = (
 ): Record<Area, NodejsFunction> => {
   const functions = {} as Record<Area, NodejsFunction>;
   for (const area of AREAS) {
-    functions[area] = createFunction(scope, area, areaEntry(area), environmentFor(area));
+    functions[area] = createFunction(
+      scope,
+      area,
+      areaEntry(area),
+      environmentFor(area),
+    );
   }
   return functions;
 };
