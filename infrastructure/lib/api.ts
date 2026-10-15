@@ -4,6 +4,7 @@
 
 import * as cdk from 'aws-cdk-lib';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import type * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import { HttpUserPoolAuthorizer, WebSocketLambdaAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
@@ -74,18 +75,41 @@ const ACCESS_LOG_FORMAT = JSON.stringify({
 });
 
 /**
+ * Account-level role API Gateway uses to publish access logs.
+ *
+ * HTTP and WebSocket stages both refuse access logging until this role ARN is stored
+ * in the API Gateway account settings for the region.
+ *
+ * @param scope - The construct that owns the role.
+ * @returns The account setting that must exist before a stage enables logging.
+ */
+const ensureApiGatewayLoggingRole = (scope: Construct): apigateway.CfnAccount => {
+  const role = new iam.Role(scope, 'ApiGatewayCloudWatchRole', {
+    assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+    managedPolicies: [
+      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonAPIGatewayPushToCloudWatchLogs'),
+    ],
+  });
+  return new apigateway.CfnAccount(scope, 'ApiGatewayAccount', {
+    cloudWatchRoleArn: role.roleArn,
+  });
+};
+
+/**
  * Sends stage access logs to CloudWatch.
  *
  * Staging keeps the group for one day. Other environments keep it for one month.
  * HTTP API stages cannot enable X-Ray; the Lambdas trace those requests instead.
  *
  * @param scope - The construct that owns the log group.
+ * @param account - Account setting that holds the CloudWatch Logs role ARN.
  * @param stage - The HTTP or WebSocket stage.
  * @param id - The log group construct id.
  * @param logGroupName - The CloudWatch log group name.
  */
 const enableAccessLogs = (
   scope: Construct,
+  account: apigateway.CfnAccount,
   stage: apigwv2.IStage | undefined,
   id: string,
   logGroupName: string,
@@ -105,6 +129,7 @@ const enableAccessLogs = (
     destinationArn: group.logGroupArn,
     format: ACCESS_LOG_FORMAT,
   };
+  cfnStage.node.addDependency(account);
 };
 
 /**
@@ -136,6 +161,8 @@ export class Api extends Construct {
    */
   constructor(scope: Construct, id: string, props: ApiProps) {
     super(scope, id);
+
+    const apiLoggingAccount = ensureApiGatewayLoggingRole(this);
 
     const deadLetter = new sqs.Queue(this, 'FanoutDeadLetter', {
       queueName: 'gameplan-fanout-dlq',
@@ -222,7 +249,7 @@ export class Api extends Construct {
         allowOrigins: [props.corsOrigin],
       },
     });
-    enableAccessLogs(this, this.httpApi.defaultStage, 'HttpAccessLogs', '/gameplan/http-api');
+    enableAccessLogs(this, apiLoggingAccount, this.httpApi.defaultStage, 'HttpAccessLogs', '/gameplan/http-api');
 
     const httpAuthorizer = new HttpUserPoolAuthorizer('CognitoAuthorizer', props.userPool, {
       userPoolClients: [props.userPoolClient],
@@ -287,7 +314,7 @@ export class Api extends Construct {
       stageName: 'prod',
       autoDeploy: true,
     });
-    enableAccessLogs(this, socketStage, 'SocketAccessLogs', '/gameplan/websocket-api');
+    enableAccessLogs(this, apiLoggingAccount, socketStage, 'SocketAccessLogs', '/gameplan/websocket-api');
 
     functions.fanout.addEnvironment('WEBSOCKET_CALLBACK_URL', socketStage.callbackUrl);
     socketStage.grantManagementApiAccess(functions.fanout);
