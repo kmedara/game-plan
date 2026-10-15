@@ -18,7 +18,7 @@
       [
         "expo-notifications",
         {
-          "color": "#0f766e"
+          "color": "#0a6e38"
         }
       ]
     ],
@@ -31,6 +31,13 @@
     },
     "android": {
       "package": "com.gameplan.app"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "fa70eb6b-e8c0-44c7-b9c8-a6c731d14f11"
+      },
+      "router": {}
+    },
+    "owner": "kmedaras-team"
   }
 }

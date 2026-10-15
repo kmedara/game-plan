@@ -139,7 +139,7 @@ First social sign-in without a birthday redirects to `/complete-profile`. `POST 
 stores birthday and derives `accountKind`.
 
 Client config is read from `EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_WS_BASE_URL`,
-`EXPO_PUBLIC_AUTH_DISABLED`, and `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`.
+`EXPO_PUBLIC_AUTH_DISABLED`, `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`, and `EXPO_PUBLIC_VAPID_PUBLIC_KEY`.
 [`client/expo/scripts/run.mjs`](client/expo/scripts/run.mjs) copies `API_BASE_URL` and
 `WS_BASE_URL` onto those names. Production builds require `API_BASE_URL` and set
 `BUILD_CONFIGURATION=production`. The website uses Cognito sign-in. The native apps
@@ -328,6 +328,7 @@ here. Each stack writes its own outputs. The client workflow fails until `api-ba
 | `apple-client-id`, `apple-team-id`, `apple-key-id`, `apple-private-key` | Optional Apple IdP. Store the PEM, including line breaks.                                        |
 | `google-maps-api-key`                                                   | Places Lambda                                                                                    |
 | `google-maps-browser-api-key`                                           | Website map                                                                                      |
+| `vapid-public-key`, `vapid-private-key`, `vapid-subject`                | Web Push. The public key is baked into the website. The private key stays on the fan-out function. `vapid-subject` is a `mailto:` contact. |
 | `site-certificate-arn`, `api-certificate-arn`                           | Written by the DNS workflow. Later stacks read the certificate ARNs from CloudFormation exports. |
 | `site-bucket-name`, `site-distribution-id`, `site-url`                  | Written by the platform workflow. The client workflow reads the bucket and distribution id.      |
 | `api-base-url`, `ws-base-url`                                           | Written by the API workflow. The client workflow reads both.                                     |

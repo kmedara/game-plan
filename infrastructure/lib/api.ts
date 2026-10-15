@@ -212,6 +212,7 @@ export class Api extends Construct {
         case 'identity':
           return { ...shared, ...tableEnv, ...cognitoEnv };
         case 'teams':
+          return { ...shared, ...tableEnv, ...queueEnv };
         case 'socket':
           return { ...shared, ...tableEnv };
         case 'schedule':
@@ -229,7 +230,15 @@ export class Api extends Construct {
             GOOGLE_MAPS_API_KEY: process.env.GOOGLE_MAPS_API_KEY ?? '',
           };
         case 'fanout':
-          return { ...shared, ...tableEnv, ...queueEnv, PUSH_TOPIC_ARN: pushTopic.topicArn };
+          return {
+            ...shared,
+            ...tableEnv,
+            ...queueEnv,
+            PUSH_TOPIC_ARN: pushTopic.topicArn,
+            VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY ?? '',
+            VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY ?? '',
+            VAPID_SUBJECT: process.env.VAPID_SUBJECT ?? 'mailto:push@gameplan.local',
+          };
         default: {
           const exhaustive: never = area;
           return exhaustive;
@@ -340,6 +349,7 @@ export class Api extends Construct {
     pushTopic.grantPublish(functions.fanout);
     queue.grantSendMessages(functions.chat);
     queue.grantSendMessages(functions.schedule);
+    queue.grantSendMessages(functions.teams);
     functions.fanout.addEventSource(
       new SqsEventSource(queue, { batchSize: 10, reportBatchItemFailures: true }),
     );

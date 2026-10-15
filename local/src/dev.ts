@@ -98,7 +98,7 @@ for (const area of AREAS) {
     AUTH_CALLBACK_URL:
       process.env.AUTH_CALLBACK_URL ?? 'http://localhost:3000/identity/oauth/callback',
   };
-  if (area === 'chat' || area === 'schedule') {
+  if (area === 'chat' || area === 'schedule' || area === 'teams') {
     env.FANOUT_DELIVER_URL =
       process.env.FANOUT_DELIVER_URL ??
       `http://127.0.0.1:${areaPort('fanout')}/fanout/deliver`;
@@ -106,6 +106,11 @@ for (const area of AREAS) {
   if (area === 'fanout') {
     env.WEBSOCKET_CALLBACK_URL =
       process.env.WEBSOCKET_CALLBACK_URL ?? `http://127.0.0.1:${areaPort('socket')}`;
+    const vapidPublic = process.env.VAPID_PUBLIC_KEY?.trim();
+    const vapidPrivate = process.env.VAPID_PRIVATE_KEY?.trim();
+    if (vapidPublic !== undefined && vapidPublic.length > 0) env.VAPID_PUBLIC_KEY = vapidPublic;
+    if (vapidPrivate !== undefined && vapidPrivate.length > 0) env.VAPID_PRIVATE_KEY = vapidPrivate;
+    env.VAPID_SUBJECT = process.env.VAPID_SUBJECT ?? 'mailto:push@gameplan.local';
   }
   if (area === 'media') {
     env.MEDIA_BUCKET = process.env.MEDIA_BUCKET ?? 'gameplan-media-local';

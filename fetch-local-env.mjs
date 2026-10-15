@@ -1,8 +1,9 @@
 /**
  * Writes the environment variables `npm run up:build` interpolates into `.env`.
  *
- * Cognito values come from CloudFormation exports. Maps keys come from Parameter Store
- * under `/gameplan/` and are optional. Existing `.env` lines for other names are kept.
+ * Cognito values come from CloudFormation exports. Maps keys and VAPID settings come
+ * from Parameter Store under `/gameplan/` and are optional. Existing `.env` lines for
+ * other names are kept.
  *
  * Usage: `node fetch-local-env.mjs --profile <name>`
  */
@@ -22,6 +23,9 @@ const EXPORTS = {
 const PARAMETERS = {
   'google-maps-api-key': 'GOOGLE_MAPS_API_KEY',
   'google-maps-browser-api-key': 'GOOGLE_MAPS_BROWSER_API_KEY',
+  'vapid-public-key': 'VAPID_PUBLIC_KEY',
+  'vapid-private-key': 'VAPID_PRIVATE_KEY',
+  'vapid-subject': 'VAPID_SUBJECT',
 };
 
 const region = process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? 'us-east-1';
@@ -115,10 +119,10 @@ if (hostedUi !== '' && !hostedUi.includes('.')) {
   const cognitoRegion = fetched.get('COGNITO_REGION') || region;
   fetched.set('COGNITO_HOSTED_UI_DOMAIN', `${hostedUi}.auth.${cognitoRegion}.amazoncognito.com`);
 }
-const missingMaps = [];
+const missing = [];
 for (const [suffix, key] of Object.entries(PARAMETERS)) {
   const value = parameterValue(`${prefix}/${suffix}`);
-  if (value === '') missingMaps.push(key);
+  if (value === '') missing.push(key);
   fetched.set(key, value);
 }
 
@@ -138,6 +142,6 @@ const body = `${order.map((key) => `${key}=${values.get(key) ?? ''}`).join('\n')
 writeFileSync('.env', body);
 
 console.log(`Wrote ${[...fetched.keys()].join(', ')} to .env from ${region}.`);
-if (missingMaps.length > 0) {
-  console.log(`Parameter Store had no value for ${missingMaps.join(', ')}. Maps calls will be empty.`);
+if (missing.length > 0) {
+  console.log(`Parameter Store had no value for ${missing.join(', ')}.`);
 }

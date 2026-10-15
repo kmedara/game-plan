@@ -24,12 +24,14 @@ import {
   teamPk,
   userPk,
 } from '../../lib/dynamo/index.js';
+import { canWithMatrix, loadRolePermissionMatrix } from '../../lib/permissions.js';
+import { sendDevicePushes } from './push-send.js';
 
 /** Chat member row under `CHAT#id` / `MEMBER#userId`. */
 type ChatMemberItem = { userId: string };
 
 /** Team roster row under `TEAM#id` / `MEMBER#userId`. */
-type TeamMemberItem = { userId: string };
+type TeamMemberItem = { userId: string; role?: string };
 
 /** Socket connection under `USER#id` / `CONN#…`. */
 type ConnectionItem = { connectionId: string };
@@ -105,7 +107,19 @@ const recipientUserIds = async (job: FanoutJob): Promise<string[]> => {
     teamPk(job.teamId),
     TEAM_MEMBER_SK_PREFIX,
   );
-  return [...new Set(members.map((member) => member.userId))];
+  if (job.type !== 'join_requested') {
+    return [...new Set(members.map((member) => member.userId))];
+  }
+
+  const matrix = await loadRolePermissionMatrix(job.teamId);
+  const approvers = members.filter((member) => {
+    const role = member.role;
+    if (role !== 'team_admin' && role !== 'coach' && role !== 'player' && role !== 'parent') {
+      return false;
+    }
+    return canWithMatrix(role, matrix, 'approve_join_requests');
+  });
+  return [...new Set(approvers.map((member) => member.userId))];
 };
 
 /**
@@ -165,27 +179,35 @@ const publishPush = async (
   devices: DeviceItem[],
 ): Promise<void> => {
   const topicArn = process.env.PUSH_TOPIC_ARN;
-  if (topicArn === undefined || topicArn.length === 0 || devices.length === 0) {
+  const topicMissing = topicArn === undefined || topicArn.length === 0;
+  if (devices.length === 0 || topicMissing) {
     console.info(
       JSON.stringify({
         service: 'fanout',
         event: 'push_skipped',
         userId,
-        reason:
-          topicArn === undefined || topicArn.length === 0
-            ? 'no_topic'
-            : 'no_devices',
+        reason: topicMissing ? 'no_topic' : 'no_devices',
         type: job.type,
       }),
     );
-    return;
   }
+  if (devices.length === 0) return;
 
-  const title = job.type === 'chat_message' ? 'New message' : 'Schedule updated';
+  const title =
+    job.type === 'chat_message'
+      ? 'New message'
+      : job.type === 'join_requested'
+        ? 'Join request'
+        : 'Schedule updated';
   const body =
     job.type === 'chat_message'
       ? job.body.slice(0, 180)
-      : `Event ${job.eventId} changed`;
+      : job.type === 'join_requested'
+        ? `${job.requesterDisplayName} asked to join ${job.teamName}`
+        : `Event ${job.eventId} changed`;
+
+  await sendDevicePushes({ title, body, data: job, devices });
+  if (topicMissing || topicArn === undefined) return;
 
   await getSnsClient().send(
     new PublishCommand({
@@ -229,7 +251,7 @@ export const deliverFanoutJob = async (job: FanoutJob): Promise<void> => {
       if (ok) deliveredToSocket = true;
     }
 
-    if (!deliveredToSocket) {
+    if (!deliveredToSocket || job.type === 'join_requested') {
       const devices = await queryBySkPrefix<DeviceItem>(userPk(userId), DEVICE_SK_PREFIX);
       await publishPush(userId, job, devices);
     }

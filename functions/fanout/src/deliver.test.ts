@@ -7,6 +7,7 @@ import {
   CHAT_MEMBER_SK_PREFIX,
   CONNECTION_SK_PREFIX,
   DEVICE_SK_PREFIX,
+  ROLE_PERMISSIONS_SK_PREFIX,
   TEAM_MEMBER_SK_PREFIX,
   chatPk,
   teamPk,
@@ -17,11 +18,13 @@ const {
   queryBySkPrefix,
   managementSend,
   snsSend,
+  sendDevicePushes,
   ApiGatewayManagementApiClientMock,
 } = vi.hoisted(() => ({
   queryBySkPrefix: vi.fn(),
   managementSend: vi.fn(),
   snsSend: vi.fn(),
+  sendDevicePushes: vi.fn(),
   ApiGatewayManagementApiClientMock: vi.fn(function ApiGatewayManagementApiClient(this: {
     send: typeof managementSend;
   }) {
@@ -43,6 +46,10 @@ vi.mock('@aws-sdk/client-apigatewaymanagementapi', () => {
     PostToConnectionCommand: vi.fn((input: unknown) => ({ input })),
   };
 });
+
+vi.mock('./push-send.js', () => ({
+  sendDevicePushes: (...args: unknown[]) => sendDevicePushes(...args),
+}));
 
 vi.mock('@aws-sdk/client-sns', () => ({
   SNSClient: vi.fn(function SNSClient(this: { send: typeof snsSend }) {
@@ -86,6 +93,8 @@ describe('deliverFanoutJob', () => {
     queryBySkPrefix.mockReset();
     managementSend.mockReset();
     snsSend.mockReset();
+    sendDevicePushes.mockReset();
+    sendDevicePushes.mockResolvedValue(undefined);
     ApiGatewayManagementApiClientMock.mockClear();
     vi.mocked(SNSClient).mockClear();
     delete process.env.WEBSOCKET_CALLBACK_URL;
@@ -486,6 +495,49 @@ describe('deliverFanoutJob', () => {
     expect(command.input?.Subject).toBe('Schedule updated');
     const message = JSON.parse(command.input?.Message ?? '{}') as { body?: string };
     expect(message.body).toBe('Event e1 changed');
+  });
+
+  it('pushes a join request to approvers even when a socket is open', async () => {
+    process.env.WEBSOCKET_CALLBACK_URL = 'https://ws.example.com';
+    queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
+      if (pk === teamPk('t1') && prefix === TEAM_MEMBER_SK_PREFIX) {
+        return [
+          { userId: 'admin', role: 'team_admin' },
+          { userId: 'coach', role: 'coach' },
+        ];
+      }
+      if (pk === teamPk('t1') && prefix === ROLE_PERMISSIONS_SK_PREFIX) {
+        return [
+          { role: 'team_admin', permissions: ['approve_join_requests'] },
+          { role: 'coach', permissions: ['manage_events'] },
+        ];
+      }
+      if (pk === userPk('admin') && prefix === CONNECTION_SK_PREFIX) {
+        return [{ connectionId: 'conn-admin' }];
+      }
+      if (pk === userPk('admin') && prefix === DEVICE_SK_PREFIX) {
+        return [{ deviceId: 'phone', token: 'ExponentPushToken[abc]', platform: 'ios' }];
+      }
+      return [];
+    });
+    managementSend.mockResolvedValue(undefined);
+
+    await deliverFanoutJob({
+      type: 'join_requested',
+      teamId: 't1',
+      requestId: 'r1',
+      teamName: 'Hawks',
+      requesterDisplayName: 'Ada',
+    });
+
+    expect(managementSend).toHaveBeenCalledTimes(1);
+    expect(queryBySkPrefix).not.toHaveBeenCalledWith(userPk('coach'), CONNECTION_SK_PREFIX);
+    expect(sendDevicePushes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Join request',
+        body: 'Ada asked to join Hawks',
+      }),
+    );
   });
 
   it('resetFanoutClients allows a new management client on the next delivery', async () => {

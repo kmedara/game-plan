@@ -7,6 +7,8 @@ export type AppConfig = {
   wsBaseUrl: string;
   authDisabled: boolean;
   googleMapsApiKey: string;
+  vapidPublicKey: string;
+  easProjectId: string;
 };
 
 export const config: AppConfig = {
@@ -14,6 +16,8 @@ export const config: AppConfig = {
   wsBaseUrl: (process.env.EXPO_PUBLIC_WS_BASE_URL ?? 'ws://localhost:3000/socket').replace(/\/$/u, ''),
   authDisabled: process.env.EXPO_PUBLIC_AUTH_DISABLED === 'true',
   googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '',
+  vapidPublicKey: process.env.EXPO_PUBLIC_VAPID_PUBLIC_KEY ?? '',
+  easProjectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? '',
 };
 
 /** Custom-scheme redirect identity uses after a native Hosted UI sign-in. */

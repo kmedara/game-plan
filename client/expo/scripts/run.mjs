@@ -28,6 +28,8 @@ process.env.EXPO_PUBLIC_AUTH_DISABLED =
   process.env.EXPO_PUBLIC_AUTH_DISABLED ?? process.env.AUTH_DISABLED ?? 'false';
 process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY =
   process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? process.env.GOOGLE_MAPS_BROWSER_API_KEY ?? '';
+process.env.EXPO_PUBLIC_VAPID_PUBLIC_KEY =
+  process.env.EXPO_PUBLIC_VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY ?? '';
 
 const mode = process.argv[2] ?? 'start';
 const extra = process.argv.slice(3);
