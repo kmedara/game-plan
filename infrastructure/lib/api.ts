@@ -387,7 +387,10 @@ export class Api extends Construct {
       emailIndex: true,
     });
     grantPartitions(props.table, functions.media, {
-      read: [USER_PREFIX, CHAT_PREFIX],
+      // Team metadata stores the shared logo and chat background. A teammate
+      // download has to read that row; the uploader is allowed from the key
+      // prefix and never reaches it.
+      read: [USER_PREFIX, CHAT_PREFIX, TEAM_PREFIX],
       write: [USER_PREFIX],
     });
     grantPartitions(props.table, functions.socket, {
