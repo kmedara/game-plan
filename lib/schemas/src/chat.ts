@@ -32,6 +32,8 @@ export const chatParticipantSchema = z
     userId: z.string().min(1),
     accountKind: accountKindSchema,
     teamIds: z.array(z.string().min(1)),
+    /** Adults linked to this minor. Omitted for adults. */
+    guardianIds: z.array(z.string().min(1)).optional(),
   })
   .strict();
 

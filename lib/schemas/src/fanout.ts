@@ -16,6 +16,28 @@ export const fanoutJobSchema = z.discriminatedUnion('type', [
     .strict(),
   z
     .object({
+      type: z.literal('event_moved'),
+      teamId: z.string().min(1),
+      eventId: z.string().min(1),
+      title: z.string().min(1).max(200),
+      occurrenceStartsAt: z.string().datetime().optional(),
+      change: z.enum(['time', 'location', 'both']),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('event_reminder'),
+      teamId: z.string().min(1),
+      eventId: z.string().min(1),
+      title: z.string().min(1).max(200),
+      occurrenceStartsAt: z.string().datetime(),
+      location: z.string().max(500).optional(),
+      kind: z.enum(['evening', 'hour']),
+      userIds: z.array(z.string().min(1)).min(1),
+    })
+    .strict(),
+  z
+    .object({
       type: z.literal('chat_message'),
       chatId: z.string().min(1),
       messageId: z.string().min(1),

@@ -35,6 +35,8 @@ export {
 export {
   authUserSchema,
   completeProfileBodySchema,
+  createGuardianInviteBodySchema,
+  guardianLinkSchema,
   confirmationRequiredSchema,
   confirmRegistrationBodySchema,
   errorBodySchema,
@@ -51,6 +53,8 @@ export {
   userProfileSchema,
   type AuthUser,
   type CompleteProfileBody,
+  type CreateGuardianInviteBody,
+  type GuardianLinkBody,
   type ConfirmationRequired,
   type ConfirmRegistrationBody,
   type ErrorBody,
@@ -67,7 +71,7 @@ export {
   type UserProfile,
 } from './auth.js';
 
-export { phoneNumberSchema } from './phone.js';
+export { phoneNumberSchema, toE164Phone } from './phone.js';
 
 export {
   acceptedInviteSchema,
@@ -96,6 +100,7 @@ export {
   updatePositionsBodySchema,
   updateRolePermissionsBodySchema,
   updateTeamBodySchema,
+  updateTeamThemeSchema,
   type AcceptedInvite,
   type ApproveJoinRequestBody,
   type AssignRoleBody,
@@ -122,6 +127,7 @@ export {
   type UpdatePositionsBody,
   type UpdateRolePermissionsBody,
   type UpdateTeamBody,
+  type UpdateTeamTheme,
 } from './teams.js';
 
 export {
@@ -130,6 +136,15 @@ export {
   exceptionEventBodySchema,
   occurrenceTargetSchema,
   recurrenceRuleSchema,
+  carpoolClaimBodySchema,
+  carpoolOfferBodySchema,
+  carpoolOfferSchema,
+  carpoolQuerySchema,
+  carpoolResponseSchema,
+  lineupBodySchema,
+  lineupQuerySchema,
+  lineupResponseSchema,
+  lineupSlotSchema,
   rsvpBodySchema,
   rsvpResponseSchema,
   scheduleListSchema,
@@ -141,6 +156,15 @@ export {
   type ExceptionEventBody,
   type OccurrenceTarget,
   type RecurrenceRule,
+  type CarpoolClaimBody,
+  type CarpoolOffer,
+  type CarpoolOfferBody,
+  type CarpoolQuery,
+  type CarpoolResponse,
+  type LineupBody,
+  type LineupQuery,
+  type LineupResponse,
+  type LineupSlot,
   type RsvpBody,
   type RsvpResponse,
   type ScheduleList,

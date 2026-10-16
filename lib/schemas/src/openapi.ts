@@ -30,6 +30,8 @@ import {
 } from './teams.js';
 import {
   completeProfileBodySchema,
+  createGuardianInviteBodySchema,
+  guardianLinkSchema,
   confirmationRequiredSchema,
   confirmRegistrationBodySchema,
   errorBodySchema,
@@ -47,6 +49,13 @@ import {
 import {
   createEventBodySchema,
   eventResponseSchema,
+  carpoolClaimBodySchema,
+  carpoolOfferBodySchema,
+  carpoolQuerySchema,
+  carpoolResponseSchema,
+  lineupBodySchema,
+  lineupQuerySchema,
+  lineupResponseSchema,
   rsvpBodySchema,
   rsvpResponseSchema,
   scheduleListSchema,
@@ -167,6 +176,24 @@ const AREAS: Record<string, AreaSpec> = {
           secured: true,
         },
       },
+      '/identity/guardians': {
+        post: {
+          summary: 'Invite an adult guardian by email',
+          body: createGuardianInviteBodySchema,
+          response: guardianLinkSchema,
+          secured: true,
+        },
+      },
+      '/identity/guardians/{inviteId}/accept': {
+        post: {
+          summary: 'Accept a guardian invite',
+          response: guardianLinkSchema,
+          secured: true,
+        },
+      },
+      '/identity/guardians/{userId}': {
+        delete: { summary: 'Remove a guardian link', secured: true },
+      },
       '/identity/profile/complete': {
         post: {
           summary: 'Finish a social-login profile',
@@ -253,7 +280,7 @@ const AREAS: Record<string, AreaSpec> = {
       },
       '/teams/{teamId}/members/{userId}': {
         get: { summary: 'Get one roster member profile', response: teamMemberProfileSchema },
-        patch: { summary: "Change a member's role", body: assignRoleBodySchema },
+        patch: { summary: "Change a member's roles", body: assignRoleBodySchema },
       },
       '/teams/{teamId}/permissions': {
         get: { summary: 'Get the role-permission matrix', response: rolePermissionsResponseSchema },
@@ -319,6 +346,33 @@ const AREAS: Record<string, AreaSpec> = {
       },
       '/schedule/teams/{teamId}/rsvps': {
         put: { summary: 'Set an RSVP for one occurrence', body: rsvpBodySchema, response: rsvpResponseSchema },
+      },
+      '/schedule/teams/{teamId}/lineup': {
+        get: {
+          summary: 'Read a game lineup, or the previous lineup in the series',
+          query: lineupQuerySchema,
+          response: lineupResponseSchema,
+        },
+        put: { summary: 'Replace a game lineup', body: lineupBodySchema, response: lineupResponseSchema },
+      },
+      '/schedule/teams/{teamId}/carpool': {
+        get: {
+          summary: 'Read rides for one event date',
+          query: carpoolQuerySchema,
+          response: carpoolResponseSchema,
+        },
+        put: {
+          summary: 'Offer or clear the caller’s seats',
+          body: carpoolOfferBodySchema,
+          response: carpoolResponseSchema,
+        },
+      },
+      '/schedule/teams/{teamId}/carpool/claim': {
+        put: {
+          summary: 'Claim or leave one driver’s car',
+          body: carpoolClaimBodySchema,
+          response: carpoolResponseSchema,
+        },
       },
     },
   },

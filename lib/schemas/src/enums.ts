@@ -28,6 +28,7 @@ export type TeamRole = z.infer<typeof teamRoleSchema>;
 /** Every privileged team permission, in a stable order for the admin matrix. */
 export const TEAM_PERMISSIONS = [
   "manage_permissions",
+  "manage_team_settings",
   "invite_members",
   "approve_join_requests",
   "assign_roles",

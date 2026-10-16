@@ -168,6 +168,29 @@ export type LoginBody = z.infer<typeof loginBodySchema>;
 /** Inferred type for {@link refreshBodySchema}. */
 export type RefreshBody = z.infer<typeof refreshBodySchema>;
 
+/** Body for inviting a guardian by email. */
+export const createGuardianInviteBodySchema = z
+  .object({
+    email: z.string().email().min(3).max(320),
+  })
+  .strict();
+
+/** Pending or accepted guardian link. */
+export const guardianLinkSchema = z
+  .object({
+    inviteId: z.string().min(1).optional(),
+    minorId: z.string().min(1),
+    adultId: z.string().min(1),
+    email: z.string().min(1).optional(),
+  })
+  .strict();
+
+/** Inferred type for {@link createGuardianInviteBodySchema}. */
+export type CreateGuardianInviteBody = z.infer<typeof createGuardianInviteBodySchema>;
+
+/** Inferred type for {@link guardianLinkSchema}. */
+export type GuardianLinkBody = z.infer<typeof guardianLinkSchema>;
+
 /** Inferred type for {@link authUserSchema}. */
 export type AuthUser = z.infer<typeof authUserSchema>;
 

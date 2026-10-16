@@ -3,6 +3,7 @@
  */
 
 import { eventTypeSchema, rsvpStatusSchema } from './enums.js';
+import { teamPositionSchema } from './teams.js';
 import { z } from './zod.js';
 
 /** Recurrence rule stored on the event item and expanded for a visible window. */
@@ -45,6 +46,7 @@ export const createEventBodySchema = z
     startsAt: z.string().datetime(),
     endsAt: z.string().datetime().optional(),
     location: z.string().max(500).optional(),
+    notes: z.string().max(2000).optional(),
     latitude: latitudeSchema.optional(),
     longitude: longitudeSchema.optional(),
     recurrence: recurrenceRuleSchema.optional(),
@@ -64,6 +66,7 @@ const eventPatchShape = {
   startsAt: z.string().datetime().optional(),
   endsAt: z.union([z.string().datetime(), z.null()]).optional(),
   location: z.union([z.string().max(500), z.null()]).optional(),
+  notes: z.union([z.string().max(2000), z.null()]).optional(),
   latitude: z.union([latitudeSchema, z.null()]).optional(),
   longitude: z.union([longitudeSchema, z.null()]).optional(),
   recurrence: z.union([recurrenceRuleSchema, z.null()]).optional(),
@@ -104,7 +107,7 @@ export const rsvpBodySchema = z
 export const scheduleOccurrenceRsvpSchema = z
   .object({
     userId: z.string().min(1),
-    status: z.union([rsvpStatusSchema, z.string()]),
+    status: rsvpStatusSchema,
   })
   .strict();
 
@@ -117,6 +120,7 @@ export const scheduleOccurrenceSchema = z
     startsAt: z.string().min(1),
     endsAt: z.string().min(1).optional(),
     location: z.string().optional(),
+    notes: z.string().optional(),
     latitude: latitudeSchema.optional(),
     longitude: longitudeSchema.optional(),
     recurring: z.boolean(),
@@ -147,6 +151,7 @@ export const eventResponseSchema = z
     startsAt: z.string().min(1),
     endsAt: z.string().min(1).optional(),
     location: z.string().optional(),
+    notes: z.string().optional(),
     latitude: latitudeSchema.optional(),
     longitude: longitudeSchema.optional(),
     recurrence: recurrenceRuleSchema.optional(),
@@ -159,6 +164,92 @@ export const eventResponseSchema = z
   })
   .strict()
   .refine(hasPairedCoordinates, { message: 'coordinates_incomplete' });
+
+/** One player assigned to a position in a game lineup. */
+export const lineupSlotSchema = z
+  .object({
+    userId: z.string().min(1),
+    position: teamPositionSchema,
+  })
+  .strict();
+
+/** Query for one occurrence lineup. */
+export const lineupQuerySchema = z
+  .object({
+    eventId: z.string().min(1),
+    occurrenceStartsAt: z.string().datetime(),
+    /** When `previous`, return the latest earlier game lineup in the same series. */
+    source: z.enum(['current', 'previous']).optional(),
+  })
+  .strict();
+
+/** Body for replacing a game lineup. */
+export const lineupBodySchema = z
+  .object({
+    eventId: z.string().min(1),
+    occurrenceStartsAt: z.string().datetime(),
+    slots: z.array(lineupSlotSchema).max(30),
+  })
+  .strict()
+  .superRefine((body, ctx) => {
+    const ids = body.slots.map((slot) => slot.userId);
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({ code: 'custom', message: 'duplicate_lineup_user', path: ['slots'] });
+    }
+  });
+
+/** Lineup from `GET` or `PUT /schedule/teams/:teamId/lineup`. */
+export const lineupResponseSchema = z
+  .object({
+    eventId: z.string().min(1),
+    occurrenceStartsAt: z.string().min(1),
+    slots: z.array(lineupSlotSchema),
+  })
+  .strict();
+
+/** One driver's seats on an event date. */
+export const carpoolOfferSchema = z
+  .object({
+    userId: z.string().min(1),
+    seats: z.number().int().min(1).max(8),
+    riderIds: z.array(z.string().min(1)),
+  })
+  .strict();
+
+/** Query for rides on one occurrence. */
+export const carpoolQuerySchema = z
+  .object({
+    eventId: z.string().min(1),
+    occurrenceStartsAt: z.string().datetime(),
+  })
+  .strict();
+
+/** Body for offering or clearing the caller's seats. `0` removes the offer. */
+export const carpoolOfferBodySchema = z
+  .object({
+    eventId: z.string().min(1),
+    occurrenceStartsAt: z.string().datetime(),
+    seats: z.number().int().min(0).max(8),
+  })
+  .strict();
+
+/** Body for claiming or leaving one driver's car. */
+export const carpoolClaimBodySchema = z
+  .object({
+    eventId: z.string().min(1),
+    occurrenceStartsAt: z.string().datetime(),
+    driverUserId: z.string().min(1),
+  })
+  .strict();
+
+/** Rides from `GET` or `PUT /schedule/teams/:teamId/carpool`. */
+export const carpoolResponseSchema = z
+  .object({
+    eventId: z.string().min(1),
+    occurrenceStartsAt: z.string().min(1),
+    offers: z.array(carpoolOfferSchema),
+  })
+  .strict();
 
 /** Stored RSVP from `PUT /schedule/teams/:teamId/rsvps`. */
 export const rsvpResponseSchema = z
@@ -203,3 +294,30 @@ export type EventResponse = z.infer<typeof eventResponseSchema>;
 
 /** Inferred type for {@link rsvpResponseSchema}. */
 export type RsvpResponse = z.infer<typeof rsvpResponseSchema>;
+
+/** Inferred type for {@link lineupSlotSchema}. */
+export type LineupSlot = z.infer<typeof lineupSlotSchema>;
+
+/** Inferred type for {@link lineupQuerySchema}. */
+export type LineupQuery = z.infer<typeof lineupQuerySchema>;
+
+/** Inferred type for {@link lineupBodySchema}. */
+export type LineupBody = z.infer<typeof lineupBodySchema>;
+
+/** Inferred type for {@link lineupResponseSchema}. */
+export type LineupResponse = z.infer<typeof lineupResponseSchema>;
+
+/** Inferred type for {@link carpoolOfferSchema}. */
+export type CarpoolOffer = z.infer<typeof carpoolOfferSchema>;
+
+/** Inferred type for {@link carpoolQuerySchema}. */
+export type CarpoolQuery = z.infer<typeof carpoolQuerySchema>;
+
+/** Inferred type for {@link carpoolOfferBodySchema}. */
+export type CarpoolOfferBody = z.infer<typeof carpoolOfferBodySchema>;
+
+/** Inferred type for {@link carpoolClaimBodySchema}. */
+export type CarpoolClaimBody = z.infer<typeof carpoolClaimBodySchema>;
+
+/** Inferred type for {@link carpoolResponseSchema}. */
+export type CarpoolResponse = z.infer<typeof carpoolResponseSchema>;

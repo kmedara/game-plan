@@ -46,6 +46,8 @@ export const teamThemeSchema = z
     logoKey: teamLogoKeySchema.optional(),
     /** Wallpaper for the team's default chat. */
     chatBackgroundKey: teamLogoKeySchema.optional(),
+    /** Tint over the chat wallpaper. Omitted means dark. */
+    chatBackgroundOverlay: z.enum(['dark', 'light', 'none']).optional(),
   })
   .strict()
   .refine(
@@ -58,13 +60,29 @@ export const teamThemeSchema = z
     { message: "theme_empty" },
   );
 
+/**
+ * Theme fields to change. Omitted keys stay as they are. `null` clears a key.
+ * `null` for the whole theme still clears it.
+ */
+export const updateTeamThemeSchema = z
+  .object({
+    primary: z.union([hexColorSchema, z.null()]).optional(),
+    secondary: z.union([hexColorSchema, z.null()]).optional(),
+    accent: z.union([hexColorSchema, z.null()]).optional(),
+    logoKey: z.union([teamLogoKeySchema, z.null()]).optional(),
+    chatBackgroundKey: z.union([teamLogoKeySchema, z.null()]).optional(),
+    chatBackgroundOverlay: z.union([z.enum(["dark", "light", "none"]), z.null()]).optional(),
+  })
+  .strict()
+  .refine((theme) => Object.keys(theme).length > 0, { message: "theme_empty" });
+
 /** Body for updating a team's name, time zone, location, and theme. */
 export const updateTeamBodySchema = z
   .object({
     name: z.string().min(1).max(30).optional(),
     timeZone: z.string().min(1).max(64).optional(),
     location: z.union([z.string().max(200), z.null()]).optional(),
-    theme: z.union([teamThemeSchema, z.null()]).optional(),
+    theme: z.union([updateTeamThemeSchema, z.null()]).optional(),
   })
   .strict();
 
@@ -95,12 +113,15 @@ export const approveJoinRequestBodySchema = z
   })
   .strict();
 
-/** Body for changing a roster member's role. */
+/** Body for replacing the roles a roster member holds. */
 export const assignRoleBodySchema = z
   .object({
-    role: teamRoleSchema,
+    roles: z.array(teamRoleSchema).min(1),
   })
-  .strict();
+  .strict()
+  .refine((body) => new Set(body.roles).size === body.roles.length, {
+    message: "duplicate_role",
+  });
 
 /**
  * A playing position on one team, such as `Fly-half` or `No. 8`.
@@ -129,7 +150,10 @@ export const teamSummarySchema = z
     timeZone: z.string().min(1),
     location: z.string().optional(),
     theme: teamThemeSchema.optional(),
-    role: z.union([teamRoleSchema, z.string()]),
+    /** Highest-ranked role the caller holds. */
+    role: teamRoleSchema,
+    /** Every role the caller holds, highest rank first. */
+    roles: z.array(teamRoleSchema).min(1),
     /** Positions the caller plays on this team. Omitted when they have not set any. */
     positions: z.array(z.string().min(1).max(40)).optional(),
     defaultChatId: z.string().min(1).optional(),
@@ -167,7 +191,10 @@ export const teamListSchema = z
 export const teamMemberSchema = z
   .object({
     userId: z.string().min(1),
+    /** Highest-ranked role this member holds. */
     role: teamRoleSchema,
+    /** Every role this member holds, highest rank first. */
+    roles: z.array(teamRoleSchema).min(1),
     joinedAt: z.string().min(1),
     displayName: displayNameSchema.optional(),
     email: z.string().min(1).optional(),
@@ -185,6 +212,8 @@ export const teamMemberProfileSchema = teamMemberSchema
     photoKey: z.string().min(1).max(512).optional(),
     phoneNumber: phoneNumberSchema.optional(),
     positions: z.array(z.string().min(1).max(40)).optional(),
+    /** Linked guardians. Present for coaches and those guardians. */
+    guardianIds: z.array(z.string().min(1)).optional(),
   })
   .strict();
 
@@ -300,6 +329,9 @@ export type TeamTheme = z.infer<typeof teamThemeSchema>;
 
 /** Inferred type for {@link createTeamBodySchema}. */
 export type CreateTeamBody = z.infer<typeof createTeamBodySchema>;
+
+/** Inferred type for {@link updateTeamThemeSchema}. */
+export type UpdateTeamTheme = z.infer<typeof updateTeamThemeSchema>;
 
 /** Inferred type for {@link updateTeamBodySchema}. */
 export type UpdateTeamBody = z.infer<typeof updateTeamBodySchema>;

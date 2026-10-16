@@ -29,12 +29,48 @@ export type ApproveJoinRequestBody = {
 }
 
 export type AssignRoleBody = {
-  role: 'team_admin' | 'coach' | 'player' | 'parent';
+  /**
+   * @minItems 1
+   */
+  roles: ['team_admin' | 'coach' | 'player' | 'parent', ...('team_admin' | 'coach' | 'player' | 'parent')[]];
 }
 
 export type AuthUser = {
   userId: string;
   email?: string;
+}
+
+export type CarpoolClaimBody = {
+  eventId: string;
+  occurrenceStartsAt: string;
+  driverUserId: string;
+}
+
+export type CarpoolOfferBody = {
+  eventId: string;
+  occurrenceStartsAt: string;
+  seats: number;
+}
+
+export type CarpoolOffer = {
+  userId: string;
+  seats: number;
+  riderIds: string[];
+}
+
+export type CarpoolQuery = {
+  eventId: string;
+  occurrenceStartsAt: string;
+}
+
+export type CarpoolResponse = {
+  eventId: string;
+  occurrenceStartsAt: string;
+  offers: {
+    userId: string;
+    seats: number;
+    riderIds: string[];
+  }[];
 }
 
 export type ChatKind = 'default' | 'channel' | 'private';
@@ -65,6 +101,7 @@ export type ChatParticipant = {
   userId: string;
   accountKind: 'adult' | 'minor';
   teamIds: string[];
+  guardianIds?: string[];
 }
 
 export type ChatSummary = {
@@ -97,6 +134,7 @@ export type CreateEventBody = {
   startsAt: string;
   endsAt?: string;
   location?: string;
+  notes?: string;
   latitude?: number;
   longitude?: number;
   recurrence?: {
@@ -106,6 +144,10 @@ export type CreateEventBody = {
     count?: number;
     byWeekDay?: string[];
   };
+}
+
+export type CreateGuardianInviteBody = {
+  email: string;
 }
 
 export type CreateInviteBody = {
@@ -151,6 +193,7 @@ export type EventResponse = {
   startsAt: string;
   endsAt?: string;
   location?: string;
+  notes?: string;
   latitude?: number;
   longitude?: number;
   recurrence?: {
@@ -177,6 +220,7 @@ export type ExceptionEventBody = {
   startsAt?: string;
   endsAt?: string | null;
   location?: string | null;
+  notes?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   recurrence?: {
@@ -193,6 +237,27 @@ export type FanoutJob =
       type: 'schedule_changed';
       teamId: string;
       eventId: string;
+    }
+  | {
+      type: 'event_moved';
+      teamId: string;
+      eventId: string;
+      title: string;
+      occurrenceStartsAt?: string;
+      change: 'time' | 'location' | 'both';
+    }
+  | {
+      type: 'event_reminder';
+      teamId: string;
+      eventId: string;
+      title: string;
+      occurrenceStartsAt: string;
+      location?: string;
+      kind: 'evening' | 'hour';
+      /**
+       * @minItems 1
+       */
+      userIds: [string, ...string[]];
     }
   | {
       type: 'chat_message';
@@ -212,6 +277,13 @@ export type FanoutJob =
       teamName: string;
       requesterDisplayName: string;
     };
+
+export type GuardianLink = {
+  inviteId?: string;
+  minorId: string;
+  adultId: string;
+  email?: string;
+}
 
 export type InvitePreview = {
   code: string;
@@ -247,6 +319,38 @@ export type JoinRequest = {
   displayName?: string;
   email?: string;
   accountKind?: 'adult' | 'minor';
+}
+
+export type LineupBody = {
+  eventId: string;
+  occurrenceStartsAt: string;
+  /**
+   * @maxItems 30
+   */
+  slots: {
+    userId: string;
+    position: string;
+  }[];
+}
+
+export type LineupQuery = {
+  eventId: string;
+  occurrenceStartsAt: string;
+  source?: 'current' | 'previous';
+}
+
+export type LineupResponse = {
+  eventId: string;
+  occurrenceStartsAt: string;
+  slots: {
+    userId: string;
+    position: string;
+  }[];
+}
+
+export type LineupSlot = {
+  userId: string;
+  position: string;
 }
 
 export type LoginBody = {
@@ -396,6 +500,7 @@ export type RolePermissionsResponse = {
     role: 'team_admin' | 'coach' | 'player' | 'parent';
     permissions: (
       | 'manage_permissions'
+      | 'manage_team_settings'
       | 'invite_members'
       | 'approve_join_requests'
       | 'assign_roles'
@@ -409,6 +514,7 @@ export type RolePermissions = {
   role: 'team_admin' | 'coach' | 'player' | 'parent';
   permissions: (
     | 'manage_permissions'
+    | 'manage_team_settings'
     | 'invite_members'
     | 'approve_join_requests'
     | 'assign_roles'
@@ -444,6 +550,7 @@ export type ScheduleList = {
     startsAt: string;
     endsAt?: string;
     location?: string;
+    notes?: string;
     latitude?: number;
     longitude?: number;
     recurring: boolean;
@@ -451,7 +558,7 @@ export type ScheduleList = {
     originalStartsAt?: string;
     rsvps: {
       userId: string;
-      status: ('going' | 'not_going' | 'maybe') | string;
+      status: 'going' | 'not_going' | 'maybe';
     }[];
   }[];
 }
@@ -463,6 +570,7 @@ export type ScheduleOccurrence = {
   startsAt: string;
   endsAt?: string;
   location?: string;
+  notes?: string;
   latitude?: number;
   longitude?: number;
   recurring: boolean;
@@ -470,7 +578,7 @@ export type ScheduleOccurrence = {
   originalStartsAt?: string;
   rsvps: {
     userId: string;
-    status: ('going' | 'not_going' | 'maybe') | string;
+    status: 'going' | 'not_going' | 'maybe';
   }[];
 }
 
@@ -578,8 +686,13 @@ export type TeamList = {
       accent?: string;
       logoKey?: string;
       chatBackgroundKey?: string;
+      chatBackgroundOverlay?: 'dark' | 'light' | 'none';
     };
-    role: ('team_admin' | 'coach' | 'player' | 'parent') | string;
+    role: 'team_admin' | 'coach' | 'player' | 'parent';
+    /**
+     * @minItems 1
+     */
+    roles: ['team_admin' | 'coach' | 'player' | 'parent', ...('team_admin' | 'coach' | 'player' | 'parent')[]];
     positions?: string[];
     defaultChatId?: string;
     createdAt?: string;
@@ -590,6 +703,10 @@ export type TeamMemberList = {
   members: {
     userId: string;
     role: 'team_admin' | 'coach' | 'player' | 'parent';
+    /**
+     * @minItems 1
+     */
+    roles: ['team_admin' | 'coach' | 'player' | 'parent', ...('team_admin' | 'coach' | 'player' | 'parent')[]];
     joinedAt: string;
     displayName?: string;
     email?: string;
@@ -600,6 +717,10 @@ export type TeamMemberList = {
 export type TeamMemberProfile = {
   userId: string;
   role: 'team_admin' | 'coach' | 'player' | 'parent';
+  /**
+   * @minItems 1
+   */
+  roles: ['team_admin' | 'coach' | 'player' | 'parent', ...('team_admin' | 'coach' | 'player' | 'parent')[]];
   joinedAt: string;
   displayName?: string;
   email?: string;
@@ -607,11 +728,16 @@ export type TeamMemberProfile = {
   photoKey?: string;
   phoneNumber?: string;
   positions?: string[];
+  guardianIds?: string[];
 }
 
 export type TeamMember = {
   userId: string;
   role: 'team_admin' | 'coach' | 'player' | 'parent';
+  /**
+   * @minItems 1
+   */
+  roles: ['team_admin' | 'coach' | 'player' | 'parent', ...('team_admin' | 'coach' | 'player' | 'parent')[]];
   joinedAt: string;
   displayName?: string;
   email?: string;
@@ -620,6 +746,7 @@ export type TeamMember = {
 
 export type TeamPermission =
   | 'manage_permissions'
+  | 'manage_team_settings'
   | 'invite_members'
   | 'approve_join_requests'
   | 'assign_roles'
@@ -639,8 +766,13 @@ export type TeamSummary = {
     accent?: string;
     logoKey?: string;
     chatBackgroundKey?: string;
+    chatBackgroundOverlay?: 'dark' | 'light' | 'none';
   };
-  role: ('team_admin' | 'coach' | 'player' | 'parent') | string;
+  role: 'team_admin' | 'coach' | 'player' | 'parent';
+  /**
+   * @minItems 1
+   */
+  roles: ['team_admin' | 'coach' | 'player' | 'parent', ...('team_admin' | 'coach' | 'player' | 'parent')[]];
   positions?: string[];
   defaultChatId?: string;
   createdAt?: string;
@@ -652,6 +784,7 @@ export type TeamTheme = {
   accent?: string;
   logoKey?: string;
   chatBackgroundKey?: string;
+  chatBackgroundOverlay?: 'dark' | 'light' | 'none';
 }
 
 export type TimeZone = string;
@@ -662,6 +795,7 @@ export type UpdateEventBody = {
   startsAt?: string;
   endsAt?: string | null;
   location?: string | null;
+  notes?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   recurrence?: {
@@ -691,6 +825,7 @@ export type UpdateRolePermissionsBody = {
       role: 'team_admin' | 'coach' | 'player' | 'parent';
       permissions: (
         | 'manage_permissions'
+        | 'manage_team_settings'
         | 'invite_members'
         | 'approve_join_requests'
         | 'assign_roles'
@@ -702,6 +837,7 @@ export type UpdateRolePermissionsBody = {
       role: 'team_admin' | 'coach' | 'player' | 'parent';
       permissions: (
         | 'manage_permissions'
+        | 'manage_team_settings'
         | 'invite_members'
         | 'approve_join_requests'
         | 'assign_roles'
@@ -717,12 +853,22 @@ export type UpdateTeamBody = {
   timeZone?: string;
   location?: string | null;
   theme?: {
-    primary?: string;
-    secondary?: string;
-    accent?: string;
-    logoKey?: string;
-    chatBackgroundKey?: string;
+    primary?: string | null;
+    secondary?: string | null;
+    accent?: string | null;
+    logoKey?: string | null;
+    chatBackgroundKey?: string | null;
+    chatBackgroundOverlay?: ('dark' | 'light' | 'none') | null;
   } | null;
+}
+
+export type UpdateTeamTheme = {
+  primary?: string | null;
+  secondary?: string | null;
+  accent?: string | null;
+  logoKey?: string | null;
+  chatBackgroundKey?: string | null;
+  chatBackgroundOverlay?: ('dark' | 'light' | 'none') | null;
 }
 
 export type UserProfile = {
@@ -752,10 +898,10 @@ export const RSVP_STATUSES = ["going", "not_going", "maybe"] as const;
 
 export const TEAM_ROLES = ["team_admin", "coach", "player", "parent"] as const;
 
-export const TEAM_PERMISSIONS = ["manage_permissions", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels"] as const;
+export const TEAM_PERMISSIONS = ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels"] as const;
 
 export const DEFAULT_ROLE_PERMISSIONS = {
-  team_admin: ["manage_permissions", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels"],
+  team_admin: ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels"],
   coach: [],
   parent: [],
   player: [],
