@@ -1,5 +1,5 @@
 /**
- * Amazon Cognito user pool with Hosted UI for email and social sign-in.
+ * Amazon Cognito user pool with Managed login for email and social sign-in.
  */
 
 import * as cdk from 'aws-cdk-lib';
@@ -26,10 +26,10 @@ export type AuthProps = {
   callbackUrls: string[];
   /** OAuth logout URLs registered on the app client (website origins). */
   logoutUrls: string[];
-  /** Optional Google / Apple / Facebook Hosted UI providers. */
+  /** Optional Google / Apple / Facebook Managed login providers. */
   social?: AuthSocialContext;
   /**
-   * When false, Hosted UI and the SignUp API reject new accounts.
+   * When false, Managed login and the SignUp API reject new accounts.
    * Defaults to true.
    */
   selfSignUpEnabled?: boolean;
@@ -41,7 +41,7 @@ export type AuthProps = {
 };
 
 /**
- * User pool, Hosted UI domain, and public OAuth app client.
+ * User pool, Managed login domain, and public OAuth app client.
  *
  * The Expo app does not talk to Cognito directly. Identity exchanges the
  * authorization code and issues GamePlan session tokens.
@@ -50,14 +50,14 @@ export class Auth extends Construct {
   /** Cognito user pool that owns accounts. */
   public readonly userPool: cognito.UserPool;
 
-  /** Public app client used by the Hosted UI OAuth flow. */
+  /** Public app client used by the Managed login OAuth flow. */
   public readonly userPoolClient: cognito.UserPoolClient;
 
-  /** Cognito Hosted UI hostname (no scheme), including the `auth.<region>.amazoncognito.com` suffix. */
+  /** Cognito Managed login hostname (no scheme), including the `auth.<region>.amazoncognito.com` suffix. */
   public readonly hostedUiDomain: string;
 
   /**
-   * Creates the user pool, optional social IdPs, Hosted UI domain, and outputs.
+   * Creates the user pool, optional social IdPs, Managed login domain, and outputs.
    *
    * @param scope - The parent CDK construct.
    * @param id - The construct id.
@@ -199,9 +199,17 @@ export class Auth extends Construct {
     const domainPrefix = `gameplan-${cdk.Aws.ACCOUNT_ID}`;
     const domain = this.userPool.addDomain('HostedUi', {
       cognitoDomain: { domainPrefix },
+      managedLoginVersion: cognito.ManagedLoginVersion.NEWER_MANAGED_LOGIN,
     });
-    // `domainName` is only the prefix (`gameplan-<account>`). Hosted UI lives on the full hostname.
+    // `domainName` is only the prefix (`gameplan-<account>`). Managed login lives on the full hostname.
     this.hostedUiDomain = cdk.Fn.select(1, cdk.Fn.split('://', domain.baseUrl()));
+
+    new cognito.CfnManagedLoginBranding(this, 'ManagedLoginBranding', {
+      userPoolId: this.userPool.userPoolId,
+      clientId: this.userPoolClient.userPoolClientId,
+      useCognitoProvidedValues: false,
+      settings: managedLoginSettings(),
+    });
 
     const issuer = `https://cognito-idp.${cdk.Stack.of(this).region}.amazonaws.com/${this.userPool.userPoolId}`;
 
@@ -231,3 +239,50 @@ export class Auth extends Construct {
     });
   }
 }
+
+/** Cognito colors are eight hex digits, `RRGGBBAA`, with no leading `#`. */
+const cognitoColor = (hex: string): string => `${hex.slice(1)}ff`;
+
+const buttonColors = (background: string, text: string): { backgroundColor: string; textColor: string } => ({
+  backgroundColor: cognitoColor(background),
+  textColor: cognitoColor(text),
+});
+
+/**
+ * Managed login colors aligned with the Expo canvas and field green in `client/expo/src/theme.ts`.
+ */
+const managedLoginSettings = (): Record<string, unknown> => {
+  const field = '#0a6e38';
+  const fieldDeep = '#064e28';
+  const canvas = '#eef2ef';
+  const paper = '#ffffff';
+  const ink = '#ffffff';
+  return {
+    categories: {
+      global: { colorSchemeMode: 'LIGHT' },
+    },
+    components: {
+      pageBackground: {
+        image: { enabled: false },
+        lightMode: { color: cognitoColor(canvas) },
+      },
+      form: {
+        lightMode: { backgroundColor: cognitoColor(paper) },
+        logo: { enabled: false },
+      },
+    },
+    componentClasses: {
+      buttons: { borderRadius: 8 },
+      primaryButton: {
+        lightMode: {
+          defaults: buttonColors(field, ink),
+          hover: buttonColors(fieldDeep, ink),
+          active: buttonColors(fieldDeep, ink),
+        },
+      },
+      focusState: {
+        lightMode: { borderColor: cognitoColor(field) },
+      },
+    },
+  };
+};
