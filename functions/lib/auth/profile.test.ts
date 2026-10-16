@@ -86,7 +86,7 @@ describe('profile helpers', () => {
       accountKind: 'minor',
       birthday: '2010-01-01',
       photoKey: 'photos/u4.jpg',
-      phoneNumber: ' 555-0100 ',
+      phoneNumber: ' +12025550123 ',
       passwordHash: 'scrypt$abc',
       createdAt: '2026-01-01T00:00:00.000Z',
     });
@@ -97,7 +97,7 @@ describe('profile helpers', () => {
       displayName: 'Writer',
       birthday: '2010-01-01',
       photoKey: 'photos/u4.jpg',
-      phoneNumber: '555-0100',
+      phoneNumber: '+12025550123',
       passwordHash: 'scrypt$abc',
       createdAt: '2026-01-01T00:00:00.000Z',
     });

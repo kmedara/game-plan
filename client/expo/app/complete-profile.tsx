@@ -34,8 +34,8 @@ export default function CompleteProfileScreen() {
     });
   }, [api]);
 
-  const submit = async (): Promise<void> => {
-    if (displayName.trim().length === 0 || birthday.trim().length === 0) return;
+  const submit = async (): Promise<boolean | void> => {
+    if (displayName.trim().length === 0 || birthday.trim().length === 0) return false;
     setBusy(true);
     try {
       if (!api.isAuthenticated()) {

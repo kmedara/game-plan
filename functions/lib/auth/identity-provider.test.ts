@@ -16,7 +16,7 @@ describe('toUserProfile', () => {
       accountKind: 'adult',
       birthday: '1990-01-01',
       photoKey: 'photos/u1.jpg',
-      phoneNumber: '+1 555 0100',
+      phoneNumber: '+12025550123',
       createdAt: '2026-01-01T00:00:00.000Z',
     };
     expect(toUserProfile(complete)).toEqual({
@@ -26,7 +26,7 @@ describe('toUserProfile', () => {
       accountKind: 'adult',
       birthday: '1990-01-01',
       photoKey: 'photos/u1.jpg',
-      phoneNumber: '+1 555 0100',
+      phoneNumber: '+12025550123',
       needsProfileCompletion: false,
     });
 

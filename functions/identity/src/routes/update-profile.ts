@@ -2,7 +2,7 @@
  * `PATCH /identity/profile` — update the caller's photo and/or phone number.
  */
 
-import { updateProfileBodySchema } from '@gameplan/schemas';
+import { toE164Phone, updateProfileBodySchema } from '@gameplan/schemas';
 import { getProfile, putProfile, requireUser, toUserProfile } from '../../../lib/auth/index.js';
 import { json } from '../../../lib/http.js';
 import { route, withBodyValidation } from '../../../lib/pipeline.js';
@@ -56,7 +56,11 @@ export const handleUpdateProfile = route(
       passwordHash: existing.passwordHash,
       photoKey: body.photoKey !== undefined ? body.photoKey : (existing.photoKey ?? null),
       phoneNumber:
-        body.phoneNumber !== undefined ? body.phoneNumber : (existing.phoneNumber ?? null),
+        body.phoneNumber === undefined
+          ? (existing.phoneNumber ?? null)
+          : body.phoneNumber === null
+            ? null
+            : toE164Phone(body.phoneNumber),
     });
     return json(200, toUserProfile(profile));
   },

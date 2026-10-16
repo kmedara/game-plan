@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { positionsWithinLimit } from '@gameplan/rules';
 import type { UserProfile } from '@gameplan/types';
 import { config } from '@/src/config';
+import { toE164Phone } from '@/src/phone';
 import { useApp } from '@/src/state';
 import { Button, ErrorText, Field, ProfilePhoto, SubmitButton } from '@/src/ui';
 
@@ -64,11 +65,19 @@ export default function ProfileScreen() {
     setPhotoUrl(download.downloadUrl);
   };
 
-  const savePhone = async (): Promise<void> => {
-    const next = await api.updateProfile({
-      phoneNumber: phone.trim().length === 0 ? null : phone.trim(),
-    });
+  const savePhone = async (): Promise<boolean | void> => {
+    const trimmed = phone.trim();
+    if (trimmed.length === 0) {
+      const next = await api.updateProfile({ phoneNumber: null });
+      setProfile(next);
+      setPhone('');
+      return;
+    }
+    const e164 = toE164Phone(trimmed);
+    if (e164 === undefined) throw new Error('bad_phone');
+    const next = await api.updateProfile({ phoneNumber: e164 });
     setProfile(next);
+    setPhone(e164);
   };
 
   const savePositions = async (teamId: string, next: readonly string[]): Promise<boolean> => {
@@ -126,8 +135,14 @@ export default function ProfileScreen() {
       </View>
       <Text className="mb-1 text-2xl font-bold text-ink">{profile?.displayName}</Text>
       <Text className="mb-4 text-muted">{profile?.email}</Text>
-      <Field label={t('profile.phoneNumber')} value={phone} onChangeText={setPhone} />
-      <SubmitButton label={t('profile.savePhone')} onPress={savePhone} />
+      <Field label={t('profile.phoneNumber')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+      <SubmitButton
+        label={t('profile.savePhone')}
+        onPress={savePhone}
+        message={(err) =>
+          err instanceof Error && err.message === 'bad_phone' ? t('errors.profile.badPhone') : t('errors.profile.savePhoneFailed')
+        }
+      />
       <Text className="mb-2 mt-4 text-lg font-semibold text-ink">{t('profile.positions')}</Text>
       {teams.map((team) => {
         const positions = team.positions ?? [];
