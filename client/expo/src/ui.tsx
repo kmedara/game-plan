@@ -3,7 +3,8 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Animated, Image, Platform, Pressable, ScrollView, type ScrollViewProps, Text, TextInput, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useApp } from './state';
 import { colors, fieldWash, fieldWashOpacity, muteColor } from './theme';
 import { searchTimeZones, timeZoneLabel } from './time-zones';
@@ -13,20 +14,27 @@ export const Field = ({
   value,
   onChangeText,
   placeholder,
+  multiline,
+  keyboardType,
 }: {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
   placeholder?: string;
+  multiline?: boolean;
+  keyboardType?: 'default' | 'phone-pad';
 }) => (
   <View className="mb-3">
     <Text className="mb-1 text-sm text-muted">{label}</Text>
     <TextInput
-      className="rounded-xl border border-line bg-inset px-3 py-2 text-base text-ink"
+      className={`rounded-xl border border-line bg-inset px-3 py-2 text-base text-ink${multiline === true ? ' min-h-24' : ''}`}
       value={value}
       onChangeText={onChangeText}
       placeholder={placeholder}
-      autoCapitalize="none"
+      autoCapitalize={multiline === true ? 'sentences' : 'none'}
+      multiline={multiline}
+      keyboardType={keyboardType}
+      textAlignVertical={multiline === true ? 'top' : undefined}
     />
   </View>
 );
@@ -85,10 +93,14 @@ export const TimeZoneField = ({
           nestedScrollEnabled
           keyboardShouldPersistTaps="handled"
           onTouchStart={cancelClose}
-          onMouseDown={(event) => {
-            event.preventDefault();
-            cancelClose();
-          }}
+          {...(Platform.OS === 'web'
+            ? ({
+                onMouseDown: (event: { preventDefault: () => void }) => {
+                  event.preventDefault();
+                  cancelClose();
+                },
+              } as unknown as ScrollViewProps)
+            : null)}
         >
           {choices.map((choice) => (
             <Pressable
@@ -119,40 +131,52 @@ export const Button = ({
   disabled,
   color,
   tone = 'primary',
+  busy = false,
+  labelOpacity,
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
   color?: string;
   tone?: ButtonTone;
+  busy?: boolean;
+  labelOpacity?: Animated.Value;
 }) => {
   const { brand } = useApp();
   const [pressed, setPressed] = useState(false);
   const source = color ?? brand.primary;
   const fill = fieldWash(muteColor(source), fieldWashOpacity.button);
   const surface = tone === 'secondary' ? 'border border-line bg-inset' : '';
+  const labelColor = tone === 'secondary' ? brand.secondary : tone === 'danger' ? colors.danger : '#ffffff';
+  const dimmed = disabled === true && !busy;
   return (
     <Pressable
       className={`mb-2 min-h-11 w-full items-center justify-center overflow-hidden rounded-full px-5 ${surface}`}
       style={
         tone === 'danger'
-          ? { opacity: disabled ? 0.4 : pressed ? 0.85 : 1 }
+          ? { opacity: dimmed ? 0.4 : pressed && !busy ? 0.85 : 1 }
           : {
-              backgroundColor: tone === 'secondary' ? colors.inset : pressed ? muteColor(source) : fill,
-              opacity: disabled ? 0.4 : pressed ? 0.85 : 1,
+              backgroundColor: tone === 'secondary' ? colors.inset : pressed && !busy ? muteColor(source) : fill,
+              opacity: dimmed ? 0.4 : pressed && !busy ? 0.85 : 1,
             }
       }
       onPress={onPress}
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
-      disabled={disabled}
+      disabled={disabled === true || busy}
     >
-      <Text
-        className={`font-semibold ${tone === 'danger' ? 'text-danger' : tone === 'secondary' ? '' : 'text-white'}`}
-        style={tone === 'secondary' ? { color: brand.secondary } : { color: tone === 'danger' ? colors.danger : '#ffffff' }}
-      >
-        {label}
-      </Text>
+      {busy ? (
+        <ActivityIndicator color={labelColor} />
+      ) : (
+        <Animated.View style={{ opacity: labelOpacity }}>
+          <Text
+            className={`font-semibold ${tone === 'danger' ? 'text-danger' : tone === 'secondary' ? '' : 'text-white'}`}
+            style={{ color: labelColor }}
+          >
+            {label}
+          </Text>
+        </Animated.View>
+      )}
     </Pressable>
   );
 };
@@ -164,7 +188,7 @@ const responseMessage = (err: unknown): string =>
   err instanceof Error && err.message.length > 0 ? err.message : 'request_failed';
 
 /**
- * Form submit control. Runs `onPress`, and shows the thrown response message under the button.
+ * Form submit control. Shows a loader on the button, then a confirmation or the thrown error.
  */
 export const SubmitButton = ({
   label,
@@ -175,20 +199,47 @@ export const SubmitButton = ({
   message,
 }: {
   label: string;
-  onPress: () => void | Promise<void>;
+  onPress: () => void | boolean | Promise<void | boolean>;
   disabled?: boolean;
   color?: string;
   tone?: ButtonTone;
   message?: (err: unknown) => string;
 }) => {
+  const { t } = useTranslation();
   const [error, setError] = useState<string | undefined>();
+  const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  const labelOpacity = useRef(new Animated.Value(1)).current;
+  const hideSaved = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => () => {
+    if (hideSaved.current !== undefined) clearTimeout(hideSaved.current);
+  }, []);
+
+  const showSaved = (): void => {
+    labelOpacity.setValue(0);
+    Animated.timing(labelOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    hideSaved.current = setTimeout(() => {
+      Animated.timing(labelOpacity, { toValue: 0, duration: 200, useNativeDriver: true }).start(({ finished }) => {
+        if (!finished) return;
+        setSaved(false);
+        Animated.timing(labelOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+      });
+    }, 1600);
+  };
 
   const submit = async (): Promise<void> => {
+    if (hideSaved.current !== undefined) clearTimeout(hideSaved.current);
     setError(undefined);
+    setSaved(false);
+    labelOpacity.setValue(1);
     setBusy(true);
     try {
-      await onPress();
+      const confirmed = await onPress();
+      if (confirmed !== false) {
+        setSaved(true);
+        showSaved();
+      }
     } catch (err) {
       setError((message ?? responseMessage)(err));
     } finally {
@@ -198,7 +249,15 @@ export const SubmitButton = ({
 
   return (
     <View>
-      <Button label={label} onPress={() => void submit()} disabled={disabled === true || busy} color={color} tone={tone} />
+      <Button
+        label={saved ? t('common.saved') : label}
+        onPress={() => void submit()}
+        disabled={disabled}
+        color={color}
+        tone={tone}
+        busy={busy}
+        labelOpacity={labelOpacity}
+      />
       <ErrorText message={error} />
     </View>
   );

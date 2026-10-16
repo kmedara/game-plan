@@ -1,25 +1,10 @@
-const plugin = require('tailwindcss/plugin');
-
-/** React Native uses a separate font file per weight, so weight classes select that file. */
-const plusJakarta = plugin(({ addUtilities }) => {
-  addUtilities({
-    '.font-sans': { fontFamily: 'PlusJakartaSans_400Regular' },
-    '.font-normal': { fontFamily: 'PlusJakartaSans_400Regular', fontWeight: '400' },
-    '.font-medium': { fontFamily: 'PlusJakartaSans_500Medium', fontWeight: '400' },
-    '.font-semibold': { fontFamily: 'PlusJakartaSans_600SemiBold', fontWeight: '400' },
-    '.font-bold': { fontFamily: 'PlusJakartaSans_700Bold', fontWeight: '400' },
-  });
-});
-
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: 'class',
   content: ['./app/**/*.{ts,tsx}', './src/**/*.{ts,tsx}'],
   presets: [require('nativewind/preset')],
   theme: {
     extend: {
-      fontFamily: {
-        sans: ['PlusJakartaSans_400Regular'],
-      },
       colors: {
         canvas: '#eef2ef',
         raised: '#f7f9f8',
@@ -39,5 +24,4 @@ module.exports = {
       },
     },
   },
-  plugins: [plusJakarta],
 };

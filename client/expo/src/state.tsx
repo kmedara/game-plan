@@ -13,6 +13,8 @@ type AppState = {
   live: LiveSocket;
   teams: TeamSummary[];
   refreshTeams: () => Promise<void>;
+  /** Replace one team in the cached list so other screens pick up a saved theme. */
+  patchTeam: (team: TeamSummary) => void;
   selectTeam: (teamId: string) => void;
   /** Draft colors for the team settings page. The header uses these until cleared. */
   setPreviewTheme: (theme: TeamTheme | undefined) => void;
@@ -55,6 +57,10 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
     if (selected === undefined) api.setTeamId(undefined);
   };
 
+  const patchTeam = (team: TeamSummary): void => {
+    setTeams(teamsCache.map((item) => (item.teamId === team.teamId ? team : item)));
+  };
+
   const selectTeam = (teamId: string): void => {
     api.setTeamId(teamId);
   };
@@ -67,7 +73,7 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
   }, [api]);
 
   const value = useMemo(
-    () => ({ api, live, teams, refreshTeams, selectTeam, setPreviewTheme, brand }),
+    () => ({ api, live, teams, refreshTeams, patchTeam, selectTeam, setPreviewTheme, brand }),
     [api, live, teams, snapshot, previewTheme, brand.primary, brand.secondary, brand.accent, brand.stops.join()],
   );
 

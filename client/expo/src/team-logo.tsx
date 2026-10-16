@@ -2,16 +2,13 @@
  * Team logo picker. Uploads through the media presign API and saves the key on the team theme.
  */
 
-import * as ImagePicker from 'expo-image-picker';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { TeamTheme } from '@gameplan/types';
 import { useApp } from './state';
+import { AddMark, TrashIcon, teamImageErrorKey, uploadTeamImage, useTeamImageUrl } from './team-media';
 import { ErrorText, ProfilePhoto } from './ui';
-
-const LOGO_MAX_BYTES = 5 * 1024 * 1024;
-const LOGO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
 export const TeamLogo = ({
   teamId,
@@ -25,84 +22,50 @@ export const TeamLogo = ({
   onSaved: (theme: TeamTheme | undefined) => void;
 }) => {
   const { t } = useTranslation();
-  const { api, refreshTeams } = useApp();
-  const [uri, setUri] = useState<string | undefined>();
+  const { api, patchTeam } = useApp();
+  const uri = useTeamImageUrl(teamId, theme?.logoKey);
   const [error, setError] = useState<string | undefined>();
 
-  useEffect(() => {
-    const key = theme?.logoKey;
-    if (key === undefined) {
-      setUri(undefined);
-      return;
-    }
-    let cancelled = false;
-    void api.presignDownload(key, { teamId }).then((download) => {
-      if (!cancelled) setUri(download.downloadUrl);
-    }).catch(() => {
-      if (!cancelled) setUri(undefined);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, teamId, theme?.logoKey]);
-
   const saveTheme = async (logoKey: string | undefined): Promise<void> => {
-    const next = {
-      ...(theme?.primary !== undefined ? { primary: theme.primary } : {}),
-      ...(theme?.secondary !== undefined ? { secondary: theme.secondary } : {}),
-      ...(theme?.accent !== undefined ? { accent: theme.accent } : {}),
-      ...(logoKey !== undefined ? { logoKey } : {}),
-      ...(theme?.chatBackgroundKey !== undefined ? { chatBackgroundKey: theme.chatBackgroundKey } : {}),
-    };
     const saved = await api.updateTeam(teamId, {
-      theme: Object.keys(next).length > 0 ? next : null,
+      theme: { logoKey: logoKey ?? null },
     });
+    patchTeam(saved);
     onSaved(saved.theme);
-    await refreshTeams();
   };
 
   const upload = async (): Promise<void> => {
     setError(undefined);
-    const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'] });
-    if (picked.canceled || picked.assets[0] === undefined) return;
-    const asset = picked.assets[0];
-    const contentType = asset.mimeType ?? 'image/jpeg';
-    if (!LOGO_TYPES.has(contentType)) {
-      setError(t('errors.teamAdmin.badLogoType'));
-      return;
-    }
-    const blob = await (await fetch(asset.uri)).blob();
-    if (blob.size > LOGO_MAX_BYTES) {
-      setError(t('errors.teamAdmin.logoTooLarge'));
+    const result = await uploadTeamImage(api);
+    if (result === undefined) return;
+    if ('error' in result) {
+      setError(t(teamImageErrorKey(result.error)));
       return;
     }
     try {
-      const presign = await api.presignUpload(contentType, blob.size);
-      const uploadResponse = await fetch(presign.uploadUrl, {
-        method: 'PUT',
-        headers: { 'content-type': contentType },
-        body: blob,
-      });
-      if (!uploadResponse.ok) {
-        setError(t('errors.teamAdmin.logoUploadFailed'));
-        return;
-      }
-      await saveTheme(presign.objectKey);
+      await saveTheme(result.key);
     } catch {
       setError(t('errors.teamAdmin.logoUploadFailed'));
     }
   };
 
+  const clear = (): void => {
+    void saveTheme(undefined).catch(() => setError(t('errors.teamAdmin.logoUploadFailed')));
+  };
+
   return (
-    <View className="mb-4 items-center">
-      <Text className="mb-2 text-sm text-muted">{t('teamAdmin.teamLogo')}</Text>
-      <ProfilePhoto name={name} uri={uri} size={72} resizeMode="contain" />
-      <Pressable className="mt-2" onPress={() => void upload()} accessibilityRole="button">
-        <Text className="font-semibold text-ink">{theme?.logoKey === undefined ? t('teamAdmin.addLogo') : t('teamAdmin.changeLogo')}</Text>
+    <View className="mb-3 shrink-0 items-center">
+      <Pressable onPress={() => void upload()} accessibilityRole="button" accessibilityLabel={t('teamAdmin.changeLogo')}>
+        {theme?.logoKey !== undefined ? (
+          <ProfilePhoto name={name} uri={uri} size={36} resizeMode="contain" />
+        ) : (
+          <AddMark />
+        )}
       </Pressable>
+      <Text className="mt-1 text-sm text-ink">{t('teamAdmin.teamLogo')}</Text>
       {theme?.logoKey !== undefined ? (
-        <Pressable className="mt-1" onPress={() => void saveTheme(undefined).catch(() => setError(t('errors.teamAdmin.logoUploadFailed')))} accessibilityRole="button">
-          <Text className="text-muted">{t('teamAdmin.removeLogo')}</Text>
+        <Pressable className="mt-1" onPress={clear} accessibilityRole="button" accessibilityLabel={t('teamAdmin.removeLogo')}>
+          <TrashIcon />
         </Pressable>
       ) : null}
       <ErrorText message={error} />

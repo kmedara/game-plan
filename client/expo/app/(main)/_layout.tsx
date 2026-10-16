@@ -169,7 +169,7 @@ export default function MainLayout() {
         {tabs.map((tab) => {
           const Icon = tabIcons[tab.href];
           const active = pathname.startsWith(tab.href);
-          const color = active ? brand.accent : colors.muted;
+          const color = active ? brand.primary : colors.muted;
           return (
             <Pressable key={tab.href} className="flex-1 items-center" onPress={() => router.push(tab.href)}>
               <Icon color={color} size={24} strokeWidth={2} />

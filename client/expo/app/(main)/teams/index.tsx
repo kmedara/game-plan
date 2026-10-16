@@ -3,14 +3,16 @@
  */
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, Text, TextInput, View, type ScrollViewProps } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { canCreateTeam } from '@gameplan/rules';
 import type { TeamDirectoryHit } from '@gameplan/types';
 import { inviteCodeFromInput } from '@/src/roles';
 import { useApp } from '@/src/state';
 import { Button, ErrorText, Field, SubmitButton, TimeZoneField } from '@/src/ui';
+
+const TEAM_PAGE = 10;
 
 export default function TeamsScreen() {
   const { t } = useTranslation();
@@ -19,8 +21,6 @@ export default function TeamsScreen() {
   const mode = action === 'join' || action === 'create' ? action : undefined;
   const { api, teams, refreshTeams, selectTeam, brand } = useApp();
   const showCreate = api.user === undefined || canCreateTeam(api.user.accountKind);
-  const [query, setQuery] = useState('');
-  const [hits, setHits] = useState<TeamDirectoryHit[]>([]);
   const [name, setName] = useState('');
   const [timeZone, setTimeZone] = useState('America/New_York');
   const [code, setCode] = useState('');
@@ -33,16 +33,6 @@ export default function TeamsScreen() {
     });
   }, []);
 
-  useEffect(() => {
-    const handle = setTimeout(() => {
-      void api
-        .searchTeams(query, { limit: 10 })
-        .then((page) => setHits(page.teams))
-        .catch(() => setHits([]));
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [api, query]);
-
   const requestJoin = async (team: TeamDirectoryHit): Promise<void> => {
     setError(undefined);
     try {
@@ -53,8 +43,8 @@ export default function TeamsScreen() {
     }
   };
 
-  const create = async (): Promise<void> => {
-    if (name.trim().length === 0) return;
+  const create = async (): Promise<boolean | void> => {
+    if (name.trim().length === 0) return false;
     const team = await api.createTeam({ name: name.trim(), timeZone: timeZone.trim() });
     selectTeam(team.teamId);
     await refreshTeams();
@@ -87,12 +77,7 @@ export default function TeamsScreen() {
       ))}
       {mode === 'join' ? (
         <View className="mb-6">
-          <Field label={t('teams.searchByName')} value={query} onChangeText={setQuery} />
-          {hits.map((hit) => (
-            <Pressable key={hit.teamId} className="mb-2 rounded-xl border border-line bg-paper p-3" onPress={() => void requestJoin(hit)}>
-              <Text className="text-ink">{hit.name}</Text>
-            </Pressable>
-          ))}
+          <TeamSearchField label={t('teams.searchByName')} onSelect={(hit) => void requestJoin(hit)} />
           <Field label={t('teams.inviteCode')} value={code} onChangeText={setCode} />
           <Button label={t('invite.joinTeam')} onPress={openInvite} />
         </View>
@@ -105,5 +90,143 @@ export default function TeamsScreen() {
         </View>
       ) : null}
     </ScrollView>
+  );
+}
+
+/** Name autocomplete. Each page is 10 teams, and scrolling the list loads the next page. */
+const TeamSearchField = ({
+  label,
+  onSelect,
+}: {
+  label: string;
+  onSelect: (team: TeamDirectoryHit) => void;
+}) => {
+  const { api } = useApp();
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [hits, setHits] = useState<TeamDirectoryHit[]>([]);
+  const closing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const requestId = useRef(0);
+  const loading = useRef(false);
+  const cursor = useRef<string | undefined>(undefined);
+  const queryRef = useRef(query);
+  const viewportHeight = useRef(0);
+  const contentHeight = useRef(0);
+  queryRef.current = query;
+
+  const cancelClose = (): void => {
+    if (closing.current === undefined) return;
+    clearTimeout(closing.current);
+    closing.current = undefined;
+  };
+
+  const load = async (text: string, pageCursor: string | undefined): Promise<void> => {
+    const id = pageCursor === undefined ? ++requestId.current : requestId.current;
+    if (pageCursor !== undefined && (loading.current || cursor.current === undefined)) return;
+    loading.current = true;
+    if (pageCursor === undefined) {
+      cursor.current = undefined;
+      setHits([]);
+    }
+    try {
+      const page = await api.searchTeams(text, {
+        limit: TEAM_PAGE,
+        ...(pageCursor !== undefined ? { cursor: pageCursor } : {}),
+      });
+      if (id !== requestId.current) return;
+      cursor.current = page.cursor;
+      setHits((current) => (pageCursor === undefined ? page.teams : [...current, ...page.teams]));
+    } catch {
+      if (id !== requestId.current) return;
+      cursor.current = undefined;
+      if (pageCursor === undefined) setHits([]);
+    } finally {
+      if (id === requestId.current) loading.current = false;
+    }
+  };
+
+  const loadMore = (): void => {
+    if (!open || cursor.current === undefined) return;
+    void load(queryRef.current, cursor.current);
+  };
+
+  const fillIfShort = (): void => {
+    if (contentHeight.current > 0 && contentHeight.current <= viewportHeight.current + 8) loadMore();
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const handle = setTimeout(() => {
+      cursor.current = undefined;
+      void load(query, undefined);
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [api, open, query]);
+
+  return (
+    <View className="mb-3" style={{ zIndex: open ? 20 : 0 }}>
+      <Text className="mb-1 text-sm text-muted">{label}</Text>
+      <View>
+        <TextInput
+          className="rounded-xl border border-line bg-inset px-3 py-2 text-base text-ink"
+          value={query}
+          onChangeText={(next) => {
+            setQuery(next);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => {
+            cancelClose();
+            closing.current = setTimeout(() => setOpen(false), 150);
+          }}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {open && hits.length > 0 ? (
+          <ScrollView
+            className="absolute left-0 right-0 top-full z-20 max-h-60 rounded-xl border border-line bg-paper"
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+            scrollEventThrottle={16}
+            onLayout={(event) => {
+              viewportHeight.current = event.nativeEvent.layout.height;
+              fillIfShort();
+            }}
+            onContentSizeChange={(_width, height) => {
+              contentHeight.current = height;
+              fillIfShort();
+            }}
+            onScroll={(event) => {
+              const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+              if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 24) loadMore();
+            }}
+            onTouchStart={cancelClose}
+            {...(Platform.OS === 'web'
+              ? ({
+                  onMouseDown: (event: { preventDefault: () => void }) => {
+                    event.preventDefault();
+                    cancelClose();
+                  },
+                } as unknown as ScrollViewProps)
+              : null)}
+          >
+            {hits.map((hit) => (
+              <Pressable
+                key={hit.teamId}
+                className="border-b border-line px-3 py-2"
+                onPressIn={() => {
+                  cancelClose();
+                  setQuery(hit.name);
+                  setOpen(false);
+                  onSelect(hit);
+                }}
+              >
+                <Text className="text-ink">{hit.name}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
+      </View>
+    </View>
   );
 }

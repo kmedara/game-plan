@@ -4,9 +4,27 @@
 
 @layer base {
   Text {
-    font-family: PlusJakartaSans_400Regular;
+    font-family: system-ui, sans-serif;
   }
   TextInput {
-    font-family: PlusJakartaSans_400Regular;
+    font-family: system-ui, sans-serif;
+  }
+}
+
+@media (display-mode: ios) {
+  Text {
+    font-family: System;
+  }
+  TextInput {
+    font-family: System;
+  }
+}
+
+@media (display-mode: android) {
+  Text {
+    font-family: sans-serif;
+  }
+  TextInput {
+    font-family: sans-serif;
   }
 }

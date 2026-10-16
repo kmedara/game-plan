@@ -3,14 +3,15 @@
  */
 
 import * as ImagePicker from 'expo-image-picker';
-import { X } from 'lucide-react-native';
+import { Send, X } from 'lucide-react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { FlatList, Image, Linking, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { ChatMessage } from '@gameplan/types';
 import { useActiveTeam, useApp } from '@/src/state';
-import { ErrorText, SubmitButton } from '@/src/ui';
+import { chatOverlayColor } from '@/src/team-media';
+import { ErrorText } from '@/src/ui';
 
 const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -23,6 +24,7 @@ export default function ChatThreadScreen() {
   const { team } = useActiveTeam();
   const id = chatId ?? '';
   const backgroundKey = id.length > 0 && id === team?.defaultChatId ? team.theme?.chatBackgroundKey : undefined;
+  const scrim = chatOverlayColor(team?.theme?.chatBackgroundOverlay);
   const [backgroundUri, setBackgroundUri] = useState<string | undefined>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
@@ -72,9 +74,9 @@ export default function ChatThreadScreen() {
     });
   }, [api, id, live]);
 
-  const send = async (): Promise<void> => {
+  const send = async (): Promise<boolean | void> => {
     const attachmentKeys = photos.map((photo) => photo.key);
-    if (draft.trim().length === 0 && attachmentKeys.length === 0) return;
+    if (draft.trim().length === 0 && attachmentKeys.length === 0) return false;
     const message = await api.sendMessage(id, {
       body: draft.trim(),
       ...(attachmentKeys.length > 0 ? { attachmentKeys } : {}),
@@ -117,7 +119,7 @@ export default function ChatThreadScreen() {
       {backgroundUri !== undefined ? (
         <>
           <Image source={{ uri: backgroundUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.45)' }]} />
+          {scrim !== undefined ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]} /> : null}
         </>
       ) : null}
       <FlatList
@@ -168,22 +170,31 @@ export default function ChatThreadScreen() {
             ))}
           </View>
         ) : null}
-        <View className="mb-2 flex-row items-center">
+        <View className="flex-row items-center rounded-xl border border-line bg-inset">
           <Pressable
             accessibilityLabel={t('chats.attachPhoto')}
-            className="mr-2 h-10 w-10 items-center justify-center rounded-full bg-inset"
+            className="h-10 w-10 items-center justify-center"
             onPress={() => void attach()}
           >
             <CameraIcon />
           </Pressable>
           <TextInput
-            className="flex-1 rounded-xl border border-line bg-inset px-3 py-2 text-ink"
+            className="flex-1 py-2 text-ink"
             value={draft}
             onChangeText={setDraft}
             placeholder={t('chats.message')}
           />
+          {draft.trim().length > 0 || photos.length > 0 ? (
+            <Pressable
+              accessibilityLabel={t('chats.send')}
+              className="mr-1 h-8 w-8 items-center justify-center rounded-full"
+              style={{ backgroundColor: brand.accent }}
+              onPress={() => void send().catch((err: unknown) => setError(err instanceof Error ? err.message : 'request_failed'))}
+            >
+              <Send color={brand.onPrimary} size={16} />
+            </Pressable>
+          ) : null}
         </View>
-        <SubmitButton label={t('chats.send')} onPress={send} color={brand.accent} />
       </View>
     </View>
   );

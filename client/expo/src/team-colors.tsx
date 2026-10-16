@@ -7,22 +7,12 @@ import { createElement, useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { colors } from './theme';
+import { AddMark, TrashIcon } from './team-media';
 
 const HUE_STOPS = ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#ff0000'] as const;
 const DEFAULT_PRIMARY = colors.field;
 const DEFAULT_SECONDARY = '#1e3a8a';
 const DEFAULT_ACCENT = '#ea580c';
-
-const TrashIcon = () => (
-  <View className="mt-1 h-4 w-3.5 items-center">
-    <View className="h-0.5 w-1.5 rounded-full bg-muted" />
-    <View className="mt-px h-0.5 w-3.5 rounded-full bg-muted" />
-    <View className="mt-px h-2 w-2.5 flex-row justify-evenly rounded-b-sm border-x border-b border-muted pt-px">
-      <View className="h-full w-px bg-muted" />
-      <View className="h-full w-px bg-muted" />
-    </View>
-  </View>
-);
 
 const hslToHex = (hue: number, lightness: number): string => {
   const saturation = 0.72;
@@ -143,7 +133,7 @@ const ColorWell = ({
         />
       )}
       <Text className="mt-1 text-sm text-ink">{label}</Text>
-      <Pressable onPress={onClear} accessibilityRole="button" accessibilityLabel={t('teamAdmin.removeColor')}>
+      <Pressable className="mt-1" onPress={onClear} accessibilityRole="button" accessibilityLabel={t('teamAdmin.removeColor')}>
         <TrashIcon />
       </Pressable>
       {Platform.OS !== 'web' && open ? <NativeBars label={label} onChange={onChange} /> : null}
@@ -165,7 +155,7 @@ export const TeamColors = ({
   const { t } = useTranslation();
 
   return (
-    <View className="mb-3 w-full flex-row items-start justify-around">
+    <View className="mb-3 min-w-0 flex-1 flex-row items-start justify-around">
       <ColorWell
         label={t('teamAdmin.primary')}
         value={primary}
@@ -181,12 +171,7 @@ export const TeamColors = ({
         />
       ) : (
         <Pressable className="items-center" onPress={() => onChange({ primary, secondary: DEFAULT_SECONDARY, accent })} accessibilityRole="button">
-          <View className="h-9 w-9 items-center justify-center rounded-full border border-line">
-            <View className="h-3.5 w-3.5 items-center justify-center">
-              <View className="absolute h-0.5 w-3.5 rounded-full bg-ink" />
-              <View className="absolute h-3.5 w-0.5 rounded-full bg-ink" />
-            </View>
-          </View>
+          <AddMark />
           <Text className="mt-1 text-sm text-ink">{t('teamAdmin.secondary')}</Text>
         </Pressable>
       )}
@@ -199,12 +184,7 @@ export const TeamColors = ({
         />
       ) : (
         <Pressable className="items-center" onPress={() => onChange({ primary, secondary, accent: DEFAULT_ACCENT })} accessibilityRole="button">
-          <View className="h-9 w-9 items-center justify-center rounded-full border border-line">
-            <View className="h-3.5 w-3.5 items-center justify-center">
-              <View className="absolute h-0.5 w-3.5 rounded-full bg-ink" />
-              <View className="absolute h-3.5 w-0.5 rounded-full bg-ink" />
-            </View>
-          </View>
+          <AddMark />
           <Text className="mt-1 text-sm text-ink">{t('teamAdmin.accent')}</Text>
         </Pressable>
       )}
