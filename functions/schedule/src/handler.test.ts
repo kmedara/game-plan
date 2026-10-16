@@ -845,7 +845,8 @@ describe('schedule handler (in-memory)', () => {
       }),
     );
     expect(claimed.statusCode).toBe(200);
-    expect(bodyOf(claimed).offers[0].riderIds).toEqual([rider.userId]);
+    const claimedOffers = bodyOf(claimed).offers as Array<{ riderIds: string[] }>;
+    expect(claimedOffers[0]?.riderIds).toEqual([rider.userId]);
 
     const full = await handler(
       httpEvent('PUT', `/schedule/teams/${teamId}/carpool/claim`, {

@@ -283,5 +283,10 @@ export const deliverFanoutJob = async (job: FanoutJob): Promise<void> => {
  */
 export const parseFanoutJob = (body: unknown): FanoutJob | undefined => {
   const parsed = fanoutJobSchema.safeParse(body);
-  return parsed.success ? parsed.data : undefined;
+  if (!parsed.success) return undefined;
+  const job = parsed.data;
+  if (job.type !== 'event_reminder') return job;
+  const [first, ...rest] = job.userIds;
+  if (first === undefined) return undefined;
+  return { ...job, userIds: [first, ...rest] };
 };

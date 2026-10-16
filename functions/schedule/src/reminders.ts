@@ -349,7 +349,8 @@ export const runDueReminders = async (now: Date): Promise<void> => {
           .map((rsvp) => rsvp.userId),
       ),
     ];
-    if (userIds.length > 0) {
+    const [first, ...rest] = userIds;
+    if (first !== undefined) {
       await enqueueFanout({
         type: 'event_reminder',
         teamId: row.teamId,
@@ -358,7 +359,7 @@ export const runDueReminders = async (now: Date): Promise<void> => {
         occurrenceStartsAt: row.occurrenceStartsAt,
         ...(row.location !== undefined ? { location: row.location } : {}),
         kind: row.kind,
-        userIds,
+        userIds: [first, ...rest],
       });
     }
     await deleteItem(REMINDERS_PK, row.SK);
