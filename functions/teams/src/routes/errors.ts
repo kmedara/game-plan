@@ -47,6 +47,7 @@ export const mapTeamsError: ErrorMappingFn = (
       return conflict(error.message);
     case "manage_permissions_required_for_team_admin":
     case "team_admin_permissions_locked":
+    case "roles_required":
     case "invalid_body":
     case "too_many_positions":
       return badRequest(error.message);

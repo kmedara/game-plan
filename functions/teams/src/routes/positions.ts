@@ -31,6 +31,6 @@ export const handleSetPositions = route(
     assertPositionLimit(body.positions);
     const membership = await setMemberPositions(teamId, user.userId, body.positions);
     const team = await loadTeam(teamId);
-    return json(200, toTeamSummary(team, membership.role, membership.positions));
+    return json(200, toTeamSummary(team, membership.roles, membership.positions));
   },
 );

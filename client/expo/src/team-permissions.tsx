@@ -2,12 +2,14 @@
  * Per-role permission checkboxes. Saving rejects a change that would leave a minor in a managing role.
  */
 
+import { Check } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { roleAllowedForAccount } from '@gameplan/rules';
 import { TEAM_PERMISSIONS, type RolePermissions, type TeamMember } from '@gameplan/types';
-import { roleLabel } from '@/src/roles';
+import { heldRoles, roleLabel } from '@/src/roles';
 import { useApp } from '@/src/state';
+import { colors } from '@/src/theme';
 import { SubmitButton } from '@/src/ui';
 
 export const TeamPermissions = ({
@@ -22,7 +24,7 @@ export const TeamPermissions = ({
   members: TeamMember[];
 }) => {
   const { t } = useTranslation();
-  const { api } = useApp();
+  const { api, brand } = useApp();
   if (roles.length === 0) return null;
 
   const toggle = (role: string, permission: RolePermissions['permissions'][number], checked: boolean): void => {
@@ -41,7 +43,7 @@ export const TeamPermissions = ({
     const blocked = roles.some((row) =>
       members.some(
         (member) =>
-          member.role === row.role &&
+          heldRoles(member).includes(row.role) &&
           member.accountKind !== undefined &&
           !roleAllowedForAccount(member.accountKind, row.role, row.permissions),
       ),
@@ -64,10 +66,23 @@ export const TeamPermissions = ({
               return (
                 <Pressable
                   key={permission}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked, disabled: locked }}
                   disabled={locked}
+                  className="min-h-9 flex-row items-center"
                   onPress={() => toggle(row.role, permission, !checked)}
                 >
-                  <Text className={locked ? 'text-muted' : 'text-ink'}>{checked ? '☑' : '☐'} {permission}</Text>
+                  <View
+                    className="mr-3 h-6 w-6 items-center justify-center rounded-md border-2"
+                    style={{
+                      borderColor: checked ? brand.primary : colors.line,
+                      backgroundColor: checked ? brand.primary : colors.paper,
+                      opacity: locked ? 0.55 : 1,
+                    }}
+                  >
+                    {checked ? <Check size={16} color={brand.onPrimary} strokeWidth={3} /> : null}
+                  </View>
+                  <Text className={locked ? 'text-base text-muted' : 'text-base text-ink'}>{permission}</Text>
                 </Pressable>
               );
             })}

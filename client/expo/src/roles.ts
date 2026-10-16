@@ -2,7 +2,7 @@
  * Shared role labels and invite-code parsing.
  */
 
-import type { TeamRole } from '@gameplan/types';
+import type { TeamPermission, TeamRole } from '@gameplan/types';
 
 /** Translation keys for team roles on invite controls. */
 const ROLE_LABEL_KEYS: Record<TeamRole, string> = {
@@ -20,6 +20,32 @@ const ROLE_LABEL_KEYS: Record<TeamRole, string> = {
  */
 export const roleLabel = (role: string): string =>
   role in ROLE_LABEL_KEYS ? ROLE_LABEL_KEYS[role as TeamRole] : role;
+
+/**
+ * Roles on a membership payload.
+ *
+ * Falls back to the single `role` when `roles` is absent.
+ *
+ * @param member - A roster row or team summary.
+ * @returns The held roles.
+ */
+export const heldRoles = (member: { role: TeamRole; roles?: readonly TeamRole[] }): TeamRole[] =>
+  member.roles !== undefined && member.roles.length > 0 ? [...member.roles] : [member.role];
+
+/**
+ * True when any held role grants the permission.
+ *
+ * @param roles - Roles the member holds.
+ * @param matrix - The team's role-permission rows.
+ * @param permission - The permission under test.
+ * @returns Whether the set grants it.
+ */
+export const memberHasPermission = (
+  roles: readonly TeamRole[],
+  matrix: readonly { role: TeamRole; permissions: readonly TeamPermission[] }[],
+  permission: TeamPermission,
+): boolean =>
+  matrix.some((row) => roles.includes(row.role) && row.permissions.includes(permission));
 
 /**
  * Reads an invite code from a pasted link or a bare code.

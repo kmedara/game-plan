@@ -332,6 +332,7 @@ describe('teams handler (in-memory)', () => {
               role: 'team_admin',
               permissions: [
                 'manage_permissions',
+                'manage_team_settings',
                 'invite_members',
                 'approve_join_requests',
                 'assign_roles',
@@ -365,7 +366,7 @@ describe('teams handler (in-memory)', () => {
     const assigned = await handler(
       httpEvent('PATCH', `/teams/${teamId}/members/${requester.userId}`, {
         headers: { authorization: admin.authorization },
-        body: { role: 'player' },
+        body: { roles: ['player'] },
       }),
     );
     expect(assigned.statusCode).toBe(200);
@@ -396,7 +397,7 @@ describe('teams handler (in-memory)', () => {
     );
     expect(stripManage.statusCode).toBe(400);
     expect(bodyOf(stripManage)).toEqual({
-      error: 'team_admin_permissions_locked',
+      error: 'manage_permissions_required_for_team_admin',
     });
   });
 
@@ -499,6 +500,37 @@ describe('teams handler (in-memory)', () => {
     );
     expect(denied.statusCode).toBe(403);
 
+    await handler(
+      httpEvent('PUT', `/teams/${teamId}/permissions`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          roles: [
+            {
+              role: 'team_admin',
+              permissions: [
+                'manage_permissions',
+                'manage_team_settings',
+                'invite_members',
+                'approve_join_requests',
+                'assign_roles',
+                'manage_events',
+                'create_team_channels',
+              ],
+            },
+            { role: 'coach', permissions: ['manage_team_settings'] },
+          ],
+        },
+      }),
+    );
+    const allowed = await handler(
+      httpEvent('PATCH', `/teams/${teamId}`, {
+        headers: { authorization: coach.authorization },
+        body: { name: 'Coach Named' },
+      }),
+    );
+    expect(allowed.statusCode).toBe(200);
+    expect(bodyOf(allowed).name).toBe('Coach Named');
+
     const empty = await handler(
       httpEvent('PATCH', `/teams/${teamId}`, {
         headers: { authorization: admin.authorization },
@@ -540,6 +572,39 @@ describe('teams handler (in-memory)', () => {
       }),
     );
     expect(bodyOf(renamed).theme).toEqual(theme);
+
+    const accentOnly = await handler(
+      httpEvent('PATCH', `/teams/${teamId}`, {
+        headers: { authorization: admin.authorization },
+        body: { theme: { accent: '#112233' } },
+      }),
+    );
+    expect(bodyOf(accentOnly).theme).toEqual({ ...theme, accent: '#112233' });
+
+    const overlayOnly = await handler(
+      httpEvent('PATCH', `/teams/${teamId}`, {
+        headers: { authorization: admin.authorization },
+        body: { theme: { chatBackgroundOverlay: 'none' } },
+      }),
+    );
+    expect(bodyOf(overlayOnly).theme).toEqual({
+      ...theme,
+      accent: '#112233',
+      chatBackgroundOverlay: 'none',
+    });
+
+    const droppedLogo = await handler(
+      httpEvent('PATCH', `/teams/${teamId}`, {
+        headers: { authorization: admin.authorization },
+        body: { theme: { logoKey: null } },
+      }),
+    );
+    expect(bodyOf(droppedLogo).theme).toEqual({
+      primary: '#7c2d12',
+      secondary: '#1e40af',
+      accent: '#112233',
+      chatBackgroundOverlay: 'none',
+    });
 
     const cleared = await handler(
       httpEvent('PATCH', `/teams/${teamId}`, {
@@ -751,7 +816,15 @@ describe('teams handler (in-memory)', () => {
           roles: [
             {
               role: 'team_admin',
-              permissions: ['manage_permissions', 'invite_members', 'approve_join_requests', 'assign_roles'],
+              permissions: [
+                'manage_permissions',
+                'manage_team_settings',
+                'invite_members',
+                'approve_join_requests',
+                'assign_roles',
+                'manage_events',
+                'create_team_channels',
+              ],
             },
             { role: 'coach', permissions: ['manage_permissions'] },
           ],
@@ -931,7 +1004,7 @@ describe('teams handler (in-memory)', () => {
     const assignGhost = await handler(
       httpEvent('PATCH', `/teams/${teamId}/members/${ghost.userId}`, {
         headers: { authorization: admin.authorization },
-        body: { role: 'coach' },
+        body: { roles: ['coach'] },
       }),
     );
     expect(assignGhost.statusCode).toBe(404);

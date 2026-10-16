@@ -32,7 +32,7 @@ export const handleGetTeam = route(
     const membership = await getMembership(teamId, member.userId);
     return json(
       200,
-      toTeamSummary(team, member.role, membership?.positions ?? []),
+      toTeamSummary(team, member.roles, membership?.positions ?? []),
     );
   },
 );

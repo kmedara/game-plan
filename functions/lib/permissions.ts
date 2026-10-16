@@ -6,14 +6,20 @@
  * second backend process.
  */
 
-import type { TeamPermission, TeamRole } from '@gameplan/types';
-import { DEFAULT_ROLE_PERMISSIONS } from '@gameplan/types';
-import { getItem, queryBySkPrefix } from './dynamo/access.js';
-import { ROLE_PERMISSIONS_SK_PREFIX, teamMemberSk, teamPk } from './dynamo/keys.js';
+import type { TeamPermission, TeamRole } from "@gameplan/types";
+import { DEFAULT_ROLE_PERMISSIONS } from "@gameplan/types";
+import { rolesFromMembership } from "@gameplan/rules";
+import { getItem, queryBySkPrefix } from "./dynamo/access.js";
+import {
+  ROLE_PERMISSIONS_SK_PREFIX,
+  teamMemberSk,
+  teamPk,
+} from "./dynamo/keys.js";
 
 /** DynamoDB shape of a roster membership under `TEAM#<id>` / `MEMBER#<userId>`. */
 type TeamMemberItem = {
   role?: unknown;
+  roles?: unknown;
 };
 
 /** DynamoDB shape of a role-permission row under `TEAM#<id>` / `ROLE#<role>`. */
@@ -49,6 +55,20 @@ export const canWithMatrix = (
 ): boolean => roleHasPermission(matrix[role] ?? [], permission);
 
 /**
+ * Pure permission check for a member who holds more than one role.
+ *
+ * @param roles - The caller's roles on the team.
+ * @param matrix - Permissions keyed by role.
+ * @param permission - The permission under test.
+ * @returns `true` when any held role grants the permission.
+ */
+export const canWithRoles = (
+  roles: readonly TeamRole[],
+  matrix: Readonly<Partial<Record<TeamRole, readonly TeamPermission[]>>>,
+  permission: TeamPermission,
+): boolean => roles.some((role) => canWithMatrix(role, matrix, permission));
+
+/**
  * Ensures `manage_permissions` stays on `team_admin` and is never granted to a
  * role held by a minor (callers pass the account kind separately).
  *
@@ -61,8 +81,8 @@ export const normalizeRolePermissions = (
   permissions: readonly TeamPermission[],
 ): TeamPermission[] => {
   const unique = [...new Set(permissions)];
-  if (role === 'team_admin' && !unique.includes('manage_permissions')) {
-    throw new Error('manage_permissions_required_for_team_admin');
+  if (role === "team_admin" && !unique.includes("manage_permissions")) {
+    throw new Error("manage_permissions_required_for_team_admin");
   }
   return unique;
 };
@@ -71,7 +91,9 @@ export const normalizeRolePermissions = (
  * Loads the role-permission matrix for a team from DynamoDB.
  *
  * Falls back to {@link DEFAULT_ROLE_PERMISSIONS} for any role that has no row
- * yet (for example, a brand-new team mid-write).
+ * yet (for example, a brand-new team mid-write). `team_admin` always receives
+ * the default list, so a newly added permission applies without rewriting the
+ * stored admin row.
  *
  * @param teamId - The team whose matrix should be loaded.
  * @returns Permissions keyed by role.
@@ -91,12 +113,12 @@ export const loadRolePermissionMatrix = async (
   };
 
   for (const item of items) {
-    if (typeof item.role !== 'string') continue;
+    if (typeof item.role !== "string") continue;
     const role = item.role as TeamRole;
-    if (!(role in matrix)) continue;
+    if (!(role in matrix) || role === "team_admin") continue;
     if (!Array.isArray(item.permissions)) continue;
     matrix[role] = item.permissions.filter(
-      (value): value is TeamPermission => typeof value === 'string',
+      (value): value is TeamPermission => typeof value === "string",
     );
   }
 
@@ -112,16 +134,20 @@ export const loadRolePermissionMatrix = async (
  * @param userId - The Cognito `sub` of the caller.
  * @param teamId - The team under test.
  * @param permission - The privileged permission under test.
- * @returns `true` when the caller's role grants the permission.
+ * @returns `true` when any of the caller's roles grants the permission.
  */
 export const can = async (
   userId: string,
   teamId: string,
   permission: TeamPermission,
 ): Promise<boolean> => {
-  const member = await getItem<TeamMemberItem>(teamPk(teamId), teamMemberSk(userId));
-  if (member === undefined || typeof member.role !== 'string') return false;
-  const role = member.role as TeamRole;
+  const member = await getItem<TeamMemberItem>(
+    teamPk(teamId),
+    teamMemberSk(userId),
+  );
+  if (member === undefined) return false;
+  const roles = rolesFromMembership(member);
+  if (roles.length === 0) return false;
   const matrix = await loadRolePermissionMatrix(teamId);
-  return canWithMatrix(role, matrix, permission);
+  return canWithRoles(roles, matrix, permission);
 };

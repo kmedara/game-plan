@@ -20,7 +20,7 @@ export const handleListTeams = route(
   async ({ user }) => {
     const teams = await listUserTeams(user.userId);
     return json(200, {
-      teams: teams.map(({ team, role, positions }) => toTeamSummary(team, role, positions)),
+      teams: teams.map(({ team, roles, positions }) => toTeamSummary(team, roles, positions)),
     });
   },
 );

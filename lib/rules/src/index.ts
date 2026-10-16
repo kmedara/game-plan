@@ -155,6 +155,62 @@ export const assertCallerCanGrant = (callerRole: TeamRole, role: TeamRole): void
 };
 
 /**
+ * Orders a role set from highest rank to lowest and drops duplicates.
+ *
+ * @param roles - Roles to normalize.
+ * @returns Roles in {@link TEAM_ROLES} order.
+ */
+export const normalizeMemberRoles = (roles: readonly TeamRole[]): TeamRole[] => {
+  const unique = [...new Set(roles)];
+  unique.sort((left, right) => TEAM_ROLES.indexOf(left) - TEAM_ROLES.indexOf(right));
+  return unique;
+};
+
+/**
+ * Highest-ranked role in a set.
+ *
+ * {@link TEAM_ROLES} is ordered from highest rank to lowest.
+ *
+ * @param roles - Roles the member holds.
+ * @returns The role used for rank checks.
+ */
+export const highestRole = (roles: readonly TeamRole[]): TeamRole => {
+  const role = normalizeMemberRoles(roles)[0];
+  if (role === undefined) throw new Error('roles_required');
+  return role;
+};
+
+const isTeamRole = (value: unknown): value is TeamRole =>
+  typeof value === 'string' && (TEAM_ROLES as readonly string[]).includes(value);
+
+/**
+ * Roles on a membership row.
+ *
+ * A row written before a member could hold more than one role has only `role`.
+ *
+ * @param item - A roster or user-side membership row.
+ * @returns The held roles, highest rank first. Empty when the row has none.
+ */
+export const rolesFromMembership = (item: { role?: unknown; roles?: unknown }): TeamRole[] => {
+  if (Array.isArray(item.roles)) {
+    const roles = item.roles.filter(isTeamRole);
+    if (roles.length > 0) return normalizeMemberRoles(roles);
+  }
+  if (isTeamRole(item.role)) return [item.role];
+  return [];
+};
+
+/**
+ * Rejects a grant when the caller cannot grant every role in the set.
+ *
+ * @param callerRole - The highest role of the member granting access.
+ * @param roles - The roles being granted or already held.
+ */
+export const assertCallerCanGrantRoles = (callerRole: TeamRole, roles: readonly TeamRole[]): void => {
+  for (const role of roles) assertCallerCanGrant(callerRole, role);
+};
+
+/**
  * Returns whether an account may hold a role with the given permissions.
  *
  * @param accountKind - The member's account kind.
@@ -211,7 +267,8 @@ export const isMinorChatMembershipAllowed = (members: readonly ChatParticipant[]
   for (const minor of minors) {
     for (const other of members) {
       if (other.userId === minor.userId) continue;
-      if (!sharesTeam(minor.teamIds, other.teamIds)) return false;
+      const linkedGuardian = (minor.guardianIds ?? []).includes(other.userId);
+      if (!linkedGuardian && !sharesTeam(minor.teamIds, other.teamIds)) return false;
     }
   }
   return true;
@@ -224,6 +281,33 @@ export const isMinorChatMembershipAllowed = (members: readonly ChatParticipant[]
  * @param adding - The person being added.
  * @returns `true` when the addition is allowed under the minor rule.
  */
+/**
+ * Returns whether every minor who is chatting with a non-guardian adult has a guardian in the set.
+ *
+ * Two minors on a shared team, with no outside adult, are allowed.
+ *
+ * @param members - The full membership after the proposed change.
+ * @returns `true` when each such minor has a linked guardian in the chat.
+ */
+export const guardianPresentForAdultMinorChats = (
+  members: readonly ChatParticipant[],
+): boolean => {
+  for (const minor of members) {
+    if (minor.accountKind !== 'minor') continue;
+    const guardians = new Set(minor.guardianIds ?? []);
+    const outsideAdult = members.some(
+      (member) =>
+        member.accountKind === 'adult' &&
+        member.userId !== minor.userId &&
+        !guardians.has(member.userId),
+    );
+    if (!outsideAdult) continue;
+    const present = members.some((member) => guardians.has(member.userId));
+    if (!present) return false;
+  }
+  return true;
+};
+
 export const canAddChatMember = (
   existing: readonly ChatParticipant[],
   adding: ChatParticipant,

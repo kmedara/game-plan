@@ -43,7 +43,14 @@ vi.mock('../../../lib/dynamo/access.js', () => ({
       }
     }
   },
-  queryBySkPrefix: async () => [],
+  queryBySkPrefix: async <T extends Record<string, unknown>>(pk: string, skPrefix: string) => {
+    const items: T[] = [];
+    for (const [key, item] of store) {
+      const [itemPk, itemSk] = key.split('\0');
+      if (itemPk === pk && itemSk?.startsWith(skPrefix)) items.push(item as T);
+    }
+    return items;
+  },
   queryPage: async () => ({ items: [] }),
   queryAll: async () => [],
   queryPartition: async () => [],
@@ -129,7 +136,7 @@ describe('handleGetMember', () => {
       email: `${memberId}@example.com`,
       displayName: 'Pat Player',
       accountKind: 'adult',
-      phoneNumber: '555-0100',
+      phoneNumber: '+12025550123',
       photoKey: `uploads/${memberId}/photo`,
       createdAt: new Date().toISOString(),
     });
@@ -143,9 +150,10 @@ describe('handleGetMember', () => {
     expect(JSON.parse(result.body ?? '')).toMatchObject({
       userId: memberId,
       role: 'player',
+      roles: ['player'],
       positions: ['Wing'],
       displayName: 'Pat Player',
-      phoneNumber: '555-0100',
+      phoneNumber: '+12025550123',
       photoKey: `uploads/${memberId}/photo`,
     });
   });
@@ -246,19 +254,136 @@ describe('handleAssignRole', () => {
       [TABLE_SK]: teamMemberSk(memberId),
       userId: memberId,
       role: 'coach',
+      roles: ['coach', 'parent'],
       joinedAt: new Date().toISOString(),
     });
 
     const result = await handler(
       httpEvent('PATCH', `/teams/${teamId}/members/${memberId}`, {
         headers: { authorization: `Bearer ${accessToken}` },
-        body: { role: 'coach' },
+        body: { roles: ['parent', 'coach'] },
       }),
     );
     expect(result.statusCode).toBe(200);
     const body = JSON.parse(result.body ?? '{}') as Record<string, unknown>;
     expect(body.userId).toBe(memberId);
     expect(body.role).toBe('coach');
+    expect(body.roles).toEqual(['coach', 'parent']);
+    expect(assignMemberRole).toHaveBeenCalledWith(teamId, memberId, ['parent', 'coach']);
     expect(body.user).toMatchObject({ displayName: 'Pat Player' });
+  });
+
+  it('rejects a duplicate role and a set the caller cannot grant', async () => {
+    const coachId = randomUUID();
+    const adminId = randomUUID();
+    const teamId = randomUUID();
+    const { accessToken } = issueLocalTokens(coachId, `${coachId}@example.com`);
+
+    store.set(itemKey(teamPk(teamId), teamMetaSk()), {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: teamMetaSk(),
+      teamId,
+      name: 'Hawks',
+      timeZone: 'UTC',
+      defaultChatId: randomUUID(),
+      createdBy: coachId,
+      createdAt: new Date().toISOString(),
+    });
+    store.set(itemKey(teamPk(teamId), teamMemberSk(coachId)), {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: teamMemberSk(coachId),
+      userId: coachId,
+      role: 'coach',
+      roles: ['coach'],
+      joinedAt: new Date().toISOString(),
+    });
+    store.set(itemKey(teamPk(teamId), teamMemberSk(adminId)), {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: teamMemberSk(adminId),
+      userId: adminId,
+      role: 'team_admin',
+      joinedAt: new Date().toISOString(),
+    });
+    for (const role of Object.keys(DEFAULT_ROLE_PERMISSIONS)) {
+      const permissions =
+        role === 'coach'
+          ? ['assign_roles']
+          : [...DEFAULT_ROLE_PERMISSIONS[role as keyof typeof DEFAULT_ROLE_PERMISSIONS]];
+      store.set(itemKey(teamPk(teamId), rolePermissionsSk(role)), {
+        [TABLE_PK]: teamPk(teamId),
+        [TABLE_SK]: rolePermissionsSk(role),
+        role,
+        permissions,
+      });
+    }
+
+    const duplicate = await handler(
+      httpEvent('PATCH', `/teams/${teamId}/members/${adminId}`, {
+        headers: { authorization: `Bearer ${accessToken}` },
+        body: { roles: ['player', 'player'] },
+      }),
+    );
+    expect(duplicate.statusCode).toBe(400);
+
+    const outranked = await handler(
+      httpEvent('PATCH', `/teams/${teamId}/members/${adminId}`, {
+        headers: { authorization: `Bearer ${accessToken}` },
+        body: { roles: ['player'] },
+      }),
+    );
+    expect(outranked.statusCode).toBe(403);
+    expect(JSON.parse(outranked.body ?? '')).toEqual({ error: 'role_outranks_caller' });
+    expect(assignMemberRole).not.toHaveBeenCalled();
+  });
+
+  it('hides a minor phone number from a teammate who is not the guardian', async () => {
+    const viewerId = randomUUID();
+    const memberId = randomUUID();
+    const teamId = randomUUID();
+    const { accessToken } = issueLocalTokens(viewerId, `${viewerId}@example.com`);
+    store.set(itemKey(teamPk(teamId), teamMetaSk()), {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: teamMetaSk(),
+      teamId,
+      name: 'Hawks',
+      timeZone: 'UTC',
+      defaultChatId: randomUUID(),
+      createdBy: viewerId,
+      createdAt: new Date().toISOString(),
+    });
+    store.set(itemKey(teamPk(teamId), teamMemberSk(viewerId)), {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: teamMemberSk(viewerId),
+      userId: viewerId,
+      role: 'coach',
+      joinedAt: new Date().toISOString(),
+    });
+    store.set(itemKey(teamPk(teamId), teamMemberSk(memberId)), {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: teamMemberSk(memberId),
+      userId: memberId,
+      role: 'player',
+      joinedAt: new Date().toISOString(),
+    });
+    getProfileMock.mockResolvedValueOnce({
+      PK: userPk(memberId),
+      SK: profileSk(),
+      userId: memberId,
+      email: `${memberId}@example.com`,
+      displayName: 'Kid',
+      accountKind: 'minor',
+      phoneNumber: '+12025550123',
+      createdAt: new Date().toISOString(),
+    });
+
+    const result = await handler(
+      httpEvent('GET', `/teams/${teamId}/members/${memberId}`, {
+        headers: { authorization: `Bearer ${accessToken}` },
+      }),
+    );
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body ?? '') as Record<string, unknown>;
+    expect(body.phoneNumber).toBeUndefined();
+    expect(body.accountKind).toBe('minor');
   });
 });

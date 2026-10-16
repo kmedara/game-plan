@@ -87,7 +87,8 @@ vi.mock('../../lib/dynamo/access.js', () => ({
   decodeCursor: () => undefined,
 }));
 
-const { assertRoleAllowedForAccount, callerCanGrant } = await import('@gameplan/rules');
+const { assertRoleAllowedForAccount, callerCanGrant, highestRole, rolesFromMembership } =
+  await import('@gameplan/rules');
 
 const { assertAccountMayHoldRole, assertCanCreateTeam, assertProposedRolePermissions } =
   await import('../../lib/role-rules.js');
@@ -100,6 +101,7 @@ const {
   rejectJoinRequest,
   requireMembership,
   searchTeamDirectory,
+  assignMemberRole,
   setMemberPositions,
   toTeamSummary,
   updateTeamSettings,
@@ -398,6 +400,43 @@ describe('team-store edge cases', () => {
   it('callerCanGrant ranks player above parent', () => {
     expect(callerCanGrant('player', 'parent')).toBe(true);
     expect(callerCanGrant('parent', 'player')).toBe(false);
+    expect(highestRole(['parent', 'coach'])).toBe('coach');
+    expect(rolesFromMembership({ role: 'player' })).toEqual(['player']);
+    expect(rolesFromMembership({ role: 'parent', roles: ['coach', 'parent'] })).toEqual([
+      'coach',
+      'parent',
+    ]);
+  });
+
+  it('assignMemberRole stores the set and keeps positions', async () => {
+    const adminId = randomUUID();
+    seedProfile(adminId, 'adult');
+    const team = await createTeam({
+      name: 'Hawks',
+      timeZone: 'UTC',
+      userId: adminId,
+    });
+    const updated = await assignMemberRole(team.teamId, adminId, ['parent', 'coach']);
+    expect(updated.role).toBe('coach');
+    expect(updated.roles).toEqual(['coach', 'parent']);
+    const stored = store.get(itemKey(teamPk(team.teamId), teamMemberSk(adminId)));
+    expect(stored).toMatchObject({ role: 'coach', roles: ['coach', 'parent'] });
+    const userSide = store.get(itemKey(userPk(adminId), userTeamSk(team.teamId)));
+    expect(userSide).toMatchObject({ role: 'coach', roles: ['coach', 'parent'] });
+
+    store.set(itemKey(teamPk(team.teamId), teamMemberSk(adminId)), {
+      ...stored,
+      roles: undefined,
+      positions: ['Wing'],
+    });
+    store.set(itemKey(userPk(adminId), userTeamSk(team.teamId)), {
+      ...userSide,
+      roles: undefined,
+      positions: ['Wing'],
+    });
+    const kept = await setMemberPositions(team.teamId, adminId, ['Wing']);
+    expect(kept.roles).toEqual(['coach']);
+    expect(kept.positions).toEqual(['Wing']);
   });
 
   it('assertProposedRolePermissions skips members without profiles', async () => {

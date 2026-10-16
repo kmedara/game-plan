@@ -1,5 +1,6 @@
 /**
  * `PATCH /teams/:teamId` — update the team name, time zone, location, and theme.
+ * Requires `manage_team_settings`.
  */
 
 import { updateTeamBodySchema } from "@gameplan/schemas";
@@ -25,7 +26,7 @@ export const handleUpdateTeam = route(
   withTeamsErrors(),
   withBodyValidation(updateTeamBodySchema),
   requireUser(),
-  requirePermission("manage_permissions"),
+  requirePermission("manage_team_settings"),
   requireMembership(),
   async ({ teamId, member, body }) => {
     if (Object.keys(body).length === 0) return badRequest("invalid_body");
@@ -55,6 +56,6 @@ export const handleUpdateTeam = route(
       ...(location !== undefined ? { location } : {}),
       ...(body.theme !== undefined ? { theme: body.theme } : {}),
     });
-    return json(200, toTeamSummary(team, member.role));
+    return json(200, toTeamSummary(team, member.roles));
   },
 );

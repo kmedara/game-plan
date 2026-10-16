@@ -3,6 +3,7 @@
  */
 
 import type { AuthUser, TeamPermission, TeamRole } from '@gameplan/types';
+import { highestRole, rolesFromMembership } from '@gameplan/rules';
 import { authenticateRequest } from './auth/cognito.js';
 import { getItem } from './dynamo/access.js';
 import { teamMemberSk, teamMetaSk, teamPk } from './dynamo/keys.js';
@@ -17,7 +18,10 @@ export type GuardTeam = {
 /** Roster membership loaded by {@link requireMembership}. */
 export type GuardMember = {
   userId: string;
+  /** Highest-ranked role. Rank checks use this. */
   role: TeamRole;
+  /** Every role this member holds, highest rank first. */
+  roles: TeamRole[];
 };
 
 /**
@@ -102,12 +106,18 @@ export const requireMembership = (): Step<
   { member: GuardMember }
 > =>
   asStep<{ teamId: string; user: AuthUser }, { member: GuardMember }>(async (ctx, next) => {
-    const member = await getItem<GuardMember>(
+    const member = await getItem<{ userId?: unknown; role?: unknown; roles?: unknown }>(
       teamPk(ctx.teamId),
       teamMemberSk(ctx.user.userId),
     );
-    if (member === undefined || typeof member.role !== 'string') {
-      throw new Error('not_a_member');
-    }
-    return next({ ...ctx, member });
+    const roles = member === undefined ? [] : rolesFromMembership(member);
+    if (roles.length === 0) throw new Error('not_a_member');
+    return next({
+      ...ctx,
+      member: {
+        userId: typeof member?.userId === 'string' ? member.userId : ctx.user.userId,
+        role: highestRole(roles),
+        roles,
+      },
+    });
   });

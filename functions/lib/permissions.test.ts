@@ -17,6 +17,7 @@ vi.mock('./dynamo/access.js', () => ({
 const {
   can,
   canWithMatrix,
+  canWithRoles,
   loadRolePermissionMatrix,
   normalizeRolePermissions,
   roleHasPermission,
@@ -36,7 +37,7 @@ describe('permissions', () => {
     expect(
       canWithMatrix('team_admin', DEFAULT_ROLE_PERMISSIONS, 'manage_permissions'),
     ).toBe(true);
-    expect(canWithMatrix('team_admin', DEFAULT_ROLE_PERMISSIONS, 'manage_events')).toBe(true);
+    expect(canWithMatrix('team_admin', DEFAULT_ROLE_PERMISSIONS, 'manage_team_settings')).toBe(true);
   });
 
   it('denies privileged permissions for coach, parent, and player by default', () => {
@@ -63,12 +64,14 @@ describe('permissions', () => {
 
   it('loads a role matrix from DynamoDB with defaults and overrides', async () => {
     mockQueryBySkPrefix.mockResolvedValueOnce([
+      { role: 'team_admin', permissions: ['manage_permissions'] },
       { role: 'coach', permissions: ['manage_events', 'invite_members', 123] },
       { role: 42, permissions: ['manage_events'] },
       { role: 'unknown', permissions: ['manage_events'] },
       { role: 'player', permissions: 'not-an-array' },
     ]);
     const matrix = await loadRolePermissionMatrix('team-1');
+    expect(matrix.team_admin).toEqual([...DEFAULT_ROLE_PERMISSIONS.team_admin]);
     expect(matrix.coach).toEqual(['manage_events', 'invite_members']);
     expect(matrix.player).toEqual([...DEFAULT_ROLE_PERMISSIONS.player]);
     expect(mockQueryBySkPrefix).toHaveBeenCalledWith(teamPk('team-1'), 'ROLE#');
@@ -86,5 +89,19 @@ describe('permissions', () => {
     mockQueryBySkPrefix.mockResolvedValueOnce([]);
     await expect(can('u1', 't1', 'manage_events')).resolves.toBe(true);
     expect(mockGetItem).toHaveBeenCalledWith(teamPk('t1'), teamMemberSk('u1'));
+  });
+
+  it('grants a permission when any held role includes it', async () => {
+    expect(
+      canWithRoles(['parent', 'coach'], { coach: ['manage_events'], parent: [] }, 'manage_events'),
+    ).toBe(true);
+    expect(canWithRoles(['parent'], { parent: [] }, 'manage_events')).toBe(false);
+
+    mockGetItem.mockResolvedValueOnce({ role: 'parent', roles: ['parent', 'coach'] });
+    mockQueryBySkPrefix.mockResolvedValueOnce([
+      { role: 'coach', permissions: ['manage_events'] },
+      { role: 'parent', permissions: [] },
+    ]);
+    await expect(can('u1', 't1', 'manage_events')).resolves.toBe(true);
   });
 });

@@ -11,6 +11,7 @@ import {
   assertRoleAllowedForAccount,
   canCreateTeam,
   canHoldManagePermissions,
+  rolesFromMembership,
 } from '@gameplan/rules';
 import { getProfile } from './auth/profile.js';
 import { queryBySkPrefix } from './dynamo/access.js';
@@ -59,7 +60,7 @@ export const assertProposedRolePermissions = async (
   teamId: string,
   roles: Array<{ role: TeamRole; permissions: readonly TeamPermission[] }>,
 ): Promise<void> => {
-  const members = await queryBySkPrefix<{ userId?: string; role?: string }>(
+  const members = await queryBySkPrefix<{ userId?: string; role?: unknown; roles?: unknown }>(
     teamPk(teamId),
     TEAM_MEMBER_SK_PREFIX,
   );
@@ -71,7 +72,7 @@ export const assertProposedRolePermissions = async (
   for (const role of TEAM_ROLES) {
     if (!next[role].includes('manage_permissions')) continue;
     for (const member of members) {
-      if (member.role !== role || typeof member.userId !== 'string') continue;
+      if (!rolesFromMembership(member).includes(role) || typeof member.userId !== 'string') continue;
       const profile = await getProfile(member.userId);
       if (profile === undefined) continue;
       if (!canHoldManagePermissions(profile.accountKind)) {
