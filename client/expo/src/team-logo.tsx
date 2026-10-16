@@ -54,7 +54,7 @@ export const TeamLogo = ({
   };
 
   return (
-    <View className="mb-3 shrink-0 items-center">
+    <View className="mb-6 shrink-0 items-center">
       <Pressable onPress={() => void upload()} accessibilityRole="button" accessibilityLabel={t('teamAdmin.changeLogo')}>
         {theme?.logoKey !== undefined ? (
           <ProfilePhoto name={name} uri={uri} size={36} resizeMode="contain" />

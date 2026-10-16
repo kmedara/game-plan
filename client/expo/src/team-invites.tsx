@@ -11,6 +11,7 @@ import { TEAM_ROLES, type TeamInvite, type TeamRole } from '@gameplan/types';
 import { roleLabel } from '@/src/roles';
 import { RolePicker } from '@/src/role-picker';
 import { useApp } from '@/src/state';
+import { TrashIcon } from '@/src/team-media';
 import { Button } from '@/src/ui';
 
 export const TeamInvites = ({
@@ -73,8 +74,13 @@ export const TeamInvites = ({
             <Text className="text-ink">{invite.code}</Text>
             <Text className="text-muted">{t('common.copyLink')}</Text>
           </Pressable>
-          <Pressable className="ml-3" onPress={() => void removeInvite(invite.role)}>
-            <Text className="text-sm font-semibold text-danger">{t('teamAdmin.deleteInvite')}</Text>
+          <Pressable
+            className="ml-3"
+            onPress={() => void removeInvite(invite.role)}
+            accessibilityRole="button"
+            accessibilityLabel={t('teamAdmin.deleteInvite')}
+          >
+            <TrashIcon />
           </Pressable>
         </View>
       ))}

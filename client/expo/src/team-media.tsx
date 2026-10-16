@@ -5,8 +5,9 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
+import Svg, { Line, Path } from 'react-native-svg';
 import { useApp } from './state';
-import { colors, muteColor } from './theme';
+import { colors, fieldWash, muteColor } from './theme';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
@@ -29,19 +30,15 @@ export const teamImageErrorKey = (error: TeamImageFailure): string => {
   return 'errors.teamAdmin.logoUploadFailed';
 };
 
-/** Trash can. Defaults to the muted ink. Pass a color for a tinted can. */
-export const TrashIcon = ({ color }: { color?: string }) => (
-  <View className="h-4 w-4 items-center justify-center">
-    <View className={`h-0.5 w-1.5 rounded-full ${color === undefined ? 'bg-muted' : ''}`} style={color === undefined ? undefined : { backgroundColor: color }} />
-    <View className={`mt-px h-0.5 w-3.5 rounded-full ${color === undefined ? 'bg-muted' : ''}`} style={color === undefined ? undefined : { backgroundColor: color }} />
-    <View
-      className={`mt-px h-2 w-2.5 flex-row justify-evenly rounded-b-sm border-x border-b pt-px ${color === undefined ? 'border-muted' : ''}`}
-      style={color === undefined ? undefined : { borderColor: color }}
-    >
-      <View className={`h-full w-px ${color === undefined ? 'bg-muted' : ''}`} style={color === undefined ? undefined : { backgroundColor: color }} />
-      <View className={`h-full w-px ${color === undefined ? 'bg-muted' : ''}`} style={color === undefined ? undefined : { backgroundColor: color }} />
-    </View>
-  </View>
+/** Outline trash can in the Lucide style. Defaults to a muted danger. Pass a color for a tinted can. */
+export const TrashIcon = ({ color = fieldWash(colors.danger, .5) }: { color?: string }) => (
+  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+    <Path d="M3 6h18" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    <Path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    <Path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    <Line x1={10} x2={10} y1={11} y2={17} stroke={color} strokeWidth={2} strokeLinecap="round" />
+    <Line x1={14} x2={14} y1={11} y2={17} stroke={color} strokeWidth={2} strokeLinecap="round" />
+  </Svg>
 );
 
 /** Plus shown inside an empty logo or background frame. */

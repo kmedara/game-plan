@@ -189,6 +189,7 @@ const responseMessage = (err: unknown): string =>
 
 /**
  * Form submit control. Shows a loader on the button, then a confirmation or the thrown error.
+ * An empty `loadedText` keeps the original label after a successful press.
  */
 export const SubmitButton = ({
   label,
@@ -197,6 +198,7 @@ export const SubmitButton = ({
   color,
   tone,
   message,
+  loadedText,
 }: {
   label: string;
   onPress: () => void | boolean | Promise<void | boolean>;
@@ -204,8 +206,10 @@ export const SubmitButton = ({
   color?: string;
   tone?: ButtonTone;
   message?: (err: unknown) => string;
+  loadedText?: string;
 }) => {
   const { t } = useTranslation();
+  const confirmation = loadedText ?? t('common.saved');
   const [error, setError] = useState<string | undefined>();
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -236,7 +240,7 @@ export const SubmitButton = ({
     setBusy(true);
     try {
       const confirmed = await onPress();
-      if (confirmed !== false) {
+      if (confirmed !== false && confirmation.length > 0) {
         setSaved(true);
         showSaved();
       }
@@ -250,7 +254,7 @@ export const SubmitButton = ({
   return (
     <View>
       <Button
-        label={saved ? t('common.saved') : label}
+        label={saved ? confirmation : label}
         onPress={() => void submit()}
         disabled={disabled}
         color={color}

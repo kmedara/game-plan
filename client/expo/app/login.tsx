@@ -82,7 +82,7 @@ export default function LoginScreen() {
           </>
         ) : (
           <>
-            <SubmitButton label={t('auth.continueCognito')} onPress={startHostedUi} />
+            <SubmitButton label={t('auth.continueCognito')} onPress={startHostedUi} loadedText="" />
             <Text className="text-muted">{t('auth.cognitoHint')}</Text>
           </>
         )}

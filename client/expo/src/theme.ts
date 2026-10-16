@@ -95,11 +95,11 @@ const offWhite = (hex: string): string => {
 };
 
 /** Pulls a fill slightly toward the muted ink so buttons are less saturated. */
-export const muteColor = (hex: string): string => {
+export const muteColor = (hex: string, mute: number = 0.16): string => {
   const color = parseHex(hex);
   const toward = parseHex(colors.muted);
   if (color === undefined || toward === undefined) return hex;
-  const amount = 0.16;
+  const amount = mute;
   const mix = (from: number, to: number): number =>
     Math.round(from + (to - from) * amount);
   return `#${hexChannel(mix(color.r, toward.r))}${hexChannel(mix(color.g, toward.g))}${hexChannel(mix(color.b, toward.b))}`;
@@ -112,11 +112,10 @@ export const brandColors = (
   const primary = chosen(theme?.primary) ?? colors.field;
   const secondary = chosen(theme?.secondary) ?? primary;
   const accent = chosen(theme?.accent) ?? secondary;
-  const gradient = [primary, secondary === primary ? darken(primary) : secondary].map(offWhite) as [
-    string,
-    string,
-    ...string[],
-  ];
+  const gradient = [
+    primary,
+    secondary === primary ? darken(primary) : secondary,
+  ].map(offWhite) as [string, string, ...string[]];
   return {
     primary,
     onPrimary: onColor(primary),

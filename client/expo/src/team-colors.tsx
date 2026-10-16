@@ -155,7 +155,7 @@ export const TeamColors = ({
   const { t } = useTranslation();
 
   return (
-    <View className="mb-3 min-w-0 flex-1 flex-row items-start justify-around">
+    <View className="mb-6 min-w-0 flex-1 flex-row items-start justify-around">
       <ColorWell
         label={t('teamAdmin.primary')}
         value={primary}
