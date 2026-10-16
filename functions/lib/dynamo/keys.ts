@@ -34,6 +34,21 @@ export const userPk = (userId: UserId): string => `USER#${userId}`;
 /** Fixed sort key for the single profile row under a user partition. */
 export const profileSk = (): string => 'PROFILE';
 
+/** Sort key for an adult linked as a minor's guardian. */
+export const guardianSk = (adultId: UserId): string => `GUARDIAN#${adultId}`;
+
+/** Sort-key prefix for every guardian of one minor. */
+export const GUARDIAN_SK_PREFIX = 'GUARDIAN#' as const;
+
+/** Sort key for a minor linked from the guardian's partition. */
+export const childSk = (minorId: UserId): string => `CHILD#${minorId}`;
+
+/** Sort-key prefix for every child of one guardian. */
+export const CHILD_SK_PREFIX = 'CHILD#' as const;
+
+/** Pending guardian invite under the minor's partition. */
+export const guardianInviteSk = (inviteId: string): string => `GUARDIAN_INVITE#${inviteId}`;
+
 /** Sort key for a team membership under the user partition. */
 export const userTeamSk = (teamId: TeamId): string => `TEAM#${teamId}`;
 
@@ -162,6 +177,42 @@ export const rsvpSkLegacy = (occurrenceStartsAt: string, userId: UserId): string
 
 /** Sort-key prefix shared by every RSVP on a team. */
 export const RSVP_SK_PREFIX = 'RSVP#' as const;
+
+/**
+ * Sort key for one occurrence lineup.
+ *
+ * Occurrence-first, matching RSVPs, so two events that share a start instant do not collide.
+ */
+export const lineupSk = (occurrenceStartsAt: string, eventId: string): string =>
+  `LINEUP#${occurrenceStartsAt}#${eventId}`;
+
+/** Sort-key prefix shared by every lineup on a team. */
+export const LINEUP_SK_PREFIX = 'LINEUP#' as const;
+
+/**
+ * Sort key for rides on one occurrence.
+ *
+ * Occurrence-first, matching lineups, so two events that share a start instant do not collide.
+ */
+export const carpoolSk = (occurrenceStartsAt: string, eventId: string): string =>
+  `CARPOOL#${occurrenceStartsAt}#${eventId}`;
+
+/** Sort-key prefix shared by every carpool on a team. */
+export const CARPOOL_SK_PREFIX = 'CARPOOL#' as const;
+
+/** Partition that holds due reminder rows for every team. */
+export const REMINDERS_PK = 'REMINDERS' as const;
+
+/** Evening-before or hour-before reminder, ordered by the instant it is due. */
+export const reminderSk = (
+  dueAt: string,
+  eventId: string,
+  occurrenceStartsAt: string,
+  kind: 'evening' | 'hour',
+): string => `REMINDER#${dueAt}#${eventId}#${occurrenceStartsAt}#${kind}`;
+
+/** Sort-key prefix for every reminder row. */
+export const REMINDER_SK_PREFIX = 'REMINDER#' as const;
 
 /**
  * Inclusive `SK BETWEEN` bounds for RSVPs whose occurrence falls in a window.
