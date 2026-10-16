@@ -334,11 +334,11 @@ describe('identity handler (in-memory)', () => {
     const withPhone = await handler(
       httpEvent('PATCH', '/identity/profile', {
         headers: { authorization: `Bearer ${session.accessToken}` },
-        body: { phoneNumber: '555-0100' },
+        body: { phoneNumber: '(202) 555-0123' },
       }),
     );
     expect(withPhone.statusCode).toBe(200);
-    expect(JSON.parse(withPhone.body ?? '')).toMatchObject({ phoneNumber: '555-0100' });
+    expect(JSON.parse(withPhone.body ?? '')).toMatchObject({ phoneNumber: '+12025550123' });
 
     const clearedPhone = await handler(
       httpEvent('PATCH', '/identity/profile', {
