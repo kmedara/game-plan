@@ -22,7 +22,7 @@ export const Field = ({
   onChangeText: (value: string) => void;
   placeholder?: string;
   multiline?: boolean;
-  keyboardType?: 'default' | 'phone-pad';
+  keyboardType?: 'default' | 'email-address' | 'phone-pad';
 }) => (
   <View className="mb-3">
     <Text className="mb-1 text-sm text-muted">{label}</Text>
@@ -30,6 +30,7 @@ export const Field = ({
       className={`rounded-xl border border-line bg-inset px-3 py-2 text-base text-ink${multiline === true ? ' min-h-24' : ''}`}
       value={value}
       onChangeText={onChangeText}
+      accessibilityLabel={label}
       placeholder={placeholder}
       autoCapitalize={multiline === true ? 'sentences' : 'none'}
       multiline={multiline}

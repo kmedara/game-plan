@@ -198,6 +198,7 @@ export default function TeamAdminScreen() {
       {memberHasPermission(callerRoles, roles, 'invite_members') ? (
         <TeamInvites
           teamId={id}
+          teamName={name}
           invites={invites}
           setInvites={setInvites}
           callerRole={callerRole}
