@@ -270,9 +270,6 @@ const managedLoginSettings = (): Record<string, unknown> => {
         lightMode: { backgroundColor: cognitoColor(paper) },
         logo: { enabled: false },
       },
-    },
-    componentClasses: {
-      buttons: { borderRadius: 8 },
       primaryButton: {
         lightMode: {
           defaults: buttonColors(field, ink),
@@ -280,6 +277,9 @@ const managedLoginSettings = (): Record<string, unknown> => {
           active: buttonColors(fieldDeep, ink),
         },
       },
+    },
+    componentClasses: {
+      buttons: { borderRadius: 8 },
       focusState: {
         lightMode: { borderColor: cognitoColor(field) },
       },
