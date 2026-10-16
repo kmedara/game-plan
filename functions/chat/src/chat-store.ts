@@ -248,12 +248,19 @@ const toParticipant = async (userId: string): Promise<ChatParticipant> => {
   const profile = await getProfile(userId);
   if (profile === undefined) throw new Error('profile_not_found');
   const teams = await queryBySkPrefix<UserTeamItem>(userPk(userId), USER_TEAM_SK_PREFIX);
+  const guardianIds =
+    profile.accountKind === 'minor'
+      ? (await queryBySkPrefix<{ adultId?: string }>(userPk(userId), 'GUARDIAN#')).flatMap((row) =>
+          typeof row.adultId === 'string' ? [row.adultId] : [],
+        )
+      : undefined;
   return {
     userId,
     accountKind: profile.accountKind,
     teamIds: teams
       .map((row) => row.teamId)
       .filter((teamId): teamId is string => typeof teamId === 'string'),
+    ...(guardianIds !== undefined && guardianIds.length > 0 ? { guardianIds } : {}),
   };
 };
 
@@ -364,6 +371,7 @@ export const listUserChats = async (userId: string): Promise<ChatSummary[]> => {
 export const createTeamChannel = async (input: {
   userId: string;
   body: CreateTeamChannelBody;
+  extraMemberIds?: readonly string[];
 }): Promise<ChatSummary> => {
   const team = await getItem<TeamMetaItem>(teamPk(input.body.teamId), teamMetaSk());
   if (team === undefined) throw new Error('team_not_found');
@@ -373,9 +381,14 @@ export const createTeamChannel = async (input: {
     teamPk(input.body.teamId),
     TEAM_MEMBER_SK_PREFIX,
   );
-  const memberIds = roster
-    .map((row) => row.userId)
-    .filter((id): id is string => typeof id === 'string');
+  const memberIds = [
+    ...new Set([
+      ...roster
+        .map((row) => row.userId)
+        .filter((id): id is string => typeof id === 'string'),
+      ...(input.extraMemberIds ?? []),
+    ]),
+  ];
   if (!memberIds.includes(input.userId)) throw new Error('not_a_member');
 
   const chatId = randomUUID();

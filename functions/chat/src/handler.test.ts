@@ -12,6 +12,7 @@ import {
   TABLE_PK,
   TABLE_SK,
   chatMemberSk,
+  guardianSk,
   chatMetaSk,
   chatPk,
   messageSk,
@@ -389,6 +390,43 @@ describe('chat channels and private chats', () => {
     );
     expect(result.statusCode).toBe(403);
     expect(JSON.parse(result.body ?? '')).toEqual({ error: 'minor_chat_rule_violated' });
+  });
+
+  it('adds the linked guardian when an adult messages a minor', async () => {
+    const minor = authFor();
+    const coach = authFor();
+    const guardian = authFor();
+    seedProfile({ userId: minor.userId, email: `${minor.userId}@example.com`, accountKind: 'minor' });
+    seedProfile({ userId: coach.userId, email: `${coach.userId}@example.com`, accountKind: 'adult' });
+    seedProfile({
+      userId: guardian.userId,
+      email: `${guardian.userId}@example.com`,
+      accountKind: 'adult',
+    });
+    const { teamId } = seedTeam({
+      members: [
+        { userId: minor.userId, role: 'player' },
+        { userId: coach.userId, role: 'coach' },
+        { userId: guardian.userId, role: 'parent' },
+      ],
+    });
+    store.set(itemKey(userPk(minor.userId), guardianSk(guardian.userId)), {
+      [TABLE_PK]: userPk(minor.userId),
+      [TABLE_SK]: guardianSk(guardian.userId),
+      minorId: minor.userId,
+      adultId: guardian.userId,
+    });
+
+    const result = await handler(
+      httpEvent('POST', '/chat/private', {
+        headers: { authorization: coach.authorization },
+        body: { memberIds: [minor.userId] },
+      }),
+    );
+    expect(result.statusCode).toBe(201);
+    const chatId = (JSON.parse(result.body ?? '') as { chatId: string }).chatId;
+    expect(store.has(itemKey(chatPk(chatId), chatMemberSk(guardian.userId)))).toBe(true);
+    expect(teamId).toBeDefined();
   });
 });
 

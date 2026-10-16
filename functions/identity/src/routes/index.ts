@@ -3,6 +3,11 @@
  */
 
 export { handleCompleteProfile } from './complete-profile.js';
+export {
+  handleAcceptGuardianInvite,
+  handleCreateGuardianInvite,
+  handleRemoveGuardianLink,
+} from './guardians.js';
 export { handleConfirmRegistration, handleResendConfirmation } from './confirm.js';
 export { handleLogin } from './login.js';
 export { handleLogout } from './logout.js';

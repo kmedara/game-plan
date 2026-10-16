@@ -11,6 +11,7 @@ import {
   canBeTeamAdmin,
   canCreateTeam,
   canHoldManagePermissions,
+  guardianPresentForAdultMinorChats,
   isMinorChatMembershipAllowed,
   sharesTeam,
 } from '@gameplan/rules';
@@ -20,7 +21,13 @@ const person = (
   userId: string,
   accountKind: 'adult' | 'minor',
   teamIds: string[],
-): ChatParticipant => ({ userId, accountKind, teamIds });
+  guardianIds?: string[],
+): ChatParticipant => ({
+  userId,
+  accountKind,
+  teamIds,
+  ...(guardianIds !== undefined ? { guardianIds } : {}),
+});
 
 describe('account rules', () => {
   it('blocks minors from creating a team, being admin, or holding manage_permissions', () => {
@@ -70,6 +77,22 @@ describe('minor chat rule', () => {
   it('rejects a minor with an outsider who shares no team', () => {
     const members = [person('m', 'minor', ['t1']), person('x', 'adult', ['t9'])];
     expect(isMinorChatMembershipAllowed(members)).toBe(false);
+  });
+
+  it('requires a guardian when a minor chats with an outside adult', () => {
+    const minor = person('m', 'minor', ['t1']);
+    const coach = person('c', 'adult', ['t1']);
+    expect(guardianPresentForAdultMinorChats([minor, coach])).toBe(false);
+    const withGuardian = person('m', 'minor', ['t1'], ['g']);
+    const guardian = person('g', 'adult', []);
+    expect(guardianPresentForAdultMinorChats([withGuardian, coach, guardian])).toBe(true);
+    expect(isMinorChatMembershipAllowed([withGuardian, coach, guardian])).toBe(true);
+  });
+
+  it('allows two minors on one team without a guardian', () => {
+    const members = [person('m1', 'minor', ['t1']), person('m2', 'minor', ['t1'])];
+    expect(guardianPresentForAdultMinorChats(members)).toBe(true);
+    expect(isMinorChatMembershipAllowed(members)).toBe(true);
   });
 
   it('rejects adding an outsider when a minor is already in the chat', () => {

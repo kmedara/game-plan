@@ -93,7 +93,17 @@ export const mapError = (error: unknown): APIGatewayProxyStructuredResultV2 | un
     case 'unauthorized':
       return unauthorized(error.message === 'unauthorized' ? 'unauthorized' : 'invalid_token');
     case 'profile_not_found':
+    case 'guardian_not_found':
+    case 'guardian_invite_not_found':
       return notFound();
+    case 'guardian_invite_minor_only':
+    case 'guardian_must_be_adult':
+    case 'forbidden':
+      return forbidden(error.message === 'forbidden' ? 'forbidden' : error.message);
+    case 'guardian_already_linked':
+      return conflict('guardian_already_linked');
+    case 'guardian_not_linked':
+      return badRequest('guardian_not_linked');
     case 'invalid_body':
       return badRequest('invalid_body');
     case 'invalid_photo_key':

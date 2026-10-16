@@ -39,6 +39,7 @@ export const mapChatError = (
     case 'forbidden':
       return forbidden();
     case 'minor_chat_rule_violated':
+    case 'guardian_required':
       return forbidden(error.message);
     case 'invalid_body':
     case 'invalid_attachment_key':
