@@ -12,6 +12,7 @@ import {
   PostToConnectionCommand,
 } from '@aws-sdk/client-apigatewaymanagementapi';
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
+import { rolesFromMembership } from '@gameplan/rules';
 import { fanoutJobSchema } from '@gameplan/schemas';
 import type { FanoutJob } from '@gameplan/types';
 import {
@@ -24,14 +25,14 @@ import {
   teamPk,
   userPk,
 } from '../../lib/dynamo/index.js';
-import { canWithMatrix, loadRolePermissionMatrix } from '../../lib/permissions.js';
+import { canWithRoles, loadRolePermissionMatrix } from '../../lib/permissions.js';
 import { sendDevicePushes } from './push-send.js';
 
 /** Chat member row under `CHAT#id` / `MEMBER#userId`. */
 type ChatMemberItem = { userId: string };
 
 /** Team roster row under `TEAM#id` / `MEMBER#userId`. */
-type TeamMemberItem = { userId: string; role?: string };
+type TeamMemberItem = { userId: string; role?: unknown; roles?: unknown };
 
 /** Socket connection under `USER#id` / `CONN#…`. */
 type ConnectionItem = { connectionId: string };
@@ -107,17 +108,15 @@ const recipientUserIds = async (job: FanoutJob): Promise<string[]> => {
     teamPk(job.teamId),
     TEAM_MEMBER_SK_PREFIX,
   );
+  if (job.type === 'event_reminder') return [...new Set(job.userIds)];
   if (job.type !== 'join_requested') {
     return [...new Set(members.map((member) => member.userId))];
   }
 
   const matrix = await loadRolePermissionMatrix(job.teamId);
   const approvers = members.filter((member) => {
-    const role = member.role;
-    if (role !== 'team_admin' && role !== 'coach' && role !== 'player' && role !== 'parent') {
-      return false;
-    }
-    return canWithMatrix(role, matrix, 'approve_join_requests');
+    const roles = rolesFromMembership(member);
+    return canWithRoles(roles, matrix, 'approve_join_requests');
   });
   return [...new Set(approvers.map((member) => member.userId))];
 };
@@ -193,18 +192,34 @@ const publishPush = async (
   }
   if (devices.length === 0) return;
 
+  if (job.type === 'schedule_changed') return;
+
   const title =
     job.type === 'chat_message'
       ? 'New message'
       : job.type === 'join_requested'
         ? 'Join request'
-        : 'Schedule updated';
+        : job.type === 'event_reminder'
+          ? 'Reminder'
+          : job.title;
+  const moved =
+    job.type === 'event_moved'
+      ? job.change === 'both'
+        ? 'time and location changed'
+        : job.change === 'time'
+          ? 'time changed'
+          : 'location changed'
+      : undefined;
+  const reminder =
+    job.type === 'event_reminder'
+      ? `${job.title} ${job.kind === 'hour' ? 'starts in an hour' : 'is tomorrow'}${job.location !== undefined ? ` · ${job.location}` : ''}`
+      : undefined;
   const body =
     job.type === 'chat_message'
       ? job.body.slice(0, 180)
       : job.type === 'join_requested'
         ? `${job.requesterDisplayName} asked to join ${job.teamName}`
-        : `Event ${job.eventId} changed`;
+        : (reminder ?? `${job.type === 'event_moved' ? job.title : 'Event'} ${moved ?? ''}`.trim());
 
   await sendDevicePushes({ title, body, data: job, devices });
   if (topicMissing || topicArn === undefined) return;
@@ -251,7 +266,9 @@ export const deliverFanoutJob = async (job: FanoutJob): Promise<void> => {
       if (ok) deliveredToSocket = true;
     }
 
-    if (!deliveredToSocket || job.type === 'join_requested') {
+    const pushAnyway =
+      job.type === 'join_requested' || job.type === 'event_moved' || job.type === 'event_reminder';
+    if (!deliveredToSocket || pushAnyway) {
       const devices = await queryBySkPrefix<DeviceItem>(userPk(userId), DEVICE_SK_PREFIX);
       await publishPush(userId, job, devices);
     }

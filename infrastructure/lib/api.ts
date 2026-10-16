@@ -12,6 +12,8 @@ import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import type * as cognito from 'aws-cdk-lib/aws-cognito';
 import type * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -25,6 +27,7 @@ import {
   DIRECTORY_KEY,
   HANDOFF_PREFIX,
   INVITE_PREFIX,
+  REMINDERS_KEY,
   TEAM_PREFIX,
   TICKET_PREFIX,
   USER_PREFIX,
@@ -354,6 +357,15 @@ export class Api extends Construct {
       new SqsEventSource(queue, { batchSize: 10, reportBatchItemFailures: true }),
     );
 
+    new events.Rule(this, 'ReminderSweep', {
+      schedule: events.Schedule.rate(cdk.Duration.minutes(15)),
+      targets: [
+        new targets.LambdaFunction(functions.schedule, {
+          event: events.RuleTargetInput.fromObject({ source: 'gameplan.reminders' }),
+        }),
+      ],
+    });
+
     grantPartitions(props.table, functions.identity, {
       read: [USER_PREFIX, TICKET_PREFIX, HANDOFF_PREFIX],
       write: [USER_PREFIX, TICKET_PREFIX, HANDOFF_PREFIX],
@@ -365,8 +377,8 @@ export class Api extends Construct {
       transact: true,
     });
     grantPartitions(props.table, functions.schedule, {
-      read: [TEAM_PREFIX],
-      write: [TEAM_PREFIX],
+      read: [TEAM_PREFIX, REMINDERS_KEY],
+      write: [TEAM_PREFIX, REMINDERS_KEY],
     });
     grantPartitions(props.table, functions.chat, {
       read: [CHAT_PREFIX, USER_PREFIX, TEAM_PREFIX],

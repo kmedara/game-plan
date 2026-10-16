@@ -9,7 +9,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
 import { Linking, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { EVENT_TYPES, RSVP_STATUSES, type EventResponse, type EventType, type RecurrenceRule, type RsvpStatus, type ScheduleOccurrence, type UpdateEventBody } from '@gameplan/types';
+import { EVENT_TYPES, RSVP_STATUSES, type CarpoolOffer, type EventResponse, type EventType, type LineupSlot, type RecurrenceRule, type RsvpStatus, type ScheduleOccurrence, type TeamMember, type UpdateEventBody } from '@gameplan/types';
 import { EventTimeFields } from '@/src/event-time';
 import { RecurrenceFields } from '@/src/recurrence-fields';
 import { recurrenceFromForm, type RepeatEnd, type RepeatFrequency } from '@/src/recurrence-form';
@@ -30,9 +30,11 @@ import {
   weekdayLabelsForLocale,
   type CalendarMonth,
 } from '@/src/schedule-calendar';
+import { heldRoles, memberHasPermission } from '@/src/roles';
 import { Sheet } from '@/src/sheet';
 import { useActiveTeam, useApp } from '@/src/state';
 import { colors, fieldWash, fieldWashOpacity } from '@/src/theme';
+import { TrashIcon } from '@/src/team-media';
 import { Button, ErrorText, Field, ProfilePhoto, SubmitButton } from '@/src/ui';
 
 const monthRange = (month: CalendarMonth, timeZone: string): { from: string; to: string } => {
@@ -77,15 +79,19 @@ export default function ScheduleScreen() {
     void api
       .getPermissions(team.teamId)
       .then((permissions) => {
-        const mine = permissions.roles.find((row) => row.role === team.role);
-        setCanManage(mine?.permissions.includes('manage_events') ?? false);
+        setCanManage(memberHasPermission(heldRoles(team), permissions.roles, 'manage_events'));
       })
       .catch(() => setCanManage(false));
   }, [team?.teamId, month.year, month.month]);
 
   useEffect(() => {
     return live.subscribe((event) => {
-      if (event.type === 'schedule_changed' && event.teamId === team?.teamId) {
+      if (
+        (event.type === 'schedule_changed' ||
+          event.type === 'event_moved' ||
+          event.type === 'event_reminder') &&
+        event.teamId === team?.teamId
+      ) {
         void load(event.teamId, month, zone);
       }
     });
@@ -206,6 +212,7 @@ export default function ScheduleScreen() {
             zone={zone}
             userId={api.user?.userId}
             maps={primaryMaps}
+            canManage={canManage}
             onRsvp={async (status) => {
               try {
                 await api.putRsvp(team.teamId, {
@@ -242,7 +249,7 @@ export default function ScheduleScreen() {
           dayKey={selected}
           timeZone={zone}
           onCreate={async (body) => {
-            const { endsAt, location, latitude, longitude, recurrence, startsAt, ...rest } = body;
+            const { endsAt, location, notes, latitude, longitude, recurrence, startsAt, ...rest } = body;
             if (startsAt === undefined) return;
             await api.createEvent(team.teamId, {
               ...rest,
@@ -251,6 +258,7 @@ export default function ScheduleScreen() {
               startsAt,
               ...(endsAt !== undefined && endsAt !== null ? { endsAt } : {}),
               ...(location !== undefined && location !== null ? { location } : {}),
+              ...(notes !== undefined && notes !== null ? { notes } : {}),
               ...(latitude !== undefined && latitude !== null && longitude !== undefined && longitude !== null
                 ? { latitude, longitude }
                 : {}),
@@ -362,20 +370,6 @@ const ChatIcon = () => (
   </View>
 );
 
-const TrashIcon = () => (
-  <View className="h-4 w-3.5 items-center">
-    <View className="h-0.5 w-1.5 rounded-full" style={{ backgroundColor: colors.danger }} />
-    <View className="mt-px h-0.5 w-3.5 rounded-full" style={{ backgroundColor: colors.danger }} />
-    <View
-      className="mt-px h-2 w-2.5 flex-row justify-evenly rounded-b-sm border-x border-b pt-px"
-      style={{ borderColor: colors.danger }}
-    >
-      <View className="h-full w-px" style={{ backgroundColor: colors.danger }} />
-      <View className="h-full w-px" style={{ backgroundColor: colors.danger }} />
-    </View>
-  </View>
-);
-
 const RsvpChoices = ({
   mine,
   onRsvp,
@@ -436,7 +430,7 @@ const EventRow = ({
       </Pressable>
       <RsvpChoices mine={mine} onRsvp={onRsvp} />
       {canManage ? (
-        <View className="absolute right-2 top-2 flex-row">
+        <View className="absolute right-2 top-2 flex-row items-center">
           <Pressable accessibilityRole="button" accessibilityLabel={t('schedule.editEvent')} className="p-1.5" onPress={onEdit}>
             <PencilIcon />
           </Pressable>
@@ -455,6 +449,7 @@ const EventDetail = ({
   zone,
   userId,
   maps,
+  canManage,
   onRsvp,
 }: {
   item: ScheduleOccurrence;
@@ -462,18 +457,32 @@ const EventDetail = ({
   zone: string;
   userId: string | undefined;
   maps: MapsProvider;
+  canManage: boolean;
   onRsvp: (status: RsvpStatus) => Promise<void>;
 }) => {
   const { t } = useTranslation();
   const { api } = useApp();
   const router = useRouter();
+  const [roster, setRoster] = useState<TeamMember[]>([]);
   const [people, setPeople] = useState<
     Record<string, { name: string | undefined; photo: string | undefined; phone: string | undefined }>
   >({});
 
   useEffect(() => {
     let cancelled = false;
-    const ids = item.rsvps.map((rsvp) => rsvp.userId);
+    void api.listMembers(teamId).then((members) => {
+      if (!cancelled) setRoster(members);
+    }).catch(() => {
+      if (!cancelled) setRoster([]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, teamId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ids = [...new Set([...roster.map((member) => member.userId), ...item.rsvps.map((rsvp) => rsvp.userId)])];
     void Promise.all(
       ids.map(async (id) => {
         try {
@@ -493,10 +502,17 @@ const EventDetail = ({
     return () => {
       cancelled = true;
     };
-  }, [api, teamId, item.rsvps]);
+  }, [api, teamId, roster, item.rsvps]);
   const uses24 = useCalendars()[0].uses24hourClock;
   const hour12 = uses24 === null ? undefined : !uses24;
   const mine = item.rsvps.find((rsvp) => rsvp.userId === userId)?.status;
+  const rsvpByUser = new Map(item.rsvps.map((rsvp) => [rsvp.userId, rsvp.status]));
+  const noReply = roster.filter((member) => !rsvpByUser.has(member.userId));
+  const short = roster.filter(
+    (member) => heldRoles(member).includes('player') && rsvpByUser.get(member.userId) !== 'going',
+  ).length;
+  const nameOf = (id: string): string =>
+    people[id]?.name ?? roster.find((member) => member.userId === id)?.displayName ?? t('common.unknownPerson');
   const openMaps = (): void => {
     if (item.location === undefined && item.latitude === undefined) return;
     const url = mapsUrl(
@@ -517,6 +533,12 @@ const EventDetail = ({
       ) : (
         <Text className="mt-2 text-muted">{t('schedule.noLocation')}</Text>
       )}
+      {item.notes !== undefined && item.notes.length > 0 ? (
+        <View className="mt-3">
+          <Text className="mb-1 font-semibold text-ink">{t('schedule.notes')}</Text>
+          <Text className="text-ink">{item.notes}</Text>
+        </View>
+      ) : null}
       {item.latitude !== undefined && item.longitude !== undefined ? (
         <View className="mt-3">
           <MapPicker latitude={item.latitude} longitude={item.longitude} readOnly />
@@ -524,62 +546,368 @@ const EventDetail = ({
       ) : null}
       <Text className="mt-4 font-semibold text-ink">{t('schedule.yourRsvp')}</Text>
       <RsvpChoices mine={mine} onRsvp={onRsvp} />
-      <Text className="mb-2 mt-4 font-semibold text-ink">{t('schedule.responses')}</Text>
-      {item.rsvps.length === 0 ? <Text className="text-muted">{t('schedule.noResponses')}</Text> : null}
+      <Text className="mb-1 mt-4 font-semibold text-ink">{t('schedule.attendance')}</Text>
+      <Text className="mb-2 text-muted">{t('schedule.short', { count: short })}</Text>
       {RSVP_STATUSES.map((status) => {
         const rows = item.rsvps.filter((rsvp) => rsvp.status === status);
-        if (rows.length === 0) return null;
         return (
           <View key={status} className="mb-3">
-            <Text className="mb-1 text-muted">{t(status === 'not_going' ? 'schedule.notGoing' : `schedule.${status}`)}</Text>
-            {rows.map((rsvp) => {
-              const person = people[rsvp.userId];
-              const name = person?.name ?? t('common.unknownPerson');
-              return (
-                <View key={rsvp.userId} className="mb-2 flex-row items-center">
-                  <ProfilePhoto name={person?.name} uri={person?.photo} size={36} />
-                  <Text className="ml-3 flex-1 text-ink">{name}</Text>
-                  {rsvp.userId !== userId && person !== undefined ? (
-                    person.phone !== undefined && person.phone.length > 0 ? (
-                      <View className="flex-row">
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={t('schedule.call')}
-                          className="p-1.5"
-                          onPress={() => void Linking.openURL(`tel:${person.phone}`)}
-                        >
-                          <PhoneIcon />
-                        </Pressable>
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={t('schedule.text')}
-                          className="p-1.5"
-                          onPress={() => void Linking.openURL(`sms:${person.phone}`)}
-                        >
-                          <TextIcon />
-                        </Pressable>
-                      </View>
-                    ) : (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={t('schedule.message')}
-                        className="p-1.5"
-                        onPress={() => {
-                          void api.createPrivateChat([rsvp.userId]).then((chat) => {
-                            router.push(`/chats/${chat.chatId}`);
-                          });
-                        }}
-                      >
-                        <ChatIcon />
-                      </Pressable>
-                    )
-                  ) : null}
-                </View>
-              );
-            })}
+            <Text className="mb-1 text-muted">
+              {t(status === 'not_going' ? 'schedule.notGoing' : `schedule.${status}`)} · {rows.length}
+            </Text>
+            {rows.map((rsvp) => (
+              <AttendanceRow
+                key={rsvp.userId}
+                userId={rsvp.userId}
+                name={nameOf(rsvp.userId)}
+                photo={people[rsvp.userId]?.photo}
+                phone={people[rsvp.userId]?.phone}
+                self={rsvp.userId === userId}
+              />
+            ))}
           </View>
         );
       })}
+      <View className="mb-3">
+        <Text className="mb-1 text-muted">{t('schedule.noReply')} · {noReply.length}</Text>
+        {noReply.map((member) => (
+          <AttendanceRow
+            key={member.userId}
+            userId={member.userId}
+            name={nameOf(member.userId)}
+            photo={people[member.userId]?.photo}
+            phone={people[member.userId]?.phone}
+            self={member.userId === userId}
+          />
+        ))}
+      </View>
+      <CarpoolSection
+        item={item}
+        teamId={teamId}
+        userId={userId}
+        nameOf={nameOf}
+      />
+      {item.eventType === 'game' ? (
+        <LineupEditor item={item} teamId={teamId} roster={roster} canManage={canManage} nameOf={nameOf} />
+      ) : null}
+    </View>
+  );
+};
+
+const AttendanceRow = ({
+  userId,
+  name,
+  photo,
+  phone,
+  self,
+}: {
+  userId: string;
+  name: string;
+  photo: string | undefined;
+  phone: string | undefined;
+  self: boolean;
+}) => {
+  const { t } = useTranslation();
+  const { api } = useApp();
+  const router = useRouter();
+  return (
+    <View className="mb-2 flex-row items-center">
+      <ProfilePhoto name={name} uri={photo} size={36} />
+      <Text className="ml-3 flex-1 text-ink">{name}</Text>
+      {!self && phone !== undefined && phone.length > 0 ? (
+        <View className="flex-row">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('schedule.call')}
+            className="p-1.5"
+            onPress={() => void Linking.openURL(`tel:${phone}`)}
+          >
+            <PhoneIcon />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('schedule.text')}
+            className="p-1.5"
+            onPress={() => void Linking.openURL(`sms:${phone}`)}
+          >
+            <TextIcon />
+          </Pressable>
+        </View>
+      ) : null}
+      {!self && (phone === undefined || phone.length === 0) ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('schedule.message')}
+          className="p-1.5"
+          onPress={() => {
+            void api.createPrivateChat([userId]).then((chat) => {
+              router.push(`/chats/${chat.chatId}`);
+            });
+          }}
+        >
+          <ChatIcon />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+};
+
+const CarpoolSection = ({
+  item,
+  teamId,
+  userId,
+  nameOf,
+}: {
+  item: ScheduleOccurrence;
+  teamId: string;
+  userId: string | undefined;
+  nameOf: (id: string) => string;
+}) => {
+  const { t } = useTranslation();
+  const { api, brand } = useApp();
+  const [offers, setOffers] = useState<CarpoolOffer[]>([]);
+  const [error, setError] = useState<string | undefined>();
+  const mine = offers.find((offer) => offer.userId === userId);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .getCarpool(teamId, { eventId: item.eventId, occurrenceStartsAt: item.startsAt })
+      .then((carpool) => {
+        if (!cancelled) setOffers(carpool.offers);
+      })
+      .catch(() => {
+        if (!cancelled) setError('carpool_load_failed');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, teamId, item.eventId, item.startsAt]);
+
+  const saveSeats = (seats: number): void => {
+    setError(undefined);
+    void api
+      .putCarpool(teamId, { eventId: item.eventId, occurrenceStartsAt: item.startsAt, seats })
+      .then((carpool) => setOffers(carpool.offers))
+      .catch(() => setError('carpool_save_failed'));
+  };
+
+  const claim = (driverUserId: string): void => {
+    setError(undefined);
+    void api
+      .claimCarpool(teamId, {
+        eventId: item.eventId,
+        occurrenceStartsAt: item.startsAt,
+        driverUserId,
+      })
+      .then((carpool) => setOffers(carpool.offers))
+      .catch((caught: unknown) => {
+        const code = caught instanceof Error ? caught.message : '';
+        if (code === 'carpool_full') setError(t('schedule.carpoolFull'));
+        else if (code === 'carpool_own_offer') setError(t('schedule.carpoolOwn'));
+        else setError('carpool_save_failed');
+      });
+  };
+
+  return (
+    <View className="mt-2">
+      <Text className="mb-1 font-semibold text-ink">{t('schedule.carpool')}</Text>
+      {offers.length === 0 ? <Text className="mb-2 text-muted">{t('schedule.carpoolEmpty')}</Text> : null}
+      {offers.map((offer) => {
+        const riding = userId !== undefined && offer.riderIds.includes(userId);
+        const full = offer.riderIds.length >= offer.seats;
+        return (
+          <View key={offer.userId} className="mb-3">
+            <Text className="text-ink">{nameOf(offer.userId)}</Text>
+            <Text className="text-muted">
+              {t('schedule.seatsTaken', { taken: offer.riderIds.length, seats: offer.seats })}
+            </Text>
+            {offer.riderIds.length > 0 ? (
+              <Text className="text-ink">
+                {t('schedule.riders')}: {offer.riderIds.map((id) => nameOf(id)).join(', ')}
+              </Text>
+            ) : null}
+            {offer.userId !== userId ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={!riding && full}
+                className="mt-1 self-start rounded-full border border-line bg-inset px-3 py-1.5"
+                style={{ opacity: !riding && full ? 0.4 : 1 }}
+                onPress={() => claim(offer.userId)}
+              >
+                <Text className="text-ink">{riding ? t('schedule.leaveRide') : t('schedule.claimRide')}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        );
+      })}
+      <Text className="mb-1 text-muted">{t('schedule.offerSeats')}</Text>
+      <View className="mb-2 flex-row flex-wrap">
+        {[1, 2, 3, 4, 5, 6, 7, 8].map((seats) => {
+          const selected = mine?.seats === seats;
+          return (
+            <Pressable
+              key={seats}
+              accessibilityRole="button"
+              className="mb-2 mr-2 h-10 w-10 items-center justify-center rounded-full border"
+              style={{
+                borderColor: selected ? brand.primary : '#c5d0c9',
+                backgroundColor: selected ? brand.primary : '#ffffff',
+              }}
+              onPress={() => saveSeats(seats)}
+            >
+              <Text style={{ color: selected ? brand.onPrimary : '#101412' }}>{seats}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {mine !== undefined ? (
+        <Pressable accessibilityRole="button" className="mb-2 self-start" onPress={() => saveSeats(0)}>
+          <Text className="text-link">{t('schedule.clearOffer')}</Text>
+        </Pressable>
+      ) : null}
+      <ErrorText message={error} />
+    </View>
+  );
+};
+
+const LineupEditor = ({
+  item,
+  teamId,
+  roster,
+  canManage,
+  nameOf,
+}: {
+  item: ScheduleOccurrence;
+  teamId: string;
+  roster: TeamMember[];
+  canManage: boolean;
+  nameOf: (userId: string) => string;
+}) => {
+  const { t } = useTranslation();
+  const { api } = useApp();
+  const [slots, setSlots] = useState<LineupSlot[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+  const [notice, setNotice] = useState<string | undefined>();
+
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .getLineup(teamId, { eventId: item.eventId, occurrenceStartsAt: item.startsAt })
+      .then((lineup) => {
+        if (!cancelled) setSlots(lineup.slots);
+      })
+      .catch(() => {
+        if (!cancelled) setError('lineup_load_failed');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, teamId, item.eventId, item.startsAt]);
+
+  const move = (index: number, direction: -1 | 1): void => {
+    const next = index + direction;
+    if (next < 0 || next >= slots.length) return;
+    const copy = [...slots];
+    const current = copy[index];
+    const swap = copy[next];
+    if (current === undefined || swap === undefined) return;
+    copy[index] = swap;
+    copy[next] = current;
+    setSlots(copy);
+  };
+
+  const save = async (): Promise<void> => {
+    setError(undefined);
+    const lineup = await api.putLineup(teamId, {
+      eventId: item.eventId,
+      occurrenceStartsAt: item.startsAt,
+      slots,
+    });
+    setSlots(lineup.slots);
+    setNotice(t('schedule.lineupSaved'));
+  };
+
+  const copyPrevious = async (): Promise<void> => {
+    setError(undefined);
+    const previous = await api.getLineup(teamId, {
+      eventId: item.eventId,
+      occurrenceStartsAt: item.startsAt,
+      source: 'previous',
+    });
+    if (previous.slots.length === 0 || previous.occurrenceStartsAt === item.startsAt) {
+      setNotice(t('schedule.noPreviousLineup'));
+      return;
+    }
+    setSlots(previous.slots);
+    setNotice(t('schedule.lineupCopied'));
+  };
+
+  const available = roster.filter((member) => !slots.some((slot) => slot.userId === member.userId));
+
+  return (
+    <View className="mt-2">
+      <Text className="mb-2 font-semibold text-ink">{t('schedule.lineup')}</Text>
+      <ErrorText message={error} />
+      {notice !== undefined ? <Text className="mb-2 text-muted">{notice}</Text> : null}
+      {slots.length === 0 ? <Text className="mb-2 text-muted">{t('schedule.lineupEmpty')}</Text> : null}
+      {slots.map((slot, index) => (
+        <View key={slot.userId} className="mb-3">
+          <Text className="mb-1 text-ink">{nameOf(slot.userId)}</Text>
+          {canManage ? (
+            <Field
+              label={t('schedule.position')}
+              value={slot.position}
+              onChangeText={(position) => {
+                setSlots(slots.map((row) => (row.userId === slot.userId ? { ...row, position } : row)));
+              }}
+            />
+          ) : (
+            <Text className="text-muted">{slot.position}</Text>
+          )}
+          {canManage ? (
+            <View className="flex-row">
+              <Button label={t('schedule.moveUp')} tone="secondary" onPress={() => move(index, -1)} />
+              <Button label={t('schedule.moveDown')} tone="secondary" onPress={() => move(index, 1)} />
+              <Button
+                label={t('schedule.removeFromLineup')}
+                tone="secondary"
+                onPress={() => setSlots(slots.filter((row) => row.userId !== slot.userId))}
+              />
+            </View>
+          ) : null}
+        </View>
+      ))}
+      {canManage && adding ? (
+        <View className="mb-3">
+          {available.map((member) => (
+            <Pressable
+              key={member.userId}
+              className="mb-2"
+              onPress={() => {
+                void api.getMember(teamId, member.userId).then((profile) => {
+                  const position = profile.positions?.[0] ?? 'Player';
+                  setSlots([...slots, { userId: member.userId, position }]);
+                  setAdding(false);
+                }).catch(() => {
+                  setSlots([...slots, { userId: member.userId, position: 'Player' }]);
+                  setAdding(false);
+                });
+              }}
+            >
+              <Text className="text-link">{nameOf(member.userId)}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+      {canManage ? (
+        <View>
+          <Button label={t('schedule.addToLineup')} tone="secondary" onPress={() => setAdding(true)} />
+          <Button label={t('schedule.copyPrevious')} tone="secondary" onPress={() => void copyPrevious().catch(() => setError('lineup_copy_failed'))} />
+          <SubmitButton label={t('schedule.saveLineup')} onPress={save} />
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -686,6 +1014,7 @@ const AddEvent = ({
     initial === undefined ? { kind: 'none' } : endChoiceFor(initial.item.startsAt, initial.item.endsAt, timeZone),
   );
   const [location, setLocation] = useState(initial?.item.location ?? '');
+  const [notes, setNotes] = useState(initial?.item.notes ?? '');
   const [query, setQuery] = useState(initial?.item.location ?? '');
   const [suggestions, setSuggestions] = useState<Array<{ id: string; primaryText: string; secondaryText?: string }>>([]);
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | undefined>(
@@ -710,8 +1039,8 @@ const AddEvent = ({
     return () => clearTimeout(handle);
   }, [api, query]);
 
-  const submit = async (): Promise<void> => {
-    if (title.trim().length === 0) return;
+  const submit = async (): Promise<boolean | void> => {
+    if (title.trim().length === 0) return false;
     const window = eventWindow(timeZone, dayKey, startMinutes, end);
     const { startsAt, endsAt } = window;
     let recurrence: RecurrenceRule | undefined;
@@ -734,6 +1063,7 @@ const AddEvent = ({
       startsAt,
       endsAt: endsAt ?? null,
       location: location.trim().length > 0 ? location.trim() : null,
+      notes: notes.trim().length > 0 ? notes.trim() : null,
       latitude: coords?.latitude ?? null,
       longitude: coords?.longitude ?? null,
       recurrence: recurrence ?? null,
@@ -757,6 +1087,12 @@ const AddEvent = ({
         end={end}
         onChangeStart={setStartMinutes}
         onChangeEnd={setEnd}
+      />
+      <Field
+        label={t('addEvent.notes')}
+        value={notes}
+        onChangeText={setNotes}
+        multiline
       />
       <Field label={t('addEvent.location')} value={query} onChangeText={(value) => { setQuery(value); setLocation(value); setCoords(undefined); }} />
       {suggestions.map((suggestion) => (

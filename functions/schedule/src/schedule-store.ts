@@ -5,9 +5,13 @@
 import { randomUUID } from 'node:crypto';
 import type { CreateEventBody, ExceptionEventBody, UpdateEventBody } from '@gameplan/schemas';
 import type {
+  CarpoolOffer,
+  CarpoolResponse,
   EventResponse,
   EventType,
   RecurrenceRule,
+  LineupResponse,
+  LineupSlot,
   RsvpResponse,
   RsvpStatus,
   ScheduleList,
@@ -21,13 +25,18 @@ import {
   parseInstant,
 } from '../../lib/expand-occurrences.js';
 import { enqueueFanout } from '../../lib/fanout-enqueue.js';
+import { deleteRemindersForEvent, syncReminders } from './reminders.js';
 import {
   EVENT_SK_PREFIX,
+  LINEUP_SK_PREFIX,
+  TEAM_MEMBER_SK_PREFIX,
   TABLE_PK,
   TABLE_SK,
   deleteItem,
+  carpoolSk,
   eventSk,
   getItem,
+  lineupSk,
   putItem,
   queryBySkBetween,
   queryBySkPrefix,
@@ -62,6 +71,7 @@ export type EventItem = {
   startsAt: string;
   endsAt?: string;
   location?: string;
+  notes?: string;
   latitude?: number;
   longitude?: number;
   recurrence?: RecurrenceRule;
@@ -94,6 +104,59 @@ export type RsvpItem = {
  * @param item - The stored event row.
  * @returns The public event payload.
  */
+/** Fields that decide whether a time or place push is warranted. */
+type MoveFields = {
+  startsAt: string;
+  endsAt?: string;
+  location?: string;
+  latitude?: number;
+  longitude?: number;
+};
+
+/**
+ * Classifies a time or place change.
+ *
+ * @param before - The stored event.
+ * @param after - The event after the write.
+ * @returns The change kind, or `undefined` when time and place are unchanged.
+ */
+export const moveChange = (before: MoveFields, after: MoveFields): 'time' | 'location' | 'both' | undefined => {
+  const timeChanged = before.startsAt !== after.startsAt || (before.endsAt ?? '') !== (after.endsAt ?? '');
+  const placeChanged =
+    (before.location ?? '') !== (after.location ?? '') ||
+    (before.latitude ?? null) !== (after.latitude ?? null) ||
+    (before.longitude ?? null) !== (after.longitude ?? null);
+  if (timeChanged && placeChanged) return 'both';
+  if (timeChanged) return 'time';
+  if (placeChanged) return 'location';
+  return undefined;
+};
+
+/**
+ * Enqueues a time or place push when those fields changed.
+ *
+ * @param input - Team, event, title, optional single date, and the before/after fields.
+ */
+const enqueueMove = async (input: {
+  teamId: string;
+  eventId: string;
+  title: string;
+  occurrenceStartsAt?: string;
+  before: MoveFields;
+  after: MoveFields;
+}): Promise<void> => {
+  const change = moveChange(input.before, input.after);
+  if (change === undefined) return;
+  await enqueueFanout({
+    type: 'event_moved',
+    teamId: input.teamId,
+    eventId: input.eventId,
+    title: input.title,
+    ...(input.occurrenceStartsAt !== undefined ? { occurrenceStartsAt: input.occurrenceStartsAt } : {}),
+    change,
+  });
+};
+
 export const toEventResponse = (item: EventItem): EventResponse => ({
   eventId: item.eventId,
   teamId: item.teamId,
@@ -102,6 +165,7 @@ export const toEventResponse = (item: EventItem): EventResponse => ({
   startsAt: item.startsAt,
   ...(item.endsAt !== undefined ? { endsAt: item.endsAt } : {}),
   ...(item.location !== undefined ? { location: item.location } : {}),
+  ...(item.notes !== undefined ? { notes: item.notes } : {}),
   ...(item.latitude !== undefined ? { latitude: item.latitude } : {}),
   ...(item.longitude !== undefined ? { longitude: item.longitude } : {}),
   ...(item.recurrence !== undefined ? { recurrence: item.recurrence } : {}),
@@ -147,7 +211,7 @@ export const createEvent = async (input: {
   userId: string;
   body: CreateEventBody;
 }): Promise<EventResponse> => {
-  await requireTeam(input.teamId);
+  const team = await requireTeam(input.teamId);
   if (input.body.recurrence !== undefined) {
     // Fail fast when byWeekDay codes are invalid.
     buildRRule(parseInstant(input.body.startsAt, 'starts_at'), input.body.recurrence);
@@ -167,6 +231,7 @@ export const createEvent = async (input: {
       ? { endsAt: new Date(input.body.endsAt).toISOString() }
       : {}),
     ...(input.body.location !== undefined ? { location: input.body.location } : {}),
+    ...(input.body.notes !== undefined ? { notes: input.body.notes } : {}),
     ...(input.body.latitude !== undefined ? { latitude: input.body.latitude } : {}),
     ...(input.body.longitude !== undefined ? { longitude: input.body.longitude } : {}),
     ...(input.body.recurrence !== undefined ? { recurrence: input.body.recurrence } : {}),
@@ -176,6 +241,16 @@ export const createEvent = async (input: {
   };
 
   await putItem(item);
+  await syncReminders({
+    teamId: input.teamId,
+    eventId,
+    title: item.title,
+    startsAt: item.startsAt,
+    location: item.location,
+    recurrence: item.recurrence,
+    timeZone: team.timeZone,
+    now: new Date(now),
+  });
   await enqueueFanout({
     type: 'schedule_changed',
     teamId: input.teamId,
@@ -208,7 +283,7 @@ export const updateEvent = async (input: {
   eventId: string;
   body: UpdateEventBody;
 }): Promise<EventResponse> => {
-  await requireTeam(input.teamId);
+  const team = await requireTeam(input.teamId);
   const existing = await requireEvent(input.teamId, input.eventId);
 
   const nextStartsAt =
@@ -225,6 +300,10 @@ export const updateEvent = async (input: {
   let nextLocation: string | undefined = existing.location;
   if (input.body.location === null) nextLocation = undefined;
   else if (input.body.location !== undefined) nextLocation = input.body.location;
+
+  let nextNotes: string | undefined = existing.notes;
+  if (input.body.notes === null) nextNotes = undefined;
+  else if (input.body.notes !== undefined) nextNotes = input.body.notes;
 
   let nextLatitude: number | undefined = existing.latitude;
   let nextLongitude: number | undefined = existing.longitude;
@@ -252,6 +331,7 @@ export const updateEvent = async (input: {
     startsAt: nextStartsAt,
     ...(nextEndsAt !== undefined ? { endsAt: nextEndsAt } : {}),
     ...(nextLocation !== undefined ? { location: nextLocation } : {}),
+    ...(nextNotes !== undefined ? { notes: nextNotes } : {}),
     ...(nextLatitude !== undefined ? { latitude: nextLatitude } : {}),
     ...(nextLongitude !== undefined ? { longitude: nextLongitude } : {}),
     ...(nextRecurrence !== undefined ? { recurrence: nextRecurrence } : {}),
@@ -261,15 +341,40 @@ export const updateEvent = async (input: {
   // Drop cleared optional fields so DynamoDB does not keep stale attributes.
   if (nextEndsAt === undefined) delete item.endsAt;
   if (nextLocation === undefined) delete item.location;
+  if (nextNotes === undefined) delete item.notes;
   if (nextLatitude === undefined) delete item.latitude;
   if (nextLongitude === undefined) delete item.longitude;
   if (nextRecurrence === undefined) delete item.recurrence;
 
   await putItem(item);
+  await syncReminders({
+    teamId: input.teamId,
+    eventId: input.eventId,
+    title: item.title,
+    startsAt: item.startsAt,
+    location: item.location,
+    recurrence: item.recurrence,
+    exdates: item.exdates,
+    timeZone: team.timeZone,
+    now: new Date(now),
+  });
   await enqueueFanout({
     type: 'schedule_changed',
     teamId: input.teamId,
     eventId: input.eventId,
+  });
+  await enqueueMove({
+    teamId: input.teamId,
+    eventId: input.eventId,
+    title: item.title,
+    occurrenceStartsAt:
+      item.seriesEventId !== undefined
+        ? item.originalStartsAt
+        : item.recurrence === undefined
+          ? item.startsAt
+          : undefined,
+    before: existing,
+    after: item,
   });
   return toEventResponse(item);
 };
@@ -328,6 +433,7 @@ export const deleteEvent = async (teamId: string, eventId: string): Promise<void
   );
   for (const row of rows) {
     await deleteItem(teamPk(teamId), eventSk(row.eventId));
+    await deleteRemindersForEvent(row.eventId);
   }
   await enqueueFanout({
     type: 'schedule_changed',
@@ -361,10 +467,30 @@ export const cancelOccurrence = async (input: {
   const exdates = [...new Set([...(series.exdates ?? []), occurrenceIso])];
   const now = new Date().toISOString();
   await putItem({ ...series, exdates, updatedAt: now });
+  const team = await requireTeam(input.teamId);
+  await syncReminders({
+    teamId: input.teamId,
+    eventId: series.eventId,
+    title: series.title,
+    startsAt: series.startsAt,
+    location: series.location,
+    recurrence: series.recurrence,
+    exdates,
+    timeZone: team.timeZone,
+    now: new Date(now),
+  });
   await enqueueFanout({
     type: 'schedule_changed',
     teamId: input.teamId,
     eventId: series.eventId,
+  });
+  await enqueueFanout({
+    type: 'event_moved',
+    teamId: input.teamId,
+    eventId: series.eventId,
+    title: series.title,
+    occurrenceStartsAt: occurrenceIso,
+    change: 'time',
   });
 };
 
@@ -433,6 +559,13 @@ export const saveOccurrenceException = async (input: {
           : series.location !== undefined
             ? { location: series.location }
             : {}),
+      ...(patch.notes === null
+        ? {}
+        : patch.notes !== undefined
+          ? { notes: patch.notes }
+          : series.notes !== undefined
+            ? { notes: series.notes }
+            : {}),
       ...(patch.latitude === null || patch.longitude === null
         ? {}
         : patch.latitude !== undefined && patch.longitude !== undefined
@@ -453,10 +586,36 @@ export const saveOccurrenceException = async (input: {
   });
   const exdates = [...new Set([...(series.exdates ?? []), occurrenceIso])];
   await putItem({ ...series, exdates, updatedAt: now });
+  const team = await requireTeam(input.teamId);
+  await syncReminders({
+    teamId: input.teamId,
+    eventId: series.eventId,
+    title: series.title,
+    startsAt: series.startsAt,
+    location: series.location,
+    recurrence: series.recurrence,
+    exdates,
+    timeZone: team.timeZone,
+    now: new Date(now),
+  });
   await enqueueFanout({
     type: 'schedule_changed',
     teamId: input.teamId,
     eventId: series.eventId,
+  });
+  await enqueueMove({
+    teamId: input.teamId,
+    eventId: created.eventId,
+    title: created.title,
+    occurrenceStartsAt: occurrenceIso,
+    before: {
+      startsAt: occurrenceIso,
+      endsAt: inheritedEnd,
+      location: series.location,
+      latitude: series.latitude,
+      longitude: series.longitude,
+    },
+    after: created,
   });
   return toEventResponse({
     ...created,
@@ -537,6 +696,7 @@ export const listOccurrences = async (
         startsAt,
         ...(endsAt !== undefined ? { endsAt } : {}),
         ...(event.location !== undefined ? { location: event.location } : {}),
+        ...(event.notes !== undefined ? { notes: event.notes } : {}),
         ...(event.latitude !== undefined ? { latitude: event.latitude } : {}),
         ...(event.longitude !== undefined ? { longitude: event.longitude } : {}),
         recurring,
@@ -606,4 +766,292 @@ export const upsertRsvp = async (input: {
     status: input.status,
     updatedAt: now,
   };
+};
+
+/** Stored lineup under `TEAM#id` / `LINEUP#occurrence#eventId`. */
+type LineupItem = {
+  eventId: string;
+  teamId: string;
+  occurrenceStartsAt: string;
+  slots: LineupSlot[];
+};
+
+/**
+ * Confirms the instant is a real, uncancelled occurrence of a game.
+ *
+ * @param teamId - The team id.
+ * @param eventId - The event id.
+ * @param occurrenceStartsAt - The occurrence instant from the client.
+ * @returns The event and the canonical occurrence instant.
+ */
+const requireGameOccurrence = async (
+  teamId: string,
+  eventId: string,
+  occurrenceStartsAt: string,
+): Promise<{ event: EventItem; occurrenceIso: string }> => {
+  const event = await requireEvent(teamId, eventId);
+  if (event.eventType !== 'game') throw new Error('not_a_game');
+  const occurrence = parseInstant(occurrenceStartsAt, 'occurrence_starts_at');
+  const occurrenceIso = occurrence.toISOString();
+  const dayBefore = new Date(occurrence.getTime() - 12 * 60 * 60 * 1000);
+  const dayAfter = new Date(occurrence.getTime() + 12 * 60 * 60 * 1000);
+  const matches = expandOccurrenceStarts(event.startsAt, event.recurrence, dayBefore, dayAfter);
+  const cancelled = new Set(event.exdates ?? []);
+  const isOccurrence =
+    matches.some((date) => date.toISOString() === occurrenceIso) && !cancelled.has(occurrenceIso);
+  if (!isOccurrence) throw new Error('occurrence_not_found');
+  return { event, occurrenceIso };
+};
+
+/**
+ * Reads a game lineup. A missing row is an empty lineup.
+ *
+ * @param input - Team, event, and occurrence.
+ * @returns The stored slots, or none.
+ */
+export const getLineup = async (input: {
+  teamId: string;
+  eventId: string;
+  occurrenceStartsAt: string;
+}): Promise<LineupResponse> => {
+  await requireTeam(input.teamId);
+  const { occurrenceIso } = await requireGameOccurrence(
+    input.teamId,
+    input.eventId,
+    input.occurrenceStartsAt,
+  );
+  const item = await getItem<LineupItem>(teamPk(input.teamId), lineupSk(occurrenceIso, input.eventId));
+  return {
+    eventId: input.eventId,
+    occurrenceStartsAt: occurrenceIso,
+    slots: item?.slots ?? [],
+  };
+};
+
+/**
+ * Returns the latest earlier game lineup in the same series, or an empty lineup.
+ *
+ * @param input - Team, event, and the occurrence to look behind.
+ * @returns Slots from that earlier game, addressed as that earlier occurrence.
+ */
+export const getPreviousLineup = async (input: {
+  teamId: string;
+  eventId: string;
+  occurrenceStartsAt: string;
+}): Promise<LineupResponse> => {
+  await requireTeam(input.teamId);
+  const { event, occurrenceIso } = await requireGameOccurrence(
+    input.teamId,
+    input.eventId,
+    input.occurrenceStartsAt,
+  );
+  const seriesId = event.seriesEventId ?? event.eventId;
+  const events = await queryBySkPrefix<EventItem>(teamPk(input.teamId), EVENT_SK_PREFIX);
+  const games = new Map(
+    events
+      .filter((row) => row.eventType === 'game' && (row.seriesEventId ?? row.eventId) === seriesId)
+      .map((row) => [row.eventId, row]),
+  );
+  const lineups = await queryBySkPrefix<LineupItem>(teamPk(input.teamId), LINEUP_SK_PREFIX);
+  const earlier = lineups
+    .filter(
+      (row) =>
+        games.has(row.eventId) &&
+        row.occurrenceStartsAt < occurrenceIso &&
+        row.slots.length > 0,
+    )
+    .sort((a, b) => b.occurrenceStartsAt.localeCompare(a.occurrenceStartsAt));
+  const found = earlier[0];
+  if (found === undefined) {
+    return { eventId: input.eventId, occurrenceStartsAt: occurrenceIso, slots: [] };
+  }
+  return {
+    eventId: found.eventId,
+    occurrenceStartsAt: found.occurrenceStartsAt,
+    slots: found.slots,
+  };
+};
+
+/**
+ * Replaces the lineup for one game occurrence.
+ *
+ * @param input - Team, event, occurrence, and the full slot list.
+ * @returns The stored lineup.
+ */
+export const putLineup = async (input: {
+  teamId: string;
+  eventId: string;
+  occurrenceStartsAt: string;
+  slots: LineupSlot[];
+}): Promise<LineupResponse> => {
+  await requireTeam(input.teamId);
+  const { occurrenceIso } = await requireGameOccurrence(
+    input.teamId,
+    input.eventId,
+    input.occurrenceStartsAt,
+  );
+  const members = await queryBySkPrefix<TeamMemberItem>(teamPk(input.teamId), TEAM_MEMBER_SK_PREFIX);
+  const memberIds = new Set(members.map((member) => member.userId));
+  if (input.slots.some((slot) => !memberIds.has(slot.userId))) {
+    throw new Error('lineup_member_not_found');
+  }
+  const item: LineupItem & { PK: string; SK: string } = {
+    [TABLE_PK]: teamPk(input.teamId),
+    [TABLE_SK]: lineupSk(occurrenceIso, input.eventId),
+    eventId: input.eventId,
+    teamId: input.teamId,
+    occurrenceStartsAt: occurrenceIso,
+    slots: input.slots,
+  };
+  await putItem(item);
+  return {
+    eventId: input.eventId,
+    occurrenceStartsAt: occurrenceIso,
+    slots: input.slots,
+  };
+};
+
+/** Stored rides under `TEAM#id` / `CARPOOL#occurrence#eventId`. */
+type CarpoolItem = {
+  eventId: string;
+  teamId: string;
+  occurrenceStartsAt: string;
+  offers: CarpoolOffer[];
+};
+
+/**
+ * Confirms the instant is a real, uncancelled occurrence of the event.
+ *
+ * @param teamId - The team id.
+ * @param eventId - The event id.
+ * @param occurrenceStartsAt - The occurrence instant from the client.
+ * @returns The canonical occurrence instant.
+ */
+const requireOccurrence = async (
+  teamId: string,
+  eventId: string,
+  occurrenceStartsAt: string,
+): Promise<string> => {
+  const event = await requireEvent(teamId, eventId);
+  const occurrence = parseInstant(occurrenceStartsAt, 'occurrence_starts_at');
+  const occurrenceIso = occurrence.toISOString();
+  const dayBefore = new Date(occurrence.getTime() - 12 * 60 * 60 * 1000);
+  const dayAfter = new Date(occurrence.getTime() + 12 * 60 * 60 * 1000);
+  const matches = expandOccurrenceStarts(event.startsAt, event.recurrence, dayBefore, dayAfter);
+  const cancelled = new Set(event.exdates ?? []);
+  const isOccurrence =
+    matches.some((date) => date.toISOString() === occurrenceIso) && !cancelled.has(occurrenceIso);
+  if (!isOccurrence) throw new Error('occurrence_not_found');
+  return occurrenceIso;
+};
+
+const memberIdsOf = async (teamId: string): Promise<Set<string>> => {
+  const members = await queryBySkPrefix<TeamMemberItem>(teamPk(teamId), TEAM_MEMBER_SK_PREFIX);
+  return new Set(members.map((member) => member.userId));
+};
+
+const writeCarpool = async (
+  teamId: string,
+  eventId: string,
+  occurrenceIso: string,
+  offers: CarpoolOffer[],
+): Promise<CarpoolResponse> => {
+  if (offers.length === 0) {
+    await deleteItem(teamPk(teamId), carpoolSk(occurrenceIso, eventId));
+  } else {
+    const item: CarpoolItem & { PK: string; SK: string } = {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: carpoolSk(occurrenceIso, eventId),
+      eventId,
+      teamId,
+      occurrenceStartsAt: occurrenceIso,
+      offers,
+    };
+    await putItem(item);
+  }
+  return { eventId, occurrenceStartsAt: occurrenceIso, offers };
+};
+
+/**
+ * Reads rides for one occurrence. A missing row is an empty list.
+ *
+ * @param input - Team, event, and occurrence.
+ * @returns The stored offers, or none.
+ */
+export const getCarpool = async (input: {
+  teamId: string;
+  eventId: string;
+  occurrenceStartsAt: string;
+}): Promise<CarpoolResponse> => {
+  await requireTeam(input.teamId);
+  const occurrenceIso = await requireOccurrence(input.teamId, input.eventId, input.occurrenceStartsAt);
+  const item = await getItem<CarpoolItem>(teamPk(input.teamId), carpoolSk(occurrenceIso, input.eventId));
+  return {
+    eventId: input.eventId,
+    occurrenceStartsAt: occurrenceIso,
+    offers: item?.offers ?? [],
+  };
+};
+
+/**
+ * Creates, replaces, or removes the caller's offer. Riders who still fit stay.
+ *
+ * @param input - Team, event, occurrence, seat count, and the driver.
+ * @returns The offers left on this date.
+ */
+export const putCarpoolOffer = async (input: {
+  teamId: string;
+  eventId: string;
+  occurrenceStartsAt: string;
+  seats: number;
+  userId: string;
+}): Promise<CarpoolResponse> => {
+  await requireTeam(input.teamId);
+  const occurrenceIso = await requireOccurrence(input.teamId, input.eventId, input.occurrenceStartsAt);
+  const members = await memberIdsOf(input.teamId);
+  if (!members.has(input.userId)) throw new Error('carpool_member_not_found');
+  const item = await getItem<CarpoolItem>(teamPk(input.teamId), carpoolSk(occurrenceIso, input.eventId));
+  const others = (item?.offers ?? []).filter((offer) => offer.userId !== input.userId);
+  if (input.seats === 0) return writeCarpool(input.teamId, input.eventId, occurrenceIso, others);
+  const current = item?.offers.find((offer) => offer.userId === input.userId);
+  const riders = (current?.riderIds ?? []).filter((riderId) => riderId !== input.userId).slice(0, input.seats);
+  if (riders.some((riderId) => !members.has(riderId))) throw new Error('carpool_member_not_found');
+  return writeCarpool(input.teamId, input.eventId, occurrenceIso, [
+    ...others,
+    { userId: input.userId, seats: input.seats, riderIds: riders },
+  ]);
+};
+
+/**
+ * Claims a free seat, or leaves that car when the caller is already in it.
+ * A claim also removes the caller from every other car on this date.
+ *
+ * @param input - Team, event, occurrence, the driver, and the rider.
+ * @returns The offers left on this date.
+ */
+export const claimCarpool = async (input: {
+  teamId: string;
+  eventId: string;
+  occurrenceStartsAt: string;
+  driverUserId: string;
+  userId: string;
+}): Promise<CarpoolResponse> => {
+  await requireTeam(input.teamId);
+  const occurrenceIso = await requireOccurrence(input.teamId, input.eventId, input.occurrenceStartsAt);
+  if (input.driverUserId === input.userId) throw new Error('carpool_own_offer');
+  const members = await memberIdsOf(input.teamId);
+  if (!members.has(input.userId) || !members.has(input.driverUserId)) {
+    throw new Error('carpool_member_not_found');
+  }
+  const item = await getItem<CarpoolItem>(teamPk(input.teamId), carpoolSk(occurrenceIso, input.eventId));
+  const offer = item?.offers.find((row) => row.userId === input.driverUserId);
+  if (offer === undefined) throw new Error('carpool_offer_not_found');
+  const leaving = offer.riderIds.includes(input.userId);
+  if (!leaving && offer.riderIds.length >= offer.seats) throw new Error('carpool_full');
+  const offers = (item?.offers ?? []).map((row) => {
+    const without = row.riderIds.filter((riderId) => riderId !== input.userId);
+    if (row.userId !== input.driverUserId) return { ...row, riderIds: without };
+    return { ...row, riderIds: leaving ? without : [...without, input.userId] };
+  });
+  return writeCarpool(input.teamId, input.eventId, occurrenceIso, offers);
 };

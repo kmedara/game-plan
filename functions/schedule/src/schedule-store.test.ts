@@ -9,8 +9,14 @@ import { TABLE_PK, TABLE_SK, eventSk, teamMemberSk, teamMetaSk, teamPk } from '.
 const store = new Map<string, Record<string, unknown>>();
 const itemKey = (pk: string, sk: string): string => `${pk}\0${sk}`;
 
+const { fanoutJobs } = vi.hoisted(() => ({
+  fanoutJobs: [] as Array<Record<string, unknown>>,
+}));
+
 vi.mock('../../lib/fanout-enqueue.js', () => ({
-  enqueueFanout: async (): Promise<void> => undefined,
+  enqueueFanout: async (job: Record<string, unknown>): Promise<void> => {
+    fanoutJobs.push(job);
+  },
   resetFanoutSqsClient: (): void => undefined,
 }));
 
@@ -52,7 +58,10 @@ const {
 } = await import('./schedule-store.js');
 
 describe('schedule-store', () => {
-  beforeEach(() => store.clear());
+  beforeEach(() => {
+    store.clear();
+    fanoutJobs.length = 0;
+  });
   afterEach(() => store.clear());
 
   it('requireTeam throws when team metadata is missing', async () => {
@@ -300,5 +309,42 @@ describe('schedule-store', () => {
     await deleteEvent(teamId, exception.eventId);
     const gone = await listOccurrences(teamId, from, to);
     expect(gone.occurrences).toEqual([]);
+  });
+
+  it('enqueues event_moved only when the time or location changes', async () => {
+    const teamId = randomUUID();
+    const eventId = randomUUID();
+    store.set(itemKey(teamPk(teamId), teamMetaSk()), {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: teamMetaSk(),
+      teamId,
+      name: 'Hawks',
+      timeZone: 'UTC',
+      defaultChatId: randomUUID(),
+      createdBy: 'admin',
+      createdAt: new Date().toISOString(),
+    });
+    store.set(itemKey(teamPk(teamId), eventSk(eventId)), {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: eventSk(eventId),
+      eventId,
+      teamId,
+      eventType: 'game',
+      title: 'Saturday game',
+      startsAt: '2026-11-07T18:00:00.000Z',
+      location: 'Field 1',
+      createdBy: 'admin',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    await updateEvent({ teamId, eventId, body: { title: 'Renamed game' } });
+    expect(fanoutJobs.some((job) => job.type === 'event_moved')).toBe(false);
+
+    fanoutJobs.length = 0;
+    await updateEvent({ teamId, eventId, body: { location: 'Field 2' } });
+    expect(fanoutJobs).toContainEqual(
+      expect.objectContaining({ type: 'event_moved', change: 'location', title: 'Renamed game' }),
+    );
   });
 });

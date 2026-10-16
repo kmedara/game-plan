@@ -675,6 +675,213 @@ describe('schedule handler (in-memory)', () => {
     expect(removed.statusCode).toBe(204);
     expect(await list()).toEqual([]);
   });
+
+  it('stores a game lineup and rejects a practice lineup', async () => {
+    const admin = authFor();
+    const player = authFor();
+    const teamId = seedTeam({ userId: admin.userId, role: 'team_admin' });
+    store.set(itemKey(teamPk(teamId), teamMemberSk(player.userId)), {
+      [TABLE_PK]: teamPk(teamId),
+      [TABLE_SK]: teamMemberSk(player.userId),
+      userId: player.userId,
+      role: 'player',
+      joinedAt: new Date().toISOString(),
+    });
+
+    const game = await handler(
+      httpEvent('POST', `/schedule/teams/${teamId}/events`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          eventType: 'game',
+          title: 'Saturday game',
+          startsAt: '2026-09-05T18:00:00.000Z',
+          recurrence: { frequency: 'WEEKLY', interval: 1, byWeekDay: ['SA'] },
+        },
+      }),
+    );
+    expect(game.statusCode).toBe(201);
+    const eventId = bodyOf(game).eventId as string;
+    const first = '2026-09-05T18:00:00.000Z';
+    const second = '2026-09-12T18:00:00.000Z';
+
+    const empty = await handler(
+      httpEvent('GET', `/schedule/teams/${teamId}/lineup`, {
+        headers: { authorization: player.authorization },
+        query: { eventId, occurrenceStartsAt: first },
+      }),
+    );
+    expect(empty.statusCode).toBe(200);
+    expect(bodyOf(empty)).toMatchObject({ eventId, occurrenceStartsAt: first, slots: [] });
+
+    const saved = await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/lineup`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          eventId,
+          occurrenceStartsAt: first,
+          slots: [{ userId: player.userId, position: 'Fly-half' }],
+        },
+      }),
+    );
+    expect(saved.statusCode).toBe(200);
+
+    const loaded = await handler(
+      httpEvent('GET', `/schedule/teams/${teamId}/lineup`, {
+        headers: { authorization: admin.authorization },
+        query: { eventId, occurrenceStartsAt: first },
+      }),
+    );
+    expect(bodyOf(loaded).slots).toEqual([{ userId: player.userId, position: 'Fly-half' }]);
+
+    const previous = await handler(
+      httpEvent('GET', `/schedule/teams/${teamId}/lineup`, {
+        headers: { authorization: admin.authorization },
+        query: { eventId, occurrenceStartsAt: second, source: 'previous' },
+      }),
+    );
+    expect(bodyOf(previous).slots).toEqual([{ userId: player.userId, position: 'Fly-half' }]);
+
+    const forbidden = await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/lineup`, {
+        headers: { authorization: player.authorization },
+        body: {
+          eventId,
+          occurrenceStartsAt: first,
+          slots: [],
+        },
+      }),
+    );
+    expect(forbidden.statusCode).toBe(403);
+
+    const duplicate = await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/lineup`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          eventId,
+          occurrenceStartsAt: first,
+          slots: [
+            { userId: player.userId, position: 'Fly-half' },
+            { userId: player.userId, position: 'Wing' },
+          ],
+        },
+      }),
+    );
+    expect(duplicate.statusCode).toBe(400);
+
+    const practice = await handler(
+      httpEvent('POST', `/schedule/teams/${teamId}/events`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          eventType: 'practice',
+          title: 'Practice',
+          startsAt: '2026-09-07T17:00:00.000Z',
+        },
+      }),
+    );
+    const practiceId = bodyOf(practice).eventId as string;
+    const notAGame = await handler(
+      httpEvent('GET', `/schedule/teams/${teamId}/lineup`, {
+        headers: { authorization: admin.authorization },
+        query: { eventId: practiceId, occurrenceStartsAt: '2026-09-07T17:00:00.000Z' },
+      }),
+    );
+    expect(notAGame.statusCode).toBe(400);
+    expect(bodyOf(notAGame).error).toBe('not_a_game');
+  });
+
+  it('offers seats and moves a rider when they claim a second car', async () => {
+    const admin = authFor();
+    const driver = authFor();
+    const other = authFor();
+    const rider = authFor();
+    const extra = authFor();
+    const teamId = seedTeam({ userId: admin.userId, role: 'team_admin' });
+    for (const user of [driver, other, rider, extra]) {
+      store.set(itemKey(teamPk(teamId), teamMemberSk(user.userId)), {
+        [TABLE_PK]: teamPk(teamId),
+        [TABLE_SK]: teamMemberSk(user.userId),
+        userId: user.userId,
+        role: 'player',
+        joinedAt: new Date().toISOString(),
+      });
+    }
+    const created = await handler(
+      httpEvent('POST', `/schedule/teams/${teamId}/events`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          eventType: 'practice',
+          title: 'Tuesday practice',
+          startsAt: '2026-09-08T22:00:00.000Z',
+        },
+      }),
+    );
+    expect(created.statusCode).toBe(201);
+    const eventId = bodyOf(created).eventId as string;
+    const occurrenceStartsAt = '2026-09-08T22:00:00.000Z';
+    const query = { eventId, occurrenceStartsAt };
+
+    const empty = await handler(
+      httpEvent('GET', `/schedule/teams/${teamId}/carpool`, {
+        headers: { authorization: rider.authorization },
+        query,
+      }),
+    );
+    expect(empty.statusCode).toBe(200);
+    expect(bodyOf(empty).offers).toEqual([]);
+
+    const offered = await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/carpool`, {
+        headers: { authorization: driver.authorization },
+        body: { ...query, seats: 1 },
+      }),
+    );
+    expect(offered.statusCode).toBe(200);
+    expect(bodyOf(offered).offers).toEqual([{ userId: driver.userId, seats: 1, riderIds: [] }]);
+
+    const claimed = await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/carpool/claim`, {
+        headers: { authorization: rider.authorization },
+        body: { ...query, driverUserId: driver.userId },
+      }),
+    );
+    expect(claimed.statusCode).toBe(200);
+    expect(bodyOf(claimed).offers[0].riderIds).toEqual([rider.userId]);
+
+    const full = await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/carpool/claim`, {
+        headers: { authorization: extra.authorization },
+        body: { ...query, driverUserId: driver.userId },
+      }),
+    );
+    expect(full.statusCode).toBe(400);
+    expect(bodyOf(full).error).toBe('carpool_full');
+
+    const own = await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/carpool/claim`, {
+        headers: { authorization: driver.authorization },
+        body: { ...query, driverUserId: driver.userId },
+      }),
+    );
+    expect(own.statusCode).toBe(400);
+    expect(bodyOf(own).error).toBe('carpool_own_offer');
+
+    await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/carpool`, {
+        headers: { authorization: other.authorization },
+        body: { ...query, seats: 2 },
+      }),
+    );
+    const moved = await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/carpool/claim`, {
+        headers: { authorization: rider.authorization },
+        body: { ...query, driverUserId: other.userId },
+      }),
+    );
+    expect(moved.statusCode).toBe(200);
+    const offers = bodyOf(moved).offers as Array<{ userId: string; riderIds: string[] }>;
+    expect(offers.find((offer) => offer.userId === driver.userId)?.riderIds).toEqual([]);
+    expect(offers.find((offer) => offer.userId === other.userId)?.riderIds).toEqual([rider.userId]);
+  });
 });
 
 describe('mapScheduleError', () => {

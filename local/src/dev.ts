@@ -29,6 +29,9 @@ const tsxCli = join(dirname(require.resolve('tsx/package.json')), 'dist', 'cli.m
 /** Child processes started for the areas and the proxy. */
 const children: ChildProcess[] = [];
 
+/** Local reminder sweep. Assigned after the area processes start. */
+let reminderTimer: ReturnType<typeof setInterval> | undefined;
+
 /** First inspector port (identity); later areas and the proxy use the next ports. */
 const INSPECT_BASE_PORT = 9229;
 
@@ -45,6 +48,7 @@ const PROXY_INSPECT_PORT = INSPECT_BASE_PORT + AREAS.length;
  * @param code - The process exit code. Defaults to `0`.
  */
 const shutdown = (code = 0): void => {
+  if (reminderTimer !== undefined) clearInterval(reminderTimer);
   for (const child of children) {
     if (!child.killed) child.kill();
   }
@@ -126,3 +130,18 @@ for (const area of AREAS) {
   start(`functions/${area}/src/local.ts`, env, inspectPortForArea(area));
 }
 start('local/src/proxy.ts', {}, PROXY_INSPECT_PORT);
+
+reminderTimer = setInterval(() => {
+  void import('../../functions/schedule/src/reminders.js')
+    .then((mod) => mod.runDueReminders(new Date()))
+    .catch((error: unknown) => {
+      console.warn(
+        JSON.stringify({
+          service: 'dev',
+          event: 'reminder_sweep_failed',
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    });
+}, 60_000);
+reminderTimer.unref?.();

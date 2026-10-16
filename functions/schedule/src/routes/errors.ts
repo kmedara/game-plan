@@ -45,7 +45,14 @@ export const mapScheduleError: ErrorMappingFn = (
     case "invalid_by_week_day":
     case "invalid_occurrence_starts_at":
     case "invalid_body":
+    case "not_a_game":
+    case "lineup_member_not_found":
+    case "carpool_member_not_found":
+    case "carpool_full":
+    case "carpool_own_offer":
       return badRequest(error.message);
+    case "carpool_offer_not_found":
+      return notFound();
     default:
       if (error.name === "ConditionalCheckFailedException") {
         return conflict("condition_failed");

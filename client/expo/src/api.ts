@@ -37,6 +37,13 @@ import type {
   PresignUploadResponse,
   RegisterDeviceBody,
   RolePermissionsResponse,
+  CarpoolClaimBody,
+  CarpoolOfferBody,
+  CarpoolQuery,
+  CarpoolResponse,
+  LineupBody,
+  LineupQuery,
+  LineupResponse,
   RsvpBody,
   RsvpResponse,
   ScheduleList,
@@ -47,6 +54,7 @@ import type {
   TeamInvite,
   TeamInviteList,
   TeamList,
+  TeamRole,
   TeamMemberList,
   TeamMemberProfile,
   TeamSummary,
@@ -306,6 +314,14 @@ export class ApiClient {
     return this.request('GET', `/teams/${teamId}/members/${encodeURIComponent(userId)}`);
   }
 
+  async assignMemberRoles(
+    teamId: string,
+    userId: string,
+    roles: readonly TeamRole[],
+  ): Promise<TeamMemberProfile> {
+    return this.request('PATCH', `/teams/${teamId}/members/${encodeURIComponent(userId)}`, { roles });
+  }
+
   async getPermissions(teamId: string): Promise<RolePermissionsResponse> {
     return this.request('GET', `/teams/${teamId}/permissions`);
   }
@@ -356,6 +372,38 @@ export class ApiClient {
 
   async putRsvp(teamId: string, body: RsvpBody): Promise<RsvpResponse> {
     return this.request('PUT', `/schedule/teams/${teamId}/rsvps`, body);
+  }
+
+  async getLineup(
+    teamId: string,
+    query: LineupQuery,
+  ): Promise<LineupResponse> {
+    const params = new URLSearchParams({
+      eventId: query.eventId,
+      occurrenceStartsAt: query.occurrenceStartsAt,
+    });
+    if (query.source !== undefined) params.set('source', query.source);
+    return this.request('GET', `/schedule/teams/${teamId}/lineup?${params}`);
+  }
+
+  async putLineup(teamId: string, body: LineupBody): Promise<LineupResponse> {
+    return this.request('PUT', `/schedule/teams/${teamId}/lineup`, body);
+  }
+
+  async getCarpool(teamId: string, query: CarpoolQuery): Promise<CarpoolResponse> {
+    const params = new URLSearchParams({
+      eventId: query.eventId,
+      occurrenceStartsAt: query.occurrenceStartsAt,
+    });
+    return this.request('GET', `/schedule/teams/${teamId}/carpool?${params}`);
+  }
+
+  async putCarpool(teamId: string, body: CarpoolOfferBody): Promise<CarpoolResponse> {
+    return this.request('PUT', `/schedule/teams/${teamId}/carpool`, body);
+  }
+
+  async claimCarpool(teamId: string, body: CarpoolClaimBody): Promise<CarpoolResponse> {
+    return this.request('PUT', `/schedule/teams/${teamId}/carpool/claim`, body);
   }
 
   async autocompletePlaces(

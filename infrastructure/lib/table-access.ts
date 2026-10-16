@@ -30,6 +30,9 @@ export const INVITE_PREFIX = 'INVITE#*';
 /** `TEAM_DIR` name search for the team directory. */
 export const DIRECTORY_KEY = 'TEAM_DIR';
 
+/** `REMINDERS` due-time rows for schedule pushes. */
+export const REMINDERS_KEY = 'REMINDERS';
+
 /** Which rows a function may read or write. */
 export type PartitionGrant = {
   /** Partition-key patterns for `GetItem` and `Query`. */

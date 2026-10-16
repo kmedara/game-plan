@@ -6,12 +6,18 @@
 
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import { handleHealth, logHttpFailure, notFound, rejectDirectOrigin } from '../../lib/http.js';
+import { runDueReminders } from './reminders.js';
 import {
   handleCancelOccurrence,
+  handleClaimCarpool,
   handleCreateEvent,
   handleDeleteEvent,
+  handleGetCarpool,
   handleGetEvent,
+  handleGetLineup,
   handleListSchedule,
+  handlePutCarpool,
+  handlePutLineup,
   handleSaveOccurrence,
   handleUpdateEvent,
   handleUpsertRsvp,
@@ -37,7 +43,7 @@ const routeOf = (path: string): string => {
  * @param event - The Amazon API Gateway HTTP API event.
  * @returns A route response, health check, or `404`.
  */
-export const handler = logHttpFailure(async (
+const httpHandler = logHttpFailure(async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyStructuredResultV2> => {
   const rejected = rejectDirectOrigin(event);
@@ -80,7 +86,37 @@ export const handler = logHttpFailure(async (
     if (parts[2] === 'rsvps' && method === 'PUT' && parts.length === 3) {
       return handleUpsertRsvp(event, teamId);
     }
+
+    if (parts[2] === 'lineup' && parts.length === 3) {
+      if (method === 'GET') return handleGetLineup(event, teamId);
+      if (method === 'PUT') return handlePutLineup(event, teamId);
+    }
+
+    if (parts[2] === 'carpool' && parts.length === 3) {
+      if (method === 'GET') return handleGetCarpool(event, teamId);
+      if (method === 'PUT') return handlePutCarpool(event, teamId);
+    }
+
+    if (parts[2] === 'carpool' && parts[3] === 'claim' && method === 'PUT' && parts.length === 4) {
+      return handleClaimCarpool(event, teamId);
+    }
   }
 
   return notFound();
 });
+
+/**
+ * Handles API Gateway requests and the reminder sweep from EventBridge.
+ *
+ * @param event - An HTTP API event, or `{ source: 'gameplan.reminders' }`.
+ * @returns The HTTP response, or an empty 200 after a sweep.
+ */
+export const handler = async (
+  event: APIGatewayProxyEventV2 | { source?: string },
+): Promise<APIGatewayProxyStructuredResultV2> => {
+  if ('source' in event && event.source === 'gameplan.reminders' && !('requestContext' in event)) {
+    await runDueReminders(new Date());
+    return { statusCode: 200, body: '' };
+  }
+  return httpHandler(event as APIGatewayProxyEventV2);
+};

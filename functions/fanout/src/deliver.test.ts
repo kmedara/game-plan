@@ -490,11 +490,39 @@ describe('deliverFanoutJob', () => {
 
     await deliverFanoutJob(scheduleJob);
 
-    expect(snsSend).toHaveBeenCalledTimes(1);
-    const command = snsSend.mock.calls[0]?.[0] as { input?: { Subject?: string; Message?: string } };
-    expect(command.input?.Subject).toBe('Schedule updated');
-    const message = JSON.parse(command.input?.Message ?? '{}') as { body?: string };
-    expect(message.body).toBe('Event e1 changed');
+    expect(snsSend).not.toHaveBeenCalled();
+    expect(sendDevicePushes).not.toHaveBeenCalled();
+  });
+
+  it('pushes event_moved even when a socket is open', async () => {
+    process.env.WEBSOCKET_CALLBACK_URL = 'https://ws.example.com';
+    process.env.PUSH_TOPIC_ARN = 'arn:aws:sns:us-east-1:123:push';
+    queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
+      if (pk === teamPk('t1') && prefix === TEAM_MEMBER_SK_PREFIX) return [{ userId: 'u1' }];
+      if (pk === userPk('u1') && prefix === CONNECTION_SK_PREFIX) return [{ connectionId: 'conn-1' }];
+      if (pk === userPk('u1') && prefix === DEVICE_SK_PREFIX) {
+        return [{ deviceId: 'dev-2', token: 'tok2', platform: 'ios' }];
+      }
+      return [];
+    });
+    managementSend.mockResolvedValue(undefined);
+    snsSend.mockResolvedValue(undefined);
+
+    await deliverFanoutJob({
+      type: 'event_moved',
+      teamId: 't1',
+      eventId: 'e1',
+      title: 'Saturday game',
+      change: 'location',
+    });
+
+    expect(managementSend).toHaveBeenCalledTimes(1);
+    expect(sendDevicePushes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Saturday game',
+        body: 'Saturday game location changed',
+      }),
+    );
   });
 
   it('pushes a join request to approvers even when a socket is open', async () => {

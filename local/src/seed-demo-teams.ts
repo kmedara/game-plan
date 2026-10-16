@@ -39,6 +39,10 @@ import {
 } from '../../functions/lib/dynamo/index.js';
 import { TABLE_NAME } from '../../functions/lib/names.js';
 
+if (process.env.DYNAMODB_ENDPOINT === undefined || process.env.DYNAMODB_ENDPOINT.trim() === '') {
+  process.env.DYNAMODB_ENDPOINT = 'http://localhost:8000';
+}
+
 /** Stable birthday so seeded admins look like complete adult profiles. */
 const ADMIN_BIRTHDAY = '1985-06-15';
 
