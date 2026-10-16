@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { phoneNumberSchema, toE164Phone } from './phone';
+import { phoneNumberSchema, toE164Phone } from './phone.js';
 
 describe('phone numbers', () => {
   it('accepts a US number and an international number', () => {
