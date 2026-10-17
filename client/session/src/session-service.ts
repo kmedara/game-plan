@@ -6,6 +6,7 @@
  * secure storage and send it in the refresh body.
  */
 
+import { withContentHash } from './content-hash.js';
 import type { RefreshStore } from './refresh-store.js';
 import type {
   AccountKind,
@@ -92,7 +93,7 @@ export class SessionService {
     this.baseUrl = options.baseUrl.replace(/\/+$/u, '');
     this.refreshStore = options.refreshStore;
     this.mode = options.mode;
-    this.fetchImpl = options.fetch ?? fetch.bind(globalThis);
+    this.fetchImpl = withContentHash(options.fetch ?? fetch.bind(globalThis));
   }
 
   /** Returns the in-memory access token, if any. */

@@ -198,7 +198,7 @@ matrix. A minor cannot create a team, cannot be `team_admin`, and cannot hold `m
 | `POST`  | `/teams/:teamId/join-requests/:id/approve` | Approve and assign role                                     |
 | `POST`  | `/teams/:teamId/join-requests/:id/reject`  | Reject a request                                            |
 
-Teams routes require a bearer access token (or Cognito JWT claims from API Gateway in the cloud).
+Teams routes require a bearer access token. The function verifies it.
 
 ### Schedule
 
@@ -214,7 +214,7 @@ editing an event requires `manage_events`; every member can read the schedule an
 | `PATCH` | `/schedule/teams/:teamId/events/:eventId` | Edit practice or game (`manage_events`)   |
 | `PUT`   | `/schedule/teams/:teamId/rsvps`           | Upsert RSVP for one occurrence            |
 
-Schedule routes require a bearer access token (or Cognito JWT claims from API Gateway in the cloud).
+Schedule routes require a bearer access token. The function verifies it.
 
 ### Chat
 
@@ -233,7 +233,7 @@ enqueues fan-out.
 | `GET`  | `/chat/:chatId/messages`    | Newest-first history (`limit`, `cursor`)            |
 | `POST` | `/chat/:chatId/messages`    | Persist a message and enqueue fan-out               |
 
-Chat routes require a bearer access token (or Cognito JWT claims from API Gateway in the cloud).
+Chat routes require a bearer access token. The function verifies it.
 
 ### Realtime
 
@@ -279,20 +279,42 @@ npm run client:start
 
 `npm run synth` prints the AWS CloudFormation (CloudFormation) templates.
 
-Staging and production use the same three stacks in **separate AWS accounts**. Resource names stay `GamePlanDns`,
-`GamePlanPlatform`, and `GamePlanApi` in both. GitHub Actions deploys them in that order:
+Staging and production use the same four stacks in **separate AWS accounts**. Resource names stay `GamePlanDns`,
+`GamePlanPlatform`, `GamePlanApi`, and `GamePlanSite` in both. Each stack reads the earlier ones through CloudFormation
+exports, so they pass values to each other with no Parameter Store round trip.
 
-| Workflow                                                                         | Stack              | When                                                                                                                    |
-| -------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| [`.github/workflows/ci.yml`](.github/workflows/ci.yml)                           |                    | Pull requests and pushes to `master`. Typecheck and tests. No AWS credentials.                                          |
-| [`.github/workflows/deploy-dns.yml`](.github/workflows/deploy-dns.yml)           | `GamePlanDns`      | Manual. Certificates and the Route 53 validation records. Run this first.                                               |
-| [`.github/workflows/deploy-platform.yml`](.github/workflows/deploy-platform.yml) | `GamePlanPlatform` | Manual. Cognito, DynamoDB, the file buckets, and CloudFront. Run this after DNS.                                        |
-| [`.github/workflows/deploy-api.yml`](.github/workflows/deploy-api.yml)           | `GamePlanApi`      | Push to `master` updates **staging**. A published GitHub release updates **production**. Also writes the alias records. |
-| [`.github/workflows/deploy-client.yml`](.github/workflows/deploy-client.yml)     |                    | Same triggers as the API workflow. Builds the Expo site and syncs it to the site bucket.                                |
+| Workflow                                               | When                                                                                     |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Pull requests and pushes to `master`. Typecheck and tests. No AWS credentials.           |
+| [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) | Push to `master` updates **staging**. A published GitHub release updates **production**. |
 
-DNS and platform stay manual because they change rarely. The API and client workflows assume those stacks already exist
-and read what they published. Re-run any workflow from the Actions tab (`workflow_dispatch` chooses `staging` or
-`production`).
+The deploy workflow is one job. It runs `cdk deploy --all`, which deploys the four stacks in dependency order and skips
+the unchanged ones. Then it reads the API URL, WebSocket URL, site bucket, and distribution id from the CDK outputs file,
+builds the Expo site, syncs it to the bucket, and invalidates the distribution. Re-run it from the Actions tab
+(`workflow_dispatch` chooses `staging` or `production`).
+
+`GamePlanSite` holds the website bucket and the CloudFront distribution. The distribution serves the website and
+forwards `/api/<area>` to each area's Lambda function URL. The function URLs require IAM, and only this distribution may
+invoke them, through origin access control. CloudFront signs each request, so clients send the SHA-256 of a `POST`,
+`PUT`, `PATCH`, or `DELETE` body in `x-amz-content-sha256` (`withContentHash` in `@gameplan/client-session`). The
+signature replaces `Authorization`, so the `/api` viewer function copies the bearer token into
+`x-viewer-authorization` first.
+
+#### One-time move to the site stack
+
+An account that still has the website in `GamePlanPlatform` cannot run the deploy workflow yet. The platform stack
+would delete the old distribution while the live API stack still imports it for the alias records. Deploy these two by
+hand first, each with `--exclusively`. The website is offline from step 1 until the workflow finishes.
+
+1. `GamePlanApi`: drops the alias records and the distribution import, adds the function URLs, removes the HTTP API.
+2. `GamePlanPlatform`: deletes the old site bucket, distribution, and firewall, which frees the hostname.
+3. The deploy workflow: updates `GamePlanDns`, creates `GamePlanSite` (bucket `gameplan-web-<account>`, distribution,
+   alias records), and uploads the website.
+
+Do not deploy `GamePlanDns` before step 2: it would drop a certificate export the old platform stack still imports.
+Afterwards, delete the parameters nothing reads anymore: `api-base-url`, `ws-base-url`, `site-bucket-name`,
+`site-distribution-id`, `site-url`, `site-certificate-arn`, `api-regional-domain`, `api-origin-verify-secret-arn`,
+`api-function-url-domains`, and `site-api-enabled`.
 
 ### GitHub environment
 
@@ -312,13 +334,12 @@ The Cognito callback is `https://<environment>.example.com/api/identity/oauth/ca
 
 `GamePlanDns` creates the certificate validation records in the hosted zone from Parameter Store
 `hosted-zone-id` and `hosted-zone-name`. The zone id is the delegated zone in this account, and the name is the
-registered domain used to build `<environment>.<name>`. `GamePlanApi` writes the alias records in that same zone.
+registered domain used to build `<environment>.<name>`. `GamePlanSite` writes the alias records in that same zone.
 
 ### Parameter Store
 
-Both accounts use the same prefix, `/gameplan/`. Every parameter is a **String**. Social credentials and map keys stay
-here. Each stack writes its own outputs. The client workflow fails until `api-base-url`, `site-bucket-name`, and
-`site-distribution-id` exist, which means the platform workflow and an API deploy have both run.
+Both accounts use the same prefix, `/gameplan/`. Every parameter is a **String**. Parameter Store holds only deploy
+inputs you set by hand. Stack outputs are not written back.
 
 | Name                                                                    | Used for                                                                                         |
 | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -329,16 +350,14 @@ here. Each stack writes its own outputs. The client workflow fails until `api-ba
 | `google-maps-api-key`                                                   | Places Lambda                                                                                    |
 | `google-maps-browser-api-key`                                           | Website map                                                                                      |
 | `vapid-public-key`, `vapid-private-key`, `vapid-subject`                | Web Push. The public key is baked into the website. The private key stays on the fan-out function. `vapid-subject` is a `mailto:` contact. |
-| `site-certificate-arn`                                                  | Written by the DNS workflow. The platform stack reads it from the CloudFormation export.         |
-| `site-bucket-name`, `site-distribution-id`, `site-url`                  | Written by the platform workflow. The client workflow reads the bucket and distribution id.      |
-| `api-base-url`, `ws-base-url`                                           | Written by the API workflow. The client workflow reads both.                                     |
+| `staging-signup-allowlist`                                              | Staging only. Emails allowed to sign up, read by the pre-signup Lambda.                          |
 
 An identity provider is created only when every field for that provider is set. CDK context still overrides these
 environment variables for a local `cdk deploy`.
 
 The stacks create:
 
-- A certificate for the website, plus the Route 53 validation record. The API stack adds the alias record
+- A certificate for the website, plus the Route 53 validation record. The site stack adds the alias record
   after the website distribution exists.
 - A Cognito user pool with Hosted UI (email/password plus optional Google / Apple / Facebook IdPs from CDK context or Parameter Store).
   OAuth callback URLs default to the website host (`/api/identity/oauth/callback`).
@@ -348,9 +367,10 @@ The stacks create:
   only.
 - A time-to-live attribute, `ttl`, for socket rows.
 - A private Amazon Simple Storage Service (S3) bucket for message files, and a second bucket plus Amazon CloudFront
-  (CloudFront) for the static website.
-- An Amazon API Gateway HTTP API. `GET /{area}/health` is open. Identity routes stay open so Hosted UI OAuth,
-  register, and login can run before a token exists. The other areas require a Cognito access token.
+  (CloudFront) for the static website and `/api`. An AWS WAF web ACL rate-limits `/api/`.
+- One IAM-only Lambda function URL per HTTP area, reachable only through the distribution. `GET /{area}/health` is
+  open. Identity routes stay open so Hosted UI OAuth, register, and login can run before a token exists. The other
+  areas verify a Cognito access token inside the function.
 - An API Gateway WebSocket API. `$connect` checks that same access token. The socket is delivery only.
 - A queue from chat and schedule to the fan-out function, and an Amazon Simple Notification Service (SNS) topic the
   fan-out function publishes to when a recipient has no open socket.

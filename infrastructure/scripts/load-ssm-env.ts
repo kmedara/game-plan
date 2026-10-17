@@ -1,7 +1,7 @@
 /**
  * Loads `/gameplan/` String parameters into `$GITHUB_ENV` for a later workflow step.
  *
- * Usage: `tsx infrastructure/scripts/load-ssm-env.ts api|client`
+ * Usage: `tsx infrastructure/scripts/load-ssm-env.ts`
  * `SSM_PREFIX` defaults to `/gameplan`. The AWS CLI reads Parameter Store.
  * Values are masked and not printed.
  */
@@ -11,9 +11,7 @@ import { appendFileSync } from 'node:fs';
 import {
   envFromParameters,
   formatGithubEnv,
-  missingEnv,
   normalizePrefix,
-  REQUIRED_CLIENT_ENV,
   type ParameterValue,
 } from '../lib/ssm-parameters';
 
@@ -68,10 +66,6 @@ const maskValue = (value: string): void => {
 };
 
 const main = (): void => {
-  const mode = process.argv[2];
-  if (mode !== 'api' && mode !== 'client') {
-    throw new Error('Usage: load-ssm-env.ts api|client');
-  }
   const githubEnv = process.env.GITHUB_ENV;
   if (githubEnv === undefined || githubEnv.trim() === '') {
     throw new Error('GITHUB_ENV is not set');
@@ -79,12 +73,6 @@ const main = (): void => {
 
   const prefix = process.env.SSM_PREFIX ?? '/gameplan';
   const env = envFromParameters(prefix, loadParameters(prefix));
-  if (mode === 'client') {
-    const missing = missingEnv(env, REQUIRED_CLIENT_ENV);
-    if (missing.length > 0) {
-      throw new Error(`Missing Parameter Store values for ${mode}: ${missing.join(', ')}`);
-    }
-  }
 
   for (const value of Object.values(env)) {
     maskValue(value);

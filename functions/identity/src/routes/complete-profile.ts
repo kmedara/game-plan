@@ -11,7 +11,7 @@ import {
   verifyAuthHeader,
 } from '../../../lib/auth/index.js';
 import { accountKindFromBirthday } from '@gameplan/rules';
-import { badRequest, headerOf, json } from '../../../lib/http.js';
+import { authorizationOf, badRequest, json } from '../../../lib/http.js';
 import { route, withBodyValidation } from '../../../lib/pipeline.js';
 import { withIdentityErrors } from './session.js';
 
@@ -25,7 +25,7 @@ export const handleCompleteProfile = route(
   withIdentityErrors(),
   withBodyValidation(completeProfileBodySchema),
   async ({ event, body }) => {
-    const auth = await verifyAuthHeader(headerOf(event, 'authorization'));
+    const auth = await verifyAuthHeader(authorizationOf(event));
     const existing = await getProfile(auth.userId);
     if (existing?.birthday !== undefined) throw new Error('profile_already_complete');
 

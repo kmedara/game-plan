@@ -1,17 +1,16 @@
 /**
- * Unit test that the HTTP API keeps its default execute-api endpoint turned on.
- *
- * The website distribution connects to that hostname. A stack that omits the
- * property leaves an earlier `true` in place, so the template must say `false`.
+ * Unit tests for the area function URLs on the API stack.
  */
 
 import * as cdk from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
-import { describe, it } from 'vitest';
+import { Match, Template } from 'aws-cdk-lib/assertions';
+import { describe, expect, it } from 'vitest';
 import { GamePlanApi, GamePlanPlatform } from './gameplan-stack';
+import { HTTP_AREAS } from './names';
+import { envFromOutputs } from './ssm-parameters';
 
-describe('http api endpoint', () => {
-  it('keeps the execute-api endpoint enabled for the website distribution', () => {
+describe('area function urls', () => {
+  it('require IAM, leave the distribution to the site stack, and verify Cognito tokens', () => {
     const app = new cdk.App();
     const platform = new GamePlanPlatform(app, 'GamePlanPlatform', {
       corsOrigin: 'https://staging.example.com',
@@ -26,12 +25,40 @@ describe('http api endpoint', () => {
       hostedUiDomain: platform.hostedUiDomain,
       table: platform.table,
       mediaBucket: platform.mediaBucket,
-      distribution: platform.distribution,
     });
-    Template.fromStack(stack).hasResourceProperties('AWS::ApiGatewayV2::Api', {
-      ProtocolType: 'HTTP',
-      DisableExecuteApiEndpoint: false,
-    });
+    const template = Template.fromStack(stack);
+
+    template.resourceCountIs('AWS::ApiGatewayV2::Api', 1);
+    template.hasResourceProperties('AWS::ApiGatewayV2::Api', { ProtocolType: 'WEBSOCKET' });
+
+    const urls = Object.values(template.findResources('AWS::Lambda::Url'));
+    expect(urls).toHaveLength(HTTP_AREAS.length);
+    for (const url of urls) {
+      expect(url.Properties.AuthType).toBe('AWS_IAM');
+    }
+
+    // The site stack grants CloudFront. A reference here would make the stacks depend on each other.
+    const permissions = Object.values(template.findResources('AWS::Lambda::Permission')).filter(
+      (resource) => resource.Properties.Principal === 'cloudfront.amazonaws.com',
+    );
+    expect(permissions).toHaveLength(0);
+    expect(JSON.stringify(template.toJSON())).not.toContain('Distribution');
+
+    for (const area of HTTP_AREAS) {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: `gameplan-${area}`,
+        Environment: {
+          Variables: Match.objectLike({
+            COGNITO_USER_POOL_ID: Match.anyValue(),
+            COGNITO_CLIENT_ID: Match.anyValue(),
+          }),
+        },
+      });
+    }
+
+    const outputKeys = Object.keys(template.toJSON().Outputs as object);
+    const outputs = envFromOutputs({ GamePlanApi: Object.fromEntries(outputKeys.map((key) => [key, 'value'])) });
+    expect(Object.keys(outputs)).toEqual(['WS_BASE_URL']);
     // Synthesizing the API stack bundles every area Lambda.
   }, 120_000);
 });

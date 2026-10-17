@@ -1,8 +1,10 @@
 /**
- * Maps Parameter Store names under a shared prefix to process environment variables.
+ * Maps Parameter Store names under a shared prefix to process environment variables,
+ * and CDK stack outputs to the variables the website build reads.
  *
- * Every parameter is a String. The deploy workflows load the path, and the
- * stack deploy writes stack outputs back under the same prefix.
+ * Parameter Store holds only deploy inputs: the hosted zone, provider credentials,
+ * and keys. Every parameter is a String. Stack outputs never go back to it; the
+ * deploy workflow reads them from the CDK outputs file in the same job.
  */
 
 /**
@@ -26,54 +28,23 @@ export const PARAMETER_ENV: Record<string, string> = {
   'vapid-public-key': 'VAPID_PUBLIC_KEY',
   'vapid-private-key': 'VAPID_PRIVATE_KEY',
   'vapid-subject': 'VAPID_SUBJECT',
-  'api-base-url': 'API_BASE_URL',
-  'api-regional-domain': 'API_REGIONAL_DOMAIN',
-  'api-origin-verify-secret-arn': 'API_ORIGIN_VERIFY_SECRET_ARN',
-  'ws-base-url': 'WS_BASE_URL',
-  'site-bucket-name': 'SITE_BUCKET_NAME',
-  'site-distribution-id': 'SITE_DISTRIBUTION_ID',
-  'site-url': 'SITE_URL',
-  'site-api-enabled': 'SITE_API_ENABLED',
-  'site-certificate-arn': 'SITE_CERTIFICATE_ARN',
 };
 
-/** Environment variables the website publish requires before the Expo web export. */
-export const REQUIRED_CLIENT_ENV = ['API_BASE_URL', 'SITE_BUCKET_NAME', 'SITE_DISTRIBUTION_ID'] as const;
-
-/** CloudFormation outputs the DNS stack writes. */
-export const DNS_OUTPUT_PARAMETERS: Record<string, string> = {
-  SiteCertificateArn: 'site-certificate-arn',
+/** Stack output ids, mapped to the environment variables the website build and upload read. */
+export const OUTPUT_ENV: Record<string, string> = {
+  HttpApiUrl: 'API_BASE_URL',
+  WebSocketUrl: 'WS_BASE_URL',
+  SiteBucketName: 'SITE_BUCKET_NAME',
+  SiteDistributionId: 'SITE_DISTRIBUTION_ID',
 };
 
-/** CloudFormation outputs the platform stack writes. The client workflow reads the bucket and distribution. */
-export const PLATFORM_OUTPUT_PARAMETERS: Record<string, string> = {
-  SiteBucketName: 'site-bucket-name',
-  SiteDistributionId: 'site-distribution-id',
-  SiteUrl: 'site-url',
-  SiteApiEnabled: 'site-api-enabled',
-};
-
-/** CloudFormation outputs the API stack writes. The client workflow reads both URLs. */
-export const API_OUTPUT_PARAMETERS: Record<string, string> = {
-  HttpApiUrl: 'api-base-url',
-  WebSocketUrl: 'ws-base-url',
-  ApiRegionalDomain: 'api-regional-domain',
-  OriginVerifySecretArn: 'api-origin-verify-secret-arn',
-};
-
-/** Output maps keyed by the deploy workflow stack name. */
-export const STACK_OUTPUT_PARAMETERS = {
-  dns: DNS_OUTPUT_PARAMETERS,
-  platform: PLATFORM_OUTPUT_PARAMETERS,
-  api: API_OUTPUT_PARAMETERS,
-} as const;
-
-/** Every CloudFormation output key written back as a parameter suffix. */
-export const OUTPUT_PARAMETERS: Record<string, string> = {
-  ...DNS_OUTPUT_PARAMETERS,
-  ...PLATFORM_OUTPUT_PARAMETERS,
-  ...API_OUTPUT_PARAMETERS,
-};
+/** Environment variables the website build and upload require. */
+export const REQUIRED_CLIENT_ENV = [
+  'API_BASE_URL',
+  'WS_BASE_URL',
+  'SITE_BUCKET_NAME',
+  'SITE_DISTRIBUTION_ID',
+] as const;
 
 /** One Parameter Store name and its string value. */
 export type ParameterValue = {
@@ -150,15 +121,15 @@ export const formatGithubEnv = (env: Record<string, string>): string => {
 };
 
 /**
- * Resolves a CloudFormation output key to a parameter suffix.
+ * Resolves a CloudFormation output key to its mapped name.
  *
  * An output declared on the stack uses the mapping key as its logical id.
  * An output declared on a nested construct keeps the construct path and an
- * eight-character hash, such as `StorageSiteBucketNameA0602231`.
+ * eight-character hash, such as `WebsiteSiteBucketNameA0602231`.
  *
  * @param outputKey - Key from a CDK `--outputs-file` document.
- * @param mapping - Output id to parameter suffix.
- * @returns The parameter suffix, when the key is one of the mapped outputs.
+ * @param mapping - Output id to mapped name.
+ * @returns The mapped name, when the key is one of the mapped outputs.
  */
 const suffixForOutputKey = (outputKey: string, mapping: Record<string, string>): string | undefined => {
   const exact = mapping[outputKey];
@@ -179,12 +150,12 @@ const suffixForOutputKey = (outputKey: string, mapping: Record<string, string>):
  * Reads known stack outputs from a CDK `--outputs-file` document.
  *
  * @param document - Parsed JSON from the outputs file.
- * @param mapping - Output id to parameter suffix. Defaults to every stack output.
- * @returns Parameter suffixes and values for the outputs that are present.
+ * @param mapping - Output id to mapped name. Defaults to {@link OUTPUT_ENV}.
+ * @returns Mapped names and values for the outputs that are present.
  */
-export const parametersFromOutputs = (
+export const envFromOutputs = (
   document: unknown,
-  mapping: Record<string, string> = OUTPUT_PARAMETERS,
+  mapping: Record<string, string> = OUTPUT_ENV,
 ): Record<string, string> => {
   const found: Record<string, string> = {};
   const visit = (node: unknown): void => {

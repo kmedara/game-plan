@@ -1,25 +1,28 @@
 /**
  * Cloud Development Kit (CDK) stacks for the GamePlan product.
  *
- * DNS, the platform (Cognito, DynamoDB, and the website buckets), and the API
- * deploy separately. The API stack reads the earlier stacks through CloudFormation
- * exports, so a later API deploy does not recreate Cognito or the hosted-zone records.
+ * DNS, the platform (Cognito, DynamoDB, and the media bucket), the API, and the
+ * site deploy separately, in that order. Each stack reads the earlier ones through
+ * CloudFormation exports, so a later deploy does not recreate Cognito or the table.
  */
 
 import * as cdk from 'aws-cdk-lib';
 import type * as cognito from 'aws-cdk-lib/aws-cognito';
 import type * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import type * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import type * as lambda from 'aws-cdk-lib/aws-lambda';
 import type * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
 import { Api } from './api';
 import { Auth, type AuthSocialContext } from './auth';
 import { Database } from './database';
 import { ZoneDns } from './dns';
-import { Storage } from './storage';
+import type { HttpArea } from './names';
 import type { SiteApiProps } from './site-api';
+import { Storage } from './storage';
+import { Website } from './website';
 
-/** Hosted zone and website hostname shared by the DNS and API stacks. */
+/** Hosted zone and website hostname shared by the DNS and site stacks. */
 export type DnsConfig = {
   hostedZoneId: string;
   roleArn?: string;
@@ -73,20 +76,10 @@ export type GamePlanPlatformProps = cdk.StackProps & {
   selfSignUpEnabled?: boolean;
   /** Parameter Store name of the staging sign-up allowlist. */
   signupAllowlistParameter?: string;
-  /** Website hostname. Set with `certificateArn` after the DNS stack exists. */
-  siteHostname?: string;
-  /** CloudFront certificate ARN from {@link GamePlanDns}. */
-  certificateArn?: string;
-  /**
-   * API origin for `/api/*` on the website distribution.
-   *
-   * Set only after the API stack has published the regional domain and secret ARN.
-   */
-  sharedApi?: SiteApiProps;
 };
 
 /**
- * Cognito, DynamoDB, and the website buckets. These exist before the API functions.
+ * Cognito, DynamoDB, and the media bucket. These exist before the API functions.
  */
 export class GamePlanPlatform extends cdk.Stack {
   /** Cognito user pool that owns accounts. */
@@ -104,15 +97,12 @@ export class GamePlanPlatform extends cdk.Stack {
   /** Private bucket for message files. */
   public readonly mediaBucket: s3.Bucket;
 
-  /** CloudFront distribution that serves the website. */
-  public readonly distribution: cloudfront.Distribution;
-
   /**
-   * Creates auth, the table, and storage.
+   * Creates auth, the table, and the media bucket.
    *
    * @param scope - The CDK app.
    * @param id - The stack id.
-   * @param props - OAuth URLs and the optional website certificate.
+   * @param props - OAuth URLs and the media CORS origin.
    */
   constructor(scope: Construct, id: string, props: GamePlanPlatformProps) {
     super(scope, id, props);
@@ -130,20 +120,13 @@ export class GamePlanPlatform extends cdk.Stack {
 
     this.table = new Database(this, 'Database').table;
 
-    const storage = new Storage(this, 'Storage', {
-      corsOrigin: props.corsOrigin,
-      siteHostname: props.siteHostname,
-      certificateArn: props.certificateArn,
-      sharedApi: props.sharedApi,
-    });
-    this.mediaBucket = storage.mediaBucket;
-    this.distribution = storage.distribution;
+    this.mediaBucket = new Storage(this, 'Storage', { corsOrigin: props.corsOrigin }).mediaBucket;
   }
 }
 
 /** Props for {@link GamePlanApi}. */
 export type GamePlanApiProps = cdk.StackProps & {
-  /** Browser origin allowed by Cross-Origin Resource Sharing (CORS) on the HTTP API. */
+  /** Browser origin the area functions use when they build absolute links. */
   corsOrigin: string;
   /** Absolute OAuth callback URL for the identity routes. */
   authCallbackUrl: string;
@@ -157,34 +140,29 @@ export type GamePlanApiProps = cdk.StackProps & {
   table: dynamodb.Table;
   /** Media bucket from {@link GamePlanPlatform}. */
   mediaBucket: s3.IBucket;
-  /** Website distribution from {@link GamePlanPlatform}. Alias records point at it. */
-  distribution: cloudfront.Distribution;
-  /** Present when the DNS stack owns the hosted zone. The API stack writes the alias records. */
-  dns?: DnsConfig;
-  /**
-   * Browser base URL for the HTTP API, such as `https://staging.example.com/api`.
-   *
-   * Clients and the OAuth callback use the website host. CloudFront calls the
-   * HTTP API execute-api domain.
-   */
-  browserApiBaseUrl?: string;
 };
 
 /**
- * HTTP API, WebSocket API, and the alias record for the website hostname.
+ * Area function URLs and the WebSocket API.
  */
 export class GamePlanApi extends cdk.Stack {
+  /** Function URL for each HTTP area. The site stack forwards `/api` here. */
+  public readonly functionUrls: Record<HttpArea, lambda.FunctionUrl>;
+
+  /** Function behind each URL. */
+  public readonly httpFunctions: Record<HttpArea, lambda.IFunction>;
+
   /**
    * Wires the area functions to the platform resources.
    *
    * @param scope - The CDK app.
    * @param id - The stack id.
-   * @param props - Platform resources and the website distribution.
+   * @param props - Platform resources.
    */
   constructor(scope: Construct, id: string, props: GamePlanApiProps) {
     super(scope, id, props);
 
-    new Api(this, 'Api', {
+    const api = new Api(this, 'Api', {
       userPool: props.userPool,
       userPoolClient: props.userPoolClient,
       hostedUiDomain: props.hostedUiDomain,
@@ -192,9 +170,48 @@ export class GamePlanApi extends cdk.Stack {
       table: props.table,
       mediaBucket: props.mediaBucket,
       corsOrigin: props.corsOrigin,
-      protectOrigin: props.dns !== undefined,
-      browserApiBaseUrl: props.browserApiBaseUrl,
     });
+    this.functionUrls = api.functionUrls;
+    this.httpFunctions = api.httpFunctions;
+  }
+}
+
+/** Props for {@link GamePlanSite}. */
+export type GamePlanSiteProps = cdk.StackProps &
+  SiteApiProps & {
+    /** Website hostname. Set with `certificateArn` when the DNS stack exists. */
+    siteHostname?: string;
+    /** CloudFront certificate ARN from {@link GamePlanDns}. */
+    certificateArn?: string;
+    /** Present when the DNS stack owns the hosted zone. This stack writes the alias records. */
+    dns?: DnsConfig;
+  };
+
+/**
+ * Website bucket, the distribution that also serves `/api`, its firewall, and
+ * the alias record. Deploys after {@link GamePlanApi} so the distribution can
+ * reference the area function URLs directly.
+ */
+export class GamePlanSite extends cdk.Stack {
+  /** CloudFront distribution that serves the website and `/api`. */
+  public readonly distribution: cloudfront.Distribution;
+
+  /**
+   * Creates the website and points the hostname at it.
+   *
+   * @param scope - The CDK app.
+   * @param id - The stack id.
+   * @param props - Hostname, certificate, DNS, and the area function URLs.
+   */
+  constructor(scope: Construct, id: string, props: GamePlanSiteProps) {
+    super(scope, id, props);
+
+    this.distribution = new Website(this, 'Website', {
+      siteHostname: props.siteHostname,
+      certificateArn: props.certificateArn,
+      functionUrls: props.functionUrls,
+      functions: props.functions,
+    }).distribution;
 
     if (props.dns !== undefined) {
       const dns = new ZoneDns(this, 'Dns', {
@@ -202,7 +219,7 @@ export class GamePlanApi extends cdk.Stack {
         certificates: false,
         handlerId: 'dns-aliases',
       });
-      dns.addAliases({ distribution: props.distribution });
+      dns.addAliases({ distribution: this.distribution });
     }
   }
 }

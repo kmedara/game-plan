@@ -4,7 +4,7 @@
 
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import { getProfile, toUserProfile, verifyAuthHeader } from '../../../lib/auth/index.js';
-import { headerOf, json, unauthorized } from '../../../lib/http.js';
+import { authorizationOf, json, unauthorized } from '../../../lib/http.js';
 import { pendingProfile } from './oauth.js';
 import { mapError } from './session.js';
 
@@ -18,7 +18,7 @@ export const handleMe = async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyStructuredResultV2> => {
   try {
-    const auth = await verifyAuthHeader(headerOf(event, 'authorization'));
+    const auth = await verifyAuthHeader(authorizationOf(event));
     const profile = await getProfile(auth.userId);
     if (profile === undefined) {
       return json(200, pendingProfile(auth.userId, auth.email, undefined));

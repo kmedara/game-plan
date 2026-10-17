@@ -49,7 +49,7 @@ describe('cognito auth', () => {
     });
   });
 
-  it('reads the caller from API Gateway JWT claims without a bearer header', async () => {
+  it('does not trust request context claims without a bearer token', async () => {
     const { authenticateRequest } = await import('./cognito.js');
     const event = {
       version: '2.0',
@@ -62,9 +62,25 @@ describe('cognito auth', () => {
         },
       },
     };
+    await expect(authenticateRequest(event as never)).rejects.toThrow('unauthorized');
+  });
+
+  it('reads the viewer token CloudFront copied past its own signature', async () => {
+    process.env.LOCAL_JWT_SECRET = 'unit-test-secret';
+    const { authenticateRequest } = await import('./cognito.js');
+    const { accessToken } = issueLocalTokens('edge-user', 'e@example.com');
+    const event = {
+      version: '2.0',
+      rawPath: '/teams',
+      headers: {
+        authorization: 'AWS4-HMAC-SHA256 Credential=cloudfront/20261016/us-east-1/lambda/aws4_request',
+        'x-viewer-authorization': `Bearer ${accessToken}`,
+      },
+      requestContext: { http: { method: 'GET', path: '/teams' } },
+    };
     await expect(authenticateRequest(event as never)).resolves.toEqual({
-      userId: 'user-from-gateway',
-      email: 'g@example.com',
+      userId: 'edge-user',
+      email: 'e@example.com',
     });
   });
 
@@ -113,7 +129,7 @@ describe('cognito auth', () => {
     });
   });
 
-  it('falls back to the Authorization header when API Gateway claims are absent', async () => {
+  it('reads the Authorization header when the local server forwards it', async () => {
     process.env.LOCAL_JWT_SECRET = 'unit-test-secret';
     const { authenticateRequest } = await import('./cognito.js');
     const { accessToken } = issueLocalTokens('header-user', 'h@example.com');

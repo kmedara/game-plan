@@ -28,13 +28,6 @@ const IP_FLOOD_LIMIT = 4000;
 const WINDOW = cdk.Duration.minutes(5);
 
 /**
- * Header CloudFront adds before the request reaches API Gateway.
- *
- * Must match `ORIGIN_VERIFY_HEADER` in `functions/lib/http.ts`.
- */
-export const ORIGIN_VERIFY_HEADER = 'x-origin-verify';
-
-/**
  * Builds a blocking rate rule that answers `429`.
  *
  * @param name - The rule name and the CloudWatch metric name.

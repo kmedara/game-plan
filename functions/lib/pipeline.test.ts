@@ -5,6 +5,7 @@
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { issueLocalTokens } from "./auth/index.js";
 import { requirePermission, requireUser } from "./guards.js";
 import { json } from "./http.js";
 import {
@@ -173,6 +174,8 @@ describe("route pipeline", () => {
 
   describe("accumulated context", () => {
     it("passes path args, user, and body to the handler", async () => {
+      process.env.LOCAL_JWT_SECRET = "pipeline-test-secret";
+      const { accessToken } = issueLocalTokens("user-1", "user-1@example.com");
       const handle = route(
         ["teamId"],
         withBodyValidation(z.object({ name: z.string() })),
@@ -188,9 +191,9 @@ describe("route pipeline", () => {
       const result = await handle(
         {
           ...httpEvent({ name: "Wildcats" }),
+          headers: { authorization: `Bearer ${accessToken}` },
           requestContext: {
             http: { method: "POST", path: "/" },
-            authorizer: { jwt: { claims: { sub: "user-1" } } },
           },
         } as unknown as APIGatewayProxyEventV2,
         "team-1",

@@ -5,7 +5,7 @@
  */
 
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
-import { handleHealth, logHttpFailure, notFound, rejectDirectOrigin } from '../../lib/http.js';
+import { handleHealth, logHttpFailure, notFound } from '../../lib/http.js';
 import {
   handleAcceptGuardianInvite,
   handleCompleteProfile,
@@ -49,9 +49,6 @@ const routeOf = (path: string): string | undefined => {
 export const handler = logHttpFailure(async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyStructuredResultV2> => {
-  const rejected = rejectDirectOrigin(event);
-  if (rejected !== undefined) return rejected;
-
   const path = event.rawPath ?? '';
   const method = event.requestContext.http.method;
 

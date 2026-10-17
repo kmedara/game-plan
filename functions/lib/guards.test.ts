@@ -27,6 +27,10 @@ const {
   requireUser,
   withTeamIdFromBody,
 } = await import('./guards.js');
+const { issueLocalTokens } = await import('./auth/index.js');
+
+process.env.LOCAL_JWT_SECRET = 'guards-test-secret';
+const { accessToken } = issueLocalTokens('guard-user', 'guard@example.com');
 
 /**
  * Builds a minimal HTTP API event.
@@ -37,10 +41,9 @@ const event = (): APIGatewayProxyEventV2 =>
   ({
     version: '2.0',
     rawPath: '/',
-    headers: { authorization: 'Bearer unused' },
+    headers: { authorization: `Bearer ${accessToken}` },
     requestContext: {
       http: { method: 'GET', path: '/' },
-      authorizer: { jwt: { claims: { sub: 'guard-user' } } },
     },
   }) as unknown as APIGatewayProxyEventV2;
 
@@ -103,7 +106,6 @@ describe('guards', () => {
       ...event(),
       requestContext: {
         http: { method: 'POST', path: '/' },
-        authorizer: { jwt: { claims: { sub: 'guard-user' } } },
       },
       body: JSON.stringify({ teamId: 'team-body' }),
     } as unknown as APIGatewayProxyEventV2);
@@ -115,7 +117,6 @@ describe('guards', () => {
         ...event(),
         requestContext: {
           http: { method: 'POST', path: '/' },
-          authorizer: { jwt: { claims: { sub: 'guard-user' } } },
         },
         body: JSON.stringify({ teamId: 'team-body' }),
       } as unknown as APIGatewayProxyEventV2),

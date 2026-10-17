@@ -6,6 +6,7 @@ import { Platform } from 'react-native';
 import {
   SessionService,
   WebRefreshStore,
+  withContentHash,
   type SessionTokens,
   type UserProfile,
 } from '@gameplan/client-session';
@@ -67,6 +68,9 @@ import { config } from './config';
 import { ExpoRefreshStore, SELECTED_TEAM_KEY, readPreference, writePreference } from './refresh-store';
 
 type Listener = () => void;
+
+/** Fetch for API calls. Writes carry the body hash the function URLs require. */
+const apiFetch = withContentHash((input, init) => fetch(input, init));
 
 /**
  * Typed helpers for identity, teams, schedule, chat, places, and media.
@@ -191,7 +195,7 @@ export class ApiClient {
    * @returns The session and the route to open.
    */
   async exchangeOAuth(code: string): Promise<OauthExchangeResponse> {
-    const response = await fetch(`${config.apiBaseUrl}/identity/oauth/exchange`, {
+    const response = await apiFetch(`${config.apiBaseUrl}/identity/oauth/exchange`, {
       method: 'POST',
       credentials: 'omit',
       headers: { 'content-type': 'application/json', 'x-refresh-delivery': 'body' },
@@ -487,7 +491,7 @@ export class ApiClient {
     if (body !== undefined) headers['content-type'] = 'application/json';
 
     const run = (): Promise<Response> =>
-      fetch(`${config.apiBaseUrl}${path}`, {
+      apiFetch(`${config.apiBaseUrl}${path}`, {
         method,
         credentials: this.native ? 'omit' : 'include',
         headers,

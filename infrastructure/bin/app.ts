@@ -2,17 +2,17 @@
 /**
  * CDK application entry for the GamePlan stacks.
  *
- * Instantiates DNS, platform, and API stacks in the caller account and region.
+ * Instantiates DNS, platform, API, and site stacks in the caller account and region.
  * Cognito OAuth callback/logout URLs and optional social IdP credentials come
  * from CDK context, then from process environment. In CI, `DEPLOY_ENV` and
- * `HOSTED_ZONE_NAME` choose `<environment>.<zone>`. The HTTP API is `/api`
+ * `HOSTED_ZONE_NAME` choose `<environment>.<zone>`. The HTTP areas are `/api`
  * on that host. `CLIENT_ORIGIN` overrides the local website CORS default. A
  * hosted zone id adds the DNS stack and connects the website hostname to it.
  */
 
 import * as cdk from 'aws-cdk-lib';
 import { definedString, hostnameOf, publicUrlsFor, siteApiBaseUrl, splitUrlList, urlListFromUnknown } from '../lib/deploy-config';
-import { GamePlanApi, GamePlanDns, GamePlanPlatform } from '../lib/gameplan-stack';
+import { GamePlanApi, GamePlanDns, GamePlanPlatform, GamePlanSite } from '../lib/gameplan-stack';
 import { getStackEnv } from '../lib/stack-env';
 
 /** Root CDK app. */
@@ -37,8 +37,6 @@ const legacyLocalCallback = 'http://localhost:3000/identity/oauth/callback';
 const localLogout = 'http://localhost:4200/login';
 const siteApiBase = derived === undefined ? undefined : siteApiBaseUrl(derived.clientOrigin);
 const siteCallback = siteApiBase === undefined ? undefined : `${siteApiBase}/identity/oauth/callback`;
-const regionalDomain = definedString(process.env.API_REGIONAL_DOMAIN);
-const originVerifySecretArn = definedString(process.env.API_ORIGIN_VERIFY_SECRET_ARN);
 const callbackUrls =
   derived !== undefined && siteCallback !== undefined
     ? [
@@ -90,26 +88,9 @@ const platform = new GamePlanPlatform(app, 'GamePlanPlatform', {
   logoutUrls,
   social,
   signupAllowlistParameter: staging ? `${ssmPrefix}/staging-signup-allowlist` : undefined,
-  siteHostname: dns?.siteHostname,
-  certificateArn: definedString(process.env.SITE_CERTIFICATE_ARN) ?? dnsStack?.currentCertificateArn,
-  sharedApi:
-    dns !== undefined && regionalDomain !== undefined && originVerifySecretArn !== undefined
-      ? {
-          executeApiDomainName: regionalDomain,
-          originVerifySecretArn,
-        }
-      : undefined,
 });
 
-if (dnsStack !== undefined) {
-  // GamePlanPlatform already imports this export. Keep the reference so a DNS
-  // deploy does not delete it while the value stays on the previous certificate.
-  new cdk.CfnOutput(platform, 'RetainedCertificateExport', {
-    value: dnsStack.siteCertificateArn,
-  });
-}
-
-new GamePlanApi(app, 'GamePlanApi', {
+const api = new GamePlanApi(app, 'GamePlanApi', {
   env,
   corsOrigin,
   authCallbackUrl: callbackUrls[0]!,
@@ -118,7 +99,13 @@ new GamePlanApi(app, 'GamePlanApi', {
   hostedUiDomain: platform.hostedUiDomain,
   table: platform.table,
   mediaBucket: platform.mediaBucket,
-  distribution: platform.distribution,
+});
+
+new GamePlanSite(app, 'GamePlanSite', {
+  env,
+  siteHostname: dns?.siteHostname,
+  certificateArn: definedString(process.env.SITE_CERTIFICATE_ARN) ?? dnsStack?.currentCertificateArn,
   dns,
-  browserApiBaseUrl: siteApiBase,
+  functionUrls: api.functionUrls,
+  functions: api.httpFunctions,
 });

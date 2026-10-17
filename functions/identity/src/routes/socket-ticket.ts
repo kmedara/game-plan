@@ -4,7 +4,7 @@
 
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import { verifyAuthHeader } from '../../../lib/auth/index.js';
-import { headerOf, json, unauthorized } from '../../../lib/http.js';
+import { authorizationOf, json, unauthorized } from '../../../lib/http.js';
 import { issueSocketTicket } from '../../../lib/socket-ticket.js';
 import { mapError } from './session.js';
 
@@ -21,7 +21,7 @@ export const handleSocketTicket = async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyStructuredResultV2> => {
   try {
-    const userId = (await verifyAuthHeader(headerOf(event, 'authorization'))).userId;
+    const userId = (await verifyAuthHeader(authorizationOf(event))).userId;
     return json(200, await issueSocketTicket(userId));
   } catch (error) {
     return mapError(error) ?? unauthorized();

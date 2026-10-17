@@ -270,29 +270,28 @@ export const readCookie = (
 };
 
 /**
- * Header CloudFront adds on the way to API Gateway.
+ * Header the website distribution copies the viewer `Authorization` value into.
  *
- * Callers cannot see it. The matching check is {@link rejectDirectOrigin}.
+ * CloudFront signs function URL requests with its own `Authorization` header,
+ * so the bearer token cannot travel there. The viewer function overwrites or
+ * removes this header on every request. Must match `VIEWER_AUTHORIZATION_HEADER`
+ * in `infrastructure/lib/site-api.ts`.
  */
-export const ORIGIN_VERIFY_HEADER = "x-origin-verify";
+export const VIEWER_AUTHORIZATION_HEADER = "x-viewer-authorization";
 
 /**
- * Rejects a request that reached a Lambda without the CloudFront origin header.
+ * Reads the caller's `Authorization` value.
  *
- * Laptop runs and deploys without a public hostname leave `ORIGIN_VERIFY_SECRET`
- * unset, so those calls pass through.
+ * Behind CloudFront it is in {@link VIEWER_AUTHORIZATION_HEADER}. The local
+ * server forwards the original header.
  *
- * @param event - The HTTP API event.
- * @returns A `403` when the secret is configured and the header does not match.
+ * @param event - The HTTP event.
+ * @returns The header value, or `undefined` when absent.
  */
-export const rejectDirectOrigin = (
+export const authorizationOf = (
   event: APIGatewayProxyEventV2,
-): APIGatewayProxyStructuredResultV2 | undefined => {
-  const expected = process.env.ORIGIN_VERIFY_SECRET?.trim() ?? "";
-  if (expected.length === 0) return undefined;
-  if (headerOf(event, ORIGIN_VERIFY_HEADER) === expected) return undefined;
-  return forbidden();
-};
+): string | undefined =>
+  headerOf(event, VIEWER_AUTHORIZATION_HEADER) ?? headerOf(event, "authorization");
 
 /**
  * Reads a case-insensitive request header value.

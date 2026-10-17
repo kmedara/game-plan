@@ -1,9 +1,8 @@
 /**
  * Cognito access-token verification for area Lambdas and the WebSocket authorizer.
  *
- * API Gateway already checks the token on protected HTTP routes and on
- * `$connect`. Handlers still verify (or read claims) when they need the `sub`
- * inside the function, and the local proxy has no Cognito authorizer.
+ * HTTP routes reach the functions through CloudFront and Lambda function URLs,
+ * which do not check the token. Each protected route verifies it here.
  *
  * When Cognito env vars are unset, local HS256 access tokens are accepted so
  * laptop work does not need a cloud deploy.
@@ -12,7 +11,7 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import type { AuthUser } from '@gameplan/types';
-import { headerOf } from '../http.js';
+import { authorizationOf } from '../http.js';
 import { verifyLocalJwt } from './local-jwt.js';
 
 /** Cached Cognito JWT verifier for warm invocations. */
@@ -110,28 +109,12 @@ export const verifyAuthHeader = async (authorization?: string): Promise<AuthUser
 };
 
 /**
- * Resolves the caller from an HTTP API event.
+ * Resolves the caller from an HTTP event by verifying its bearer token.
  *
- * Prefers JWT claims already checked by the API Gateway Cognito authorizer.
- * Falls back to verifying the `Authorization` bearer token (local proxy and
- * open routes that still need a user id).
- *
- * @param event - The HTTP API event.
+ * @param event - The HTTP event.
  * @returns The authenticated user.
- * @throws When no trusted identity is present.
+ * @throws When no valid token is present.
  */
 export const authenticateRequest = async (
   event: APIGatewayProxyEventV2,
-): Promise<AuthUser> => {
-  const context = event.requestContext as APIGatewayProxyEventV2['requestContext'] & {
-    authorizer?: { jwt?: { claims?: Record<string, unknown> } };
-  };
-  const claims = context.authorizer?.jwt?.claims;
-  if (claims !== undefined && typeof claims.sub === 'string' && claims.sub.length > 0) {
-    return toAuthUser({
-      sub: claims.sub,
-      email: claims.email,
-    });
-  }
-  return verifyAuthHeader(headerOf(event, 'authorization'));
-};
+): Promise<AuthUser> => verifyAuthHeader(authorizationOf(event));

@@ -1,30 +1,25 @@
 /**
- * HTTP API and WebSocket API wiring for every product area Lambda.
+ * Function URLs and WebSocket API wiring for every product area Lambda.
  */
 
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
-import { HttpUserPoolAuthorizer, WebSocketLambdaAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
+import { WebSocketLambdaAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import type * as cognito from 'aws-cdk-lib/aws-cognito';
 import type * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import type * as s3 from 'aws-cdk-lib/aws-s3';
-import {
-  AwsCustomResource,
-  AwsCustomResourcePolicy,
-  PhysicalResourceId,
-} from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
-import { AREAS, type Area } from './names';
+import { HTTP_AREAS, type Area, type HttpArea } from './names';
 import {
   CHAT_PREFIX,
   DIRECTORY_KEY,
@@ -52,35 +47,15 @@ export type ApiProps = {
   table: dynamodb.Table;
   /** Private bucket that stores message file bytes. */
   mediaBucket: s3.IBucket;
-  /** Browser origin allowed by Cross-Origin Resource Sharing (CORS). */
+  /** Browser origin the functions use when they build absolute links. */
   corsOrigin: string;
-  /**
-   * When set, Lambdas require the CloudFront origin header and the stack publishes
-   * the execute-api hostname for the website distribution.
-   */
-  protectOrigin?: boolean;
-  /**
-   * Public base URL the browser and the Expo app use, such as `https://staging.example.com/api`.
-   *
-   * When set, the published API URL points here. API Gateway stays on its execute-api domain.
-   */
-  browserApiBaseUrl?: string;
 };
 
 /**
- * Areas whose HTTP routes stay open so register and login can run before a token exists.
- */
-const PUBLIC_HTTP = new Set<Area>(['identity']);
-
-/** HTTP areas that must see the CloudFront origin header. Socket and fan-out are not HTTP. */
-const EDGE_AREAS: readonly Area[] = ['identity', 'teams', 'schedule', 'chat', 'media', 'places'];
-
-/**
- * Access log line written for each API Gateway request.
+ * Access log line written for each WebSocket API request.
  *
- * `path` is the request path (`/identity/profile/complete`). `routeKey` is the
- * matched template (`POST /identity/{proxy+}`). `error` is an API Gateway
- * failure; a Lambda JSON `{ error }` body is logged by the function instead.
+ * `error` is an API Gateway failure; a Lambda JSON `{ error }` body is logged
+ * by the function instead.
  */
 const ACCESS_LOG_FORMAT = JSON.stringify({
   requestId: '$context.requestId',
@@ -115,11 +90,10 @@ const ensureApiGatewayLoggingRole = (scope: Construct): apigateway.CfnAccount =>
  * Sends stage access logs to CloudWatch.
  *
  * Staging keeps the group for one day. Other environments keep it for one month.
- * HTTP API stages cannot enable X-Ray; the Lambdas trace those requests instead.
  *
  * @param scope - The construct that owns the log group.
  * @param account - Account setting that holds the CloudWatch Logs role ARN.
- * @param stage - The HTTP or WebSocket stage.
+ * @param stage - The WebSocket stage.
  * @param id - The log group construct id.
  * @param logGroupName - The CloudWatch log group name.
  */
@@ -149,25 +123,30 @@ const enableAccessLogs = (
 };
 
 /**
- * HTTP API plus the WebSocket API. Each area is its own function.
+ * Area function URLs plus the WebSocket API. Each area is its own function.
  *
- * The gateway checks the Cognito access token on HTTP routes. WebSocket APIs have no
- * Cognito authorizer, so `$connect` burns a one-time ticket from
+ * The function URLs require IAM. The site stack lets only the website
+ * distribution call them, so every HTTP request passes the website firewall.
+ * The functions verify the Cognito access token themselves. WebSocket APIs have
+ * no Cognito authorizer, so `$connect` burns a one-time ticket from
  * `POST /identity/socket-ticket`.
  */
 export class Api extends Construct {
-  /** Amazon API Gateway HTTP API that fronts the area Lambdas. */
-  public readonly httpApi: apigwv2.HttpApi;
-
   /** Amazon API Gateway WebSocket API used for live delivery only. */
   public readonly webSocketApi: apigwv2.WebSocketApi;
 
+  /** IAM-only function URL for each HTTP area. */
+  public readonly functionUrls: Record<HttpArea, lambda.FunctionUrl>;
+
+  /** Function behind each URL. */
+  public readonly httpFunctions: Record<HttpArea, lambda.IFunction>;
+
   /**
-   * Creates the HTTP routes, WebSocket routes, fan-out queue, and push topic.
+   * Creates the function URLs, WebSocket routes, fan-out queue, and push topic.
    *
    * @param scope - The parent CDK construct.
    * @param id - The construct id.
-   * @param props - Auth, table, media, and CORS inputs.
+   * @param props - Auth, table, and media inputs.
    */
   constructor(scope: Construct, id: string, props: ApiProps) {
     super(scope, id);
@@ -196,11 +175,14 @@ export class Api extends Construct {
     const shared = { NODE_ENV: 'production', CLIENT_ORIGIN: props.corsOrigin };
     const tableEnv = { TABLE_NAME: props.table.tableName };
     const queueEnv = { FANOUT_QUEUE_URL: queue.queueUrl };
-    const cognitoEnv = {
+    // Without the pool and client ids, token checks fall back to the laptop HS256 secret.
+    const tokenEnv = {
       COGNITO_USER_POOL_ID: props.userPool.userPoolId,
       COGNITO_CLIENT_ID: props.userPoolClient.userPoolClientId,
-      COGNITO_HOSTED_UI_DOMAIN: props.hostedUiDomain,
       COGNITO_REGION: cdk.Stack.of(this).region,
+    };
+    const oauthEnv = {
+      COGNITO_HOSTED_UI_DOMAIN: props.hostedUiDomain,
       AUTH_CALLBACK_URL: props.authCallbackUrl,
     };
 
@@ -213,23 +195,25 @@ export class Api extends Construct {
     const environmentFor = (area: Area): Record<string, string> => {
       switch (area) {
         case 'identity':
-          return { ...shared, ...tableEnv, ...cognitoEnv };
+          return { ...shared, ...tableEnv, ...tokenEnv, ...oauthEnv };
         case 'teams':
-          return { ...shared, ...tableEnv, ...queueEnv };
+          return { ...shared, ...tableEnv, ...tokenEnv, ...queueEnv };
         case 'socket':
           return { ...shared, ...tableEnv };
         case 'schedule':
         case 'chat':
-          return { ...shared, ...tableEnv, ...queueEnv };
+          return { ...shared, ...tableEnv, ...tokenEnv, ...queueEnv };
         case 'media':
           return {
             ...shared,
             ...tableEnv,
+            ...tokenEnv,
             MEDIA_BUCKET: props.mediaBucket.bucketName,
           };
         case 'places':
           return {
             ...shared,
+            ...tokenEnv,
             GOOGLE_MAPS_API_KEY: process.env.GOOGLE_MAPS_API_KEY ?? '',
           };
         case 'fanout':
@@ -251,59 +235,16 @@ export class Api extends Construct {
 
     const functions = createAreaFunctions(this, environmentFor);
 
-    this.httpApi = new apigwv2.HttpApi(this, 'HttpApi', {
-      apiName: 'gameplan-http',
-      createDefaultStage: true,
-      // The website distribution connects to the execute-api hostname. An earlier
-      // deploy turned it off, and removing the property does not turn it back on.
-      disableExecuteApiEndpoint: false,
-      corsPreflight: {
-        allowCredentials: true,
-        allowHeaders: ['Authorization', 'Content-Type', 'Cookie', 'X-Refresh-Delivery'],
-        allowMethods: [
-          apigwv2.CorsHttpMethod.GET,
-          apigwv2.CorsHttpMethod.POST,
-          apigwv2.CorsHttpMethod.PUT,
-          apigwv2.CorsHttpMethod.PATCH,
-          apigwv2.CorsHttpMethod.DELETE,
-          apigwv2.CorsHttpMethod.OPTIONS,
-        ],
-        allowOrigins: [props.corsOrigin],
-      },
-    });
-    enableAccessLogs(this, apiLoggingAccount, this.httpApi.defaultStage, 'HttpAccessLogs', '/gameplan/http-api');
-
-    const httpAuthorizer = new HttpUserPoolAuthorizer('CognitoAuthorizer', props.userPool, {
-      userPoolClients: [props.userPoolClient],
-      authorizerName: 'gameplan-cognito',
-    });
-
-    for (const area of AREAS) {
-      const integration = new integrations.HttpLambdaIntegration(`${area}Http`, functions[area]);
-      this.httpApi.addRoutes({
-        path: `/${area}/health`,
-        methods: [apigwv2.HttpMethod.GET],
-        integration,
+    const functionUrls = {} as Record<HttpArea, lambda.FunctionUrl>;
+    const httpFunctions = {} as Record<HttpArea, lambda.IFunction>;
+    for (const area of HTTP_AREAS) {
+      functionUrls[area] = functions[area].addFunctionUrl({
+        authType: lambda.FunctionUrlAuthType.AWS_IAM,
       });
-      // `{proxy+}` requires a segment after the area, so `/teams` and `/chat` need
-      // their own route. ANY also matches OPTIONS and is more specific than the
-      // CORS preflight route `OPTIONS /{proxy+}`, so a preflight would hit the
-      // Lambda and return 404.
-      const areaMethods = [
-        apigwv2.HttpMethod.GET,
-        apigwv2.HttpMethod.POST,
-        apigwv2.HttpMethod.PUT,
-        apigwv2.HttpMethod.PATCH,
-        apigwv2.HttpMethod.DELETE,
-      ];
-      const areaRoute = {
-        methods: areaMethods,
-        integration,
-        ...(PUBLIC_HTTP.has(area) ? {} : { authorizer: httpAuthorizer }),
-      };
-      this.httpApi.addRoutes({ path: `/${area}`, ...areaRoute });
-      this.httpApi.addRoutes({ path: `/${area}/{proxy+}`, ...areaRoute });
+      httpFunctions[area] = functions[area];
     }
+    this.functionUrls = functionUrls;
+    this.httpFunctions = httpFunctions;
 
     const socketAuthorizerFn = createFunction(
       this,
@@ -413,39 +354,6 @@ export class Api extends Construct {
     );
     props.mediaBucket.grantRead(functions.media);
     props.mediaBucket.grantPut(functions.media);
-
-    if (props.protectOrigin === true) {
-      const originSecret = new secretsmanager.Secret(this, 'OriginVerifySecret', {
-        description: 'Header CloudFront sends so clients cannot call API Gateway directly.',
-        generateSecretString: { excludePunctuation: true, passwordLength: 32 },
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      });
-      const readOriginSecret = new AwsCustomResource(this, 'ReadOriginVerifySecret', {
-        onCreate: {
-          service: 'SecretsManager',
-          action: 'getSecretValue',
-          parameters: { SecretId: originSecret.secretArn },
-          physicalResourceId: PhysicalResourceId.of('GamePlanOriginVerify'),
-        },
-        policy: AwsCustomResourcePolicy.fromSdkCalls({ resources: [originSecret.secretArn] }),
-      });
-      readOriginSecret.node.addDependency(originSecret);
-      const originVerify = readOriginSecret.getResponseField('SecretString');
-      for (const area of EDGE_AREAS) {
-        functions[area].addEnvironment('ORIGIN_VERIFY_SECRET', originVerify);
-      }
-      const executeApiDomain = cdk.Fn.select(
-        0,
-        cdk.Fn.split('/', cdk.Fn.select(1, cdk.Fn.split('://', this.httpApi.apiEndpoint))),
-      );
-      new cdk.CfnOutput(this, 'ApiRegionalDomain', { value: executeApiDomain });
-      new cdk.CfnOutput(this, 'OriginVerifySecretArn', { value: originSecret.secretArn });
-    }
-
-    new cdk.CfnOutput(this, 'HttpApiUrl', {
-      value: props.browserApiBaseUrl ?? this.httpApi.apiEndpoint,
-      exportName: 'GamePlanHttpApiUrl',
-    });
 
     new cdk.CfnOutput(this, 'WebSocketUrl', {
       value: socketStage.url,

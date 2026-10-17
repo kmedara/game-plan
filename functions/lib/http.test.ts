@@ -10,8 +10,8 @@ import {
   conflict,
   forbidden,
   handleHealth,
+  authorizationOf,
   headerOf,
-  rejectDirectOrigin,
   isHttpEvent,
   isSqsEvent,
   isWebSocketEvent,
@@ -162,19 +162,18 @@ describe('http helpers', () => {
     ).toEqual({ b: 2 });
   });
 
-  it('rejects calls that skip CloudFront when the origin secret is set', () => {
-    const previous = process.env.ORIGIN_VERIFY_SECRET;
-    process.env.ORIGIN_VERIFY_SECRET = 'edge-secret';
-    try {
-      expect(rejectDirectOrigin(httpEvent())?.statusCode).toBe(403);
-      expect(
-        rejectDirectOrigin(httpEvent({ headers: { 'X-Origin-Verify': 'edge-secret' } })),
-      ).toBeUndefined();
-    } finally {
-      if (previous === undefined) delete process.env.ORIGIN_VERIFY_SECRET;
-      else process.env.ORIGIN_VERIFY_SECRET = previous;
-    }
-    expect(rejectDirectOrigin(httpEvent())).toBeUndefined();
+  it('prefers the viewer Authorization copy over the CloudFront signature', () => {
+    expect(
+      authorizationOf(
+        httpEvent({
+          headers: { authorization: 'AWS4-HMAC-SHA256 sig', 'X-Viewer-Authorization': 'Bearer t' },
+        }),
+      ),
+    ).toBe('Bearer t');
+    expect(authorizationOf(httpEvent({ headers: { Authorization: 'Bearer local' } }))).toBe(
+      'Bearer local',
+    );
+    expect(authorizationOf(httpEvent())).toBeUndefined();
   });
 
   it('answers health checks for matching paths', () => {
