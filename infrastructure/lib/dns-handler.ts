@@ -422,16 +422,13 @@ export const handler = async (event: DnsEvent): Promise<{ PhysicalResourceId: st
 
   const siteDomain = props.SiteDomain ?? '';
   const siteRegion = props.SiteRegion ?? 'us-east-1';
-  const previous = event.OldResourceProperties;
-  const previousDomain = previous?.ApiDomain ?? '';
-  const previousRegion = previous?.ApiRegion ?? siteRegion;
-  if (event.RequestType !== 'Create' && previousDomain !== '' && previousDomain !== siteDomain) {
-    await retireDomainCertificate(previousRegion, previousDomain, route53, props.HostedZoneId);
-  }
   if (event.RequestType === 'Delete') {
     await retireDomainCertificate(siteRegion, siteDomain, route53, props.HostedZoneId);
     return { PhysicalResourceId: physicalResourceId };
   }
+  // A hostname change issues a certificate for the new name and leaves the
+  // previous one. CloudFront still presents that certificate until the
+  // platform stack updates the distribution.
 
   const siteCertificateArn = await issueCertificate(siteRegion, siteDomain, route53, props.HostedZoneId);
   return {
