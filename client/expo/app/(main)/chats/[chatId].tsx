@@ -9,7 +9,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { FlatList, Image, Linking, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { errorMessageKey } from '@/src/errors';
+import { errorMessageKey, queryError } from '@/src/errors';
 import { pickAndUploadImage, useDownloadUrl, type UploadedImage } from '@/src/media';
 import { messagesQuery, sendMessageMutation } from '@/src/queries/chat';
 import { useActiveTeam, useApp } from '@/src/state';
@@ -99,7 +99,7 @@ export default function ChatThreadScreen() {
         <ErrorText
           message={
             error ??
-            (messagesLoaded.error !== undefined
+            (queryError(messagesLoaded.error) !== undefined
               ? t(errorMessageKey(messagesLoaded.error, 'errors.common.loadFailed'))
               : undefined)
           }

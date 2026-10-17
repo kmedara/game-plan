@@ -2,7 +2,7 @@
  * Error codes map to translation keys, never to raw codes.
  */
 
-import { errorCode, errorMessageKey } from './errors';
+import { errorCode, errorMessageKey, queryError } from './errors';
 
 describe('errorMessageKey', () => {
   it('prefers a screen override, then the shared map, then the fallback', () => {
@@ -16,5 +16,12 @@ describe('errorMessageKey', () => {
     expect(errorMessageKey('oops', 'fallback')).toBe('fallback');
     expect(errorMessageKey(new Error(''), 'fallback')).toBe('fallback');
     expect(errorCode(undefined, 'none')).toBe('none');
+  });
+
+  it('ignores TanStack Query null and other non-Error values', () => {
+    expect(queryError(new Error('unauthorized'))?.message).toBe('unauthorized');
+    expect(queryError(null)).toBeUndefined();
+    expect(queryError(undefined)).toBeUndefined();
+    expect(queryError('unauthorized')).toBeUndefined();
   });
 });

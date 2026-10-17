@@ -9,7 +9,7 @@ import { Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { callerCanGrant, highestRole, rolesFromMembership } from '@gameplan/rules';
 import { TEAM_ROLES, type TeamRole } from '@gameplan/types';
-import { errorMessageKey } from '@/src/errors';
+import { errorMessageKey, queryError } from '@/src/errors';
 import { RoleSetPicker } from '@/src/role-picker';
 import { useDownloadUrl } from '@/src/media';
 import { assignMemberRolesMutation, memberQuery } from '@/src/queries/teams';
@@ -60,7 +60,7 @@ export default function MemberProfileScreen() {
 
   return (
     <View className="flex-1 px-4 pt-4">
-      <ErrorText message={loaded.error !== undefined ? t('errors.memberProfile.notFound') : undefined} />
+      <ErrorText message={queryError(loaded.error) !== undefined ? t('errors.memberProfile.notFound') : undefined} />
       <View className="mb-3">
         <ProfilePhoto name={member?.displayName} uri={photoUrl} />
       </View>

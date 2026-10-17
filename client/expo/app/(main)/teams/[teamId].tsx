@@ -15,7 +15,7 @@ import {
   type TeamTheme,
   type UpdateTeamBody,
 } from '@gameplan/types';
-import { errorMessageKey } from '@/src/errors';
+import { errorMessageKey, queryError } from '@/src/errors';
 import { JoinRequests } from '@/src/join-requests';
 import { membersQuery, permissionsQuery, teamQuery, updateTeamMutation } from '@/src/queries/teams';
 import { useApp } from '@/src/state';
@@ -86,7 +86,7 @@ export default function TeamAdminScreen() {
   }, [permissionsLoaded.data, roles]);
 
   useEffect(() => {
-    const loadError = teamLoaded.error ?? membersLoaded.error;
+    const loadError = queryError(teamLoaded.error) ?? queryError(membersLoaded.error);
     if (loadError !== undefined) setError(t(errorMessageKey(loadError, 'errors.common.loadFailed')));
   }, [teamLoaded.error, membersLoaded.error, t]);
 

@@ -32,6 +32,18 @@ export const errorCode = (err: unknown, fallback = ''): string =>
   err instanceof Error && err.message.length > 0 ? err.message : fallback;
 
 /**
+ * The thrown value from a failed TanStack Query, or `undefined` when none.
+ *
+ * Successful queries keep `error: null`. Treating that as a failure made every
+ * screen show its load-failed sentence after data arrived.
+ *
+ * @param error - `useQuery().error`, which is `null` after a successful fetch.
+ * @returns The `Error` when a fetch failed, otherwise `undefined`.
+ */
+export const queryError = (error: unknown): Error | undefined =>
+  error instanceof Error ? error : undefined;
+
+/**
  * Translation key for a thrown value.
  *
  * @param err - Anything a promise rejected with.

@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { queryError } from '@/src/errors';
 import { acceptInviteMutation, invitePreviewQuery } from '@/src/queries/teams';
 import { inviteErrorMessage, roleLabel } from '@/src/roles';
 import { useApp } from '@/src/state';
@@ -26,7 +27,7 @@ export default function InviteScreen() {
   const error =
     inviteCode.length === 0
       ? t(inviteErrorMessage(new Error('not_found')))
-      : preview.error !== undefined
+      : queryError(preview.error) !== undefined
         ? t(inviteErrorMessage(preview.error))
         : undefined;
 

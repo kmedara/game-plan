@@ -11,7 +11,7 @@ import { Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-na
 import { useTranslation } from 'react-i18next';
 import { positionsWithinLimit } from '@gameplan/rules';
 import { config } from '@/src/config';
-import { errorMessageKey } from '@/src/errors';
+import { errorMessageKey, queryError } from '@/src/errors';
 import { pickAndUploadImage, useDownloadUrl } from '@/src/media';
 import { meQuery, updateProfileMutation } from '@/src/queries/profile';
 import { setPositionsMutation } from '@/src/queries/teams';
@@ -42,7 +42,8 @@ export default function ProfileScreen() {
   }, [me.data, phoneReady]);
 
   useEffect(() => {
-    if (me.error !== undefined) setError(t(errorMessageKey(me.error, 'errors.profile.loadFailed')));
+    const failed = queryError(me.error);
+    if (failed !== undefined) setError(t(errorMessageKey(failed, 'errors.profile.loadFailed')));
   }, [me.error, t]);
 
   const upload = async (): Promise<void> => {

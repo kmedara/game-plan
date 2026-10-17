@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { ChatSummary } from '@gameplan/types';
-import { errorMessageKey } from '@/src/errors';
+import { errorMessageKey, queryError } from '@/src/errors';
 import { chatsQuery, createPrivateChatMutation, createTeamChannelMutation } from '@/src/queries/chat';
 import { useApp } from '@/src/state';
 import { ErrorText, Field, SubmitButton } from '@/src/ui';
@@ -27,8 +27,8 @@ export default function ChatsScreen() {
   const chats = chatsLoaded.data ?? [];
   const [email, setEmail] = useState('');
   const [channelName, setChannelName] = useState('');
-  const error =
-    chatsLoaded.error !== undefined ? t(errorMessageKey(chatsLoaded.error, 'errors.common.loadFailed')) : undefined;
+  const failed = queryError(chatsLoaded.error);
+  const error = failed !== undefined ? t(errorMessageKey(failed, 'errors.common.loadFailed')) : undefined;
 
   const startPrivate = async (): Promise<void> => {
     const user = await api.searchChatUser(email);

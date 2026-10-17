@@ -17,7 +17,7 @@ import { Linking, Modal, Platform, Pressable, ScrollView, Text, View } from 'rea
 import { useTranslation } from 'react-i18next';
 import { rolesFromMembership } from '@gameplan/rules';
 import { EVENT_TYPES, RSVP_STATUSES, type EventResponse, type EventType, type RecurrenceRule, type RsvpStatus, type ScheduleOccurrence, type TeamMember, type UpdateEventBody } from '@gameplan/types';
-import { errorMessageKey } from '@/src/errors';
+import { errorMessageKey, queryError } from '@/src/errors';
 import { EventTimeFields } from '@/src/event-time';
 import { RecurrenceFields } from '@/src/recurrence-fields';
 import { recurrenceFromForm, type RepeatEnd, type RepeatFrequency } from '@/src/recurrence-form';
@@ -108,7 +108,7 @@ export default function ScheduleScreen() {
     | { kind: 'edit'; item: ScheduleOccurrence; body: UpdateEventBody }
     | undefined
   >();
-  const loadError = schedule.error !== undefined ? t('errors.common.loadFailed') : undefined;
+  const loadError = queryError(schedule.error) !== undefined ? t('errors.common.loadFailed') : undefined;
 
   if (team === undefined) {
     return (
@@ -621,7 +621,7 @@ const CarpoolSection = ({
   const offers = carpool.data ?? [];
   const [error, setError] = useState<string | undefined>();
   const mine = offers.find((offer) => offer.userId === userId);
-  const shown = error ?? (carpool.error !== undefined ? t('errors.event.carpoolLoadFailed') : undefined);
+  const shown = error ?? (queryError(carpool.error) !== undefined ? t('errors.event.carpoolLoadFailed') : undefined);
 
   const saveSeats = (seats: number): void => {
     setError(undefined);
@@ -741,7 +741,7 @@ const LineupEditor = ({
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [notice, setNotice] = useState<string | undefined>();
-  const shown = error ?? (lineup.error !== undefined ? t('errors.event.lineupLoadFailed') : undefined);
+  const shown = error ?? (queryError(lineup.error) !== undefined ? t('errors.event.lineupLoadFailed') : undefined);
 
   useEffect(() => {
     setSlots(undefined);
