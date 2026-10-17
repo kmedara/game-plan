@@ -8,6 +8,17 @@
 /** Cookie name written by identity register, login, and refresh. */
 export const REFRESH_COOKIE = 'ts_refresh';
 
+/**
+ * Cookie path for session cookies on the website host.
+ *
+ * CloudFront serves the HTTP API under `/api`, so the browser calls
+ * `/api/identity/...` on the site origin.
+ */
+export const SESSION_COOKIE_PATH = '/api/identity';
+
+/** Previous cookie path. Responses expire it so browsers drop the old cookie. */
+const LEGACY_SESSION_COOKIE_PATH = '/identity';
+
 /** Header that asks identity to also return the refresh token in JSON. */
 export const REFRESH_DELIVERY_HEADER = 'x-refresh-delivery';
 
@@ -21,40 +32,47 @@ export const wantsBodyRefreshToken = (headerValue?: string): boolean =>
   headerValue?.trim().toLowerCase() === 'body';
 
 /**
- * Builds the `Set-Cookie` value that stores the refresh token.
+ * Builds one `Set-Cookie` attribute string.
  *
- * @param refreshToken - The Cognito or local refresh token.
- * @returns A full cookie attribute string for the HTTP API `cookies` array.
+ * The website and the API share an origin, so `SameSite=Lax` is sent on
+ * same-site requests. Production adds `Secure`.
+ *
+ * @param assignment - `name=value`, already encoded.
+ * @param path - Cookie path.
+ * @param maxAge - Lifetime in seconds. Zero expires the cookie.
+ * @returns A full cookie attribute string.
  */
-export const refreshSetCookie = (refreshToken: string): string => {
-  const secure = process.env.NODE_ENV === 'production';
-  const sameSite = secure ? 'None' : 'Lax';
-  const parts = [
-    `${REFRESH_COOKIE}=${encodeURIComponent(refreshToken)}`,
-    'Path=/identity',
-    'HttpOnly',
-    `SameSite=${sameSite}`,
-    `Max-Age=${60 * 60 * 24 * 30}`,
-  ];
-  if (secure) parts.push('Secure');
+const sessionCookie = (assignment: string, path: string, maxAge: number): string => {
+  const parts = [assignment, `Path=${path}`, 'HttpOnly', 'SameSite=Lax', `Max-Age=${maxAge}`];
+  if (process.env.NODE_ENV === 'production') parts.push('Secure');
   return parts.join('; ');
 };
 
 /**
- * Builds the `Set-Cookie` value that clears the refresh cookie.
+ * Builds the live session cookie and expires the previous path.
  *
- * @returns A full cookie attribute string that expires the cookie immediately.
+ * @param name - Cookie name.
+ * @param value - Cookie value, already encoded. Blank expires the live cookie.
+ * @param maxAge - Lifetime in seconds for the live path.
+ * @returns The live cookie, then an expired cookie on the old path.
  */
-export const clearRefreshSetCookie = (): string => {
-  const secure = process.env.NODE_ENV === 'production';
-  const sameSite = secure ? 'None' : 'Lax';
-  const parts = [
-    `${REFRESH_COOKIE}=`,
-    'Path=/identity',
-    'HttpOnly',
-    `SameSite=${sameSite}`,
-    'Max-Age=0',
-  ];
-  if (secure) parts.push('Secure');
-  return parts.join('; ');
-};
+export const sessionCookies = (name: string, value: string, maxAge: number): string[] => [
+  sessionCookie(`${name}=${value}`, SESSION_COOKIE_PATH, maxAge),
+  sessionCookie(`${name}=`, LEGACY_SESSION_COOKIE_PATH, 0),
+];
+
+/**
+ * Builds the `Set-Cookie` values that store the refresh token.
+ *
+ * @param refreshToken - The Cognito or local refresh token.
+ * @returns The live cookie and an expired cookie on the old path.
+ */
+export const refreshSetCookie = (refreshToken: string): string[] =>
+  sessionCookies(REFRESH_COOKIE, encodeURIComponent(refreshToken), 60 * 60 * 24 * 30);
+
+/**
+ * Builds the `Set-Cookie` values that clear the refresh cookie.
+ *
+ * @returns Expired cookies for the live path and the old path.
+ */
+export const clearRefreshSetCookie = (): string[] => sessionCookies(REFRESH_COOKIE, '', 0);

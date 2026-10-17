@@ -17,46 +17,41 @@ import { Auth, type AuthSocialContext } from './auth';
 import { Database } from './database';
 import { ZoneDns } from './dns';
 import { Storage } from './storage';
+import type { SiteApiProps } from './site-api';
 
-/** Hosted zone and public hostnames shared by the DNS and API stacks. */
+/** Hosted zone and website hostname shared by the DNS and API stacks. */
 export type DnsConfig = {
   hostedZoneId: string;
   roleArn?: string;
   siteHostname: string;
-  apiHostname: string;
 };
 
 /** Props for {@link GamePlanDns}. */
 export type GamePlanDnsProps = cdk.StackProps & DnsConfig;
 
 /**
- * Certificate validation records for the website and the HTTP API.
+ * Certificate validation records for the website.
  */
 export class GamePlanDns extends cdk.Stack {
   /** Certificate ARN in `us-east-1` for CloudFront. */
   public readonly siteCertificateArn: string;
 
-  /** Certificate ARN in the stack region for the HTTP API. */
-  public readonly apiCertificateArn: string;
-
   /**
-   * Requests both certificates and writes the validation records.
+   * Requests the website certificate and writes the validation records.
    *
    * @param scope - The CDK app.
    * @param id - The stack id.
-   * @param props - Hosted zone, role, and hostnames.
+   * @param props - Hosted zone, role, and website hostname.
    */
   constructor(scope: Construct, id: string, props: GamePlanDnsProps) {
     super(scope, id, props);
     const dns = new ZoneDns(this, 'Dns', { ...props, handlerId: 'dns-certificates' });
-    if (dns.siteCertificateArn === undefined || dns.apiCertificateArn === undefined) {
-      throw new Error('The DNS stack requires certificate outputs');
+    if (dns.siteCertificateArn === undefined) {
+      throw new Error('The DNS stack requires a certificate output');
     }
     this.siteCertificateArn = dns.siteCertificateArn;
-    this.apiCertificateArn = dns.apiCertificateArn;
 
     new cdk.CfnOutput(this, 'SiteCertificateArn', { value: this.siteCertificateArn });
-    new cdk.CfnOutput(this, 'ApiCertificateArn', { value: this.apiCertificateArn });
   }
 }
 
@@ -78,6 +73,12 @@ export type GamePlanPlatformProps = cdk.StackProps & {
   siteHostname?: string;
   /** CloudFront certificate ARN from {@link GamePlanDns}. */
   certificateArn?: string;
+  /**
+   * API origin for `/api/*` on the website distribution.
+   *
+   * Set only after the API stack has published the regional domain and secret ARN.
+   */
+  sharedApi?: SiteApiProps;
 };
 
 /**
@@ -129,6 +130,7 @@ export class GamePlanPlatform extends cdk.Stack {
       corsOrigin: props.corsOrigin,
       siteHostname: props.siteHostname,
       certificateArn: props.certificateArn,
+      sharedApi: props.sharedApi,
     });
     this.mediaBucket = storage.mediaBucket;
     this.distribution = storage.distribution;
@@ -153,14 +155,19 @@ export type GamePlanApiProps = cdk.StackProps & {
   mediaBucket: s3.IBucket;
   /** Website distribution from {@link GamePlanPlatform}. Alias records point at it. */
   distribution: cloudfront.Distribution;
-  /** API certificate ARN from {@link GamePlanDns}. */
-  certificateArn?: string;
   /** Present when the DNS stack owns the hosted zone. The API stack writes the alias records. */
   dns?: DnsConfig;
+  /**
+   * Browser base URL for the HTTP API, such as `https://app.example.com/api`.
+   *
+   * Clients and the OAuth callback use the website host. CloudFront calls the
+   * HTTP API execute-api domain.
+   */
+  browserApiBaseUrl?: string;
 };
 
 /**
- * HTTP API, WebSocket API, and the alias records that point the public names at them.
+ * HTTP API, WebSocket API, and the alias record for the website hostname.
  */
 export class GamePlanApi extends cdk.Stack {
   /**
@@ -168,12 +175,12 @@ export class GamePlanApi extends cdk.Stack {
    *
    * @param scope - The CDK app.
    * @param id - The stack id.
-   * @param props - Platform resources and the optional public API hostname.
+   * @param props - Platform resources and the website distribution.
    */
   constructor(scope: Construct, id: string, props: GamePlanApiProps) {
     super(scope, id, props);
 
-    const api = new Api(this, 'Api', {
+    new Api(this, 'Api', {
       userPool: props.userPool,
       userPoolClient: props.userPoolClient,
       hostedUiDomain: props.hostedUiDomain,
@@ -181,17 +188,17 @@ export class GamePlanApi extends cdk.Stack {
       table: props.table,
       mediaBucket: props.mediaBucket,
       corsOrigin: props.corsOrigin,
-      apiHostname: props.dns?.apiHostname,
-      certificateArn: props.certificateArn,
+      protectOrigin: props.dns !== undefined,
+      browserApiBaseUrl: props.browserApiBaseUrl,
     });
 
-    if (props.dns !== undefined && api.distribution !== undefined) {
+    if (props.dns !== undefined) {
       const dns = new ZoneDns(this, 'Dns', {
         ...props.dns,
         certificates: false,
         handlerId: 'dns-aliases',
       });
-      dns.addAliases({ distribution: props.distribution, apiDistribution: api.distribution });
+      dns.addAliases({ distribution: props.distribution });
     }
   }
 }

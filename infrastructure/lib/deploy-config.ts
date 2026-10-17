@@ -18,15 +18,25 @@ export const definedString = (value: unknown): string | undefined =>
 export type PublicUrls = {
   /** Website origin, with no path and no trailing slash. */
   clientOrigin: string;
-  /** Identity OAuth callback on the API hostname. */
+  /** Identity OAuth callback on the website host, under `/api`. */
   callbackUrl: string;
   /** Browser URL after Cognito logout. */
   logoutUrl: string;
   /** Website hostname, `app.<environment>.<domain>`. */
   siteHostname: string;
-  /** HTTP API hostname, `api.<environment>.<domain>`. */
-  apiHostname: string;
 };
+
+/** Path on the website host that CloudFront forwards to the HTTP API. */
+export const SITE_API_PREFIX = '/api';
+
+/**
+ * Browser base URL for the HTTP API on the website host.
+ *
+ * @param clientOrigin - Website origin, with no path.
+ * @returns The origin plus `/api`, with no trailing slash.
+ */
+export const siteApiBaseUrl = (clientOrigin: string): string =>
+  `${clientOrigin.replace(/\/+$/u, '')}${SITE_API_PREFIX}`;
 
 /** One DNS label: letters, digits, and inner hyphens. */
 const DNS_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
@@ -34,11 +44,11 @@ const DNS_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
 /**
  * Builds the website and API URLs for one environment under a registered domain.
  *
- * Staging becomes `app.staging.example.com` and `api.staging.example.com`.
+ * Staging becomes `app.staging.example.com`. The HTTP API is `/api` on that host.
  *
  * @param environment - GitHub environment name, such as `staging`.
  * @param domain - Hosted zone name, such as `example.com`.
- * @returns The origin, callback, logout URL, and both hostnames.
+ * @returns The origin, callback, logout URL, and website hostname.
  */
 export const publicUrlsFor = (environment: string, domain: string): PublicUrls => {
   const envLabel = environment.trim().toLowerCase();
@@ -48,14 +58,12 @@ export const publicUrlsFor = (environment: string, domain: string): PublicUrls =
     throw new Error('DEPLOY_ENV and HOSTED_ZONE_NAME must be DNS names');
   }
   const siteHostname = `app.${envLabel}.${apex}`;
-  const apiHostname = `api.${envLabel}.${apex}`;
   const clientOrigin = `https://${siteHostname}`;
   return {
     clientOrigin,
-    callbackUrl: `https://${apiHostname}/identity/oauth/callback`,
+    callbackUrl: `${siteApiBaseUrl(clientOrigin)}/identity/oauth/callback`,
     logoutUrl: `${clientOrigin}/login`,
     siteHostname,
-    apiHostname,
   };
 };
 

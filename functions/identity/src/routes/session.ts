@@ -63,7 +63,7 @@ export const sessionResponse = (
       statusCode,
       sessionBody(accessToken, expiresIn, user, refreshToken, includeRefreshInBody),
     ),
-    [refreshSetCookie(refreshToken)],
+    refreshSetCookie(refreshToken),
   );
 
 /**

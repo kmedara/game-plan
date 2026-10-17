@@ -122,7 +122,7 @@ from `.env`):
 - `COGNITO_CLIENT_ID`
 - `COGNITO_HOSTED_UI_DOMAIN`
 - `COGNITO_REGION` (defaults to `us-east-1`)
-- `AUTH_CALLBACK_URL` (`http://localhost:3000/identity/oauth/callback`)
+- `AUTH_CALLBACK_URL` (`http://localhost:4200/api/identity/oauth/callback`)
 - `CLIENT_ORIGIN`
 
 Sign-in starts at `GET /identity/oauth/login` (PKCE → Hosted UI → `GET /identity/oauth/callback`).
@@ -302,13 +302,13 @@ Each GitHub environment (`staging`, `production`) has one secret, `AWS_ROLE_ARN`
 The hosted zone name in Parameter Store is the registered domain, such as `example.com`. The deploy environment name is
 inserted into the hostnames:
 
-| Environment  | Website                              | HTTP API                             |
-| ------------ | ------------------------------------ | ------------------------------------ |
-| `staging`    | `https://app.staging.example.com`    | `https://api.staging.example.com`    |
-| `production` | `https://app.production.example.com` | `https://api.production.example.com` |
+| Environment  | Website                              | HTTP API                                      |
+| ------------ | ------------------------------------ | --------------------------------------------- |
+| `staging`    | `https://app.staging.example.com`    | `https://app.staging.example.com/api`         |
+| `production` | `https://app.production.example.com` | `https://app.production.example.com/api`      |
 
-The Cognito callback is `https://api.<environment>.example.com/identity/oauth/callback`. Logout returns to
-`https://app.<environment>.example.com/login`.
+The Cognito callback is `https://app.<environment>.example.com/api/identity/oauth/callback`. Logout returns to
+`https://app.<environment>.example.com/login`. The WebSocket URL stays on the API Gateway execute-api domain.
 
 `GamePlanDns` creates the certificate validation records in the hosted zone from Parameter Store
 `hosted-zone-id` and `hosted-zone-name`. The zone id is the delegated zone in this account, and the name is the
@@ -322,14 +322,14 @@ here. Each stack writes its own outputs. The client workflow fails until `api-ba
 
 | Name                                                                    | Used for                                                                                         |
 | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `hosted-zone-id`, `hosted-zone-name`                                    | Route 53 zone. The name is the registered domain used for the website and API hostnames.        |
+| `hosted-zone-id`, `hosted-zone-name`                                    | Route 53 zone. The name is the registered domain used for the website hostname.                 |
 | `google-client-id`, `google-client-secret`                              | Optional Google IdP                                                                              |
 | `facebook-app-id`, `facebook-app-secret`                                | Optional Facebook IdP                                                                            |
 | `apple-client-id`, `apple-team-id`, `apple-key-id`, `apple-private-key` | Optional Apple IdP. Store the PEM, including line breaks.                                        |
 | `google-maps-api-key`                                                   | Places Lambda                                                                                    |
 | `google-maps-browser-api-key`                                           | Website map                                                                                      |
 | `vapid-public-key`, `vapid-private-key`, `vapid-subject`                | Web Push. The public key is baked into the website. The private key stays on the fan-out function. `vapid-subject` is a `mailto:` contact. |
-| `site-certificate-arn`, `api-certificate-arn`                           | Written by the DNS workflow. Later stacks read the certificate ARNs from CloudFormation exports. |
+| `site-certificate-arn`                                                  | Written by the DNS workflow. The platform stack reads it from the CloudFormation export.         |
 | `site-bucket-name`, `site-distribution-id`, `site-url`                  | Written by the platform workflow. The client workflow reads the bucket and distribution id.      |
 | `api-base-url`, `ws-base-url`                                           | Written by the API workflow. The client workflow reads both.                                     |
 
@@ -338,10 +338,10 @@ environment variables for a local `cdk deploy`.
 
 The stacks create:
 
-- Certificates for the website and the HTTP API, plus the Route 53 validation records. The API stack adds the alias records
-  after CloudFront and the API domain exist.
+- A certificate for the website, plus the Route 53 validation record. The API stack adds the alias record
+  after the website distribution exists.
 - A Cognito user pool with Hosted UI (email/password plus optional Google / Apple / Facebook IdPs from CDK context or Parameter Store).
-  OAuth callback URLs default to the identity BFF (`/identity/oauth/callback`).
+  OAuth callback URLs default to the website host (`/api/identity/oauth/callback`).
 - One DynamoDB table, `gameplan`, with partition key `PK` and sort key `SK`. Billing is on-demand.
 - **EmailIndex** on `email`, for an exact-email lookup that cannot start from a user partition.
 - **ConnectionIndex** on `connectionId`, so WebSocket `$disconnect` can find the user item. Both indexes project keys

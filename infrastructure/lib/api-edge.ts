@@ -1,22 +1,13 @@
 /**
- * CloudFront and AWS WAF in front of the HTTP API.
+ * AWS WAF rules for the HTTP API.
  *
  * WAF here is pay-as-you-go, not a CloudFront flat-rate plan. A rate rule can
  * count by the Authorization header, so each access token has its own limit.
+ * The website distribution attaches these rules to `/api/`.
  */
 
 import * as cdk from 'aws-cdk-lib';
-import * as acm from 'aws-cdk-lib/aws-certificatemanager';
-import type * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
-import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
-import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
-import {
-  AwsCustomResource,
-  AwsCustomResourcePolicy,
-  PhysicalResourceId,
-} from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 
 /** Requests one access token may make in {@link WINDOW}. */
@@ -41,17 +32,7 @@ const WINDOW = cdk.Duration.minutes(5);
  *
  * Must match `ORIGIN_VERIFY_HEADER` in `functions/lib/http.ts`.
  */
-const ORIGIN_VERIFY_HEADER = 'x-origin-verify';
-
-/** Inputs for {@link attachApiEdge}. */
-export type ApiEdgeProps = {
-  /** HTTP API custom domain. CloudFront uses its regional hostname as the origin. */
-  customDomain: apigwv2.IDomainName;
-  /** Public API hostname. DNS points this name at the distribution. */
-  apiHostname: string;
-  /** Certificate ARN in `us-east-1` for `apiHostname`. */
-  certificateArn: string;
-};
+export const ORIGIN_VERIFY_HEADER = 'x-origin-verify';
 
 /**
  * Builds a blocking rate rule that answers `429`.
@@ -91,7 +72,10 @@ const rateRule = (
  */
 const hasAuthorization = (): wafv2.CfnWebACL.StatementProperty => ({
   sizeConstraintStatement: {
-    fieldToMatch: { singleHeader: { name: 'authorization' } },
+    fieldToMatch: {
+      // Nested WAF statements keep a lowercase `name` unless this key is already `Name`.
+      singleHeader: { Name: 'authorization' } as unknown as wafv2.CfnWebACL.SingleHeaderProperty,
+    },
     comparisonOperator: 'GE',
     size: 1,
     textTransformations: [{ priority: 0, type: 'NONE' }],
@@ -99,40 +83,98 @@ const hasAuthorization = (): wafv2.CfnWebACL.StatementProperty => ({
 });
 
 /**
- * Puts CloudFront and a per-token WAF in front of the HTTP API.
+ * Matches a viewer path prefix, such as `/api/` on the website distribution.
+ *
+ * @param prefix - The path prefix, including the leading slash.
+ * @returns A byte-match statement.
+ */
+const uriStartsWith = (prefix: string): wafv2.CfnWebACL.StatementProperty => ({
+  byteMatchStatement: {
+    searchString: prefix,
+    fieldToMatch: { uriPath: {} },
+    positionalConstraint: 'STARTS_WITH',
+    textTransformations: [{ priority: 0, type: 'NONE' }],
+  },
+});
+
+/**
+ * Combines scope-down statements. One statement is returned as itself.
+ *
+ * @param statements - Statements to require. Blank entries are skipped.
+ * @returns The combined statement, or `undefined` when nothing was required.
+ */
+const allOf = (
+  statements: readonly (wafv2.CfnWebACL.StatementProperty | undefined)[],
+): wafv2.CfnWebACL.StatementProperty | undefined => {
+  const present = statements.filter((statement) => statement !== undefined);
+  if (present.length === 0) return undefined;
+  if (present.length === 1) return present[0];
+  return { andStatement: { statements: present } };
+};
+
+/**
+ * Builds the three rate rules shared by the API and website distributions.
+ *
+ * @param pathPrefix - When set, only paths with this prefix count. The website
+ *   distribution uses `/api/` so static files stay outside the limits.
+ * @returns WebACL rules in priority order.
+ */
+export const apiRateLimitRules = (pathPrefix?: string): wafv2.CfnWebACL.RuleProperty[] => {
+  const prefix = pathPrefix === undefined ? undefined : uriStartsWith(pathPrefix);
+  const anonymous = { notStatement: { statement: hasAuthorization() } };
+  return [
+    rateRule('PerAccessToken', 0, {
+      rateBasedStatement: {
+        limit: TOKEN_LIMIT,
+        evaluationWindowSec: WINDOW.toSeconds(),
+        aggregateKeyType: 'CUSTOM_KEYS',
+        customKeys: [
+          {
+            header: {
+              name: 'authorization',
+              textTransformations: [{ priority: 0, type: 'NONE' }],
+            },
+          },
+        ],
+        scopeDownStatement: allOf([hasAuthorization(), prefix]),
+      },
+    }),
+    rateRule('PerAnonymousIp', 1, {
+      rateBasedStatement: {
+        limit: ANONYMOUS_IP_LIMIT,
+        evaluationWindowSec: WINDOW.toSeconds(),
+        aggregateKeyType: 'IP',
+        scopeDownStatement: allOf([anonymous, prefix]),
+      },
+    }),
+    rateRule('PerIpFlood', 2, {
+      rateBasedStatement: {
+        limit: IP_FLOOD_LIMIT,
+        evaluationWindowSec: WINDOW.toSeconds(),
+        aggregateKeyType: 'IP',
+        ...(prefix === undefined ? {} : { scopeDownStatement: prefix }),
+      },
+    }),
+  ];
+};
+
+/**
+ * Creates a CloudFront WebACL that answers `429` after the shared rate limits.
  *
  * @param scope - The parent construct.
- * @param props - The API domain, hostname, and certificate.
- * @returns The distribution, plus the origin header value the Lambdas must expect.
+ * @param id - The construct id. This becomes part of the logical id.
+ * @param name - The WebACL name and the top-level metric name.
+ * @param pathPrefix - Optional viewer path prefix. See {@link apiRateLimitRules}.
+ * @returns The WebACL.
  */
-export const attachApiEdge = (
+export const rateLimitedWebAcl = (
   scope: Construct,
-  props: ApiEdgeProps,
-): { distribution: cloudfront.Distribution; originVerify: string } => {
-  const region = cdk.Stack.of(scope).region;
-  if (!cdk.Token.isUnresolved(region) && region !== 'us-east-1') {
-    throw new Error('The API CloudFront distribution and its firewall must be deployed in us-east-1.');
-  }
-
-  const originSecret = new secretsmanager.Secret(scope, 'OriginVerifySecret', {
-    description: 'Header CloudFront sends so clients cannot call API Gateway directly.',
-    generateSecretString: { excludePunctuation: true, passwordLength: 32 },
-    removalPolicy: cdk.RemovalPolicy.DESTROY,
-  });
-  const readOriginSecret = new AwsCustomResource(scope, 'ReadOriginVerifySecret', {
-    onCreate: {
-      service: 'SecretsManager',
-      action: 'getSecretValue',
-      parameters: { SecretId: originSecret.secretArn },
-      physicalResourceId: PhysicalResourceId.of('GamePlanOriginVerify'),
-    },
-    policy: AwsCustomResourcePolicy.fromSdkCalls({ resources: [originSecret.secretArn] }),
-  });
-  readOriginSecret.node.addDependency(originSecret);
-  const originVerify = readOriginSecret.getResponseField('SecretString');
-
-  const webAcl = new wafv2.CfnWebACL(scope, 'ApiWebAcl', {
-    name: 'gameplan-api',
+  id: string,
+  name: string,
+  pathPrefix?: string,
+): wafv2.CfnWebACL =>
+  new wafv2.CfnWebACL(scope, id, {
+    name,
     scope: 'CLOUDFRONT',
     defaultAction: { allow: {} },
     customResponseBodies: {
@@ -143,64 +185,8 @@ export const attachApiEdge = (
     },
     visibilityConfig: {
       cloudWatchMetricsEnabled: true,
-      metricName: 'gameplan-api',
+      metricName: name,
       sampledRequestsEnabled: true,
     },
-    rules: [
-      rateRule('PerAccessToken', 0, {
-        rateBasedStatement: {
-          limit: TOKEN_LIMIT,
-          evaluationWindowSec: WINDOW.toSeconds(),
-          aggregateKeyType: 'CUSTOM_KEYS',
-          customKeys: [
-            {
-              header: {
-                name: 'authorization',
-                textTransformations: [{ priority: 0, type: 'NONE' }],
-              },
-            },
-          ],
-          scopeDownStatement: hasAuthorization(),
-        },
-      }),
-      rateRule('PerAnonymousIp', 1, {
-        rateBasedStatement: {
-          limit: ANONYMOUS_IP_LIMIT,
-          evaluationWindowSec: WINDOW.toSeconds(),
-          aggregateKeyType: 'IP',
-          scopeDownStatement: { notStatement: { statement: hasAuthorization() } },
-        },
-      }),
-      rateRule('PerIpFlood', 2, {
-        rateBasedStatement: {
-          limit: IP_FLOOD_LIMIT,
-          evaluationWindowSec: WINDOW.toSeconds(),
-          aggregateKeyType: 'IP',
-        },
-      }),
-    ],
+    rules: apiRateLimitRules(pathPrefix),
   });
-
-  const distribution = new cloudfront.Distribution(scope, 'ApiDistribution', {
-    comment: 'GamePlan HTTP API',
-    webAclId: webAcl.attrArn,
-    domainNames: [props.apiHostname],
-    certificate: acm.Certificate.fromCertificateArn(scope, 'ApiEdgeCertificate', props.certificateArn),
-    httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
-    priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
-    minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
-    defaultBehavior: {
-      origin: new origins.HttpOrigin(props.customDomain.regionalDomainName, {
-        protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
-        customHeaders: { [ORIGIN_VERIFY_HEADER]: originVerify },
-      }),
-      viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-      allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-      cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-      originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
-      compress: true,
-    },
-  });
-
-  return { distribution, originVerify };
-};

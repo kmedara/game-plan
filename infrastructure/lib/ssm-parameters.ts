@@ -8,7 +8,7 @@
 /**
  * Suffix after the prefix, mapped to the environment variable CDK and the client build read.
  *
- * Website and API hostnames are derived from `HOSTED_ZONE_NAME` and the deploy environment.
+ * The website hostname is derived from `HOSTED_ZONE_NAME` and the deploy environment.
  */
 export const PARAMETER_ENV: Record<string, string> = {
   'hosted-zone-id': 'HOSTED_ZONE_ID',
@@ -27,10 +27,13 @@ export const PARAMETER_ENV: Record<string, string> = {
   'vapid-private-key': 'VAPID_PRIVATE_KEY',
   'vapid-subject': 'VAPID_SUBJECT',
   'api-base-url': 'API_BASE_URL',
+  'api-regional-domain': 'API_REGIONAL_DOMAIN',
+  'api-origin-verify-secret-arn': 'API_ORIGIN_VERIFY_SECRET_ARN',
   'ws-base-url': 'WS_BASE_URL',
   'site-bucket-name': 'SITE_BUCKET_NAME',
   'site-distribution-id': 'SITE_DISTRIBUTION_ID',
   'site-url': 'SITE_URL',
+  'site-api-enabled': 'SITE_API_ENABLED',
 };
 
 /** Environment variables the website publish requires before the Expo web export. */
@@ -39,7 +42,6 @@ export const REQUIRED_CLIENT_ENV = ['API_BASE_URL', 'SITE_BUCKET_NAME', 'SITE_DI
 /** CloudFormation outputs the DNS stack writes. */
 export const DNS_OUTPUT_PARAMETERS: Record<string, string> = {
   SiteCertificateArn: 'site-certificate-arn',
-  ApiCertificateArn: 'api-certificate-arn',
 };
 
 /** CloudFormation outputs the platform stack writes. The client workflow reads the bucket and distribution. */
@@ -47,12 +49,15 @@ export const PLATFORM_OUTPUT_PARAMETERS: Record<string, string> = {
   SiteBucketName: 'site-bucket-name',
   SiteDistributionId: 'site-distribution-id',
   SiteUrl: 'site-url',
+  SiteApiEnabled: 'site-api-enabled',
 };
 
 /** CloudFormation outputs the API stack writes. The client workflow reads both URLs. */
 export const API_OUTPUT_PARAMETERS: Record<string, string> = {
   HttpApiUrl: 'api-base-url',
   WebSocketUrl: 'ws-base-url',
+  ApiRegionalDomain: 'api-regional-domain',
+  OriginVerifySecretArn: 'api-origin-verify-secret-arn',
 };
 
 /** Output maps keyed by the deploy workflow stack name. */

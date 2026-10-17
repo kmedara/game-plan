@@ -20,31 +20,34 @@ import {
 } from '@aws-sdk/client-route-53';
 import { AssumeRoleCommand, STSClient } from '@aws-sdk/client-sts';
 
+/** Properties for the certificate and alias custom resources. */
+type DnsProperties = {
+  Mode: 'certificates' | 'aliases';
+  HostedZoneId: string;
+  RoleArn?: string;
+  SiteDomain?: string;
+  ApiDomain?: string;
+  SiteRegion?: string;
+  ApiRegion?: string;
+  SiteName?: string;
+  SiteTarget?: string;
+  SiteTargetZoneId?: string;
+  ApiName?: string;
+  ApiTarget?: string;
+  ApiTargetZoneId?: string;
+};
+
 /** CloudFormation custom-resource event from the CDK provider. */
 type DnsEvent = {
   RequestType: 'Create' | 'Update' | 'Delete';
   PhysicalResourceId?: string;
-  ResourceProperties: {
-    Mode: 'certificates' | 'aliases';
-    HostedZoneId: string;
-    RoleArn?: string;
-    SiteDomain?: string;
-    ApiDomain?: string;
-    SiteRegion?: string;
-    ApiRegion?: string;
-    SiteName?: string;
-    SiteTarget?: string;
-    SiteTargetZoneId?: string;
-    ApiName?: string;
-    ApiTarget?: string;
-    ApiTargetZoneId?: string;
-  };
+  ResourceProperties: DnsProperties;
+  OldResourceProperties?: DnsProperties;
 };
 
 /** Fields returned to CloudFormation. */
 type DnsData = {
   SiteCertificateArn?: string;
-  ApiCertificateArn?: string;
 };
 
 /**
@@ -266,19 +269,40 @@ const issueCertificate = async (
 };
 
 /**
- * Deletes certificates for a domain in one region.
+ * Deletes a domain's validation records and certificates.
  *
  * @param region - The certificate region.
  * @param domain - The certificate domain name.
+ * @param route53 - The Route 53 client. When set, validation CNAMEs are removed first.
+ * @param hostedZoneId - The zone that holds the validation records.
  */
-const deleteCertificates = async (region: string, domain: string): Promise<void> => {
+const retireDomainCertificate = async (
+  region: string,
+  domain: string,
+  route53?: Route53Client,
+  hostedZoneId?: string,
+): Promise<void> => {
+  if (domain.trim() === '') return;
   const acm = new ACMClient({ region });
   let nextToken: string | undefined;
   do {
     const page = await clientPage(acm, nextToken);
     nextToken = page.nextToken;
-    for (const arn of page.arns.filter((item) => item.domain === domain).map((item) => item.arn)) {
-      await acm.send(new DeleteCertificateCommand({ CertificateArn: arn }));
+    for (const item of page.arns.filter((entry) => entry.domain === domain)) {
+      if (route53 !== undefined && hostedZoneId !== undefined) {
+        const described = await acm.send(new DescribeCertificateCommand({ CertificateArn: item.arn }));
+        for (const option of described.Certificate?.DomainValidationOptions ?? []) {
+          const record = option.ResourceRecord;
+          if (record?.Name === undefined || record.Value === undefined) continue;
+          try {
+            await changeCname(route53, hostedZoneId, 'DELETE', record.Name, record.Value);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (!message.includes('not found')) throw error;
+          }
+        }
+      }
+      await acm.send(new DeleteCertificateCommand({ CertificateArn: item.arn }));
     }
   } while (nextToken !== undefined);
 };
@@ -294,7 +318,20 @@ const clientPage = async (
   client: ACMClient,
   nextToken: string | undefined,
 ): Promise<{ arns: { arn: string; domain: string }[]; nextToken?: string }> => {
-  const page = await client.send(new ListCertificatesCommand({ NextToken: nextToken }));
+  const page = await client.send(
+    new ListCertificatesCommand({
+      NextToken: nextToken,
+      CertificateStatuses: [
+        'PENDING_VALIDATION',
+        'ISSUED',
+        'INACTIVE',
+        'EXPIRED',
+        'VALIDATION_TIMED_OUT',
+        'REVOKED',
+        'FAILED',
+      ],
+    }),
+  );
   return {
     arns: (page.CertificateSummaryList ?? []).flatMap((item) =>
       item.CertificateArn !== undefined && item.DomainName !== undefined
@@ -338,28 +375,47 @@ export const handler = async (event: DnsEvent): Promise<{ PhysicalResourceId: st
         props.ApiTargetZoneId,
       );
     }
-    return { PhysicalResourceId: physicalResourceId };
-  }
-
-  const siteDomain = props.SiteDomain ?? '';
-  const apiDomain = props.ApiDomain ?? '';
-  const siteRegion = props.SiteRegion ?? 'us-east-1';
-  const apiRegion = props.ApiRegion ?? siteRegion;
-  if (event.RequestType === 'Delete') {
-    await deleteCertificates(siteRegion, siteDomain);
-    if (apiRegion !== siteRegion || apiDomain !== siteDomain) {
-      await deleteCertificates(apiRegion, apiDomain);
+    const previous = event.OldResourceProperties;
+    if (
+      event.RequestType === 'Update' &&
+      previous?.ApiName &&
+      previous.ApiTarget &&
+      previous.ApiTargetZoneId &&
+      previous.ApiName !== props.ApiName
+    ) {
+      try {
+        await changeAlias(
+          route53,
+          props.HostedZoneId,
+          'DELETE',
+          previous.ApiName,
+          previous.ApiTarget,
+          previous.ApiTargetZoneId,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes('not found')) throw error;
+      }
     }
     return { PhysicalResourceId: physicalResourceId };
   }
 
+  const siteDomain = props.SiteDomain ?? '';
+  const siteRegion = props.SiteRegion ?? 'us-east-1';
+  const previous = event.OldResourceProperties;
+  const previousDomain = previous?.ApiDomain ?? '';
+  const previousRegion = previous?.ApiRegion ?? siteRegion;
+  if (event.RequestType !== 'Create' && previousDomain !== '' && previousDomain !== siteDomain) {
+    await retireDomainCertificate(previousRegion, previousDomain, route53, props.HostedZoneId);
+  }
+  if (event.RequestType === 'Delete') {
+    await retireDomainCertificate(siteRegion, siteDomain, route53, props.HostedZoneId);
+    return { PhysicalResourceId: physicalResourceId };
+  }
+
   const siteCertificateArn = await issueCertificate(siteRegion, siteDomain, route53, props.HostedZoneId);
-  const apiCertificateArn =
-    apiDomain === siteDomain && apiRegion === siteRegion
-      ? siteCertificateArn
-      : await issueCertificate(apiRegion, apiDomain, route53, props.HostedZoneId);
   return {
     PhysicalResourceId: physicalResourceId,
-    Data: { SiteCertificateArn: siteCertificateArn, ApiCertificateArn: apiCertificateArn },
+    Data: { SiteCertificateArn: siteCertificateArn },
   };
 };

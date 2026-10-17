@@ -3,10 +3,8 @@
  */
 
 import * as cdk from 'aws-cdk-lib';
-import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
-import type * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import { HttpUserPoolAuthorizer, WebSocketLambdaAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import type * as cognito from 'aws-cdk-lib/aws-cognito';
@@ -16,11 +14,16 @@ import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import type * as s3 from 'aws-cdk-lib/aws-s3';
+import {
+  AwsCustomResource,
+  AwsCustomResourcePolicy,
+  PhysicalResourceId,
+} from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
-import { attachApiEdge } from './api-edge';
 import { AREAS, type Area } from './names';
 import {
   CHAT_PREFIX,
@@ -51,14 +54,17 @@ export type ApiProps = {
   mediaBucket: s3.IBucket;
   /** Browser origin allowed by Cross-Origin Resource Sharing (CORS). */
   corsOrigin: string;
-  /** Public API hostname. When set with `certificateArn`, the stack adds a custom domain. */
-  apiHostname?: string;
   /**
-   * Certificate ARN in `us-east-1` for `apiHostname`.
-   *
-   * CloudFront and the API Gateway custom domain both use it when the stack is in that region.
+   * When set, Lambdas require the CloudFront origin header and the stack publishes
+   * the execute-api hostname for the website distribution.
    */
-  certificateArn?: string;
+  protectOrigin?: boolean;
+  /**
+   * Public base URL the browser and the Expo app use, such as `https://app.example.com/api`.
+   *
+   * When set, the published API URL points here. API Gateway stays on its execute-api domain.
+   */
+  browserApiBaseUrl?: string;
 };
 
 /**
@@ -155,12 +161,6 @@ export class Api extends Construct {
 
   /** Amazon API Gateway WebSocket API used for live delivery only. */
   public readonly webSocketApi: apigwv2.WebSocketApi;
-
-  /** Custom domain for the HTTP API, when a hostname and certificate were provided. */
-  public readonly customDomain?: apigwv2.DomainName;
-
-  /** CloudFront distribution that serves the public API hostname. */
-  public readonly distribution?: cloudfront.Distribution;
 
   /**
    * Creates the HTTP routes, WebSocket routes, fan-out queue, and push topic.
@@ -411,35 +411,36 @@ export class Api extends Construct {
     props.mediaBucket.grantRead(functions.media);
     props.mediaBucket.grantPut(functions.media);
 
-    if (props.apiHostname !== undefined && props.certificateArn !== undefined) {
-      if (this.httpApi.defaultStage === undefined) {
-        throw new Error('HTTP API is missing its default stage');
-      }
-      this.customDomain = new apigwv2.DomainName(this, 'ApiDomain', {
-        domainName: props.apiHostname,
-        certificate: acm.Certificate.fromCertificateArn(this, 'ApiCertificate', props.certificateArn),
+    if (props.protectOrigin === true) {
+      const originSecret = new secretsmanager.Secret(this, 'OriginVerifySecret', {
+        description: 'Header CloudFront sends so clients cannot call API Gateway directly.',
+        generateSecretString: { excludePunctuation: true, passwordLength: 32 },
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
       });
-      new apigwv2.ApiMapping(this, 'ApiMapping', {
-        api: this.httpApi,
-        domainName: this.customDomain,
-        stage: this.httpApi.defaultStage,
+      const readOriginSecret = new AwsCustomResource(this, 'ReadOriginVerifySecret', {
+        onCreate: {
+          service: 'SecretsManager',
+          action: 'getSecretValue',
+          parameters: { SecretId: originSecret.secretArn },
+          physicalResourceId: PhysicalResourceId.of('GamePlanOriginVerify'),
+        },
+        policy: AwsCustomResourcePolicy.fromSdkCalls({ resources: [originSecret.secretArn] }),
       });
-      const edge = attachApiEdge(this, {
-        customDomain: this.customDomain,
-        apiHostname: props.apiHostname,
-        certificateArn: props.certificateArn,
-      });
-      this.distribution = edge.distribution;
-      const cfnApi = this.httpApi.node.defaultChild as apigwv2.CfnApi;
-      cfnApi.disableExecuteApiEndpoint = true;
+      readOriginSecret.node.addDependency(originSecret);
+      const originVerify = readOriginSecret.getResponseField('SecretString');
       for (const area of EDGE_AREAS) {
-        functions[area].addEnvironment('ORIGIN_VERIFY_SECRET', edge.originVerify);
+        functions[area].addEnvironment('ORIGIN_VERIFY_SECRET', originVerify);
       }
+      const executeApiDomain = cdk.Fn.select(
+        0,
+        cdk.Fn.split('/', cdk.Fn.select(1, cdk.Fn.split('://', this.httpApi.apiEndpoint))),
+      );
+      new cdk.CfnOutput(this, 'ApiRegionalDomain', { value: executeApiDomain });
+      new cdk.CfnOutput(this, 'OriginVerifySecretArn', { value: originSecret.secretArn });
     }
 
     new cdk.CfnOutput(this, 'HttpApiUrl', {
-      value:
-        props.apiHostname === undefined ? this.httpApi.apiEndpoint : `https://${props.apiHostname}`,
+      value: props.browserApiBaseUrl ?? this.httpApi.apiEndpoint,
       exportName: 'GamePlanHttpApiUrl',
     });
 

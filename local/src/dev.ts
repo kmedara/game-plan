@@ -100,7 +100,7 @@ for (const area of AREAS) {
     DYNAMODB_ENDPOINT: process.env.DYNAMODB_ENDPOINT ?? 'http://127.0.0.1:8000',
     CLIENT_ORIGIN: process.env.CLIENT_ORIGIN ?? 'http://localhost:4200',
     AUTH_CALLBACK_URL:
-      process.env.AUTH_CALLBACK_URL ?? 'http://localhost:3000/identity/oauth/callback',
+      process.env.AUTH_CALLBACK_URL ?? 'http://localhost:4200/api/identity/oauth/callback',
   };
   if (area === 'chat' || area === 'schedule' || area === 'teams') {
     env.FANOUT_DELIVER_URL =

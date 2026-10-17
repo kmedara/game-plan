@@ -45,7 +45,7 @@ export const handleOAuthExchange = route(
         refreshToken,
         next: handoff.next,
       }),
-      [refreshSetCookie(refreshToken)],
+      refreshSetCookie(refreshToken),
     );
   },
 );

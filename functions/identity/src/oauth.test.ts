@@ -187,14 +187,16 @@ describe('identity oauth and session edges', () => {
   it('covers oauth cookie helpers in production and development', () => {
     process.env.NODE_ENV = 'production';
     const setProd = oauthSetCookie(OAUTH_STATE_COOKIE, 'abc');
-    expect(setProd).toContain('SameSite=None');
-    expect(setProd).toContain('Secure');
-    expect(oauthClearCookie(OAUTH_STATE_COOKIE)).toContain('Secure');
+    expect(setProd.every((cookie) => cookie.includes('SameSite=Lax'))).toBe(true);
+    expect(setProd.some((cookie) => cookie.includes('Path=/api/identity'))).toBe(true);
+    expect(setProd.some((cookie) => cookie.includes('Path=/identity') && cookie.includes('Max-Age=0'))).toBe(true);
+    expect(setProd.every((cookie) => cookie.includes('Secure'))).toBe(true);
+    expect(oauthClearCookie(OAUTH_STATE_COOKIE).every((cookie) => cookie.includes('Secure'))).toBe(true);
 
     delete process.env.NODE_ENV;
     const setDev = oauthSetCookie(OAUTH_STATE_COOKIE, 'abc');
-    expect(setDev).toContain('SameSite=Lax');
-    expect(setDev).not.toContain('Secure');
+    expect(setDev.every((cookie) => cookie.includes('SameSite=Lax'))).toBe(true);
+    expect(setDev.every((cookie) => !cookie.includes('Secure'))).toBe(true);
   });
 
   it('maps session errors including non-Error values', () => {

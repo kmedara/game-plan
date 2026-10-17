@@ -48,7 +48,7 @@ export const getCognitoOAuthConfig = (): {
  * @returns The redirect URI used for authorize and token exchange.
  */
 export const getAuthCallbackUrl = (): string =>
-  process.env.AUTH_CALLBACK_URL ?? 'http://localhost:3000/identity/oauth/callback';
+  process.env.AUTH_CALLBACK_URL ?? 'http://localhost:4200/api/identity/oauth/callback';
 
 /**
  * Builds a cryptographically random OAuth `state` value.

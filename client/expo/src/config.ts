@@ -12,7 +12,7 @@ export type AppConfig = {
 };
 
 export const config: AppConfig = {
-  apiBaseUrl: (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:3000').replace(/\/$/u, ''),
+  apiBaseUrl: (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:4200/api').replace(/\/$/u, ''),
   wsBaseUrl: (process.env.EXPO_PUBLIC_WS_BASE_URL ?? 'ws://localhost:3000/socket').replace(/\/$/u, ''),
   authDisabled: process.env.EXPO_PUBLIC_AUTH_DISABLED === 'true',
   googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '',

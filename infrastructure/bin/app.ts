@@ -5,13 +5,13 @@
  * Instantiates DNS, platform, and API stacks in the caller account and region.
  * Cognito OAuth callback/logout URLs and optional social IdP credentials come
  * from CDK context, then from process environment. In CI, `DEPLOY_ENV` and
- * `HOSTED_ZONE_NAME` choose `app.<environment>.<zone>` and `api.<environment>.<zone>`.
- * `CLIENT_ORIGIN` overrides the local website CORS default. A hosted zone id
- * adds the DNS stack and connects the website and API hostnames to it.
+ * `HOSTED_ZONE_NAME` choose `app.<environment>.<zone>`. The HTTP API is `/api`
+ * on that host. `CLIENT_ORIGIN` overrides the local website CORS default. A
+ * hosted zone id adds the DNS stack and connects the website hostname to it.
  */
 
 import * as cdk from 'aws-cdk-lib';
-import { definedString, hostnameOf, publicUrlsFor, splitUrlList, urlListFromUnknown } from '../lib/deploy-config';
+import { definedString, hostnameOf, publicUrlsFor, siteApiBaseUrl, splitUrlList, urlListFromUnknown } from '../lib/deploy-config';
 import { GamePlanApi, GamePlanDns, GamePlanPlatform } from '../lib/gameplan-stack';
 import { getStackEnv } from '../lib/stack-env';
 
@@ -32,12 +32,20 @@ const domain = definedString(process.env.HOSTED_ZONE_NAME) ?? definedString(proc
 const deployEnv = definedString(process.env.DEPLOY_ENV);
 const derived = domain !== undefined && deployEnv !== undefined ? publicUrlsFor(deployEnv, domain) : undefined;
 
-const localCallback = 'http://localhost:3000/identity/oauth/callback';
+const localCallback = 'http://localhost:4200/api/identity/oauth/callback';
+const legacyLocalCallback = 'http://localhost:3000/identity/oauth/callback';
 const localLogout = 'http://localhost:4200/login';
-const callbackUrls = derived !== undefined
-  ? [derived.callbackUrl, localCallback]
-  : (urlListFromUnknown(app.node.tryGetContext('callbackUrls')) ??
-    splitUrlList(process.env.CALLBACK_URLS) ?? [localCallback]);
+const siteApiBase = derived === undefined ? undefined : siteApiBaseUrl(derived.clientOrigin);
+const siteCallback = siteApiBase === undefined ? undefined : `${siteApiBase}/identity/oauth/callback`;
+const regionalDomain = definedString(process.env.API_REGIONAL_DOMAIN);
+const originVerifySecretArn = definedString(process.env.API_ORIGIN_VERIFY_SECRET_ARN);
+const callbackUrls =
+  derived !== undefined && siteCallback !== undefined
+    ? [
+        ...new Set([siteCallback, localCallback, legacyLocalCallback]),
+      ]
+    : (urlListFromUnknown(app.node.tryGetContext('callbackUrls')) ??
+      splitUrlList(process.env.CALLBACK_URLS) ?? [localCallback, legacyLocalCallback]);
 const logoutUrls = derived !== undefined
   ? [derived.logoutUrl, localLogout]
   : (urlListFromUnknown(app.node.tryGetContext('logoutUrls')) ??
@@ -56,20 +64,18 @@ const social = {
 
 const hostedZoneId = definedString(process.env.HOSTED_ZONE_ID);
 const siteHostname = derived?.siteHostname ?? hostnameOf(definedString(process.env.CLIENT_ORIGIN));
-const apiHostname = derived?.apiHostname ?? hostnameOf(callbackUrls[0]);
-if (hostedZoneId !== undefined && (siteHostname === undefined || apiHostname === undefined)) {
+if (hostedZoneId !== undefined && siteHostname === undefined) {
   throw new Error('HOSTED_ZONE_ID requires HOSTED_ZONE_NAME and DEPLOY_ENV');
 }
 
 const env = getStackEnv();
 const corsOrigin = derived?.clientOrigin ?? definedString(process.env.CLIENT_ORIGIN) ?? 'http://localhost:4200';
 const dns =
-  hostedZoneId === undefined || siteHostname === undefined || apiHostname === undefined
+  hostedZoneId === undefined || siteHostname === undefined
     ? undefined
     : {
         hostedZoneId,
         siteHostname,
-        apiHostname,
       };
 
 const dnsStack = dns === undefined ? undefined : new GamePlanDns(app, 'GamePlanDns', { env, ...dns });
@@ -86,6 +92,13 @@ const platform = new GamePlanPlatform(app, 'GamePlanPlatform', {
   signupAllowlistParameter: staging ? `${ssmPrefix}/staging-signup-allowlist` : undefined,
   siteHostname: dns?.siteHostname,
   certificateArn: dnsStack?.siteCertificateArn,
+  sharedApi:
+    dns !== undefined && regionalDomain !== undefined && originVerifySecretArn !== undefined
+      ? {
+          executeApiDomainName: regionalDomain,
+          originVerifySecretArn,
+        }
+      : undefined,
 });
 
 new GamePlanApi(app, 'GamePlanApi', {
@@ -98,6 +111,6 @@ new GamePlanApi(app, 'GamePlanApi', {
   table: platform.table,
   mediaBucket: platform.mediaBucket,
   distribution: platform.distribution,
-  certificateArn: dnsStack?.apiCertificateArn,
   dns,
+  browserApiBaseUrl: siteApiBase,
 });

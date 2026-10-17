@@ -1,5 +1,5 @@
 /**
- * Public DNS for the website and the HTTP API.
+ * Public DNS for the website.
  *
  * The hosted zone may live in another account. The zone id and the role that
  * can change it are supplied at deploy time.
@@ -22,10 +22,8 @@ export type DnsZoneProps = {
   roleArn?: string;
   /** Website hostname, `app.<environment>.<domain>`. */
   siteHostname: string;
-  /** HTTP API hostname from the first callback URL. */
-  apiHostname: string;
   /**
-   * Requests the site and API certificates. The alias-only stack sets this to false
+   * Requests the website certificate. The alias-only stack sets this to false
    * so certificate issuance stays in the DNS stack.
    */
   certificates?: boolean;
@@ -34,19 +32,11 @@ export type DnsZoneProps = {
 };
 
 /**
- * Requests certificates and publishes alias records for the site and the API.
+ * Requests the website certificate and publishes its alias record.
  */
 export class ZoneDns extends Construct {
   /** Issued certificate ARN in `us-east-1` for CloudFront. Absent when certificates are skipped. */
   public readonly siteCertificateArn?: string;
-
-  /**
-   * Issued certificate ARN for the HTTP API hostname.
-   *
-   * CloudFront requires this certificate in `us-east-1`. The DNS handler requests it in the stack
-   * region, and the API edge refuses any other region.
-   */
-  public readonly apiCertificateArn?: string;
 
   private readonly provider: Provider;
 
@@ -111,24 +101,18 @@ export class ZoneDns extends Construct {
         HostedZoneId: props.hostedZoneId,
         RoleArn: props.roleArn ?? '',
         SiteDomain: props.siteHostname,
-        ApiDomain: props.apiHostname,
         SiteRegion: 'us-east-1',
-        ApiRegion: cdk.Stack.of(this).region,
       },
     });
     this.siteCertificateArn = certificates.getAttString('SiteCertificateArn');
-    this.apiCertificateArn = certificates.getAttString('ApiCertificateArn');
   }
 
   /**
-   * Points the site and API hostnames at their CloudFront distributions.
+   * Points the website hostname at its CloudFront distribution.
    *
-   * @param targets - Website distribution and the API distribution.
+   * @param targets - Website distribution.
    */
-  addAliases(targets: {
-    distribution: cloudfront.Distribution;
-    apiDistribution: cloudfront.Distribution;
-  }): void {
+  addAliases(targets: { distribution: cloudfront.Distribution }): void {
     new cdk.CustomResource(this, 'Aliases', {
       serviceToken: this.provider.serviceToken,
       properties: {
@@ -138,9 +122,6 @@ export class ZoneDns extends Construct {
         SiteName: this.zone.siteHostname,
         SiteTarget: targets.distribution.distributionDomainName,
         SiteTargetZoneId: CloudFrontTarget.getHostedZoneId(targets.distribution),
-        ApiName: this.zone.apiHostname,
-        ApiTarget: targets.apiDistribution.distributionDomainName,
-        ApiTargetZoneId: CloudFrontTarget.getHostedZoneId(targets.apiDistribution),
       },
     });
   }

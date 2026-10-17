@@ -1,6 +1,7 @@
 const { getDefaultConfig } = require('expo/metro-config');
 const { withNativeWind } = require('nativewind/metro');
 const path = require('path');
+const { proxyApiRequest } = require('./scripts/dev-api-proxy');
 
 const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, '../..');
@@ -50,4 +51,15 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   return (upstream ?? context.resolveRequest)(context, moduleName, platform);
 };
 
-module.exports = withNativeWind(config, { input: './global.css' });
+const wind = withNativeWind(config, { input: './global.css' });
+wind.server = { ...(wind.server ?? {}) };
+const enhanceMiddleware = wind.server.enhanceMiddleware;
+wind.server.enhanceMiddleware = (middleware, server) => {
+  const next = enhanceMiddleware === undefined ? middleware : enhanceMiddleware(middleware, server);
+  return (req, res, nextFn) => {
+    if (proxyApiRequest(req, res)) return;
+    next(req, res, nextFn);
+  };
+};
+
+module.exports = wind;

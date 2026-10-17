@@ -8,6 +8,7 @@ import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+import { addSiteApiBehavior, createSiteApiEdge, type SiteApiProps } from './site-api';
 
 /** Inputs for the storage construct. */
 export type StorageProps = {
@@ -17,6 +18,11 @@ export type StorageProps = {
   siteHostname?: string;
   /** CloudFront certificate ARN in `us-east-1`. Required with `siteHostname`. */
   certificateArn?: string;
+  /**
+   * Present after the API stack has published its regional domain and origin secret.
+   * Adds `/api/*` on this distribution and stops rewriting API errors to `index.html`.
+   */
+  sharedApi?: SiteApiProps;
 };
 
 /**
@@ -69,6 +75,8 @@ export class Storage extends Construct {
       autoDeleteObjects: true,
     });
 
+    const siteApi = props.sharedApi === undefined ? undefined : createSiteApiEdge(this, props.sharedApi);
+
     const responseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeaders', {
       comment: 'GamePlan website security headers',
       securityHeadersBehavior: {
@@ -92,6 +100,7 @@ export class Storage extends Construct {
 
     this.distribution = new cloudfront.Distribution(this, 'SiteDistribution', {
       comment: 'GamePlan website',
+      webAclId: siteApi?.webAcl.attrArn,
       domainNames: props.siteHostname === undefined ? undefined : [props.siteHostname],
       certificate:
         props.certificateArn === undefined
@@ -108,22 +117,39 @@ export class Storage extends Construct {
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         compress: true,
         responseHeadersPolicy,
+        functionAssociations:
+          siteApi === undefined
+            ? undefined
+            : [
+                {
+                  function: siteApi.spaRewrite,
+                  eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+                },
+              ],
       },
-      errorResponses: [
-        {
-          httpStatus: 403,
-          responseHttpStatus: 200,
-          responsePagePath: '/index.html',
-          ttl: cdk.Duration.minutes(5),
-        },
-        {
-          httpStatus: 404,
-          responseHttpStatus: 200,
-          responsePagePath: '/index.html',
-          ttl: cdk.Duration.minutes(5),
-        },
-      ],
+      // Distribution-wide error pages would also rewrite API 403 and 404 responses.
+      // The SPA function covers website routes once `/api/*` shares this distribution.
+      errorResponses:
+        siteApi === undefined
+          ? [
+              {
+                httpStatus: 403,
+                responseHttpStatus: 200,
+                responsePagePath: '/index.html',
+                ttl: cdk.Duration.minutes(5),
+              },
+              {
+                httpStatus: 404,
+                responseHttpStatus: 200,
+                responsePagePath: '/index.html',
+                ttl: cdk.Duration.minutes(5),
+              },
+            ]
+          : undefined,
     });
+    if (siteApi !== undefined && props.sharedApi !== undefined) {
+      addSiteApiBehavior(this.distribution, siteApi, props.sharedApi);
+    }
 
     const siteUrl =
       props.siteHostname === undefined
@@ -148,6 +174,10 @@ export class Storage extends Construct {
     new cdk.CfnOutput(this, 'SiteUrl', {
       value: siteUrl,
       exportName: 'GamePlanSiteUrl',
+    });
+
+    new cdk.CfnOutput(this, 'SiteApiEnabled', {
+      value: props.sharedApi === undefined ? 'false' : 'true',
     });
   }
 }

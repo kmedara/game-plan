@@ -21,26 +21,28 @@ describe('refresh cookie helpers', () => {
     expect(wantsBodyRefreshToken('  BoDy  ')).toBe(true);
   });
 
-  it('sets Lax cookies in non-production', () => {
+  it('sets a Lax cookie on /api/identity and expires the old path', () => {
     const set = refreshSetCookie('token value');
-    expect(set).toContain(`${REFRESH_COOKIE}=token%20value`);
-    expect(set).toContain('SameSite=Lax');
-    expect(set).not.toContain('Secure');
+    expect(set).toEqual([
+      `${REFRESH_COOKIE}=token%20value; Path=/api/identity; HttpOnly; SameSite=Lax; Max-Age=2592000`,
+      `${REFRESH_COOKIE}=; Path=/identity; HttpOnly; SameSite=Lax; Max-Age=0`,
+    ]);
 
     const cleared = clearRefreshSetCookie();
-    expect(cleared).toContain(`${REFRESH_COOKIE}=`);
-    expect(cleared).toContain('Max-Age=0');
-    expect(cleared).not.toContain('Secure');
+    expect(cleared).toEqual([
+      `${REFRESH_COOKIE}=; Path=/api/identity; HttpOnly; SameSite=Lax; Max-Age=0`,
+      `${REFRESH_COOKIE}=; Path=/identity; HttpOnly; SameSite=Lax; Max-Age=0`,
+    ]);
   });
 
-  it('adds Secure and SameSite=None in production', () => {
+  it('adds Secure in production', () => {
     process.env.NODE_ENV = 'production';
     const set = refreshSetCookie('prod-token');
-    expect(set).toContain('SameSite=None');
-    expect(set).toContain('Secure');
+    expect(set.every((cookie) => cookie.includes('SameSite=Lax'))).toBe(true);
+    expect(set.every((cookie) => cookie.includes('Secure'))).toBe(true);
 
     const cleared = clearRefreshSetCookie();
-    expect(cleared).toContain('SameSite=None');
-    expect(cleared).toContain('Secure');
+    expect(cleared.every((cookie) => cookie.includes('SameSite=Lax'))).toBe(true);
+    expect(cleared.every((cookie) => cookie.includes('Secure'))).toBe(true);
   });
 });

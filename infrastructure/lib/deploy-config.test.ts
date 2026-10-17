@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { definedString, hostnameOf, publicUrlsFor, splitUrlList, urlListFromUnknown } from './deploy-config';
+import { definedString, hostnameOf, publicUrlsFor, siteApiBaseUrl, splitUrlList, urlListFromUnknown } from './deploy-config';
 
 describe('deploy config', () => {
   it('drops blank strings', () => {
@@ -21,19 +21,19 @@ describe('deploy config', () => {
     expect(splitUrlList(undefined)).toBeUndefined();
   });
 
-  it('builds app and api hostnames from the environment and domain', () => {
+  it('builds the website hostname and /api callback from the environment and domain', () => {
     expect(publicUrlsFor('staging', 'Example.com.')).toEqual({
       clientOrigin: 'https://app.staging.example.com',
-      callbackUrl: 'https://api.staging.example.com/identity/oauth/callback',
+      callbackUrl: 'https://app.staging.example.com/api/identity/oauth/callback',
       logoutUrl: 'https://app.staging.example.com/login',
       siteHostname: 'app.staging.example.com',
-      apiHostname: 'api.staging.example.com',
     });
+    expect(siteApiBaseUrl('https://app.staging.example.com')).toBe('https://app.staging.example.com/api');
     expect(() => publicUrlsFor('staging', 'localhost')).toThrow(/HOSTED_ZONE_NAME/);
   });
 
   it('reads a hostname from an absolute URL', () => {
-    expect(hostnameOf('https://api.example.com/identity/oauth/callback')).toBe('api.example.com');
+    expect(hostnameOf('https://app.example.com/api/identity/oauth/callback')).toBe('app.example.com');
     expect(hostnameOf('  ')).toBeUndefined();
     expect(hostnameOf('not a url')).toBeUndefined();
   });

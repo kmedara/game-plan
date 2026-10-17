@@ -37,7 +37,7 @@ services:
       COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID:?set COGNITO_CLIENT_ID}
       COGNITO_HOSTED_UI_DOMAIN: ${COGNITO_HOSTED_UI_DOMAIN:?set COGNITO_HOSTED_UI_DOMAIN}
       COGNITO_REGION: ${COGNITO_REGION:-us-east-1}
-      AUTH_CALLBACK_URL: http://localhost:3000/identity/oauth/callback
+      AUTH_CALLBACK_URL: http://localhost:4200/api/identity/oauth/callback
       MEDIA_LOCAL_DIR: /var/lib/gameplan/media
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
@@ -82,8 +82,9 @@ services:
       - "4200:4200"
       - "8081:8081"
     environment:
-      API_BASE_URL: http://localhost:3000
+      API_BASE_URL: http://localhost:4200/api
       WS_BASE_URL: ws://localhost:3000/socket
+      API_PROXY_TARGET: http://api:3000
       GOOGLE_MAPS_BROWSER_API_KEY: ${GOOGLE_MAPS_BROWSER_API_KEY:-}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
     develop:

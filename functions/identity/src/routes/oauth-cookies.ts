@@ -2,6 +2,8 @@
  * Cookie helpers for the Hosted UI OAuth PKCE handshake.
  */
 
+import { sessionCookies } from '../../../lib/auth/refresh-cookie.js';
+
 /** Cookie that holds the OAuth `state` value. */
 export const OAUTH_STATE_COOKIE = 'ts_oauth_state';
 
@@ -18,42 +20,19 @@ export const OAUTH_NATIVE_COOKIE = 'ts_oauth_native';
 export const NATIVE_AUTH_REDIRECT = 'gameplan://auth';
 
 /**
- * Builds a short-lived HttpOnly cookie for the OAuth handshake.
+ * Builds short-lived HttpOnly cookies for the OAuth handshake.
  *
  * @param name - Cookie name.
  * @param value - Cookie value (will be URI-encoded).
- * @returns A full `Set-Cookie` attribute string.
+ * @returns The live cookie and an expired cookie on the old path.
  */
-export const oauthSetCookie = (name: string, value: string): string => {
-  const secure = process.env.NODE_ENV === 'production';
-  const sameSite = secure ? 'None' : 'Lax';
-  const parts = [
-    `${name}=${encodeURIComponent(value)}`,
-    'Path=/identity',
-    'HttpOnly',
-    `SameSite=${sameSite}`,
-    `Max-Age=${60 * 10}`,
-  ];
-  if (secure) parts.push('Secure');
-  return parts.join('; ');
-};
+export const oauthSetCookie = (name: string, value: string): string[] =>
+  sessionCookies(name, encodeURIComponent(value), 60 * 10);
 
 /**
- * Builds a cookie that clears an OAuth handshake cookie.
+ * Builds cookies that clear an OAuth handshake cookie.
  *
  * @param name - Cookie name.
- * @returns A full `Set-Cookie` attribute string.
+ * @returns Expired cookies for the live path and the old path.
  */
-export const oauthClearCookie = (name: string): string => {
-  const secure = process.env.NODE_ENV === 'production';
-  const sameSite = secure ? 'None' : 'Lax';
-  const parts = [
-    `${name}=`,
-    'Path=/identity',
-    'HttpOnly',
-    `SameSite=${sameSite}`,
-    'Max-Age=0',
-  ];
-  if (secure) parts.push('Secure');
-  return parts.join('; ');
-};
+export const oauthClearCookie = (name: string): string[] => sessionCookies(name, '', 0);

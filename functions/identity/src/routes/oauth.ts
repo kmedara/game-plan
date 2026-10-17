@@ -67,10 +67,10 @@ export const handleOAuthLogin = async (
   const { verifier, challenge } = generatePkcePair();
   const location = buildAuthorizeUrl({ state, challenge });
   return redirect(location, [
-    oauthSetCookie(OAUTH_STATE_COOKIE, state),
-    oauthSetCookie(OAUTH_VERIFIER_COOKIE, verifier),
-    oauthSetCookie(OAUTH_RETURN_COOKIE, returnTo),
-    oauthSetCookie(OAUTH_NATIVE_COOKIE, native ? "1" : "0"),
+    ...oauthSetCookie(OAUTH_STATE_COOKIE, state),
+    ...oauthSetCookie(OAUTH_VERIFIER_COOKIE, verifier),
+    ...oauthSetCookie(OAUTH_RETURN_COOKIE, returnTo),
+    ...oauthSetCookie(OAUTH_NATIVE_COOKIE, native ? "1" : "0"),
   ]);
 };
 
@@ -87,10 +87,10 @@ export const handleOAuthCallback = async (
     process.env.CLIENT_ORIGIN ?? "http://localhost:4200"
   ).replace(/\/+$/u, "");
   const clearHandshake = [
-    oauthClearCookie(OAUTH_STATE_COOKIE),
-    oauthClearCookie(OAUTH_VERIFIER_COOKIE),
-    oauthClearCookie(OAUTH_RETURN_COOKIE),
-    oauthClearCookie(OAUTH_NATIVE_COOKIE),
+    ...oauthClearCookie(OAUTH_STATE_COOKIE),
+    ...oauthClearCookie(OAUTH_VERIFIER_COOKIE),
+    ...oauthClearCookie(OAUTH_RETURN_COOKIE),
+    ...oauthClearCookie(OAUTH_NATIVE_COOKIE),
   ];
 
   const code = event.queryStringParameters?.code;
@@ -168,7 +168,7 @@ export const handleOAuthCallback = async (
 
     return redirect(destination, [
       ...clearHandshake,
-      refreshSetCookie(tokens.refreshToken),
+      ...refreshSetCookie(tokens.refreshToken),
     ]);
   } catch (err) {
     logError({
@@ -198,7 +198,7 @@ export const handleOAuthLogout = async (
     event.queryStringParameters?.returnTo ??
       `${(process.env.CLIENT_ORIGIN ?? "http://localhost:4200").replace(/\/+$/u, "")}/login`,
   );
-  const clear = [clearRefreshSetCookie()];
+  const clear = clearRefreshSetCookie();
 
   try {
     return redirect(buildLogoutUrl(returnTo), clear);

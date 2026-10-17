@@ -34,5 +34,5 @@ export const handleLogout = async (
     // Best-effort revoke.
   }
 
-  return withCookies({ statusCode: 204 }, [clearRefreshSetCookie()]);
+  return withCookies({ statusCode: 204 }, clearRefreshSetCookie());
 };

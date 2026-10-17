@@ -36,13 +36,13 @@ describe('ssm parameters', () => {
 
   it('accepts a prefix that already ends with a slash', () => {
     const env = envFromParameters('/gameplan/', [
-      { name: '/gameplan/api-base-url', value: 'https://api.example.com' },
+      { name: '/gameplan/api-base-url', value: 'https://app.example.com/api' },
     ]);
-    expect(env.API_BASE_URL).toBe('https://api.example.com');
+    expect(env.API_BASE_URL).toBe('https://app.example.com/api');
   });
 
   it('reports blank required client variables', () => {
-    expect(missingEnv({ API_BASE_URL: ' https://api.example.com ' }, ['API_BASE_URL', 'SITE_BUCKET_NAME'])).toEqual([
+    expect(missingEnv({ API_BASE_URL: ' https://app.example.com/api ' }, ['API_BASE_URL', 'SITE_BUCKET_NAME'])).toEqual([
       'SITE_BUCKET_NAME',
     ]);
     expect(missingEnv({ API_BASE_URL: '' }, REQUIRED_CLIENT_ENV)).toEqual([
@@ -68,15 +68,15 @@ describe('ssm parameters', () => {
         {
           GamePlanDns: {
             SiteCertificateArn: 'arn:aws:acm:us-east-1:1:certificate/site',
-            ApiCertificateArn: 'arn:aws:acm:us-east-1:1:certificate/api',
+            SiteUrl: 'https://app.example.com',
             SiteBucketName: 'ignored',
           },
         },
-        { SiteCertificateArn: 'site-certificate-arn', ApiCertificateArn: 'api-certificate-arn' },
+        { SiteCertificateArn: 'site-certificate-arn', SiteUrl: 'site-url' },
       ),
     ).toEqual({
       'site-certificate-arn': 'arn:aws:acm:us-east-1:1:certificate/site',
-      'api-certificate-arn': 'arn:aws:acm:us-east-1:1:certificate/api',
+      'site-url': 'https://app.example.com',
     });
   });
 
@@ -84,7 +84,7 @@ describe('ssm parameters', () => {
     expect(
       parametersFromOutputs({
         GamePlanStack: {
-          HttpApiUrl: 'https://api.example.com',
+          HttpApiUrl: 'https://app.example.com/api',
           WebSocketUrl: 'wss://ws.example.com',
           SiteBucketName: 'site-bucket',
           SiteDistributionId: 'E123',
@@ -92,7 +92,7 @@ describe('ssm parameters', () => {
         },
       }),
     ).toEqual({
-      'api-base-url': 'https://api.example.com',
+      'api-base-url': 'https://app.example.com/api',
       'ws-base-url': 'wss://ws.example.com',
       'site-bucket-name': 'site-bucket',
       'site-distribution-id': 'E123',
@@ -124,12 +124,13 @@ describe('ssm parameters', () => {
     const app = new cdk.App();
     const stack = new GamePlanPlatform(app, 'GamePlanPlatform', {
       corsOrigin: 'https://app.example.com',
-      callbackUrls: ['https://api.example.com/identity/oauth/callback'],
+      callbackUrls: ['https://app.example.com/api/identity/oauth/callback'],
       logoutUrls: ['https://app.example.com/login'],
     });
     const keys = Object.keys(Template.fromStack(stack).toJSON().Outputs as object);
     const document = { GamePlanPlatform: Object.fromEntries(keys.map((key) => [key, 'value'])) };
     expect(Object.keys(parametersFromOutputs(document, PLATFORM_OUTPUT_PARAMETERS)).sort()).toEqual([
+      'site-api-enabled',
       'site-bucket-name',
       'site-distribution-id',
       'site-url',
