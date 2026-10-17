@@ -28,7 +28,7 @@ const bundling: BundlingOptions = {
   target: "node22",
   mainFields: ["module", "main"],
   minify: true,
-  sourceMap: true,
+  sourceMap: false,
   banner:
     "import { createRequire } from 'module'; const require = createRequire(import.meta.url);",
 };

@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "sideEffects": false,
   "description": "Shared Zod request/response schemas for the GamePlan API",
   "exports": {
     ".": "./src/index.ts",
