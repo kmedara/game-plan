@@ -34,14 +34,12 @@ const websocketFallback = (base) => {
   return `${wsProtocol}//${url.host}/socket`;
 };
 
-const defaultWs = websocketFallback(apiBaseUrl);
+const configuredWs = [process.env.EXPO_PUBLIC_WS_BASE_URL, process.env.WS_BASE_URL].find(
+  (value) => value !== undefined && value.trim() !== '',
+);
 
 process.env.EXPO_PUBLIC_API_BASE_URL = apiBaseUrl;
-process.env.EXPO_PUBLIC_WS_BASE_URL = (
-  process.env.EXPO_PUBLIC_WS_BASE_URL ??
-  process.env.WS_BASE_URL ??
-  defaultWs
-).replace(/\/$/u, '');
+process.env.EXPO_PUBLIC_WS_BASE_URL = (configuredWs ?? websocketFallback(apiBaseUrl)).replace(/\/$/u, '');
 process.env.EXPO_PUBLIC_AUTH_DISABLED =
   process.env.EXPO_PUBLIC_AUTH_DISABLED ?? process.env.AUTH_DISABLED ?? 'false';
 process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY =
