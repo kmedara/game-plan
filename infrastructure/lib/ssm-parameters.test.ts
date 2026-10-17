@@ -41,6 +41,13 @@ describe('ssm parameters', () => {
     expect(env.API_BASE_URL).toBe('https://app.example.com/api');
   });
 
+  it('loads the website certificate for the next platform deploy', () => {
+    const env = envFromParameters('/gameplan', [
+      { name: '/gameplan/site-certificate-arn', value: 'arn:aws:acm:us-east-1:1:certificate/site' },
+    ]);
+    expect(env.SITE_CERTIFICATE_ARN).toBe('arn:aws:acm:us-east-1:1:certificate/site');
+  });
+
   it('reports blank required client variables', () => {
     expect(missingEnv({ API_BASE_URL: ' https://app.example.com/api ' }, ['API_BASE_URL', 'SITE_BUCKET_NAME'])).toEqual([
       'SITE_BUCKET_NAME',

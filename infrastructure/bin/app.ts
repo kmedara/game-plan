@@ -91,7 +91,7 @@ const platform = new GamePlanPlatform(app, 'GamePlanPlatform', {
   social,
   signupAllowlistParameter: staging ? `${ssmPrefix}/staging-signup-allowlist` : undefined,
   siteHostname: dns?.siteHostname,
-  certificateArn: dnsStack?.siteCertificateArn,
+  certificateArn: definedString(process.env.SITE_CERTIFICATE_ARN) ?? dnsStack?.currentCertificateArn,
   sharedApi:
     dns !== undefined && regionalDomain !== undefined && originVerifySecretArn !== undefined
       ? {
@@ -100,6 +100,14 @@ const platform = new GamePlanPlatform(app, 'GamePlanPlatform', {
         }
       : undefined,
 });
+
+if (dnsStack !== undefined) {
+  // GamePlanPlatform already imports this export. Keep the reference so a DNS
+  // deploy does not delete it while the value stays on the previous certificate.
+  new cdk.CfnOutput(platform, 'RetainedCertificateExport', {
+    value: dnsStack.siteCertificateArn,
+  });
+}
 
 new GamePlanApi(app, 'GamePlanApi', {
   env,

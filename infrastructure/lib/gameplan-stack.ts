@@ -33,8 +33,11 @@ export type GamePlanDnsProps = cdk.StackProps & DnsConfig;
  * Certificate validation records for the website.
  */
 export class GamePlanDns extends cdk.Stack {
-  /** Certificate ARN in `us-east-1` for CloudFront. */
+  /** Certificate ARN the existing cross-stack export must keep returning. */
   public readonly siteCertificateArn: string;
+
+  /** Certificate ARN for the current website hostname. */
+  public readonly currentCertificateArn: string;
 
   /**
    * Requests the website certificate and writes the validation records.
@@ -46,12 +49,13 @@ export class GamePlanDns extends cdk.Stack {
   constructor(scope: Construct, id: string, props: GamePlanDnsProps) {
     super(scope, id, props);
     const dns = new ZoneDns(this, 'Dns', { ...props, handlerId: 'dns-certificates' });
-    if (dns.siteCertificateArn === undefined) {
+    if (dns.siteCertificateArn === undefined || dns.currentCertificateArn === undefined) {
       throw new Error('The DNS stack requires a certificate output');
     }
     this.siteCertificateArn = dns.siteCertificateArn;
+    this.currentCertificateArn = dns.currentCertificateArn;
 
-    new cdk.CfnOutput(this, 'SiteCertificateArn', { value: this.siteCertificateArn });
+    new cdk.CfnOutput(this, 'SiteCertificateArn', { value: this.currentCertificateArn });
   }
 }
 

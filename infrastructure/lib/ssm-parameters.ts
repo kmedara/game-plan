@@ -34,6 +34,7 @@ export const PARAMETER_ENV: Record<string, string> = {
   'site-distribution-id': 'SITE_DISTRIBUTION_ID',
   'site-url': 'SITE_URL',
   'site-api-enabled': 'SITE_API_ENABLED',
+  'site-certificate-arn': 'SITE_CERTIFICATE_ARN',
 };
 
 /** Environment variables the website publish requires before the Expo web export. */

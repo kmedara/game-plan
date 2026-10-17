@@ -35,8 +35,17 @@ export type DnsZoneProps = {
  * Requests the website certificate and publishes its alias record.
  */
 export class ZoneDns extends Construct {
-  /** Issued certificate ARN in `us-east-1` for CloudFront. Absent when certificates are skipped. */
+  /**
+   * Certificate ARN the existing cross-stack export must keep returning.
+   *
+   * Absent when certificates are skipped. This stays on the previous hostname's
+   * certificate so CloudFormation can publish the new one without changing an
+   * export GamePlanPlatform already imports.
+   */
   public readonly siteCertificateArn?: string;
+
+  /** Certificate ARN for the current website hostname. Absent when certificates are skipped. */
+  public readonly currentCertificateArn?: string;
 
   private readonly provider: Provider;
 
@@ -101,10 +110,12 @@ export class ZoneDns extends Construct {
         HostedZoneId: props.hostedZoneId,
         RoleArn: props.roleArn ?? '',
         SiteDomain: props.siteHostname,
+        RetainedSiteDomain: `app.${props.siteHostname}`,
         SiteRegion: 'us-east-1',
       },
     });
     this.siteCertificateArn = certificates.getAttString('SiteCertificateArn');
+    this.currentCertificateArn = certificates.getAttString('CurrentSiteCertificateArn');
   }
 
   /**

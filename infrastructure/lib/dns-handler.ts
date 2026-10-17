@@ -26,6 +26,8 @@ type DnsProperties = {
   HostedZoneId: string;
   RoleArn?: string;
   SiteDomain?: string;
+  /** Earlier hostname whose certificate the cross-stack export must keep returning. */
+  RetainedSiteDomain?: string;
   ApiDomain?: string;
   SiteRegion?: string;
   ApiRegion?: string;
@@ -47,7 +49,10 @@ type DnsEvent = {
 
 /** Fields returned to CloudFormation. */
 type DnsData = {
+  /** Certificate the existing cross-stack export must keep returning. */
   SiteCertificateArn?: string;
+  /** Certificate for the hostname in this request. */
+  CurrentSiteCertificateArn?: string;
 };
 
 /**
@@ -370,6 +375,29 @@ const clientPage = async (
 };
 
 /**
+ * Chooses the hostname whose certificate the existing export must keep returning.
+ *
+ * A later update of the same hostname still pins the retained name. Otherwise
+ * the export would change the next time this resource is updated.
+ *
+ * @param siteDomain - Hostname on this request.
+ * @param retainedDomain - Hostname configured to stay on the export.
+ * @param previousDomain - Hostname from the previous custom-resource properties.
+ * @returns The pinned hostname, or `undefined` when the current certificate is safe to export.
+ */
+export const exportedCertificateDomain = (
+  siteDomain: string,
+  retainedDomain: string | undefined,
+  previousDomain: string | undefined,
+): string | undefined => {
+  const retained = retainedDomain?.trim() ?? '';
+  if (retained !== '' && retained !== siteDomain) return retained;
+  const previous = previousDomain?.trim() ?? '';
+  if (previous !== '' && previous !== siteDomain) return previous;
+  return undefined;
+};
+
+/**
  * Handles certificate and alias custom resources.
  *
  * @param event - The CloudFormation custom-resource event.
@@ -426,13 +454,25 @@ export const handler = async (event: DnsEvent): Promise<{ PhysicalResourceId: st
     await retireDomainCertificate(siteRegion, siteDomain, route53, props.HostedZoneId);
     return { PhysicalResourceId: physicalResourceId };
   }
-  // A hostname change issues a certificate for the new name and leaves the
-  // previous one. CloudFront still presents that certificate until the
-  // platform stack updates the distribution.
-
-  const siteCertificateArn = await issueCertificate(siteRegion, siteDomain, route53, props.HostedZoneId);
+  // GamePlanPlatform imports SiteCertificateArn. CloudFormation rejects the
+  // stack update when that exported value changes, so keep returning the
+  // certificate for the previous hostname until that import is gone.
+  const currentCertificateArn = await issueCertificate(siteRegion, siteDomain, route53, props.HostedZoneId);
+  const pinnedDomain = exportedCertificateDomain(
+    siteDomain,
+    props.RetainedSiteDomain,
+    event.RequestType === 'Update' ? event.OldResourceProperties?.SiteDomain : undefined,
+  );
+  let siteCertificateArn = currentCertificateArn;
+  if (pinnedDomain !== undefined) {
+    const pinnedArn = await findCertificate(new ACMClient({ region: siteRegion }), pinnedDomain);
+    if (pinnedArn !== undefined) siteCertificateArn = pinnedArn;
+  }
   return {
     PhysicalResourceId: physicalResourceId,
-    Data: { SiteCertificateArn: siteCertificateArn },
+    Data: {
+      SiteCertificateArn: siteCertificateArn,
+      CurrentSiteCertificateArn: currentCertificateArn,
+    },
   };
 };
