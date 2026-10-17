@@ -1,72 +1,22 @@
 /**
  * Team permission checks.
  *
- * Privileged actions call {@link can}, which reads the caller's membership and
- * the team's role-permission rows. That shared read is the stand-in for a
- * second backend process.
+ * Privileged routes load the caller's roles with `requireMembership`, then
+ * `requirePermission` checks them against the team's role-permission matrix
+ * from {@link loadRolePermissionMatrix}. The check itself (`canWithRoles`)
+ * lives in `@gameplan/rules` so the app uses the same definition.
  */
 
 import type { TeamPermission, TeamRole } from "@gameplan/types";
 import { DEFAULT_ROLE_PERMISSIONS } from "@gameplan/types";
-import { rolesFromMembership } from "@gameplan/rules";
-import { getItem, queryBySkPrefix } from "./dynamo/access.js";
-import {
-  ROLE_PERMISSIONS_SK_PREFIX,
-  teamMemberSk,
-  teamPk,
-} from "./dynamo/keys.js";
-
-/** DynamoDB shape of a roster membership under `TEAM#<id>` / `MEMBER#<userId>`. */
-type TeamMemberItem = {
-  role?: unknown;
-  roles?: unknown;
-};
+import { queryBySkPrefix } from "./dynamo/access.js";
+import { ROLE_PERMISSIONS_SK_PREFIX, teamPk } from "./dynamo/keys.js";
 
 /** DynamoDB shape of a role-permission row under `TEAM#<id>` / `ROLE#<role>`. */
 type RolePermissionsItem = {
   role?: unknown;
   permissions?: unknown;
 };
-
-/**
- * Returns whether a role's permission list includes the given permission.
- *
- * @param permissions - Permissions granted to the role.
- * @param permission - The permission under test.
- * @returns `true` when the list contains the permission.
- */
-export const roleHasPermission = (
-  permissions: readonly TeamPermission[],
-  permission: TeamPermission,
-): boolean => permissions.includes(permission);
-
-/**
- * Pure permission check when membership and the matrix are already loaded.
- *
- * @param role - The caller's role on the team.
- * @param matrix - Permissions keyed by role.
- * @param permission - The permission under test.
- * @returns `true` when the role grants the permission.
- */
-export const canWithMatrix = (
-  role: TeamRole,
-  matrix: Readonly<Partial<Record<TeamRole, readonly TeamPermission[]>>>,
-  permission: TeamPermission,
-): boolean => roleHasPermission(matrix[role] ?? [], permission);
-
-/**
- * Pure permission check for a member who holds more than one role.
- *
- * @param roles - The caller's roles on the team.
- * @param matrix - Permissions keyed by role.
- * @param permission - The permission under test.
- * @returns `true` when any held role grants the permission.
- */
-export const canWithRoles = (
-  roles: readonly TeamRole[],
-  matrix: Readonly<Partial<Record<TeamRole, readonly TeamPermission[]>>>,
-  permission: TeamPermission,
-): boolean => roles.some((role) => canWithMatrix(role, matrix, permission));
 
 /**
  * Ensures `manage_permissions` stays on `team_admin` and is never granted to a
@@ -123,31 +73,4 @@ export const loadRolePermissionMatrix = async (
   }
 
   return matrix;
-};
-
-/**
- * Returns whether a user holds a team permission.
- *
- * Reads the roster membership and the team's role-permission matrix from
- * DynamoDB. Missing membership means the caller cannot act.
- *
- * @param userId - The Cognito `sub` of the caller.
- * @param teamId - The team under test.
- * @param permission - The privileged permission under test.
- * @returns `true` when any of the caller's roles grants the permission.
- */
-export const can = async (
-  userId: string,
-  teamId: string,
-  permission: TeamPermission,
-): Promise<boolean> => {
-  const member = await getItem<TeamMemberItem>(
-    teamPk(teamId),
-    teamMemberSk(userId),
-  );
-  if (member === undefined) return false;
-  const roles = rolesFromMembership(member);
-  if (roles.length === 0) return false;
-  const matrix = await loadRolePermissionMatrix(teamId);
-  return canWithRoles(roles, matrix, permission);
 };

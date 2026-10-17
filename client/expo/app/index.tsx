@@ -1,5 +1,7 @@
 /**
  * Sends the visitor to teams when a session restores, otherwise to login.
+ *
+ * A website visitor with no session hint goes straight to login without a refresh request.
  */
 
 import { Redirect } from 'expo-router';
@@ -14,10 +16,11 @@ export default function Index() {
   const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
-    void api.refreshSession().then((ok) => {
+    void (async () => {
+      const ok = (await api.mightHaveSession()) && (await api.refreshSession());
       setSignedIn(ok);
       setReady(true);
-    });
+    })();
   }, [api]);
 
   if (!ready) {

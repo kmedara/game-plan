@@ -2,6 +2,8 @@
  * Web civil-date input. The value is `YYYY-MM-DD`.
  */
 
+import { colors } from './theme';
+
 export const DayField = ({
   value,
   onChange,
@@ -16,11 +18,11 @@ export const DayField = ({
     style={{
       width: '100%',
       borderRadius: 12,
-      border: '1px solid #c5d0c9',
-      backgroundColor: '#e4ebe6',
+      border: `1px solid ${colors.line}`,
+      backgroundColor: colors.inset,
       padding: '8px 12px',
       fontSize: 16,
-      color: '#101412',
+      color: colors.ink,
     }}
   />
 );

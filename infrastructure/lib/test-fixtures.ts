@@ -3,7 +3,9 @@
  */
 
 import * as cdk from 'aws-cdk-lib';
+import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { GamePlanSite, type GamePlanSiteProps } from './gameplan-stack';
 import { HTTP_AREAS, type HttpArea } from './names';
 
@@ -20,6 +22,8 @@ export const siteStackForTest = (
 ): { app: cdk.App; site: GamePlanSite; api: cdk.Stack } => {
   const app = new cdk.App();
   const env = { account: '123456789012', region: 'us-east-1' };
+  const platform = new cdk.Stack(app, 'GamePlanPlatform', { env });
+  const mediaBucket = new s3.Bucket(platform, 'MediaBucket');
   const api = new cdk.Stack(app, 'GamePlanApi', { env });
   const functions = {} as Record<HttpArea, lambda.IFunction>;
   const functionUrls = {} as Record<HttpArea, lambda.FunctionUrl>;
@@ -32,6 +36,18 @@ export const siteStackForTest = (
     functions[area] = fn;
     functionUrls[area] = fn.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.AWS_IAM });
   }
-  const site = new GamePlanSite(app, 'GamePlanSite', { env, functions, functionUrls, ...props });
+  const socket = {
+    webSocketApi: new apigwv2.WebSocketApi(api, 'WebSocketApi'),
+    stageName: 'prod',
+    originSecretParameter: '/gameplan/socket-origin-verify',
+  };
+  const site = new GamePlanSite(app, 'GamePlanSite', {
+    env,
+    functions,
+    functionUrls,
+    socket,
+    mediaBucket,
+    ...props,
+  });
   return { app, site, api };
 };

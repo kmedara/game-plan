@@ -29,10 +29,10 @@ import { withTeamsErrors } from './errors.js';
 export const handleCreateInvite = route(
   ['teamId'],
   withTeamsErrors(),
-  withBodyValidation(createInviteBodySchema),
   requireUser(),
-  requirePermission('invite_members'),
+  withBodyValidation(createInviteBodySchema),
   requireMembership(),
+  requirePermission('invite_members'),
   async ({ teamId, user, member, body }) => {
     const role = body.role ?? 'player';
     assertCallerCanGrant(member.role, role);
@@ -62,6 +62,7 @@ export const handleListInvites = route(
   ['teamId'],
   withTeamsErrors(),
   requireUser(),
+  requireMembership(),
   requirePermission('invite_members'),
   async ({ teamId }) => {
     await requireTeam(teamId);
@@ -90,8 +91,8 @@ export const handleDeleteInvite = route(
   ['teamId', 'role'],
   withTeamsErrors(),
   requireUser(),
-  requirePermission('invite_members'),
   requireMembership(),
+  requirePermission('invite_members'),
   async ({ teamId, role, member }) => {
     if (!TEAM_ROLES.includes(role as TeamRole)) return badRequest('invalid_body');
     const inviteRole = role as TeamRole;

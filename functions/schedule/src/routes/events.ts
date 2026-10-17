@@ -37,8 +37,9 @@ import { withScheduleErrors } from "./errors.js";
 export const handleCreateEvent = route(
   ["teamId"],
   withScheduleErrors(),
-  withBodyValidation(createEventBodySchema),
   requireUser(),
+  withBodyValidation(createEventBodySchema),
+  requireMembership(),
   requirePermission("manage_events"),
   async ({ teamId, user, body }) => {
     assertEventEndsAfterStart(body.startsAt, body.endsAt);
@@ -81,8 +82,9 @@ export const handleGetEvent = route(
 export const handleUpdateEvent = route(
   ["teamId", "eventId"],
   withScheduleErrors(),
-  withBodyValidation(updateEventBodySchema),
   requireUser(),
+  withBodyValidation(updateEventBodySchema),
+  requireMembership(),
   requirePermission("manage_events"),
   async ({ teamId, eventId, body }) => {
     if (Object.keys(body).length === 0) {
@@ -111,6 +113,7 @@ export const handleDeleteEvent = route(
   ["teamId", "eventId"],
   withScheduleErrors(),
   requireUser(),
+  requireMembership(),
   requirePermission("manage_events"),
   async ({ teamId, eventId }) => {
     await deleteEvent(teamId, eventId);
@@ -129,8 +132,9 @@ export const handleDeleteEvent = route(
 export const handleCancelOccurrence = route(
   ["teamId", "eventId"],
   withScheduleErrors(),
-  withBodyValidation(occurrenceTargetSchema),
   requireUser(),
+  withBodyValidation(occurrenceTargetSchema),
+  requireMembership(),
   requirePermission("manage_events"),
   async ({ teamId, eventId, body }) => {
     await cancelOccurrence({
@@ -153,8 +157,9 @@ export const handleCancelOccurrence = route(
 export const handleSaveOccurrence = route(
   ["teamId", "eventId"],
   withScheduleErrors(),
-  withBodyValidation(exceptionEventBodySchema),
   requireUser(),
+  withBodyValidation(exceptionEventBodySchema),
+  requireMembership(),
   requirePermission("manage_events"),
   async ({ teamId, eventId, user, body }) => {
     const saved = await saveOccurrenceException({

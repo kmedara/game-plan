@@ -3,7 +3,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View, type TextInputInstance } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { birthdayPartOrder, composeBirthday, splitBirthday, type BirthdayPart } from './birthday';
 
@@ -19,7 +19,7 @@ export const BirthdayField = ({
   const { i18n, t } = useTranslation();
   const [parts, setParts] = useState(splitBirthday(value));
   const order = birthdayPartOrder(i18n.language);
-  const inputs = useRef<Partial<Record<BirthdayPart, TextInput | null>>>({});
+  const inputs = useRef<Partial<Record<BirthdayPart, TextInputInstance | null>>>({});
 
   useEffect(() => {
     if (value.length === 0) return;

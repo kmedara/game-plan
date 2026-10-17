@@ -2,20 +2,29 @@
  * Month calendar, day list, RSVP, and add-event form.
  */
 
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import ChevronLeft from 'lucide-react-native/icons/chevron-left';
+import ChevronRight from 'lucide-react-native/icons/chevron-right';
+import MessageCircle from 'lucide-react-native/icons/message-circle';
+import MessageSquareText from 'lucide-react-native/icons/message-square-text';
+import Pencil from 'lucide-react-native/icons/pencil';
+import Phone from 'lucide-react-native/icons/phone';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCalendars } from 'expo-localization';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
 import { Linking, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { EVENT_TYPES, RSVP_STATUSES, type CarpoolOffer, type EventResponse, type EventType, type LineupSlot, type RecurrenceRule, type RsvpStatus, type ScheduleOccurrence, type TeamMember, type UpdateEventBody } from '@gameplan/types';
+import { rolesFromMembership } from '@gameplan/rules';
+import { EVENT_TYPES, RSVP_STATUSES, type EventResponse, type EventType, type RecurrenceRule, type RsvpStatus, type ScheduleOccurrence, type TeamMember, type UpdateEventBody } from '@gameplan/types';
+import { errorMessageKey } from '@/src/errors';
 import { EventTimeFields } from '@/src/event-time';
 import { RecurrenceFields } from '@/src/recurrence-fields';
 import { recurrenceFromForm, type RepeatEnd, type RepeatFrequency } from '@/src/recurrence-form';
 import { DEFAULT_START_MINUTES, DURATION_PRESETS, eventWindow, type EndChoice } from '@/src/event-window';
 import { appLocale } from '@/src/i18n';
 import { MapPicker } from '@/src/map-picker';
+import { useDownloadUrl } from '@/src/media';
 import { mapsUrl, type MapsProvider } from '@/src/maps';
 import {
   buildMonthGrid,
@@ -30,9 +39,26 @@ import {
   weekdayLabelsForLocale,
   type CalendarMonth,
 } from '@/src/schedule-calendar';
-import { heldRoles, memberHasPermission } from '@/src/roles';
 import { Sheet } from '@/src/sheet';
+import { queryKeys } from '@/src/queries/keys';
+import { membersQuery } from '@/src/queries/teams';
+import {
+  cancelOccurrenceMutation,
+  carpoolClaimMutation,
+  carpoolOfferMutation,
+  carpoolQuery,
+  createEventMutation,
+  deleteEventMutation,
+  eventQuery,
+  lineupMutation,
+  lineupQuery,
+  rsvpMutation,
+  saveOccurrenceMutation,
+  scheduleQuery,
+  updateEventMutation,
+} from '@/src/queries/schedule';
 import { useActiveTeam, useApp } from '@/src/state';
+import { useTeamAccess } from '@/src/team-access';
 import { colors, fieldWash, fieldWashOpacity } from '@/src/theme';
 import { TrashIcon } from '@/src/team-media';
 import { Button, ErrorText, Field, ProfilePhoto, SubmitButton } from '@/src/ui';
@@ -46,56 +72,43 @@ const monthRange = (month: CalendarMonth, timeZone: string): { from: string; to:
 
 export default function ScheduleScreen() {
   const { t } = useTranslation();
-  const { api, live, brand } = useApp();
+  const { api, brand } = useApp();
+  const queryClient = useQueryClient();
   const { team } = useActiveTeam();
   const zone = team?.timeZone ?? 'UTC';
+  const teamId = team?.teamId;
   const [month, setMonth] = useState<CalendarMonth>(() => {
     const key = dayKeyInZone(new Date(), 'UTC');
     const [year, monthNumber] = key.split('-').map(Number) as [number, number];
     return { year, month: monthNumber };
   });
   const [selected, setSelected] = useState(() => dayKeyInZone(new Date(), 'UTC'));
-  const [events, setEvents] = useState<ScheduleOccurrence[]>([]);
-  const [canManage, setCanManage] = useState(false);
+  const range = monthRange(month, zone);
+  const schedule = useQuery({
+    ...scheduleQuery(api, teamId ?? '', range.from, range.to),
+    enabled: teamId !== undefined,
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === teamId ? previous : undefined,
+  });
+  const events = schedule.data?.occurrences ?? [];
+  const createEvent = useMutation(createEventMutation(api, queryClient, teamId ?? ''));
+  const updateEvent = useMutation(updateEventMutation(api, queryClient, teamId ?? ''));
+  const deleteEvent = useMutation(deleteEventMutation(api, queryClient, teamId ?? ''));
+  const saveOccurrence = useMutation(saveOccurrenceMutation(api, queryClient, teamId ?? ''));
+  const cancelOccurrence = useMutation(cancelOccurrenceMutation(api, queryClient, teamId ?? ''));
+  const putRsvp = useMutation(rsvpMutation(api, queryClient));
+  const canManage = useTeamAccess(team).can('manage_events');
   const [error, setError] = useState<string | undefined>();
   const [adding, setAdding] = useState(false);
-  const [viewing, setViewing] = useState<ScheduleOccurrence | undefined>();
+  const [viewingKey, setViewingKey] = useState<{ eventId: string; startsAt: string } | undefined>();
+  const viewing = events.find((item) => item.eventId === viewingKey?.eventId && item.startsAt === viewingKey?.startsAt);
   const [editing, setEditing] = useState<{ item: ScheduleOccurrence; series: EventResponse } | undefined>();
   const [scopePrompt, setScopePrompt] = useState<
     | { kind: 'delete'; item: ScheduleOccurrence }
     | { kind: 'edit'; item: ScheduleOccurrence; body: UpdateEventBody }
     | undefined
   >();
-
-  const load = async (teamId: string, visible: CalendarMonth, timeZone: string): Promise<void> => {
-    const range = monthRange(visible, timeZone);
-    const schedule = await api.getSchedule(teamId, range.from, range.to);
-    setEvents(schedule.occurrences);
-  };
-
-  useEffect(() => {
-    if (team === undefined) return;
-    void load(team.teamId, month, zone).catch(() => setError('load_failed'));
-    void api
-      .getPermissions(team.teamId)
-      .then((permissions) => {
-        setCanManage(memberHasPermission(heldRoles(team), permissions.roles, 'manage_events'));
-      })
-      .catch(() => setCanManage(false));
-  }, [team?.teamId, month.year, month.month]);
-
-  useEffect(() => {
-    return live.subscribe((event) => {
-      if (
-        (event.type === 'schedule_changed' ||
-          event.type === 'event_moved' ||
-          event.type === 'event_reminder') &&
-        event.teamId === team?.teamId
-      ) {
-        void load(event.teamId, month, zone);
-      }
-    });
-  }, [live, team?.teamId, month, zone]);
+  const loadError = schedule.error !== undefined ? t('errors.common.loadFailed') : undefined;
 
   if (team === undefined) {
     return (
@@ -111,7 +124,7 @@ export default function ScheduleScreen() {
 
   return (
     <ScrollView className="flex-1 px-3 pt-3">
-      <ErrorText message={error} />
+      <ErrorText message={error ?? loadError} />
       <View className="mb-2 flex-row items-center justify-between">
         <Pressable
           accessibilityRole="button"
@@ -166,34 +179,37 @@ export default function ScheduleScreen() {
           zone={zone}
           userId={api.user?.userId}
           canManage={canManage}
-          onView={() => setViewing(item)}
+          onView={() => setViewingKey({ eventId: item.eventId, startsAt: item.startsAt })}
           onEdit={() => {
             const seriesId = item.seriesEventId ?? item.eventId;
-            void api
-              .getEvent(team.teamId, seriesId)
+            void queryClient
+              .fetchQuery(eventQuery(api, team.teamId, seriesId))
               .then((series) => setEditing({ item, series }))
-              .catch(() => setError('load_failed'));
+              .catch(() => setError(t('errors.common.loadFailed')));
           }}
           onDelete={() => {
             if (!item.recurring) {
-              void api
-                .deleteEvent(team.teamId, item.eventId)
-                .then(() => load(team.teamId, month, zone))
-                .catch(() => setError('delete_failed'));
+              void deleteEvent
+                .mutateAsync(item.eventId)
+                .catch(() => setError(t('errors.common.deleteFailed')));
               return;
             }
             setScopePrompt({ kind: 'delete', item });
           }}
           onRsvp={async (status) => {
+            if (api.user === undefined) return;
             try {
-              await api.putRsvp(team.teamId, {
-                eventId: item.eventId,
-                occurrenceStartsAt: item.startsAt,
-                status,
+              await putRsvp.mutateAsync({
+                teamId: team.teamId,
+                userId: api.user.userId,
+                body: {
+                  eventId: item.eventId,
+                  occurrenceStartsAt: item.startsAt,
+                  status,
+                },
               });
-              await load(team.teamId, month, zone);
             } catch {
-              setError('rsvp_failed');
+              setError(t('errors.event.rsvpFailed'));
             }
           }}
         />
@@ -203,7 +219,7 @@ export default function ScheduleScreen() {
         visible={viewing !== undefined}
         title={viewing?.title ?? t('schedule.addEvent')}
         closeLabel={t('common.close')}
-        onClose={() => setViewing(undefined)}
+        onClose={() => setViewingKey(undefined)}
       >
         {viewing !== undefined ? (
           <EventDetail
@@ -214,26 +230,19 @@ export default function ScheduleScreen() {
             maps={primaryMaps}
             canManage={canManage}
             onRsvp={async (status) => {
+              if (api.user === undefined) return;
               try {
-                await api.putRsvp(team.teamId, {
-                  eventId: viewing.eventId,
-                  occurrenceStartsAt: viewing.startsAt,
-                  status,
+                await putRsvp.mutateAsync({
+                  teamId: team.teamId,
+                  userId: api.user.userId,
+                  body: {
+                    eventId: viewing.eventId,
+                    occurrenceStartsAt: viewing.startsAt,
+                    status,
+                  },
                 });
-                await load(team.teamId, month, zone);
-                setViewing((current) =>
-                  current === undefined
-                    ? current
-                    : {
-                        ...current,
-                        rsvps: [
-                          ...current.rsvps.filter((rsvp) => rsvp.userId !== api.user?.userId),
-                          ...(api.user === undefined ? [] : [{ userId: api.user.userId, status }]),
-                        ],
-                      },
-                );
               } catch {
-                setError('rsvp_failed');
+                setError(t('errors.event.rsvpFailed'));
               }
             }}
           />
@@ -251,7 +260,7 @@ export default function ScheduleScreen() {
           onCreate={async (body) => {
             const { endsAt, location, notes, latitude, longitude, recurrence, startsAt, ...rest } = body;
             if (startsAt === undefined) return;
-            await api.createEvent(team.teamId, {
+            await createEvent.mutateAsync({
               ...rest,
               title: rest.title ?? '',
               eventType: rest.eventType ?? 'practice',
@@ -265,7 +274,6 @@ export default function ScheduleScreen() {
               ...(recurrence !== undefined && recurrence !== null ? { recurrence } : {}),
             });
             setAdding(false);
-            await load(team.teamId, month, zone);
           }}
         />
       </Sheet>
@@ -283,9 +291,8 @@ export default function ScheduleScreen() {
             initial={{ item: editing.item, series: editing.series }}
             onCreate={async (body) => {
               if (!editing.item.recurring) {
-                await api.updateEvent(team.teamId, editing.item.eventId, body);
+                await updateEvent.mutateAsync({ eventId: editing.item.eventId, body });
                 setEditing(undefined);
-                await load(team.teamId, month, zone);
                 return;
               }
               setScopePrompt({ kind: 'edit', item: editing.item, body });
@@ -303,13 +310,17 @@ export default function ScheduleScreen() {
           const seriesId = prompt.item.seriesEventId ?? prompt.item.eventId;
           const original = prompt.item.originalStartsAt ?? prompt.item.startsAt;
           if (prompt.kind === 'delete') {
-            if (scope === 'one') await api.cancelOccurrence(team.teamId, seriesId, { occurrenceStartsAt: original });
-            else await api.deleteEvent(team.teamId, seriesId);
+            if (scope === 'one') {
+              await cancelOccurrence.mutateAsync({ eventId: seriesId, body: { occurrenceStartsAt: original } });
+            } else await deleteEvent.mutateAsync(seriesId);
           } else if (scope === 'one') {
             const { recurrence: _recurrence, ...rest } = prompt.body;
-            await api.saveOccurrence(team.teamId, seriesId, { ...rest, occurrenceStartsAt: original });
+            await saveOccurrence.mutateAsync({
+              eventId: seriesId,
+              body: { ...rest, occurrenceStartsAt: original },
+            });
           } else {
-            const series = await api.getEvent(team.teamId, seriesId);
+            const series = await queryClient.fetchQuery(eventQuery(api, team.teamId, seriesId));
             const nextStart = prompt.body.startsAt ?? prompt.item.startsAt;
             const delta = new Date(nextStart).getTime() - new Date(prompt.item.startsAt).getTime();
             const startsAt = new Date(new Date(series.startsAt).getTime() + delta).toISOString();
@@ -320,55 +331,28 @@ export default function ScheduleScreen() {
                     new Date(startsAt).getTime() +
                       (new Date(prompt.body.endsAt).getTime() - new Date(nextStart).getTime()),
                   ).toISOString();
-            await api.updateEvent(team.teamId, seriesId, { ...prompt.body, startsAt, endsAt });
+            await updateEvent.mutateAsync({ eventId: seriesId, body: { ...prompt.body, startsAt, endsAt } });
           }
           setScopePrompt(undefined);
           setEditing(undefined);
-          await load(team.teamId, month, zone);
         }}
       />
     </ScrollView>
   );
 }
 
-const PencilIcon = () => (
-  <View className="h-4 w-4 items-center justify-center" style={{ transform: [{ rotate: '-45deg' }] }}>
-    <View className="h-2 w-1.5 rounded-t-sm bg-ink" />
-    <View className="h-1 w-1.5 bg-muted" />
-    <View
-      style={{
-        width: 0,
-        height: 0,
-        borderLeftWidth: 3,
-        borderRightWidth: 3,
-        borderTopWidth: 4,
-        borderLeftColor: 'transparent',
-        borderRightColor: 'transparent',
-        borderTopColor: colors.ink,
-      }}
-    />
-  </View>
-);
+/** Row-action icon size and stroke. */
+const ICON = { size: 16, color: colors.ink, strokeWidth: 2 } as const;
 
-const PhoneIcon = () => (
-  <View className="h-4 w-4 items-center justify-center" style={{ transform: [{ rotate: '135deg' }] }}>
-    <View className="h-3.5 w-3.5 rounded-lg border-2 border-ink" />
-  </View>
-);
+/** Translation key for an RSVP status. */
+const rsvpLabelKey = (status: RsvpStatus): string =>
+  status === 'not_going' ? 'schedule.notGoing' : `schedule.${status}`;
 
-const TextIcon = () => (
-  <View className="h-4 w-4 items-end justify-end">
-    <View className="h-3 w-3.5 rounded-md border-2 border-ink" />
-    <View className="absolute bottom-0 right-0 h-1.5 w-1.5 border-b-2 border-r-2 border-ink" />
-  </View>
-);
-
-const ChatIcon = () => (
-  <View className="h-4 w-4 justify-center">
-    <View className="h-3 w-4 rounded-md border-2 border-ink" />
-    <View className="ml-1 h-1 w-1 border-b-2 border-l-2 border-ink" />
-  </View>
-);
+/** The device's 12/24-hour preference, or `undefined` to use the locale default. */
+const useHour12 = (): boolean | undefined => {
+  const uses24 = useCalendars()[0].uses24hourClock;
+  return uses24 === null ? undefined : !uses24;
+};
 
 const RsvpChoices = ({
   mine,
@@ -387,9 +371,7 @@ const RsvpChoices = ({
           style={mine === status ? { backgroundColor: fieldWash(rsvpColor(status), fieldWashOpacity.chip) } : undefined}
           onPress={() => void onRsvp(status)}
         >
-          <Text className="text-ink">
-            {t(status === 'not_going' ? 'schedule.notGoing' : `schedule.${status}`)}
-          </Text>
+          <Text className="text-ink">{t(rsvpLabelKey(status))}</Text>
         </Pressable>
       ))}
     </View>
@@ -416,8 +398,7 @@ const EventRow = ({
   onRsvp: (status: RsvpStatus) => Promise<void>;
 }) => {
   const { t } = useTranslation();
-  const uses24 = useCalendars()[0].uses24hourClock;
-  const hour12 = uses24 === null ? undefined : !uses24;
+  const hour12 = useHour12();
   const mine = item.rsvps.find((rsvp) => rsvp.userId === userId)?.status;
   return (
     <View className="mb-3 rounded-xl bg-inset p-3">
@@ -432,7 +413,7 @@ const EventRow = ({
       {canManage ? (
         <View className="absolute right-2 top-2 flex-row items-center">
           <Pressable accessibilityRole="button" accessibilityLabel={t('schedule.editEvent')} className="p-1.5" onPress={onEdit}>
-            <PencilIcon />
+            <Pencil {...ICON} />
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel={t('schedule.deleteEvent')} className="p-1.5" onPress={onDelete}>
             <TrashIcon />
@@ -462,57 +443,17 @@ const EventDetail = ({
 }) => {
   const { t } = useTranslation();
   const { api } = useApp();
-  const router = useRouter();
-  const [roster, setRoster] = useState<TeamMember[]>([]);
-  const [people, setPeople] = useState<
-    Record<string, { name: string | undefined; photo: string | undefined; phone: string | undefined }>
-  >({});
-
-  useEffect(() => {
-    let cancelled = false;
-    void api.listMembers(teamId).then((members) => {
-      if (!cancelled) setRoster(members);
-    }).catch(() => {
-      if (!cancelled) setRoster([]);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, teamId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const ids = [...new Set([...roster.map((member) => member.userId), ...item.rsvps.map((rsvp) => rsvp.userId)])];
-    void Promise.all(
-      ids.map(async (id) => {
-        try {
-          const member = await api.getMember(teamId, id);
-          const photo =
-            member.photoKey === undefined
-              ? undefined
-              : (await api.presignDownload(member.photoKey, { userId: id })).downloadUrl;
-          return [id, { name: member.displayName, photo, phone: member.phoneNumber }] as const;
-        } catch {
-          return [id, { name: undefined, photo: undefined, phone: undefined }] as const;
-        }
-      }),
-    ).then((rows) => {
-      if (!cancelled) setPeople(Object.fromEntries(rows));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, teamId, roster, item.rsvps]);
-  const uses24 = useCalendars()[0].uses24hourClock;
-  const hour12 = uses24 === null ? undefined : !uses24;
+  const [error, setError] = useState<string | undefined>();
+  const roster = useQuery(membersQuery(api, teamId)).data ?? [];
+  const byId = new Map(roster.map((member) => [member.userId, member]));
+  const hour12 = useHour12();
   const mine = item.rsvps.find((rsvp) => rsvp.userId === userId)?.status;
   const rsvpByUser = new Map(item.rsvps.map((rsvp) => [rsvp.userId, rsvp.status]));
   const noReply = roster.filter((member) => !rsvpByUser.has(member.userId));
   const short = roster.filter(
-    (member) => heldRoles(member).includes('player') && rsvpByUser.get(member.userId) !== 'going',
+    (member) => rolesFromMembership(member).includes('player') && rsvpByUser.get(member.userId) !== 'going',
   ).length;
-  const nameOf = (id: string): string =>
-    people[id]?.name ?? roster.find((member) => member.userId === id)?.displayName ?? t('common.unknownPerson');
+  const nameOf = (id: string): string => byId.get(id)?.displayName ?? t('common.unknownPerson');
   const openMaps = (): void => {
     if (item.location === undefined && item.latitude === undefined) return;
     const url = mapsUrl(
@@ -548,21 +489,22 @@ const EventDetail = ({
       <RsvpChoices mine={mine} onRsvp={onRsvp} />
       <Text className="mb-1 mt-4 font-semibold text-ink">{t('schedule.attendance')}</Text>
       <Text className="mb-2 text-muted">{t('schedule.short', { count: short })}</Text>
+      <ErrorText message={error} />
       {RSVP_STATUSES.map((status) => {
         const rows = item.rsvps.filter((rsvp) => rsvp.status === status);
         return (
           <View key={status} className="mb-3">
             <Text className="mb-1 text-muted">
-              {t(status === 'not_going' ? 'schedule.notGoing' : `schedule.${status}`)} · {rows.length}
+              {t(rsvpLabelKey(status))} · {rows.length}
             </Text>
             {rows.map((rsvp) => (
               <AttendanceRow
                 key={rsvp.userId}
                 userId={rsvp.userId}
                 name={nameOf(rsvp.userId)}
-                photo={people[rsvp.userId]?.photo}
-                phone={people[rsvp.userId]?.phone}
+                member={byId.get(rsvp.userId)}
                 self={rsvp.userId === userId}
+                onError={setError}
               />
             ))}
           </View>
@@ -575,9 +517,9 @@ const EventDetail = ({
             key={member.userId}
             userId={member.userId}
             name={nameOf(member.userId)}
-            photo={people[member.userId]?.photo}
-            phone={people[member.userId]?.phone}
+            member={member}
             self={member.userId === userId}
+            onError={setError}
           />
         ))}
       </View>
@@ -597,19 +539,22 @@ const EventDetail = ({
 const AttendanceRow = ({
   userId,
   name,
-  photo,
-  phone,
+  member,
   self,
+  onError,
 }: {
   userId: string;
   name: string;
-  photo: string | undefined;
-  phone: string | undefined;
+  member: TeamMember | undefined;
   self: boolean;
+  onError: (message: string) => void;
 }) => {
   const { t } = useTranslation();
   const { api } = useApp();
+  const queryClient = useQueryClient();
   const router = useRouter();
+  const photo = useDownloadUrl(member?.photoKey, { userId });
+  const phone = member?.phoneNumber;
   return (
     <View className="mb-2 flex-row items-center">
       <ProfilePhoto name={name} uri={photo} size={36} />
@@ -622,7 +567,7 @@ const AttendanceRow = ({
             className="p-1.5"
             onPress={() => void Linking.openURL(`tel:${phone}`)}
           >
-            <PhoneIcon />
+            <Phone {...ICON} />
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -630,7 +575,7 @@ const AttendanceRow = ({
             className="p-1.5"
             onPress={() => void Linking.openURL(`sms:${phone}`)}
           >
-            <TextIcon />
+            <MessageSquareText {...ICON} />
           </Pressable>
         </View>
       ) : null}
@@ -640,12 +585,16 @@ const AttendanceRow = ({
           accessibilityLabel={t('schedule.message')}
           className="p-1.5"
           onPress={() => {
-            void api.createPrivateChat([userId]).then((chat) => {
-              router.push(`/chats/${chat.chatId}`);
-            });
+            void api
+              .createPrivateChat([userId])
+              .then(async (chat) => {
+                await queryClient.invalidateQueries({ queryKey: queryKeys.chats });
+                router.push(`/chats/${chat.chatId}`);
+              })
+              .catch((err: unknown) => onError(t(errorMessageKey(err, 'errors.event.messageFailed'))));
           }}
         >
-          <ChatIcon />
+          <MessageCircle {...ICON} />
         </Pressable>
       ) : null}
     </View>
@@ -665,48 +614,46 @@ const CarpoolSection = ({
 }) => {
   const { t } = useTranslation();
   const { api, brand } = useApp();
-  const [offers, setOffers] = useState<CarpoolOffer[]>([]);
+  const queryClient = useQueryClient();
+  const carpool = useQuery(carpoolQuery(api, teamId, item.eventId, item.startsAt));
+  const offerSeats = useMutation(carpoolOfferMutation(api, queryClient));
+  const claimRide = useMutation(carpoolClaimMutation(api, queryClient));
+  const offers = carpool.data ?? [];
   const [error, setError] = useState<string | undefined>();
   const mine = offers.find((offer) => offer.userId === userId);
-
-  useEffect(() => {
-    let cancelled = false;
-    void api
-      .getCarpool(teamId, { eventId: item.eventId, occurrenceStartsAt: item.startsAt })
-      .then((carpool) => {
-        if (!cancelled) setOffers(carpool.offers);
-      })
-      .catch(() => {
-        if (!cancelled) setError('carpool_load_failed');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, teamId, item.eventId, item.startsAt]);
+  const shown = error ?? (carpool.error !== undefined ? t('errors.event.carpoolLoadFailed') : undefined);
 
   const saveSeats = (seats: number): void => {
     setError(undefined);
-    void api
-      .putCarpool(teamId, { eventId: item.eventId, occurrenceStartsAt: item.startsAt, seats })
-      .then((carpool) => setOffers(carpool.offers))
-      .catch(() => setError('carpool_save_failed'));
+    void offerSeats
+      .mutateAsync({
+        teamId,
+        body: { eventId: item.eventId, occurrenceStartsAt: item.startsAt, seats },
+      })
+      .catch((err: unknown) => setError(t(errorMessageKey(err, 'errors.event.carpoolSaveFailed'))));
   };
 
   const claim = (driverUserId: string): void => {
     setError(undefined);
-    void api
-      .claimCarpool(teamId, {
-        eventId: item.eventId,
-        occurrenceStartsAt: item.startsAt,
-        driverUserId,
+    void claimRide
+      .mutateAsync({
+        teamId,
+        body: {
+          eventId: item.eventId,
+          occurrenceStartsAt: item.startsAt,
+          driverUserId,
+        },
       })
-      .then((carpool) => setOffers(carpool.offers))
-      .catch((caught: unknown) => {
-        const code = caught instanceof Error ? caught.message : '';
-        if (code === 'carpool_full') setError(t('schedule.carpoolFull'));
-        else if (code === 'carpool_own_offer') setError(t('schedule.carpoolOwn'));
-        else setError('carpool_save_failed');
-      });
+      .catch((err: unknown) =>
+        setError(
+          t(
+            errorMessageKey(err, 'errors.event.carpoolSaveFailed', {
+              carpool_full: 'schedule.carpoolFull',
+              carpool_own_offer: 'schedule.carpoolOwn',
+            }),
+          ),
+        ),
+      );
   };
 
   return (
@@ -751,12 +698,12 @@ const CarpoolSection = ({
               accessibilityRole="button"
               className="mb-2 mr-2 h-10 w-10 items-center justify-center rounded-full border"
               style={{
-                borderColor: selected ? brand.primary : '#c5d0c9',
-                backgroundColor: selected ? brand.primary : '#ffffff',
+                borderColor: selected ? brand.primary : colors.line,
+                backgroundColor: selected ? brand.primary : colors.paper,
               }}
               onPress={() => saveSeats(seats)}
             >
-              <Text style={{ color: selected ? brand.onPrimary : '#101412' }}>{seats}</Text>
+              <Text style={{ color: selected ? brand.onPrimary : colors.ink }}>{seats}</Text>
             </Pressable>
           );
         })}
@@ -766,7 +713,7 @@ const CarpoolSection = ({
           <Text className="text-link">{t('schedule.clearOffer')}</Text>
         </Pressable>
       ) : null}
-      <ErrorText message={error} />
+      <ErrorText message={shown} />
     </View>
   );
 };
@@ -786,30 +733,24 @@ const LineupEditor = ({
 }) => {
   const { t } = useTranslation();
   const { api } = useApp();
-  const [slots, setSlots] = useState<LineupSlot[]>([]);
+  const queryClient = useQueryClient();
+  const lineup = useQuery(lineupQuery(api, teamId, item.eventId, item.startsAt));
+  const saveLineup = useMutation(lineupMutation(api, queryClient));
+  const [slots, setSlots] = useState<typeof lineup.data>(undefined);
+  const shownSlots = slots ?? lineup.data ?? [];
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [notice, setNotice] = useState<string | undefined>();
+  const shown = error ?? (lineup.error !== undefined ? t('errors.event.lineupLoadFailed') : undefined);
 
   useEffect(() => {
-    let cancelled = false;
-    void api
-      .getLineup(teamId, { eventId: item.eventId, occurrenceStartsAt: item.startsAt })
-      .then((lineup) => {
-        if (!cancelled) setSlots(lineup.slots);
-      })
-      .catch(() => {
-        if (!cancelled) setError('lineup_load_failed');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, teamId, item.eventId, item.startsAt]);
+    setSlots(undefined);
+  }, [item.eventId, item.startsAt]);
 
   const move = (index: number, direction: -1 | 1): void => {
     const next = index + direction;
-    if (next < 0 || next >= slots.length) return;
-    const copy = [...slots];
+    if (next < 0 || next >= shownSlots.length) return;
+    const copy = [...shownSlots];
     const current = copy[index];
     const swap = copy[next];
     if (current === undefined || swap === undefined) return;
@@ -820,12 +761,15 @@ const LineupEditor = ({
 
   const save = async (): Promise<void> => {
     setError(undefined);
-    const lineup = await api.putLineup(teamId, {
-      eventId: item.eventId,
-      occurrenceStartsAt: item.startsAt,
-      slots,
+    const saved = await saveLineup.mutateAsync({
+      teamId,
+      body: {
+        eventId: item.eventId,
+        occurrenceStartsAt: item.startsAt,
+        slots: shownSlots,
+      },
     });
-    setSlots(lineup.slots);
+    setSlots(saved.slots);
     setNotice(t('schedule.lineupSaved'));
   };
 
@@ -844,15 +788,15 @@ const LineupEditor = ({
     setNotice(t('schedule.lineupCopied'));
   };
 
-  const available = roster.filter((member) => !slots.some((slot) => slot.userId === member.userId));
+  const available = roster.filter((member) => !shownSlots.some((slot) => slot.userId === member.userId));
 
   return (
     <View className="mt-2">
       <Text className="mb-2 font-semibold text-ink">{t('schedule.lineup')}</Text>
-      <ErrorText message={error} />
+      <ErrorText message={shown} />
       {notice !== undefined ? <Text className="mb-2 text-muted">{notice}</Text> : null}
-      {slots.length === 0 ? <Text className="mb-2 text-muted">{t('schedule.lineupEmpty')}</Text> : null}
-      {slots.map((slot, index) => (
+      {shownSlots.length === 0 ? <Text className="mb-2 text-muted">{t('schedule.lineupEmpty')}</Text> : null}
+      {shownSlots.map((slot, index) => (
         <View key={slot.userId} className="mb-3">
           <Text className="mb-1 text-ink">{nameOf(slot.userId)}</Text>
           {canManage ? (
@@ -860,7 +804,7 @@ const LineupEditor = ({
               label={t('schedule.position')}
               value={slot.position}
               onChangeText={(position) => {
-                setSlots(slots.map((row) => (row.userId === slot.userId ? { ...row, position } : row)));
+                setSlots(shownSlots.map((row) => (row.userId === slot.userId ? { ...row, position } : row)));
               }}
             />
           ) : (
@@ -873,7 +817,7 @@ const LineupEditor = ({
               <Button
                 label={t('schedule.removeFromLineup')}
                 tone="secondary"
-                onPress={() => setSlots(slots.filter((row) => row.userId !== slot.userId))}
+                onPress={() => setSlots(shownSlots.filter((row) => row.userId !== slot.userId))}
               />
             </View>
           ) : null}
@@ -886,14 +830,8 @@ const LineupEditor = ({
               key={member.userId}
               className="mb-2"
               onPress={() => {
-                void api.getMember(teamId, member.userId).then((profile) => {
-                  const position = profile.positions?.[0] ?? 'Player';
-                  setSlots([...slots, { userId: member.userId, position }]);
-                  setAdding(false);
-                }).catch(() => {
-                  setSlots([...slots, { userId: member.userId, position: 'Player' }]);
-                  setAdding(false);
-                });
+                setSlots([...shownSlots, { userId: member.userId, position: member.positions?.[0] ?? 'Player' }]);
+                setAdding(false);
               }}
             >
               <Text className="text-link">{nameOf(member.userId)}</Text>
@@ -904,7 +842,7 @@ const LineupEditor = ({
       {canManage ? (
         <View>
           <Button label={t('schedule.addToLineup')} tone="secondary" onPress={() => setAdding(true)} />
-          <Button label={t('schedule.copyPrevious')} tone="secondary" onPress={() => void copyPrevious().catch(() => setError('lineup_copy_failed'))} />
+          <Button label={t('schedule.copyPrevious')} tone="secondary" onPress={() => void copyPrevious().catch(() => setError(t('errors.event.lineupCopyFailed')))} />
           <SubmitButton label={t('schedule.saveLineup')} onPress={save} />
         </View>
       ) : null}
@@ -935,7 +873,7 @@ const ScopeChoice = ({
             label={t('schedule.thisOccurrence')}
             onPress={() => {
               void onChoose('one').catch((err: unknown) => {
-                setError(err instanceof Error ? err.message : 'save_failed');
+                setError(t(errorMessageKey(err, 'errors.common.saveFailed')));
               });
             }}
           />
@@ -944,7 +882,7 @@ const ScopeChoice = ({
             tone="secondary"
             onPress={() => {
               void onChoose('all').catch((err: unknown) => {
-                setError(err instanceof Error ? err.message : 'save_failed');
+                setError(t(errorMessageKey(err, 'errors.common.saveFailed')));
               });
             }}
           />
@@ -1043,20 +981,15 @@ const AddEvent = ({
     if (title.trim().length === 0) return false;
     const window = eventWindow(timeZone, dayKey, startMinutes, end);
     const { startsAt, endsAt } = window;
-    let recurrence: RecurrenceRule | undefined;
-    try {
-      recurrence = recurrenceFromForm({
-        frequency,
-        interval: Number(interval),
-        byWeekDay,
-        end: repeatEnd,
-        timeZone,
-        dayKey,
-        startMinutes,
-      });
-    } catch (err) {
-      throw new Error(err instanceof Error ? err.message : 'invalid_recurrence');
-    }
+    const recurrence = recurrenceFromForm({
+      frequency,
+      interval: Number(interval),
+      byWeekDay,
+      end: repeatEnd,
+      timeZone,
+      dayKey,
+      startMinutes,
+    });
     await onCreate({
       eventType,
       title: title.trim(),
@@ -1138,7 +1071,7 @@ const AddEvent = ({
       <SubmitButton
         label={t('common.save')}
         onPress={submit}
-        message={(err) => (err instanceof Error ? err.message : 'create_failed')}
+        message={(err) => t(errorMessageKey(err, 'errors.common.saveFailed'))}
       />
     </View>
   );

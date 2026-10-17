@@ -4,6 +4,7 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Linking } from 'react-native';
+import { createTestQueryClient, queryWrapper } from './test-query';
 import { TeamInvites } from './team-invites';
 
 jest.mock('@gameplan/types', () => ({
@@ -31,6 +32,7 @@ jest.mock('@/src/state', () => ({
     api: {
       createInvite: (...args: unknown[]) => mockCreateInvite(...args),
       deleteInvite: jest.fn(),
+      listInvites: jest.fn(async () => []),
     },
     brand: { primary: '#0a6e38', secondary: '#0a6e38' },
   }),
@@ -46,14 +48,8 @@ const invite = (role: 'coach' | 'player', code: string) => ({
 
 const renderInvites = (onError = jest.fn()) => {
   const view = render(
-    <TeamInvites
-      teamId="team-1"
-      teamName="Rockets"
-      invites={[]}
-      setInvites={jest.fn()}
-      callerRole="team_admin"
-      onError={onError}
-    />,
+    <TeamInvites teamId="team-1" teamName="Rockets" callerRole="team_admin" onError={onError} />,
+    { wrapper: queryWrapper(createTestQueryClient()) },
   );
   return { ...view, onError };
 };

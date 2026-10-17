@@ -19,8 +19,8 @@ import { withScheduleErrors } from "./errors.js";
 export const handleGetCarpool = route(
   ["teamId"],
   withScheduleErrors(),
-  withQueryValidation(carpoolQuerySchema),
   requireUser(),
+  withQueryValidation(carpoolQuerySchema),
   requireMembership(),
   async ({ teamId, query }) => {
     const carpool = await getCarpool({
@@ -42,8 +42,8 @@ export const handleGetCarpool = route(
 export const handlePutCarpool = route(
   ["teamId"],
   withScheduleErrors(),
-  withBodyValidation(carpoolOfferBodySchema),
   requireUser(),
+  withBodyValidation(carpoolOfferBodySchema),
   requireMembership(),
   async ({ teamId, user, body }) => {
     const carpool = await putCarpoolOffer({
@@ -67,8 +67,8 @@ export const handlePutCarpool = route(
 export const handleClaimCarpool = route(
   ["teamId"],
   withScheduleErrors(),
-  withBodyValidation(carpoolClaimBodySchema),
   requireUser(),
+  withBodyValidation(carpoolClaimBodySchema),
   requireMembership(),
   async ({ teamId, user, body }) => {
     const carpool = await claimCarpool({

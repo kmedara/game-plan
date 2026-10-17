@@ -2,11 +2,13 @@
  * Function URLs and WebSocket API wiring for every product area Lambda.
  */
 
+import { createHash } from 'node:crypto';
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import { WebSocketLambdaAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import type * as cognito from 'aws-cdk-lib/aws-cognito';
 import type * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -49,6 +51,68 @@ export type ApiProps = {
   mediaBucket: s3.IBucket;
   /** Browser origin the functions use when they build absolute links. */
   corsOrigin: string;
+  /** Parameter Store prefix that holds the deploy secrets, such as `/gameplan`. */
+  ssmPrefix: string;
+  /**
+   * RSA public key PEM for media URLs signed for the website distribution.
+   * Without it, downloads stay on presigned S3 URLs.
+   */
+  mediaSigningPublicKey?: string;
+};
+
+/**
+ * Lets a function read one Parameter Store name.
+ *
+ * @param fn - The function that reads the parameter.
+ * @param name - The full parameter name, with its leading slash.
+ */
+const allowParameterRead = (fn: lambda.IFunction, name: string): void => {
+  fn.addToRolePolicy(
+    new iam.PolicyStatement({
+      actions: ['ssm:GetParameter'],
+      resources: [
+        cdk.Stack.of(fn).formatArn({
+          service: 'ssm',
+          resource: 'parameter',
+          resourceName: name.replace(/^\//u, ''),
+          arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
+        }),
+      ],
+    }),
+  );
+};
+
+/**
+ * Creates the CloudFront public key and key group that sign media URLs.
+ *
+ * The key name includes a hash of the PEM: a new key replaces the resource, and
+ * CloudFront rejects two keys with one name while both exist during the swap.
+ *
+ * @param scope - The construct that owns the key.
+ * @param publicKeyPem - RSA public key in PEM form.
+ * @param siteOrigin - Website origin the signed URLs point at.
+ * @returns The public key and the key group that trusts it.
+ */
+const createMediaSigningKey = (
+  scope: Construct,
+  publicKeyPem: string,
+  siteOrigin: string,
+): { publicKey: cloudfront.PublicKey; keyGroup: cloudfront.KeyGroup } => {
+  if (!siteOrigin.startsWith('https://')) {
+    throw new Error('MEDIA_SIGNING_PUBLIC_KEY requires an https website origin');
+  }
+  const encodedKey = `${publicKeyPem.trim()}\n`;
+  const hash = createHash('sha256').update(encodedKey).digest('hex').slice(0, 12);
+  const publicKey = new cloudfront.PublicKey(scope, 'MediaSigningKey', {
+    publicKeyName: `gameplan-media-${hash}`,
+    encodedKey,
+    comment: 'Signs media URLs served by the website',
+  });
+  const keyGroup = new cloudfront.KeyGroup(scope, 'MediaKeyGroup', {
+    keyGroupName: 'gameplan-media',
+    items: [publicKey],
+  });
+  return { publicKey, keyGroup };
 };
 
 /**
@@ -130,16 +194,40 @@ const enableAccessLogs = (
  * The functions verify the Cognito access token themselves. WebSocket APIs have
  * no Cognito authorizer, so `$connect` burns a one-time ticket from
  * `POST /identity/socket-ticket`.
+ *
+ * AWS WAF cannot attach to a WebSocket API, so clients connect through the
+ * website distribution instead. CloudFront sends the value of
+ * {@link socketOriginParameter} on each connect, and the authorizer rejects a
+ * connect without it.
  */
 export class Api extends Construct {
   /** Amazon API Gateway WebSocket API used for live delivery only. */
   public readonly webSocketApi: apigwv2.WebSocketApi;
+
+  /** WebSocket stage CloudFront forwards connects to. */
+  public readonly webSocketStage: apigwv2.WebSocketStage;
+
+  /**
+   * Parameter Store name of the value CloudFront adds to each socket connect.
+   *
+   * Set by hand to a random String. CloudFormation cannot resolve a SecureString
+   * into a distribution, so it cannot be one.
+   */
+  public readonly socketOriginParameter: string;
 
   /** IAM-only function URL for each HTTP area. */
   public readonly functionUrls: Record<HttpArea, lambda.FunctionUrl>;
 
   /** Function behind each URL. */
   public readonly httpFunctions: Record<HttpArea, lambda.IFunction>;
+
+  /**
+   * Key group the website trusts for `/uploads/*`, when media signing is configured.
+   *
+   * It lives here rather than in the site stack so the media function can read
+   * the key id; the site stack deploys later.
+   */
+  public readonly mediaKeyGroup?: cloudfront.IKeyGroup;
 
   /**
    * Creates the function URLs, WebSocket routes, fan-out queue, and push topic.
@@ -185,6 +273,23 @@ export class Api extends Construct {
       COGNITO_HOSTED_UI_DOMAIN: props.hostedUiDomain,
       AUTH_CALLBACK_URL: props.authCallbackUrl,
     };
+    // Functions get parameter names only. The secret values are read at run time.
+    const mapsKeyParameter = `${props.ssmPrefix}/google-maps-api-key`;
+    const vapidPrivateKeyParameter = `${props.ssmPrefix}/vapid-private-key`;
+    const originSecretParameter = `${props.ssmPrefix}/socket-origin-verify`;
+    this.socketOriginParameter = originSecretParameter;
+    const mediaSigningKeyParameter = `${props.ssmPrefix}/media-signing-private-key`;
+    const mediaSigning = props.mediaSigningPublicKey === undefined
+      ? undefined
+      : createMediaSigningKey(this, props.mediaSigningPublicKey, props.corsOrigin);
+    this.mediaKeyGroup = mediaSigning?.keyGroup;
+    const mediaCdnEnv = mediaSigning === undefined
+      ? {}
+      : {
+          MEDIA_CDN_ORIGIN: props.corsOrigin,
+          MEDIA_SIGNING_KEY_ID: mediaSigning.publicKey.publicKeyId,
+          MEDIA_SIGNING_PRIVATE_KEY_PARAMETER: mediaSigningKeyParameter,
+        };
 
     /**
      * Builds the environment map for one area Lambda.
@@ -209,12 +314,13 @@ export class Api extends Construct {
             ...tableEnv,
             ...tokenEnv,
             MEDIA_BUCKET: props.mediaBucket.bucketName,
+            ...mediaCdnEnv,
           };
         case 'places':
           return {
             ...shared,
             ...tokenEnv,
-            GOOGLE_MAPS_API_KEY: process.env.GOOGLE_MAPS_API_KEY ?? '',
+            GOOGLE_MAPS_API_KEY_PARAMETER: mapsKeyParameter,
           };
         case 'fanout':
           return {
@@ -223,7 +329,7 @@ export class Api extends Construct {
             ...queueEnv,
             PUSH_TOPIC_ARN: pushTopic.topicArn,
             VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY ?? '',
-            VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY ?? '',
+            VAPID_PRIVATE_KEY_PARAMETER: vapidPrivateKeyParameter,
             VAPID_SUBJECT: process.env.VAPID_SUBJECT ?? 'mailto:push@gameplan.local',
           };
         default: {
@@ -234,6 +340,9 @@ export class Api extends Construct {
     };
 
     const functions = createAreaFunctions(this, environmentFor);
+    allowParameterRead(functions.places, mapsKeyParameter);
+    allowParameterRead(functions.fanout, vapidPrivateKeyParameter);
+    if (mediaSigning !== undefined) allowParameterRead(functions.media, mediaSigningKeyParameter);
 
     const functionUrls = {} as Record<HttpArea, lambda.FunctionUrl>;
     const httpFunctions = {} as Record<HttpArea, lambda.IFunction>;
@@ -250,12 +359,18 @@ export class Api extends Construct {
       this,
       'socket-authorizer',
       areaEntry('socket', 'authorize.ts'),
-      tableEnv,
+      {
+        ...tableEnv,
+        NODE_ENV: 'production',
+        ORIGIN_VERIFY_SECRET_PARAMETER: originSecretParameter,
+      },
       5,
     );
     grantPartitions(props.table, socketAuthorizerFn, { write: [TICKET_PREFIX] });
+    allowParameterRead(socketAuthorizerFn, originSecretParameter);
+    // A connect missing either identity source gets 401 without invoking the function.
     const socketAuthorizer = new WebSocketLambdaAuthorizer('SocketAuthorizer', socketAuthorizerFn, {
-      identitySource: ['route.request.querystring.ticket'],
+      identitySource: ['route.request.querystring.ticket', 'route.request.header.X-Origin-Verify'],
     });
     const socketIntegration = new integrations.WebSocketLambdaIntegration(
       'SocketIntegration',
@@ -289,6 +404,7 @@ export class Api extends Construct {
       stageName: 'prod',
       autoDeploy: true,
     });
+    this.webSocketStage = socketStage;
     enableAccessLogs(this, apiLoggingAccount, socketStage, 'SocketAccessLogs', '/gameplan/websocket-api');
 
     functions.fanout.addEnvironment('WEBSOCKET_CALLBACK_URL', socketStage.callbackUrl);

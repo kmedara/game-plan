@@ -2,12 +2,11 @@
  * Wallpaper for the team's default chat. A dark overlay sits on top in the thread.
  */
 
-import { useState } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { TeamTheme } from '@gameplan/types';
-import { useApp } from './state';
-import { AddMark, RemoveBadge, chatOverlayColor, teamImageErrorKey, uploadTeamImage, useTeamImageUrl, type ChatBackgroundOverlay } from './team-media';
+import { useDownloadUrl } from './media';
+import { AddMark, RemoveBadge, chatOverlayColor, useTeamImageSetting, type ChatBackgroundOverlay } from './team-media';
 import { ErrorText } from './ui';
 
 const overlayLabel = {
@@ -28,39 +27,15 @@ export const TeamChatBackground = ({
   onSaved: (theme: TeamTheme | undefined) => void;
 }) => {
   const { t } = useTranslation();
-  const { api, patchTeam } = useApp();
-  const uri = useTeamImageUrl(teamId, theme?.chatBackgroundKey);
-  const [error, setError] = useState<string | undefined>();
-
-  const saveTheme = async (chatBackgroundKey: string | undefined): Promise<void> => {
-    const saved = await api.updateTeam(teamId, {
-      theme:
-        chatBackgroundKey === undefined
-          ? { chatBackgroundKey: null, chatBackgroundOverlay: null }
-          : { chatBackgroundKey },
-    });
-    patchTeam(saved);
-    onSaved(saved.theme);
-  };
-
-  const upload = async (): Promise<void> => {
-    setError(undefined);
-    const result = await uploadTeamImage(api);
-    if (result === undefined) return;
-    if ('error' in result) {
-      setError(t(teamImageErrorKey(result.error)));
-      return;
-    }
-    try {
-      await saveTheme(result.key);
-    } catch {
-      setError(t('errors.teamAdmin.logoUploadFailed'));
-    }
-  };
-
-  const clear = (): void => {
-    void saveTheme(undefined).catch(() => setError(t('errors.teamAdmin.logoUploadFailed')));
-  };
+  const uri = useDownloadUrl(theme?.chatBackgroundKey, { teamId });
+  const { error, upload, clear } = useTeamImageSetting({
+    teamId,
+    themePatch: (chatBackgroundKey) =>
+      chatBackgroundKey === undefined
+        ? { chatBackgroundKey: null, chatBackgroundOverlay: null }
+        : { chatBackgroundKey },
+    onSaved,
+  });
 
   const overlay = theme?.chatBackgroundOverlay ?? 'dark';
   const scrim = chatOverlayColor(overlay);

@@ -190,6 +190,75 @@ describe('handleGetMember', () => {
   });
 });
 
+describe('handleListMembers', () => {
+  beforeEach(() => {
+    store.clear();
+    getProfileMock.mockReset();
+    process.env.LOCAL_JWT_SECRET = 'members-route-test';
+  });
+
+  afterEach(() => {
+    store.clear();
+  });
+
+  it('returns photo, positions, and phone, hiding a minor phone from non-guardians', async () => {
+    const viewerId = randomUUID();
+    const adultId = randomUUID();
+    const minorId = randomUUID();
+    const guardedId = randomUUID();
+    const teamId = randomUUID();
+    const { accessToken } = issueLocalTokens(viewerId, `${viewerId}@example.com`);
+    const joinedAt = new Date().toISOString();
+    for (const [userId, role] of [
+      [viewerId, 'coach'],
+      [adultId, 'player'],
+      [minorId, 'player'],
+      [guardedId, 'player'],
+    ] as const) {
+      store.set(itemKey(teamPk(teamId), teamMemberSk(userId)), {
+        [TABLE_PK]: teamPk(teamId),
+        [TABLE_SK]: teamMemberSk(userId),
+        userId,
+        role,
+        joinedAt,
+        ...(userId === adultId ? { positions: ['Wing'] } : {}),
+      });
+    }
+    store.set(itemKey(userPk(guardedId), `GUARDIAN#${viewerId}`), { adultId: viewerId });
+    getProfileMock.mockImplementation(async (...args: unknown[]) => {
+      const userId = String(args[0]);
+      return {
+        PK: userPk(userId),
+        SK: profileSk(),
+        userId,
+        email: `${userId}@example.com`,
+        displayName: userId,
+        accountKind: userId === minorId || userId === guardedId ? 'minor' : 'adult',
+        phoneNumber: '+12025550123',
+        photoKey: `uploads/${userId}/photo`,
+        createdAt: joinedAt,
+      };
+    });
+
+    const result = await handler(
+      httpEvent('GET', `/teams/${teamId}/members`, {
+        headers: { authorization: `Bearer ${accessToken}` },
+      }),
+    );
+    expect(result.statusCode).toBe(200);
+    const { members } = JSON.parse(result.body ?? '') as { members: Array<Record<string, unknown>> };
+    const byId = new Map(members.map((member) => [member.userId, member]));
+    expect(byId.get(adultId)).toMatchObject({
+      positions: ['Wing'],
+      phoneNumber: '+12025550123',
+      photoKey: `uploads/${adultId}/photo`,
+    });
+    expect(byId.get(minorId)?.phoneNumber).toBeUndefined();
+    expect(byId.get(minorId)?.photoKey).toBe(`uploads/${minorId}/photo`);
+    expect(byId.get(guardedId)?.phoneNumber).toBe('+12025550123');
+  });
+});
+
 describe('handleAssignRole', () => {
   beforeEach(() => {
     store.clear();

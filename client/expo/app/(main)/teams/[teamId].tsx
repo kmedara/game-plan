@@ -2,20 +2,22 @@
  * Team admin: settings, roster, join requests, invites, and permissions.
  */
 
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { highestRole } from '@gameplan/rules';
+import { canWithRoles, highestRole, permissionMatrix, rolesFromMembership } from '@gameplan/rules';
 import {
-  type JoinRequest,
   type RolePermissions,
-  type TeamInvite,
-  type TeamMember,
+  type TeamPermission,
   type TeamRole,
+  type TeamTheme,
   type UpdateTeamBody,
 } from '@gameplan/types';
+import { errorMessageKey } from '@/src/errors';
 import { JoinRequests } from '@/src/join-requests';
+import { membersQuery, permissionsQuery, teamQuery, updateTeamMutation } from '@/src/queries/teams';
 import { useApp } from '@/src/state';
 import { TeamInvites } from '@/src/team-invites';
 import { TeamPermissions } from '@/src/team-permissions';
@@ -24,211 +26,142 @@ import { TeamColors } from '@/src/team-colors';
 import { TeamChatBackground } from '@/src/team-chat-background';
 import { TeamLogo } from '@/src/team-logo';
 import type { ChatBackgroundOverlay } from '@/src/team-media';
-import { heldRoles, memberHasPermission } from '@/src/roles';
 import { ErrorText, Field, SubmitButton, TimeZoneField } from '@/src/ui';
 
 export default function TeamAdminScreen() {
   const { t } = useTranslation();
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
-  const { api, patchTeam, setPreviewTheme } = useApp();
+  const { api, setPreviewTheme } = useApp();
+  const queryClient = useQueryClient();
   const id = teamId ?? '';
-  const [name, setName] = useState('');
-  const [timeZone, setTimeZone] = useState('');
-  const [primary, setPrimary] = useState('');
-  const [secondary, setSecondary] = useState('');
-  const [accent, setAccent] = useState('');
-  const [logoKey, setLogoKey] = useState<string | undefined>();
-  const [chatBackgroundKey, setChatBackgroundKey] = useState<string | undefined>();
-  const [chatBackgroundOverlay, setChatBackgroundOverlay] = useState<ChatBackgroundOverlay>('dark');
+  const enabled = id.length > 0;
+  const teamLoaded = useQuery({ ...teamQuery(api, id), enabled });
+  const membersLoaded = useQuery({ ...membersQuery(api, id), enabled });
+  const permissionsLoaded = useQuery({ ...permissionsQuery(api, id), enabled });
+  const saveTeam = useMutation(updateTeamMutation(api, queryClient, id));
+  const [draft, setDraft] = useState<SettingsDraft | undefined>();
   const [baseline, setBaseline] = useState<SettingsDraft | undefined>();
-  const [members, setMembers] = useState<TeamMember[]>([]);
-  const [requests, setRequests] = useState<JoinRequest[]>([]);
-  const [invites, setInvites] = useState<TeamInvite[]>([]);
-  const [roles, setRoles] = useState<RolePermissions[]>([]);
-  const [callerRole, setCallerRole] = useState<TeamRole>('player');
-  const [callerRoles, setCallerRoles] = useState<TeamRole[]>(['player']);
-  const [canManageSettings, setCanManageSettings] = useState(false);
+  const [roles, setRoles] = useState<RolePermissions[] | undefined>();
   const [error, setError] = useState<string | undefined>();
-  const [ready, setReady] = useState(false);
+  const members = membersLoaded.data ?? [];
+  const savedRoles = permissionsLoaded.data ?? [];
+  const roleRows = roles ?? savedRoles;
+  const callerRoles: TeamRole[] = teamLoaded.data === undefined ? ['player'] : rolesFromMembership(teamLoaded.data);
+  const callerRole = highestRole(callerRoles);
+  const can = (permission: TeamPermission): boolean => canWithRoles(callerRoles, permissionMatrix(roleRows), permission);
+  const ready =
+    enabled &&
+    teamLoaded.data !== undefined &&
+    membersLoaded.data !== undefined &&
+    (permissionsLoaded.data !== undefined || permissionsLoaded.isError);
 
-  const remember = (team: { name: string; timeZone: string; theme?: Parameters<typeof draftFromTeam>[0]['theme'] }): void => {
+  const remember = (team: { name: string; timeZone: string; theme?: TeamTheme }): void => {
     const next = draftFromTeam(team);
-    setName(next.name);
-    setTimeZone(next.timeZone);
-    setPrimary(next.primary);
-    setSecondary(next.secondary);
-    setAccent(next.accent);
-    setLogoKey(next.logoKey);
-    setChatBackgroundKey(next.chatBackgroundKey);
-    setChatBackgroundOverlay(next.chatBackgroundOverlay);
+    setDraft(next);
     setBaseline(next);
   };
 
-  const load = async (): Promise<void> => {
-    const team = await api.getTeam(id);
-    const mine = heldRoles(team);
-    setCallerRoles(mine);
-    setCallerRole(highestRole(mine));
-    remember(team);
-    setMembers(await api.listMembers(id));
-    let matrix: RolePermissions[] = [];
-    try {
-      const permissions = await api.getPermissions(id);
-      matrix = permissions.roles;
-      setRoles(matrix);
-    } catch {
-      setRoles([]);
-    }
-    setCanManageSettings(memberHasPermission(mine, matrix, 'manage_team_settings'));
-    if (memberHasPermission(mine, matrix, 'approve_join_requests')) {
-      try {
-        setRequests(await api.listJoinRequests(id));
-      } catch {
-        setRequests([]);
-      }
-    } else {
-      setRequests([]);
-    }
-    if (memberHasPermission(mine, matrix, 'invite_members')) {
-      try {
-        setInvites(await api.listInvites(id));
-      } catch {
-        setInvites([]);
-      }
-    } else {
-      setInvites([]);
-    }
-    setReady(true);
+  const edit = (patch: Partial<SettingsDraft>): void => {
+    setDraft((current) => (current === undefined ? current : { ...current, ...patch }));
+  };
+
+  /** Applies fields that were already saved, so they no longer count as unsaved edits. */
+  const adopt = (patch: Partial<SettingsDraft>): void => {
+    edit(patch);
+    setBaseline((current) => (current === undefined ? current : { ...current, ...patch }));
   };
 
   useEffect(() => {
-    if (id.length === 0) return;
-    setReady(false);
-    void load().catch((err: unknown) => setError(err instanceof Error ? err.message : 'load_failed'));
+    setDraft(undefined);
+    setBaseline(undefined);
+    setRoles(undefined);
   }, [id]);
 
   useEffect(() => {
+    if (teamLoaded.data !== undefined && draft === undefined) remember(teamLoaded.data);
+  }, [teamLoaded.data, draft]);
+
+  useEffect(() => {
+    if (permissionsLoaded.data !== undefined && roles === undefined) setRoles(permissionsLoaded.data);
+  }, [permissionsLoaded.data, roles]);
+
+  useEffect(() => {
+    const loadError = teamLoaded.error ?? membersLoaded.error;
+    if (loadError !== undefined) setError(t(errorMessageKey(loadError, 'errors.common.loadFailed')));
+  }, [teamLoaded.error, membersLoaded.error, t]);
+
+  const colors = draft === undefined ? undefined : colorTheme(draft);
+  useEffect(() => {
     if (!ready) return;
-    const theme = {
-      ...(primary.trim().length > 0 ? { primary: primary.trim() } : {}),
-      ...(secondary.trim().length > 0 ? { secondary: secondary.trim() } : {}),
-      ...(accent.trim().length > 0 ? { accent: accent.trim() } : {}),
-    };
-    setPreviewTheme(Object.keys(theme).length > 0 ? theme : undefined);
-  }, [ready, primary, secondary, accent, setPreviewTheme]);
+    setPreviewTheme(colors);
+  }, [ready, colors?.primary, colors?.secondary, colors?.accent, setPreviewTheme]);
 
   useEffect(() => () => setPreviewTheme(undefined), [setPreviewTheme]);
 
   const saveSettings = async (): Promise<boolean | void> => {
-    if (baseline === undefined) return false;
-    const body = settingsPatch(baseline, {
-      name,
-      timeZone,
-      primary,
-      secondary,
-      accent,
-      logoKey,
-      chatBackgroundKey,
-      chatBackgroundOverlay,
-    });
+    if (baseline === undefined || draft === undefined) return false;
+    const body = settingsPatch(baseline, draft);
     if (body === undefined) return false;
-    const saved = await api.updateTeam(id, body);
-    patchTeam(saved);
-    remember(saved);
+    remember(await saveTeam.mutateAsync(body));
   };
+
+  const theme = draft === undefined ? undefined : themeFromDraft(draft);
 
   return (
     <ScrollView className="flex-1 px-4 pt-4">
       <ErrorText message={error} />
-      {ready ? (
+      {ready && draft !== undefined ? (
         <>
-      {canManageSettings ? (
-        <>
-          <Field label={t('teams.team')} value={name} onChangeText={setName} />
-          <TimeZoneField label={t('teams.timeZone')} value={timeZone} onChange={setTimeZone} />
-          <View className="w-full flex-row items-start justify-around">
-          <TeamColors
-            primary={primary}
-            secondary={secondary}
-            accent={accent}
-            onChange={(next) => {
-              setPrimary(next.primary);
-              setSecondary(next.secondary);
-              setAccent(next.accent);
-            }}
-          />
-          <TeamLogo
+          {can('manage_team_settings') ? (
+            <>
+              <Field label={t('teams.team')} value={draft.name} onChangeText={(name) => edit({ name })} />
+              <TimeZoneField label={t('teams.timeZone')} value={draft.timeZone} onChange={(timeZone) => edit({ timeZone })} />
+              <View className="w-full flex-row items-start justify-around">
+                <TeamColors primary={draft.primary} secondary={draft.secondary} accent={draft.accent} onChange={edit} />
+                <TeamLogo
+                  teamId={id}
+                  name={draft.name}
+                  theme={theme}
+                  onSaved={(saved) => adopt({ logoKey: saved?.logoKey })}
+                />
+              </View>
+              <TeamChatBackground
+                teamId={id}
+                theme={theme}
+                onOverlayChange={(chatBackgroundOverlay) => edit({ chatBackgroundOverlay })}
+                onSaved={(saved) =>
+                  adopt({
+                    chatBackgroundKey: saved?.chatBackgroundKey,
+                    chatBackgroundOverlay: saved?.chatBackgroundOverlay ?? 'dark',
+                  })
+                }
+              />
+              <SubmitButton label={t('common.save')} onPress={saveSettings} />
+            </>
+          ) : null}
+          <TeamRoster teamId={id} members={members} />
+          {can('approve_join_requests') ? (
+            <JoinRequests teamId={id} roles={roleRows} callerRole={callerRole} onError={setError} />
+          ) : null}
+          {can('invite_members') ? (
+            <TeamInvites teamId={id} teamName={draft.name} callerRole={callerRole} onError={setError} />
+          ) : null}
+          <TeamPermissions
             teamId={id}
-            name={name}
-            theme={currentTheme(primary, secondary, accent, logoKey, chatBackgroundKey, chatBackgroundOverlay)}
-            onSaved={(theme) => {
-              setLogoKey(theme?.logoKey);
-              setBaseline((current) => (current === undefined ? current : { ...current, logoKey: theme?.logoKey }));
-            }}
+            roles={roleRows}
+            setRoles={(update) =>
+              setRoles((current) => {
+                const rows = current ?? savedRoles;
+                return typeof update === 'function' ? update(rows) : update;
+              })
+            }
+            members={members}
           />
-          </View>
-          <TeamChatBackground
-            teamId={id}
-            theme={currentTheme(primary, secondary, accent, logoKey, chatBackgroundKey, chatBackgroundOverlay)}
-            onOverlayChange={setChatBackgroundOverlay}
-            onSaved={(theme) => {
-              const chatBackgroundKey = theme?.chatBackgroundKey;
-              const chatBackgroundOverlay = theme?.chatBackgroundOverlay ?? 'dark';
-              setChatBackgroundKey(chatBackgroundKey);
-              setChatBackgroundOverlay(chatBackgroundOverlay);
-              setBaseline((current) =>
-                current === undefined ? current : { ...current, chatBackgroundKey, chatBackgroundOverlay },
-              );
-            }}
-          />
-          <SubmitButton label={t('common.save')} onPress={saveSettings} />
-        </>
-      ) : null}
-      <TeamRoster teamId={id} members={members} />
-      {memberHasPermission(callerRoles, roles, 'approve_join_requests') ? (
-        <JoinRequests
-          teamId={id}
-          requests={requests}
-          roles={roles}
-          callerRole={callerRole}
-          reload={load}
-          onError={setError}
-        />
-      ) : null}
-      {memberHasPermission(callerRoles, roles, 'invite_members') ? (
-        <TeamInvites
-          teamId={id}
-          teamName={name}
-          invites={invites}
-          setInvites={setInvites}
-          callerRole={callerRole}
-          onError={setError}
-        />
-      ) : null}
-      <TeamPermissions teamId={id} roles={roles} setRoles={setRoles} members={members} />
         </>
       ) : null}
     </ScrollView>
   );
-};
-
-const currentTheme = (
-  primary: string,
-  secondary: string,
-  accent: string,
-  logoKey: string | undefined,
-  chatBackgroundKey: string | undefined,
-  chatBackgroundOverlay: ChatBackgroundOverlay,
-): { primary?: string; secondary?: string; accent?: string; logoKey?: string; chatBackgroundKey?: string; chatBackgroundOverlay?: ChatBackgroundOverlay } | undefined => {
-  const theme = {
-    ...(primary.trim().length > 0 ? { primary: primary.trim() } : {}),
-    ...(secondary.trim().length > 0 ? { secondary: secondary.trim() } : {}),
-    ...(accent.trim().length > 0 ? { accent: accent.trim() } : {}),
-    ...(logoKey !== undefined ? { logoKey } : {}),
-    ...(chatBackgroundKey !== undefined ? { chatBackgroundKey, chatBackgroundOverlay } : {}),
-  };
-  return Object.keys(theme).length > 0 ? theme : undefined;
-};
+}
 
 type SettingsDraft = {
   name: string;
@@ -241,7 +174,7 @@ type SettingsDraft = {
   chatBackgroundOverlay: ChatBackgroundOverlay;
 };
 
-const draftFromTeam = (team: { name: string; timeZone: string; theme?: { primary?: string; secondary?: string; accent?: string; logoKey?: string; chatBackgroundKey?: string; chatBackgroundOverlay?: ChatBackgroundOverlay } }): SettingsDraft => ({
+const draftFromTeam = (team: { name: string; timeZone: string; theme?: TeamTheme }): SettingsDraft => ({
   name: team.name,
   timeZone: team.timeZone,
   primary: team.theme?.primary ?? '',
@@ -251,6 +184,28 @@ const draftFromTeam = (team: { name: string; timeZone: string; theme?: { primary
   chatBackgroundKey: team.theme?.chatBackgroundKey,
   chatBackgroundOverlay: team.theme?.chatBackgroundOverlay ?? 'dark',
 });
+
+/** The draft's non-blank colors, or `undefined` when none are set. */
+const colorTheme = (draft: SettingsDraft): TeamTheme | undefined => {
+  const theme = {
+    ...(draft.primary.trim().length > 0 ? { primary: draft.primary.trim() } : {}),
+    ...(draft.secondary.trim().length > 0 ? { secondary: draft.secondary.trim() } : {}),
+    ...(draft.accent.trim().length > 0 ? { accent: draft.accent.trim() } : {}),
+  };
+  return Object.keys(theme).length > 0 ? theme : undefined;
+};
+
+/** The theme the draft describes, for the image settings. */
+const themeFromDraft = (draft: SettingsDraft): TeamTheme | undefined => {
+  const theme: TeamTheme = {
+    ...colorTheme(draft),
+    ...(draft.logoKey !== undefined ? { logoKey: draft.logoKey } : {}),
+    ...(draft.chatBackgroundKey !== undefined
+      ? { chatBackgroundKey: draft.chatBackgroundKey, chatBackgroundOverlay: draft.chatBackgroundOverlay }
+      : {}),
+  };
+  return Object.keys(theme).length > 0 ? theme : undefined;
+};
 
 const changedText = (saved: string, current: string): string | null | undefined => {
   const next = current.trim();

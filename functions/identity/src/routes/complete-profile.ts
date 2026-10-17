@@ -6,12 +6,12 @@ import { completeProfileBodySchema } from '@gameplan/schemas';
 import {
   getProfile,
   putProfile,
+  requireUser,
   toUserProfile,
   usableDisplayName,
-  verifyAuthHeader,
 } from '../../../lib/auth/index.js';
 import { accountKindFromBirthday } from '@gameplan/rules';
-import { authorizationOf, badRequest, json } from '../../../lib/http.js';
+import { badRequest, json } from '../../../lib/http.js';
 import { route, withBodyValidation } from '../../../lib/pipeline.js';
 import { withIdentityErrors } from './session.js';
 
@@ -23,9 +23,9 @@ import { withIdentityErrors } from './session.js';
  */
 export const handleCompleteProfile = route(
   withIdentityErrors(),
+  requireUser(),
   withBodyValidation(completeProfileBodySchema),
-  async ({ event, body }) => {
-    const auth = await verifyAuthHeader(authorizationOf(event));
+  async ({ user: auth, body }) => {
     const existing = await getProfile(auth.userId);
     if (existing?.birthday !== undefined) throw new Error('profile_already_complete');
 

@@ -2,96 +2,94 @@
  * Profile photo, phone, positions, theme note, and sign-out.
  */
 
-import * as ImagePicker from 'expo-image-picker';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
+import Plus from 'lucide-react-native/icons/plus';
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { positionsWithinLimit } from '@gameplan/rules';
-import type { UserProfile } from '@gameplan/types';
 import { config } from '@/src/config';
+import { errorMessageKey } from '@/src/errors';
+import { pickAndUploadImage, useDownloadUrl } from '@/src/media';
+import { meQuery, updateProfileMutation } from '@/src/queries/profile';
+import { setPositionsMutation } from '@/src/queries/teams';
+import { clearPersistedCache } from '@/src/query-client';
 import { toE164Phone } from '@/src/phone';
 import { useApp } from '@/src/state';
 import { Button, ErrorText, Field, ProfilePhoto, SubmitButton } from '@/src/ui';
 
-const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
-
 export default function ProfileScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { api, live, refreshTeams, teams, brand } = useApp();
-  const [profile, setProfile] = useState<UserProfile | undefined>(api.user);
-  const [photoUrl, setPhotoUrl] = useState<string | undefined>();
+  const { api, live, teams, brand } = useApp();
+  const queryClient = useQueryClient();
+  const me = useQuery(meQuery(api));
+  const saveProfile = useMutation(updateProfileMutation(api, queryClient));
+  const savePositionsMutation = useMutation(setPositionsMutation(api, queryClient));
+  const profile = me.data ?? api.user;
+  const photoUrl = useDownloadUrl(profile?.photoKey);
   const [phone, setPhone] = useState(api.user?.phoneNumber ?? '');
+  const [phoneReady, setPhoneReady] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
-    void api.getMe().then(async (next) => {
-      setProfile(next);
-      setPhone(next.phoneNumber ?? '');
-      if (next.photoKey !== undefined) {
-        const download = await api.presignDownload(next.photoKey);
-        setPhotoUrl(download.downloadUrl);
-      }
-    }).catch((err: unknown) => setError(err instanceof Error ? err.message : 'load_failed'));
-    void refreshTeams();
-  }, [api]);
+    if (phoneReady || me.data === undefined) return;
+    setPhone(me.data.phoneNumber ?? '');
+    setPhoneReady(true);
+  }, [me.data, phoneReady]);
+
+  useEffect(() => {
+    if (me.error !== undefined) setError(t(errorMessageKey(me.error, 'errors.profile.loadFailed')));
+  }, [me.error, t]);
 
   const upload = async (): Promise<void> => {
-    const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
-    if (picked.canceled || picked.assets[0] === undefined) return;
-    const asset = picked.assets[0];
-    const contentType = asset.mimeType ?? 'image/jpeg';
-    const blob = await (await fetch(asset.uri)).blob();
-    if (blob.size > PHOTO_MAX_BYTES) {
+    const result = await pickAndUploadImage(api, { quality: 0.8 });
+    if (result === undefined) return;
+    if ('error' in result) {
       setError(t('chats.attachFailed'));
       return;
     }
-    const presign = await api.presignUpload(contentType, blob.size);
-    const uploadResponse = await fetch(presign.uploadUrl, {
-      method: 'PUT',
-      headers: { 'content-type': contentType },
-      body: blob,
-    });
-    if (!uploadResponse.ok) {
+    try {
+      await saveProfile.mutateAsync({ photoKey: result.key });
+    } catch {
       setError(t('chats.attachFailed'));
-      return;
     }
-    const next = await api.updateProfile({ photoKey: presign.objectKey });
-    setProfile(next);
-    const download = await api.presignDownload(presign.objectKey);
-    setPhotoUrl(download.downloadUrl);
   };
 
   const savePhone = async (): Promise<boolean | void> => {
     const trimmed = phone.trim();
     if (trimmed.length === 0) {
-      const next = await api.updateProfile({ phoneNumber: null });
-      setProfile(next);
+      await saveProfile.mutateAsync({ phoneNumber: null });
       setPhone('');
       return;
     }
     const e164 = toE164Phone(trimmed);
     if (e164 === undefined) throw new Error('bad_phone');
-    const next = await api.updateProfile({ phoneNumber: e164 });
-    setProfile(next);
+    await saveProfile.mutateAsync({ phoneNumber: e164 });
     setPhone(e164);
   };
 
   const savePositions = async (teamId: string, next: readonly string[]): Promise<boolean> => {
     if (!positionsWithinLimit(next)) {
-      setError('too_many_positions');
+      setError(t('errors.position.tooMany'));
       return false;
     }
     try {
       setError(undefined);
-      await api.setPositions(teamId, [...next]);
-      await refreshTeams();
+      await savePositionsMutation.mutateAsync({ teamId, positions: [...next] });
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'request_failed');
+      setError(
+        t(
+          errorMessageKey(err, 'errors.position.saveFailed', {
+            too_many_positions: 'errors.position.tooMany',
+            invalid_body: 'errors.position.invalid',
+          }),
+        ),
+      );
       return false;
     }
   };
@@ -105,6 +103,7 @@ export default function ProfileScreen() {
 
   const logout = async (): Promise<void> => {
     live.disconnect();
+    await clearPersistedCache(queryClient);
     if (!config.authDisabled && Platform.OS !== 'web') {
       await api.logout();
       await WebBrowser.openBrowserAsync(`${config.apiBaseUrl}/identity/oauth/logout`);
@@ -127,10 +126,7 @@ export default function ProfileScreen() {
           style={{ backgroundColor: brand.primary }}
           onPress={() => void upload()}
         >
-          <View className="h-3.5 w-3.5 items-center justify-center">
-            <View className="absolute h-0.5 w-3.5 rounded-full bg-white" />
-            <View className="absolute h-3.5 w-0.5 rounded-full bg-white" />
-          </View>
+          <Plus size={14} color={brand.onPrimary} strokeWidth={3} />
         </Pressable>
       </View>
       <Text className="mb-1 text-2xl font-bold text-ink">{profile?.displayName}</Text>
@@ -140,7 +136,7 @@ export default function ProfileScreen() {
         label={t('profile.savePhone')}
         onPress={savePhone}
         message={(err) =>
-          err instanceof Error && err.message === 'bad_phone' ? t('errors.profile.badPhone') : t('errors.profile.savePhoneFailed')
+          t(errorMessageKey(err, 'errors.profile.savePhoneFailed', { bad_phone: 'errors.profile.badPhone' }))
         }
       />
       <Text className="mb-2 mt-4 text-lg font-semibold text-ink">{t('profile.positions')}</Text>
@@ -175,10 +171,7 @@ export default function ProfileScreen() {
                 style={{ backgroundColor: brand.primary }}
                 onPress={() => void addPosition(team.teamId, positions)}
               >
-                <View className="h-3 w-3 items-center justify-center">
-                  <View className="absolute h-0.5 w-3 rounded-full bg-white" />
-                  <View className="absolute h-3 w-0.5 rounded-full bg-white" />
-                </View>
+                <Plus size={12} color={brand.onPrimary} strokeWidth={3} />
               </Pressable>
             </View>
           </View>

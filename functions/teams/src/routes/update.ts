@@ -24,10 +24,10 @@ import { withTeamsErrors } from "./errors.js";
 export const handleUpdateTeam = route(
   ["teamId"],
   withTeamsErrors(),
-  withBodyValidation(updateTeamBodySchema),
   requireUser(),
-  requirePermission("manage_team_settings"),
+  withBodyValidation(updateTeamBodySchema),
   requireMembership(),
+  requirePermission("manage_team_settings"),
   async ({ teamId, member, body }) => {
     if (Object.keys(body).length === 0) return badRequest("invalid_body");
 

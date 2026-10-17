@@ -52,3 +52,9 @@ export const EMAIL_INDEX = resources.emailIndex;
 
 /** Global Secondary Index (GSI) name for WebSocket connection lookups. */
 export const CONNECTION_INDEX = resources.connectionIndex;
+
+/**
+ * Media bucket key prefix the website serves at `/<prefix>/*`. Must match the
+ * prefix the media function writes new keys under.
+ */
+export const MEDIA_CDN_KEY_PREFIX = 'uploads';

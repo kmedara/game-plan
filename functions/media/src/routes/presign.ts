@@ -18,8 +18,8 @@ import { withMediaErrors } from './errors.js';
  */
 export const handlePresignUpload = route(
   withMediaErrors(),
-  withBodyValidation(presignUploadBodySchema),
   requireUser(),
+  withBodyValidation(presignUploadBodySchema),
   async ({ user, body }) => {
     const result = await createUploadUrl(user.userId, body);
     return json(200, result);
@@ -34,8 +34,8 @@ export const handlePresignUpload = route(
  */
 export const handlePresignDownload = route(
   withMediaErrors(),
-  withQueryValidation(presignDownloadQuerySchema),
   requireUser(),
+  withQueryValidation(presignDownloadQuerySchema),
   async ({ user, query }) => {
     await assertCanDownload(user.userId, query.objectKey, {
       ...(query.chatId !== undefined ? { chatId: query.chatId } : {}),

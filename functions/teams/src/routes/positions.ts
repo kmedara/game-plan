@@ -24,8 +24,8 @@ import { withTeamsErrors } from './errors.js';
 export const handleSetPositions = route(
   ['teamId'],
   withTeamsErrors(),
-  withBodyValidation(updatePositionsBodySchema),
   requireUser(),
+  withBodyValidation(updatePositionsBodySchema),
   requireTeam(),
   async ({ teamId, user, body }) => {
     assertPositionLimit(body.positions);

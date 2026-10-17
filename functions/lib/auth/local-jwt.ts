@@ -24,9 +24,13 @@ export type LocalJwtClaims = {
  * Reads the HMAC secret used to sign local JWTs.
  *
  * @returns The secret string.
+ * @throws When `LOCAL_JWT_SECRET` is unset or blank.
  */
-export const localJwtSecret = (): string =>
-  process.env.LOCAL_JWT_SECRET ?? 'local-dev-secret-change-me';
+export const localJwtSecret = (): string => {
+  const secret = process.env.LOCAL_JWT_SECRET;
+  if (secret === undefined || secret.length === 0) throw new Error('local_jwt_secret_missing');
+  return secret;
+};
 
 /**
  * Encodes a value as base64url without padding.

@@ -4,12 +4,21 @@
 
 import { Redirect, Slot, usePathname, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Calendar, ChevronLeft, MessageCircle, User, Users } from 'lucide-react-native';
+import Calendar from 'lucide-react-native/icons/calendar';
+import ChevronLeft from 'lucide-react-native/icons/chevron-left';
+import MessageCircle from 'lucide-react-native/icons/message-circle';
+import User from 'lucide-react-native/icons/user';
+import Users from 'lucide-react-native/icons/users';
+import { useIsRestoring, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Image, Platform, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { canCreateTeam } from '@gameplan/rules';
+import { useDownloadUrl } from '@/src/media';
+import { adoptCacheOwner } from '@/src/query-client';
+import { useLiveQuerySync } from '@/src/use-live-query-sync';
 import { useApp } from '@/src/state';
+import { useTeamAccess } from '@/src/team-access';
 import { colors } from '@/src/theme';
 
 const tabIcons = {
@@ -38,59 +47,35 @@ export default function MainLayout() {
   const { t } = useTranslation();
   const pathname = usePathname();
   const router = useRouter();
-  const { api, teams, refreshTeams, brand, live } = useApp();
+  const { api, teams, brand, live } = useApp();
+  const queryClient = useQueryClient();
+  const restoring = useIsRestoring();
+  useLiveQuerySync();
   const [ready, setReady] = useState(api.isAuthenticated());
-  const [canCreateChannel, setCanCreateChannel] = useState(false);
-  const [logoUrl, setLogoUrl] = useState<string | undefined>();
   const activeTeamId = api.selectedTeamId;
-  const activeLogoKey = teams.find((team) => team.teamId === activeTeamId)?.theme?.logoKey;
+  const activeTeam = teams.find((team) => team.teamId === activeTeamId);
+  const logoUrl = useDownloadUrl(activeTeam?.theme?.logoKey, { teamId: activeTeamId });
   const onChats = pathname === '/chats';
+  const access = useTeamAccess(onChats ? activeTeam : undefined);
 
   useEffect(() => {
-    void api.refreshSession().then((ok) => {
+    void api.refreshSession().then(async (ok) => {
       setReady(true);
       if (ok) {
         live.connect();
-        void refreshTeams();
+        await adoptCacheOwner(queryClient, api.user?.userId);
       }
     });
-  }, [api, live]);
+  }, [api, live, queryClient]);
 
-  useEffect(() => {
-    if (activeTeamId === undefined || activeLogoKey === undefined) {
-      setLogoUrl(undefined);
-      return;
-    }
-    let cancelled = false;
-    void api.presignDownload(activeLogoKey, { teamId: activeTeamId }).then((download) => {
-      if (!cancelled) setLogoUrl(download.downloadUrl);
-    }).catch(() => {
-      if (!cancelled) setLogoUrl(undefined);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, activeTeamId, activeLogoKey]);
-
-  useEffect(() => {
-    const teamId = api.selectedTeamId;
-    if (!onChats || teamId === undefined) return;
-    const role = teams.find((team) => team.teamId === teamId)?.role;
-    if (role === undefined) return;
-    void api.getPermissions(teamId).then((permissions) => {
-      const mine = permissions.roles.find((row) => row.role === role);
-      setCanCreateChannel(mine?.permissions.includes('create_team_channels') ?? false);
-    }).catch(() => setCanCreateChannel(false));
-  }, [api, onChats, teams]);
-
-  if (!ready) return <View className="flex-1 bg-canvas" />;
+  if (restoring || !ready) return <View className="flex-1 bg-canvas" />;
   if (!api.isAuthenticated()) return <Redirect href="/login" />;
   if (api.user?.needsProfileCompletion && !pathname.startsWith('/complete-profile')) {
     return <Redirect href="/complete-profile" />;
   }
 
   const nested = !Object.prototype.hasOwnProperty.call(titles, pathname);
-  const activeTeam = teams.find((team) => team.teamId === api.selectedTeamId);
+  const canCreateChannel = access.can('create_team_channels');
   const onTeams = pathname === '/teams';
   const showCreate = api.user === undefined || canCreateTeam(api.user.accountKind);
   const openTeamAction = (action: 'join' | 'create'): void => {

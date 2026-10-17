@@ -18,8 +18,8 @@ import { withTeamsErrors } from './errors.js';
  */
 export const handleCreateTeam = route(
   withTeamsErrors(),
-  withBodyValidation(createTeamBodySchema),
   requireUser(),
+  withBodyValidation(createTeamBodySchema),
   async ({ user, body }) => {
     await assertCanCreateTeam(user.userId);
     const team = await createTeam({

@@ -2,112 +2,59 @@
  * Message thread with a virtualized list and live updates.
  */
 
-import * as ImagePicker from 'expo-image-picker';
-import { Send, X } from 'lucide-react-native';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import Send from 'lucide-react-native/icons/send';
+import X from 'lucide-react-native/icons/x';
 import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { FlatList, Image, Linking, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import type { ChatMessage } from '@gameplan/types';
+import { errorMessageKey } from '@/src/errors';
+import { pickAndUploadImage, useDownloadUrl, type UploadedImage } from '@/src/media';
+import { messagesQuery, sendMessageMutation } from '@/src/queries/chat';
 import { useActiveTeam, useApp } from '@/src/state';
 import { chatOverlayColor } from '@/src/team-media';
 import { ErrorText } from '@/src/ui';
 
-const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
-
-type PendingPhoto = { key: string; uri: string };
-
 export default function ChatThreadScreen() {
   const { t } = useTranslation();
   const { chatId } = useLocalSearchParams<{ chatId: string }>();
-  const { api, live, brand } = useApp();
+  const { api, brand } = useApp();
+  const queryClient = useQueryClient();
   const { team } = useActiveTeam();
   const id = chatId ?? '';
   const backgroundKey = id.length > 0 && id === team?.defaultChatId ? team.theme?.chatBackgroundKey : undefined;
   const scrim = chatOverlayColor(team?.theme?.chatBackgroundOverlay);
-  const [backgroundUri, setBackgroundUri] = useState<string | undefined>();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const backgroundUri = useDownloadUrl(backgroundKey, { teamId: team?.teamId });
+  const messagesLoaded = useQuery({ ...messagesQuery(api, id), enabled: id.length > 0 });
+  const sendMessage = useMutation(sendMessageMutation(api, queryClient));
+  const messages = messagesLoaded.data?.messages ?? [];
   const [draft, setDraft] = useState('');
-  const [photos, setPhotos] = useState<PendingPhoto[]>([]);
+  const [photos, setPhotos] = useState<UploadedImage[]>([]);
   const [error, setError] = useState<string | undefined>();
-
-  const addMessage = (message: ChatMessage): void => {
-    setMessages((current) => [message, ...current.filter((item) => item.messageId !== message.messageId)]);
-  };
-
-  const load = async (): Promise<void> => {
-    const page = await api.listMessages(id);
-    setMessages(page.messages);
-  };
-
-  useEffect(() => {
-    const teamId = team?.teamId;
-    if (backgroundKey === undefined || teamId === undefined) {
-      setBackgroundUri(undefined);
-      return;
-    }
-    let cancelled = false;
-    void api.presignDownload(backgroundKey, { teamId }).then((download) => {
-      if (!cancelled) setBackgroundUri(download.downloadUrl);
-    }).catch(() => {
-      if (!cancelled) setBackgroundUri(undefined);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, backgroundKey, team?.teamId]);
-
-  useEffect(() => {
-    if (id.length === 0) return;
-    void load().catch((err: unknown) => setError(err instanceof Error ? err.message : 'load_failed'));
-    return live.subscribe((event) => {
-      if (event.type !== 'chat_message' || event.chatId !== id) return;
-      addMessage({
-        messageId: event.messageId,
-        chatId: event.chatId,
-        senderId: event.senderId,
-        senderDisplayName: event.senderDisplayName ?? 'Player',
-        body: event.body,
-        createdAt: event.createdAt,
-        attachmentKeys: event.attachmentKeys,
-      });
-    });
-  }, [api, id, live]);
 
   const send = async (): Promise<boolean | void> => {
     const attachmentKeys = photos.map((photo) => photo.key);
     if (draft.trim().length === 0 && attachmentKeys.length === 0) return false;
-    const message = await api.sendMessage(id, {
-      body: draft.trim(),
-      ...(attachmentKeys.length > 0 ? { attachmentKeys } : {}),
+    await sendMessage.mutateAsync({
+      chatId: id,
+      body: {
+        body: draft.trim(),
+        ...(attachmentKeys.length > 0 ? { attachmentKeys } : {}),
+      },
     });
-    addMessage(message);
     setDraft('');
     setPhotos([]);
   };
 
   const attach = async (): Promise<void> => {
-    const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
-    if (picked.canceled || picked.assets[0] === undefined) return;
-    const asset = picked.assets[0];
-    const contentType = asset.mimeType ?? 'image/jpeg';
-    const response = await fetch(asset.uri);
-    const blob = await response.blob();
-    if (blob.size > PHOTO_MAX_BYTES) {
+    const result = await pickAndUploadImage(api, { quality: 0.8 });
+    if (result === undefined) return;
+    if ('error' in result) {
       setError(t('chats.attachFailed'));
       return;
     }
-    const presign = await api.presignUpload(contentType, blob.size);
-    const upload = await fetch(presign.uploadUrl, {
-      method: 'PUT',
-      headers: { 'content-type': contentType },
-      body: blob,
-    });
-    if (!upload.ok) {
-      setError(t('chats.attachFailed'));
-      return;
-    }
-    setPhotos((current) => [...current, { key: presign.objectKey, uri: asset.uri }].slice(0, 10));
+    setPhotos((current) => [...current, result].slice(0, 10));
   };
 
   const removePhoto = (key: string): void => {
@@ -149,7 +96,14 @@ export default function ChatThreadScreen() {
         }}
       />
       <View className="border-t border-line bg-raised px-3 pb-4 pt-2">
-        <ErrorText message={error} />
+        <ErrorText
+          message={
+            error ??
+            (messagesLoaded.error !== undefined
+              ? t(errorMessageKey(messagesLoaded.error, 'errors.common.loadFailed'))
+              : undefined)
+          }
+        />
         {photos.length > 0 ? (
           <View className="mb-2 flex-row flex-wrap">
             {photos.map((photo) => (
@@ -189,7 +143,7 @@ export default function ChatThreadScreen() {
               accessibilityLabel={t('chats.send')}
               className="mr-1 h-8 w-8 items-center justify-center rounded-full"
               style={{ backgroundColor: brand.accent }}
-              onPress={() => void send().catch((err: unknown) => setError(err instanceof Error ? err.message : 'request_failed'))}
+              onPress={() => void send().catch((err: unknown) => setError(t(errorMessageKey(err, 'chats.sendFailed'))))}
             >
               <Send color={brand.onPrimary} size={16} />
             </Pressable>
@@ -229,15 +183,8 @@ const savePhoto = async (uri: string): Promise<void> => {
 
 const Attachment = ({ chatId, objectKey }: { chatId: string; objectKey: string }) => {
   const { t } = useTranslation();
-  const { api } = useApp();
-  const [uri, setUri] = useState<string | undefined>();
+  const uri = useDownloadUrl(objectKey, { chatId });
   const [open, setOpen] = useState(false);
-  useEffect(() => {
-    void api
-      .presignDownload(objectKey, { chatId })
-      .then((download) => setUri(download.downloadUrl))
-      .catch(() => undefined);
-  }, [api, chatId, objectKey]);
   if (uri === undefined) return null;
   return (
     <>

@@ -200,6 +200,59 @@ export const rolesFromMembership = (item: { role?: unknown; roles?: unknown }): 
   return [];
 };
 
+/** Permissions keyed by role. A missing role grants nothing. */
+export type RolePermissionMatrix = Readonly<Partial<Record<TeamRole, readonly TeamPermission[]>>>;
+
+/**
+ * Keys role-permission rows by role.
+ *
+ * @param rows - Rows as returned by `GET /teams/:teamId/permissions`.
+ * @returns The same permissions keyed by role.
+ */
+export const permissionMatrix = (
+  rows: readonly { role: TeamRole; permissions: readonly TeamPermission[] }[],
+): RolePermissionMatrix => Object.fromEntries(rows.map((row) => [row.role, row.permissions]));
+
+/**
+ * Returns whether a role's permission list includes the given permission.
+ *
+ * @param permissions - Permissions granted to the role.
+ * @param permission - The permission under test.
+ * @returns `true` when the list contains the permission.
+ */
+export const roleHasPermission = (
+  permissions: readonly TeamPermission[],
+  permission: TeamPermission,
+): boolean => permissions.includes(permission);
+
+/**
+ * Permission check for one role.
+ *
+ * @param role - The caller's role on the team.
+ * @param matrix - Permissions keyed by role.
+ * @param permission - The permission under test.
+ * @returns `true` when the role grants the permission.
+ */
+export const canWithMatrix = (
+  role: TeamRole,
+  matrix: RolePermissionMatrix,
+  permission: TeamPermission,
+): boolean => roleHasPermission(matrix[role] ?? [], permission);
+
+/**
+ * Permission check for a member who may hold more than one role.
+ *
+ * @param roles - The caller's roles on the team.
+ * @param matrix - Permissions keyed by role.
+ * @param permission - The permission under test.
+ * @returns `true` when any held role grants the permission.
+ */
+export const canWithRoles = (
+  roles: readonly TeamRole[],
+  matrix: RolePermissionMatrix,
+  permission: TeamPermission,
+): boolean => roles.some((role) => canWithMatrix(role, matrix, permission));
+
 /**
  * Rejects a grant when the caller cannot grant every role in the set.
  *

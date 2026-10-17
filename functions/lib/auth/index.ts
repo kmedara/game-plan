@@ -6,6 +6,7 @@ export {
   authenticateRequest,
   getAccessVerifier,
   isCognitoConfigured,
+  isLocalAuthEnabled,
   resetAccessVerifier,
   toAuthUser,
   verifyAccessToken,

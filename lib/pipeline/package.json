@@ -1,0 +1,11 @@
+{
+  "name": "@gameplan/pipeline",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Typed middleware pipelines with step-order checking, independent of any HTTP framework",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

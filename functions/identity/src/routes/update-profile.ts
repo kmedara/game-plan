@@ -33,8 +33,8 @@ const ownsPhotoKey = (userId: string, photoKey: string): boolean => {
  */
 export const handleUpdateProfile = route(
   withIdentityErrors(),
-  withBodyValidation(updateProfileBodySchema),
   requireUser(),
+  withBodyValidation(updateProfileBodySchema),
   async ({ user, body }) => {
     if (body.photoKey === undefined && body.phoneNumber === undefined) {
       throw new Error('invalid_body');

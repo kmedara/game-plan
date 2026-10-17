@@ -32,10 +32,17 @@ export const presignDownloadQuerySchema = z.object({
   teamId: z.string().min(1).max(128).optional(),
 });
 
-/** Response with a short-lived download URL. */
+/**
+ * Response with a short-lived download URL.
+ *
+ * CDN links are stable for a whole signing window, so a client can reuse one
+ * until `expiresAt` and let its image cache hit.
+ */
 export const presignDownloadResponseSchema = z.object({
   downloadUrl: z.string().min(1),
   objectKey: z.string().min(1),
+  /** ISO time after which the URL stops working. */
+  expiresAt: z.string().datetime(),
 });
 
 /** `PUT /media/devices/:deviceId`. */

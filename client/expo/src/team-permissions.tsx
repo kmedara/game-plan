@@ -2,12 +2,14 @@
  * Per-role permission checkboxes. Saving rejects a change that would leave a minor in a managing role.
  */
 
-import { Check } from 'lucide-react-native';
+import Check from 'lucide-react-native/icons/check';
 import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { roleAllowedForAccount } from '@gameplan/rules';
+import { roleAllowedForAccount, rolesFromMembership } from '@gameplan/rules';
 import { TEAM_PERMISSIONS, type RolePermissions, type TeamMember } from '@gameplan/types';
-import { heldRoles, roleLabel } from '@/src/roles';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { putPermissionsMutation } from '@/src/queries/teams';
+import { roleLabel } from '@/src/roles';
 import { useApp } from '@/src/state';
 import { colors } from '@/src/theme';
 import { SubmitButton } from '@/src/ui';
@@ -25,6 +27,8 @@ export const TeamPermissions = ({
 }) => {
   const { t } = useTranslation();
   const { api, brand } = useApp();
+  const queryClient = useQueryClient();
+  const save = useMutation(putPermissionsMutation(api, queryClient, teamId));
   if (roles.length === 0) return null;
 
   const toggle = (role: string, permission: RolePermissions['permissions'][number], checked: boolean): void => {
@@ -43,13 +47,13 @@ export const TeamPermissions = ({
     const blocked = roles.some((row) =>
       members.some(
         (member) =>
-          heldRoles(member).includes(row.role) &&
+          rolesFromMembership(member).includes(row.role) &&
           member.accountKind !== undefined &&
           !roleAllowedForAccount(member.accountKind, row.role, row.permissions),
       ),
     );
     if (blocked) throw new Error('minor_cannot_hold_manage_permissions');
-    const saved = await api.putPermissions(teamId, roles);
+    const saved = await save.mutateAsync(roles);
     setRoles(saved.roles);
   };
 

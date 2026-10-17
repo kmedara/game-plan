@@ -27,8 +27,8 @@ import { withPlacesErrors } from './errors.js';
  */
 export const handleAutocomplete = route(
   withPlacesErrors(),
-  withQueryValidation(placesAutocompleteQuerySchema),
   requireUser(),
+  withQueryValidation(placesAutocompleteQuerySchema),
   async ({ query }) => {
     const suggestions = await autocompletePlaces(query.q);
     return json(200, { suggestions });
@@ -43,8 +43,8 @@ export const handleAutocomplete = route(
  */
 export const handleResolve = route(
   withPlacesErrors(),
-  withQueryValidation(placesResolveQuerySchema),
   requireUser(),
+  withQueryValidation(placesResolveQuerySchema),
   async ({ query }) => {
     const place = await resolvePlace(query.id);
     return json(200, place);
@@ -59,8 +59,8 @@ export const handleResolve = route(
  */
 export const handleReverse = route(
   withPlacesErrors(),
-  withQueryValidation(placesReverseQuerySchema),
   requireUser(),
+  withQueryValidation(placesReverseQuerySchema),
   async ({ query }) => {
     const place = await reverseGeocode(query.latitude, query.longitude);
     return json(200, place);
@@ -75,8 +75,8 @@ export const handleReverse = route(
  */
 export const handleMapPreview = route(
   withPlacesErrors(),
-  withQueryValidation(placesMapQuerySchema),
   requireUser(),
+  withQueryValidation(placesMapQuerySchema),
   async ({ query }) => {
     const png = await fetchStaticMapPng(query.latitude, query.longitude);
     return binary(200, 'image/png', png);

@@ -19,8 +19,8 @@ import { withChatErrors } from './errors.js';
 export const handleListMessages = route(
   ['chatId'],
   withChatErrors(),
-  withQueryValidation(messageHistoryQuerySchema),
   requireUser(),
+  withQueryValidation(messageHistoryQuerySchema),
   async ({ chatId, user, query }) => {
     await requireChatMembership(chatId, user.userId);
     const page = await listMessages(chatId, query);
@@ -38,8 +38,8 @@ export const handleListMessages = route(
 export const handleSendMessage = route(
   ['chatId'],
   withChatErrors(),
-  withBodyValidation(sendMessageBodySchema),
   requireUser(),
+  withBodyValidation(sendMessageBodySchema),
   async ({ chatId, user, body }) => {
     const message = await sendMessage({
       chatId,

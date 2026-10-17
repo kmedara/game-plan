@@ -17,6 +17,15 @@ const TOKEN_LIMIT = 600;
 const ANONYMOUS_IP_LIMIT = 100;
 
 /**
+ * WebSocket connects one IP address may open in {@link WINDOW}.
+ *
+ * A connect carries a one-time ticket instead of an Authorization header. Each
+ * phone reconnects whenever the app returns to the foreground, so a team on one
+ * network needs more room than the anonymous limit gives.
+ */
+const SOCKET_CONNECT_IP_LIMIT = 300;
+
+/**
  * Requests one IP address may make in {@link WINDOW}, with or without a token.
  *
  * This stops a client from inventing a new Authorization value on every call.
@@ -91,6 +100,21 @@ const uriStartsWith = (prefix: string): wafv2.CfnWebACL.StatementProperty => ({
 });
 
 /**
+ * Matches one exact viewer path, such as the WebSocket connect path.
+ *
+ * @param path - The full path, including the leading slash.
+ * @returns A byte-match statement.
+ */
+const uriIs = (path: string): wafv2.CfnWebACL.StatementProperty => ({
+  byteMatchStatement: {
+    searchString: path,
+    fieldToMatch: { uriPath: {} },
+    positionalConstraint: 'EXACTLY',
+    textTransformations: [{ priority: 0, type: 'NONE' }],
+  },
+});
+
+/**
  * Combines scope-down statements. One statement is returned as itself.
  *
  * @param statements - Statements to require. Blank entries are skipped.
@@ -106,15 +130,35 @@ const allOf = (
 };
 
 /**
- * Builds the three rate rules shared by the API and website distributions.
+ * Builds the rate rules for the website distribution's API paths.
  *
  * @param pathPrefix - When set, only paths with this prefix count. The website
  *   distribution uses `/api/` so static files stay outside the limits.
+ * @param socketPath - When set, WebSocket connects on this exact path get their
+ *   own per-IP limit instead of the anonymous one.
  * @returns WebACL rules in priority order.
  */
-export const apiRateLimitRules = (pathPrefix?: string): wafv2.CfnWebACL.RuleProperty[] => {
+export const apiRateLimitRules = (
+  pathPrefix?: string,
+  socketPath?: string,
+): wafv2.CfnWebACL.RuleProperty[] => {
   const prefix = pathPrefix === undefined ? undefined : uriStartsWith(pathPrefix);
+  const socket = socketPath === undefined ? undefined : uriIs(socketPath);
   const anonymous = { notStatement: { statement: hasAuthorization() } };
+  const notSocket = socket === undefined ? undefined : { notStatement: { statement: socket } };
+  const socketRules =
+    socket === undefined
+      ? []
+      : [
+          rateRule('SocketConnectIp', 2, {
+            rateBasedStatement: {
+              limit: SOCKET_CONNECT_IP_LIMIT,
+              evaluationWindowSec: WINDOW.toSeconds(),
+              aggregateKeyType: 'IP',
+              scopeDownStatement: socket,
+            },
+          }),
+        ];
   return [
     rateRule('PerAccessToken', 0, {
       rateBasedStatement: {
@@ -137,10 +181,11 @@ export const apiRateLimitRules = (pathPrefix?: string): wafv2.CfnWebACL.RuleProp
         limit: ANONYMOUS_IP_LIMIT,
         evaluationWindowSec: WINDOW.toSeconds(),
         aggregateKeyType: 'IP',
-        scopeDownStatement: allOf([anonymous, prefix]),
+        scopeDownStatement: allOf([anonymous, prefix, notSocket]),
       },
     }),
-    rateRule('PerIpFlood', 2, {
+    ...socketRules,
+    rateRule('PerIpFlood', 3, {
       rateBasedStatement: {
         limit: IP_FLOOD_LIMIT,
         evaluationWindowSec: WINDOW.toSeconds(),
@@ -158,6 +203,7 @@ export const apiRateLimitRules = (pathPrefix?: string): wafv2.CfnWebACL.RuleProp
  * @param id - The construct id. This becomes part of the logical id.
  * @param name - The WebACL name and the top-level metric name.
  * @param pathPrefix - Optional viewer path prefix. See {@link apiRateLimitRules}.
+ * @param socketPath - Optional WebSocket connect path. See {@link apiRateLimitRules}.
  * @returns The WebACL.
  */
 export const rateLimitedWebAcl = (
@@ -165,6 +211,7 @@ export const rateLimitedWebAcl = (
   id: string,
   name: string,
   pathPrefix?: string,
+  socketPath?: string,
 ): wafv2.CfnWebACL =>
   new wafv2.CfnWebACL(scope, id, {
     name,
@@ -181,5 +228,5 @@ export const rateLimitedWebAcl = (
       metricName: name,
       sampledRequestsEnabled: true,
     },
-    rules: apiRateLimitRules(pathPrefix),
+    rules: apiRateLimitRules(pathPrefix, socketPath),
   });

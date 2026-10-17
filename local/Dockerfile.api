@@ -9,6 +9,7 @@ WORKDIR /app
 
 # Manifests only — source COPY comes after install so code edits keep the install layer.
 COPY package.json package-lock.json ./
+COPY lib/pipeline/package.json ./lib/pipeline/package.json
 COPY lib/schemas/package.json ./lib/schemas/package.json
 COPY lib/types/package.json ./lib/types/package.json
 COPY lib/rules/package.json ./lib/rules/package.json

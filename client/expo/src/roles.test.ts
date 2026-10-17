@@ -1,8 +1,8 @@
 /**
- * Invite-code parsing and role label keys.
+ * Invite-code parsing, role labels, and team error keys.
  */
 
-import { heldRoles, inviteCodeFromInput, inviteErrorMessage, memberHasPermission, roleLabel } from './roles';
+import { inviteCodeFromInput, inviteErrorMessage, joinRequestMessage, roleLabel, roleNames } from './roles';
 
 describe('roles', () => {
   it('reads a code from a link or plain text', () => {
@@ -15,21 +15,19 @@ describe('roles', () => {
     expect(roleLabel('coach')).toBe('role.coach');
     expect(roleLabel('captain')).toBe('captain');
     expect(inviteErrorMessage(new Error('not_found'))).toBe('errors.invite.notValid');
+    expect(inviteErrorMessage(new Error('minor_cannot_be_team_admin'))).toBe('errors.invite.roleUnavailable');
     expect(inviteErrorMessage('nope')).toBe('errors.invite.failed');
   });
 
-  it('reads a role set and unions permissions', () => {
-    expect(heldRoles({ role: 'player' })).toEqual(['player']);
-    expect(heldRoles({ role: 'coach', roles: ['coach', 'parent'] })).toEqual(['coach', 'parent']);
-    expect(
-      memberHasPermission(
-        ['parent', 'coach'],
-        [
-          { role: 'parent', permissions: [] },
-          { role: 'coach', permissions: ['manage_events'] },
-        ],
-        'manage_events',
-      ),
-    ).toBe(true);
+  it('uses the shared sentence for minor rules on join requests', () => {
+    expect(joinRequestMessage(new Error('minor_cannot_be_team_admin'))).toBe('errors.roles.minorCannotBeTeamAdmin');
+    expect(joinRequestMessage(new Error('not_found'))).toBe('errors.join.notPending');
+    expect(joinRequestMessage(new Error('http_500'))).toBe('errors.join.updateFailed');
+  });
+
+  it('lists every held role, highest rank first', () => {
+    const t = (key: string): string => key;
+    expect(roleNames({ role: 'player' }, t)).toBe('role.player');
+    expect(roleNames({ role: 'coach', roles: ['parent', 'coach'] }, t)).toBe('role.coach, role.parent');
   });
 });

@@ -185,6 +185,7 @@
     "removePhoto": "Quitar",
     "uploading": "Subiendo…",
     "attachFailed": "No se pudo subir la foto.",
+    "sendFailed": "No se pudo enviar el mensaje.",
     "add": "Agregar chat",
     "newPrivate": "Chat privado",
     "newChannel": "Canal del equipo",
@@ -310,9 +311,29 @@
     "google": "Google Maps"
   },
   "errors": {
-    "join": {
+    "common": {
+      "loadFailed": "No se pudo cargar. Inténtalo de nuevo.",
+      "requestFailed": "Algo salió mal. Inténtalo de nuevo.",
+      "saveFailed": "No se pudieron guardar los cambios.",
+      "deleteFailed": "No se pudo eliminar.",
+      "forbidden": "No tienes permiso para hacer eso."
+    },
+    "roles": {
       "minorCannotBeTeamAdmin": "Un menor no puede ser administrador del equipo.",
       "minorCannotManagePermissions": "Un menor no puede tener un rol que gestione permisos.",
+      "outranksCaller": "Solo puedes cambiar roles de tu nivel o inferiores."
+    },
+    "event": {
+      "invalidRepeat": "Revisa la configuración de repetición.",
+      "endsBeforeStart": "La hora de fin debe ser posterior al inicio.",
+      "rsvpFailed": "No se pudo guardar tu respuesta.",
+      "carpoolLoadFailed": "No se pudieron cargar los viajes.",
+      "carpoolSaveFailed": "No se pudieron actualizar los viajes.",
+      "lineupLoadFailed": "No se pudo cargar la alineación.",
+      "lineupCopyFailed": "No se pudo copiar la alineación anterior.",
+      "messageFailed": "No se pudo abrir un chat con esa persona."
+    },
+    "join": {
       "alreadyMember": "Ya está en el equipo.",
       "notPending": "Esa solicitud ya no está pendiente.",
       "updateFailed": "No se pudo actualizar la solicitud de ingreso."
@@ -341,7 +362,6 @@
     "memberProfile": {
       "notFound": "No se pudo encontrar a esa persona.",
       "loadFailed": "No se pudo cargar ese perfil.",
-      "roleOutranks": "Solo puedes cambiar roles de tu nivel o inferiores.",
       "saveRolesFailed": "No se pudieron guardar esos roles."
     },
     "teamAdmin": {

@@ -4,6 +4,7 @@
 
 import { createPrivateChatBodySchema, createTeamChannelBodySchema } from '@gameplan/schemas';
 import {
+  requireMembership,
   requirePermission,
   requireTeam,
   requireUser,
@@ -49,10 +50,11 @@ const withRequiredGuardians = async (memberIds: string[]): Promise<string[]> => 
  */
 export const handleCreateTeamChannel = route(
   withChatErrors(),
-  withBodyValidation(createTeamChannelBodySchema),
   requireUser(),
+  withBodyValidation(createTeamChannelBodySchema),
   withTeamIdFromBody(),
   requireTeam(),
+  requireMembership(),
   requirePermission('create_team_channels'),
   async ({ user, body }) => {
     const rosterIds = await listTeamMemberIds(body.teamId);
@@ -78,8 +80,8 @@ export const handleCreateTeamChannel = route(
  */
 export const handleCreatePrivateChat = route(
   withChatErrors(),
-  withBodyValidation(createPrivateChatBodySchema),
   requireUser(),
+  withBodyValidation(createPrivateChatBodySchema),
   async ({ user, body }) => {
     const requested = [...new Set([user.userId, ...body.memberIds])];
     if (requested.length < 2) throw new Error('invalid_body');

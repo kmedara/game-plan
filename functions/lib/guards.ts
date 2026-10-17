@@ -7,7 +7,8 @@ import { highestRole, rolesFromMembership } from '@gameplan/rules';
 import { authenticateRequest } from './auth/cognito.js';
 import { getItem } from './dynamo/access.js';
 import { teamMemberSk, teamMetaSk, teamPk } from './dynamo/keys.js';
-import { can } from './permissions.js';
+import { canWithRoles } from '@gameplan/rules';
+import { loadRolePermissionMatrix } from './permissions.js';
 import { asStep, type Step } from './pipeline.js';
 
 /** Team identity confirmed by {@link requireTeam}. */
@@ -22,23 +23,6 @@ export type GuardMember = {
   role: TeamRole;
   /** Every role this member holds, highest rank first. */
   roles: TeamRole[];
-};
-
-/**
- * Ensures the caller holds a team permission (used by {@link requirePermission}).
- *
- * @param userId - The caller's user id.
- * @param teamId - The team under test.
- * @param permission - The required permission.
- */
-export const assertPermission = async (
-  userId: string,
-  teamId: string,
-  permission: TeamPermission,
-): Promise<void> => {
-  if (!(await can(userId, teamId, permission))) {
-    throw new Error('forbidden');
-  }
 };
 
 /**
@@ -70,17 +54,18 @@ export const withTeamIdFromBody = (): Step<
 /**
  * Ensures the caller holds a team permission.
  *
- * The context must already include `user` and `teamId` (from the path or
- * {@link withTeamIdFromBody}).
+ * List after {@link requireMembership}. The roles come from the `member` it
+ * attached, so this step only loads the team's permission matrix.
  *
  * @param permission - The required permission.
  * @returns A step that throws `forbidden` when the permission is missing.
  */
 export const requirePermission = (
   permission: TeamPermission,
-): Step<{ user: AuthUser; teamId: string }, object> =>
-  asStep<{ user: AuthUser; teamId: string }, object>(async (ctx, next) => {
-    await assertPermission(ctx.user.userId, ctx.teamId, permission);
+): Step<{ teamId: string; member: GuardMember }, object> =>
+  asStep<{ teamId: string; member: GuardMember }, object>(async (ctx, next) => {
+    const matrix = await loadRolePermissionMatrix(ctx.teamId);
+    if (!canWithRoles(ctx.member.roles, matrix, permission)) throw new Error('forbidden');
     return next(ctx);
   });
 

@@ -25,7 +25,8 @@ import {
   teamPk,
   userPk,
 } from '../../lib/dynamo/index.js';
-import { canWithRoles, loadRolePermissionMatrix } from '../../lib/permissions.js';
+import { canWithRoles } from '@gameplan/rules';
+import { loadRolePermissionMatrix } from '../../lib/permissions.js';
 import { sendDevicePushes } from './push-send.js';
 
 /** Chat member row under `CHAT#id` / `MEMBER#userId`. */

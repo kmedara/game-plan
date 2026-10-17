@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, Text } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { TeamMember } from '@gameplan/types';
-import { heldRoles, roleLabel } from '@/src/roles';
+import { roleNames } from '@/src/roles';
 
 export const TeamRoster = ({ teamId, members }: { teamId: string; members: TeamMember[] }) => {
   const { t } = useTranslation();
@@ -22,7 +22,7 @@ export const TeamRoster = ({ teamId, members }: { teamId: string; members: TeamM
           onPress={() => router.push(`/teams/${teamId}/members/${member.userId}`)}
         >
           <Text className="text-ink">{member.displayName ?? member.userId}</Text>
-          <Text className="text-muted">{heldRoles(member).map((role) => t(roleLabel(role))).join(', ')}</Text>
+          <Text className="text-muted">{roleNames(member, t)}</Text>
         </Pressable>
       ))}
     </>

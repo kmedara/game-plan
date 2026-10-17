@@ -4,6 +4,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  FetchError,
+  JwtExpiredError,
+  JwtInvalidSignatureError,
+  JwtParseError,
+} from 'aws-jwt-verify/error';
+import {
   issueLocalTokens,
   resetAccessVerifier,
   signLocalJwt,
@@ -30,6 +36,22 @@ describe('cognito auth', () => {
     delete process.env.COGNITO_USER_POOL_ID;
     delete process.env.COGNITO_CLIENT_ID;
     delete process.env.LOCAL_JWT_SECRET;
+    process.env.AUTH_PROVIDER = 'local';
+    process.env.NODE_ENV = 'test';
+  });
+
+  it('rejects every token when neither Cognito nor local auth is configured', async () => {
+    process.env.LOCAL_JWT_SECRET = 'unit-test-secret';
+    const { accessToken } = issueLocalTokens('user-1', 'a@example.com');
+    delete process.env.AUTH_PROVIDER;
+    await expect(verifyAccessToken(accessToken)).rejects.toThrow('cognito_not_configured');
+  });
+
+  it('rejects local tokens in production even when local auth is requested', async () => {
+    process.env.LOCAL_JWT_SECRET = 'unit-test-secret';
+    const { accessToken } = issueLocalTokens('user-1', 'a@example.com');
+    process.env.NODE_ENV = 'production';
+    await expect(verifyAccessToken(accessToken)).rejects.toThrow('cognito_not_configured');
   });
 
   it('rejects a missing Authorization header', async () => {
@@ -40,7 +62,7 @@ describe('cognito auth', () => {
     await expect(verifyAuthHeader('Basic abc')).rejects.toThrow('unauthorized');
   });
 
-  it('accepts a local access token when Cognito is not configured', async () => {
+  it('accepts a local access token when local auth is requested', async () => {
     process.env.LOCAL_JWT_SECRET = 'unit-test-secret';
     const { accessToken } = issueLocalTokens('user-1', 'a@example.com');
     await expect(verifyAccessToken(accessToken)).resolves.toEqual({
@@ -127,6 +149,37 @@ describe('cognito auth', () => {
       userId: 'cognito-user',
       email: 'c@example.com',
     });
+  });
+
+  it.each([
+    ['expired', () => new JwtExpiredError('Token expired at 1', 1)],
+    ['forged', () => new JwtInvalidSignatureError('Invalid signature')],
+    ['malformed', () => new JwtParseError('Invalid JWT')],
+  ])('answers unauthorized for a Cognito %s token so clients refresh', async (_kind, error) => {
+    process.env.COGNITO_USER_POOL_ID = 'pool';
+    process.env.COGNITO_CLIENT_ID = 'client';
+    resetAccessVerifier();
+    mockVerify.mockRejectedValueOnce(error());
+    await expect(verifyAccessToken('cognito-access')).rejects.toThrow(/^unauthorized$/u);
+  });
+
+  it('keeps a JWKS fetch failure as a server error', async () => {
+    process.env.COGNITO_USER_POOL_ID = 'pool';
+    process.env.COGNITO_CLIENT_ID = 'client';
+    resetAccessVerifier();
+    mockVerify.mockRejectedValueOnce(new FetchError('https://cognito/jwks', 'timeout'));
+    await expect(verifyAccessToken('cognito-access')).rejects.toBeInstanceOf(FetchError);
+  });
+
+  it('answers unauthorized for an expired local token', async () => {
+    process.env.LOCAL_JWT_SECRET = 'unit-test-secret';
+    const expired = signLocalJwt({
+      sub: 'user-1',
+      token_use: 'access',
+      iat: Math.floor(Date.now() / 1000) - 120,
+      exp: Math.floor(Date.now() / 1000) - 60,
+    });
+    await expect(verifyAccessToken(expired)).rejects.toThrow(/^unauthorized$/u);
   });
 
   it('reads the Authorization header when the local server forwards it', async () => {

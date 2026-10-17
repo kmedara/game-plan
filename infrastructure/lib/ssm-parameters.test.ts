@@ -66,9 +66,10 @@ describe('ssm parameters', () => {
     expect(
       envFromOutputs({
         GamePlanDns: { SiteCertificateArn: 'arn:aws:acm:us-east-1:1:certificate/site' },
-        GamePlanApi: { WebSocketUrl: 'wss://ws.example.com' },
+        GamePlanApi: { ApiWebSocketUrl1A2B3C4D: 'wss://abc.execute-api.us-east-1.amazonaws.com/prod' },
         GamePlanSite: {
           HttpApiUrl: 'https://app.example.com/api',
+          SiteWebSocketUrl: 'wss://app.example.com/api/socket',
           SiteBucketName: 'site-bucket',
           SiteDistributionId: 'E123',
           SiteUrl: 'https://app.example.com',
@@ -76,7 +77,7 @@ describe('ssm parameters', () => {
       }),
     ).toEqual({
       API_BASE_URL: 'https://app.example.com/api',
-      WS_BASE_URL: 'wss://ws.example.com',
+      WS_BASE_URL: 'wss://app.example.com/api/socket',
       SITE_BUCKET_NAME: 'site-bucket',
       SITE_DISTRIBUTION_ID: 'E123',
     });
@@ -103,6 +104,6 @@ describe('ssm parameters', () => {
     const { site } = siteStackForTest();
     const keys = Object.keys(Template.fromStack(site).toJSON().Outputs as object);
     const env = envFromOutputs({ GamePlanSite: Object.fromEntries(keys.map((key) => [key, 'value'])) });
-    expect(missingEnv(env, REQUIRED_CLIENT_ENV)).toEqual(['WS_BASE_URL']);
+    expect(missingEnv(env, REQUIRED_CLIENT_ENV)).toEqual([]);
   });
 });

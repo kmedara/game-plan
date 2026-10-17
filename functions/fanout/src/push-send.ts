@@ -3,6 +3,7 @@
  */
 
 import webpush from 'web-push';
+import { readSecret } from '../../lib/parameters.js';
 
 /** Device row needed to address one push registration. */
 export type PushDevice = {
@@ -15,22 +16,21 @@ const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 /**
  * Reads VAPID settings when all three values are present.
  *
+ * The public key and subject are not secret and come from the environment.
+ * The private key comes from Parameter Store.
+ *
  * @returns The public key, private key, and subject, or `undefined`.
  */
-const vapidConfig = (): { publicKey: string; privateKey: string; subject: string } | undefined => {
+const vapidConfig = async (): Promise<
+  { publicKey: string; privateKey: string; subject: string } | undefined
+> => {
   const publicKey = process.env.VAPID_PUBLIC_KEY?.trim();
-  const privateKey = process.env.VAPID_PRIVATE_KEY?.trim();
   const subject = process.env.VAPID_SUBJECT?.trim();
-  if (
-    publicKey === undefined ||
-    publicKey.length === 0 ||
-    privateKey === undefined ||
-    privateKey.length === 0 ||
-    subject === undefined ||
-    subject.length === 0
-  ) {
+  if (publicKey === undefined || publicKey.length === 0 || subject === undefined || subject.length === 0) {
     return undefined;
   }
+  const privateKey = await readSecret('VAPID_PRIVATE_KEY_PARAMETER', 'VAPID_PRIVATE_KEY');
+  if (privateKey === undefined) return undefined;
   return { publicKey, privateKey, subject };
 };
 
@@ -109,8 +109,9 @@ export const sendDevicePushes = async (input: {
   }
 
   const web = input.devices.filter((device) => device.platform === 'web');
-  const vapid = vapidConfig();
-  if (web.length === 0 || vapid === undefined) return;
+  if (web.length === 0) return;
+  const vapid = await vapidConfig();
+  if (vapid === undefined) return;
 
   webpush.setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey);
   const payload = JSON.stringify({ title: input.title, body: input.body, data: input.data });

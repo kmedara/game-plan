@@ -2,24 +2,28 @@
  * Team list, directory join, invite code, and create.
  */
 
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, Text, TextInput, View, type ScrollViewProps } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { canCreateTeam } from '@gameplan/rules';
 import type { TeamDirectoryHit } from '@gameplan/types';
+import { errorMessageKey } from '@/src/errors';
+import { createTeamMutation, directoryQuery, requestJoinMutation } from '@/src/queries/teams';
 import { inviteCodeFromInput } from '@/src/roles';
 import { useApp } from '@/src/state';
 import { Button, ErrorText, Field, SubmitButton, TimeZoneField } from '@/src/ui';
-
-const TEAM_PAGE = 10;
 
 export default function TeamsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { action } = useLocalSearchParams<{ action?: string }>();
   const mode = action === 'join' || action === 'create' ? action : undefined;
-  const { api, teams, refreshTeams, selectTeam, brand } = useApp();
+  const { api, teams, selectTeam, brand } = useApp();
+  const queryClient = useQueryClient();
+  const createTeam = useMutation(createTeamMutation(api, queryClient));
+  const requestJoinTeam = useMutation(requestJoinMutation(api));
   const showCreate = api.user === undefined || canCreateTeam(api.user.accountKind);
   const [name, setName] = useState('');
   const [timeZone, setTimeZone] = useState('America/New_York');
@@ -27,27 +31,20 @@ export default function TeamsScreen() {
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | undefined>();
 
-  useEffect(() => {
-    void refreshTeams().catch((err: unknown) => {
-      setError(err instanceof Error ? err.message : 'load_failed');
-    });
-  }, []);
-
   const requestJoin = async (team: TeamDirectoryHit): Promise<void> => {
     setError(undefined);
     try {
-      await api.requestJoin(team.teamId);
+      await requestJoinTeam.mutateAsync(team.teamId);
       setMessage(t('teams.joinRequestSent'));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'request_failed');
+      setError(t(errorMessageKey(err, 'errors.common.requestFailed', { already_a_member: 'errors.invite.alreadyMember' })));
     }
   };
 
   const create = async (): Promise<boolean | void> => {
     if (name.trim().length === 0) return false;
-    const team = await api.createTeam({ name: name.trim(), timeZone: timeZone.trim() });
+    const team = await createTeam.mutateAsync({ name: name.trim(), timeZone: timeZone.trim() });
     selectTeam(team.teamId);
-    await refreshTeams();
     router.push(`/teams/${team.teamId}`);
   };
 
@@ -103,16 +100,13 @@ const TeamSearchField = ({
 }) => {
   const { api } = useApp();
   const [query, setQuery] = useState('');
+  const [debounced, setDebounced] = useState('');
   const [open, setOpen] = useState(false);
-  const [hits, setHits] = useState<TeamDirectoryHit[]>([]);
   const closing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const requestId = useRef(0);
-  const loading = useRef(false);
-  const cursor = useRef<string | undefined>(undefined);
-  const queryRef = useRef(query);
   const viewportHeight = useRef(0);
   const contentHeight = useRef(0);
-  queryRef.current = query;
+  const directory = useInfiniteQuery({ ...directoryQuery(api, debounced), enabled: open });
+  const hits = directory.data?.pages.flatMap((page) => page.teams) ?? [];
 
   const cancelClose = (): void => {
     if (closing.current === undefined) return;
@@ -120,34 +114,9 @@ const TeamSearchField = ({
     closing.current = undefined;
   };
 
-  const load = async (text: string, pageCursor: string | undefined): Promise<void> => {
-    const id = pageCursor === undefined ? ++requestId.current : requestId.current;
-    if (pageCursor !== undefined && (loading.current || cursor.current === undefined)) return;
-    loading.current = true;
-    if (pageCursor === undefined) {
-      cursor.current = undefined;
-      setHits([]);
-    }
-    try {
-      const page = await api.searchTeams(text, {
-        limit: TEAM_PAGE,
-        ...(pageCursor !== undefined ? { cursor: pageCursor } : {}),
-      });
-      if (id !== requestId.current) return;
-      cursor.current = page.cursor;
-      setHits((current) => (pageCursor === undefined ? page.teams : [...current, ...page.teams]));
-    } catch {
-      if (id !== requestId.current) return;
-      cursor.current = undefined;
-      if (pageCursor === undefined) setHits([]);
-    } finally {
-      if (id === requestId.current) loading.current = false;
-    }
-  };
-
   const loadMore = (): void => {
-    if (!open || cursor.current === undefined) return;
-    void load(queryRef.current, cursor.current);
+    if (!open || !directory.hasNextPage || directory.isFetchingNextPage) return;
+    void directory.fetchNextPage();
   };
 
   const fillIfShort = (): void => {
@@ -155,13 +124,9 @@ const TeamSearchField = ({
   };
 
   useEffect(() => {
-    if (!open) return;
-    const handle = setTimeout(() => {
-      cursor.current = undefined;
-      void load(query, undefined);
-    }, 300);
+    const handle = setTimeout(() => setDebounced(query), 300);
     return () => clearTimeout(handle);
-  }, [api, open, query]);
+  }, [query]);
 
   return (
     <View className="mb-3" style={{ zIndex: open ? 20 : 0 }}>

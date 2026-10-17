@@ -31,7 +31,7 @@
     "synth": "npm run synth -w @gameplan/infrastructure"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.152",

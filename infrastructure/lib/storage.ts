@@ -3,13 +3,17 @@
  */
 
 import * as cdk from 'aws-cdk-lib';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+import { MEDIA_CDN_KEY_PREFIX } from './names';
 
 /** Inputs for the storage construct. */
 export type StorageProps = {
   /** Browser origin allowed to upload and download message files. */
   corsOrigin: string;
+  /** Lets the website distribution read uploads through origin access control. */
+  cdnReads?: boolean;
 };
 
 /**
@@ -46,6 +50,23 @@ export class Storage extends Construct {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
+
+    if (props.cdnReads === true) {
+      // The distribution is in the later site stack, so naming it here would be a
+      // stack cycle. Any distribution in this account may read, and only `uploads/`.
+      const stack = cdk.Stack.of(this);
+      this.mediaBucket.addToResourcePolicy(
+        new iam.PolicyStatement({
+          actions: ['s3:GetObject'],
+          principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
+          resources: [this.mediaBucket.arnForObjects(`${MEDIA_CDN_KEY_PREFIX}/*`)],
+          conditions: {
+            StringEquals: { 'AWS:SourceAccount': stack.account },
+            ArnLike: { 'AWS:SourceArn': `arn:${stack.partition}:cloudfront::${stack.account}:distribution/*` },
+          },
+        }),
+      );
+    }
 
     new cdk.CfnOutput(this, 'MediaBucketName', {
       value: this.mediaBucket.bucketName,

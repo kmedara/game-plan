@@ -22,6 +22,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    env: { AUTH_PROVIDER: 'local', LOCAL_JWT_SECRET: 'vitest-local-secret' },
     pool: 'forks',
     // Single-worker runs avoid flaky coverage.tmp ENOENT races on Windows.
     fileParallelism: false,

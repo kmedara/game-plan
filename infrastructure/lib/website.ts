@@ -1,5 +1,6 @@
 /**
- * Static website bucket and the CloudFront distribution that also serves `/api`.
+ * Static website bucket and the CloudFront distribution that also serves `/api`
+ * and, with a signing key, cached uploads.
  */
 
 import * as cdk from 'aws-cdk-lib';
@@ -9,7 +10,8 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import { SITE_API_PREFIX } from './deploy-config';
-import { addSiteApiBehaviors, createSiteApiEdge, type SiteApiProps } from './site-api';
+import { MEDIA_CDN_KEY_PREFIX } from './names';
+import { addSiteApiBehaviors, createSiteApiEdge, SITE_SOCKET_PATH, type SiteApiProps } from './site-api';
 
 /** Inputs for the website construct. */
 export type WebsiteProps = SiteApiProps & {
@@ -17,7 +19,120 @@ export type WebsiteProps = SiteApiProps & {
   siteHostname?: string;
   /** CloudFront certificate ARN in `us-east-1`. Required with `siteHostname`. */
   certificateArn?: string;
+  /** Media bucket the browser uploads to, and loads from when there is no signing key. */
+  mediaBucket: s3.IBucket;
+  /** Key group that signs `/uploads/*` URLs. Adds the cached media behavior when set. */
+  mediaKeyGroup?: cloudfront.IKeyGroup;
 };
+
+/**
+ * Serves uploads from the website host behind signed URLs.
+ *
+ * Object keys are random and never rewritten, so the edge keeps them for a long
+ * time. The cache key leaves out the signature query string, so every signed URL
+ * for one object shares an edge copy.
+ *
+ * Uploads come from users with any content type, and this host also runs the
+ * app, so each response is sandboxed: an uploaded HTML or SVG file opened
+ * directly cannot run script against the site.
+ *
+ * @param website - The website construct.
+ * @param distribution - The website distribution.
+ * @param mediaBucket - The media bucket from the platform stack.
+ * @param keyGroup - Key group the media function signs with.
+ */
+const addMediaBehavior = (
+  website: Construct,
+  distribution: cloudfront.Distribution,
+  mediaBucket: s3.IBucket,
+  keyGroup: cloudfront.IKeyGroup,
+): void => {
+  // The platform stack owns the bucket policy grant. Passing the owned bucket
+  // would make CDK add the grant there, naming this distribution, which is a stack cycle.
+  const bucket = s3.Bucket.fromBucketName(website, 'MediaOriginBucket', mediaBucket.bucketName);
+  cdk.Annotations.of(website).acknowledgeWarning(
+    '@aws-cdk/aws-cloudfront-origins:updateImportedBucketPolicyOac',
+    'The platform stack grants CloudFront read access to uploads.',
+  );
+  const cachePolicy = new cloudfront.CachePolicy(website, 'MediaCache', {
+    comment: 'GamePlan uploads: immutable keys, signature left out of the cache key',
+    minTtl: cdk.Duration.days(1),
+    defaultTtl: cdk.Duration.days(30),
+    maxTtl: cdk.Duration.days(365),
+    queryStringBehavior: cloudfront.CacheQueryStringBehavior.none(),
+    headerBehavior: cloudfront.CacheHeaderBehavior.none(),
+    cookieBehavior: cloudfront.CacheCookieBehavior.none(),
+  });
+  const responseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(website, 'MediaHeaders', {
+    comment: 'GamePlan uploads: sandboxed, cached by the viewer for one signing window',
+    securityHeadersBehavior: {
+      contentSecurityPolicy: { contentSecurityPolicy: "default-src 'none'; sandbox", override: true },
+      contentTypeOptions: { override: true },
+      strictTransportSecurity: {
+        accessControlMaxAge: cdk.Duration.days(365),
+        includeSubdomains: true,
+        preload: true,
+        override: true,
+      },
+      referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.NO_REFERRER, override: true },
+    },
+    customHeadersBehavior: {
+      customHeaders: [{ header: 'Cache-Control', value: 'private, max-age=7200, immutable', override: true }],
+    },
+  });
+  distribution.addBehavior(
+    `/${MEDIA_CDN_KEY_PREFIX}/*`,
+    origins.S3BucketOrigin.withOriginAccessControl(bucket, {
+      originAccessLevels: [cloudfront.AccessLevel.READ],
+    }),
+    {
+      viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+      allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+      cachePolicy,
+      responseHeadersPolicy,
+      trustedKeyGroups: [keyGroup],
+    },
+  );
+};
+
+/** Hosts the Maps JavaScript API loads scripts, tiles, and fonts from. */
+const GOOGLE_MAPS = {
+  script: ['https://*.googleapis.com', 'https://*.gstatic.com', 'https://*.google.com', 'https://*.ggpht.com', 'https://*.googleusercontent.com'],
+  img: ['https://*.googleapis.com', 'https://*.gstatic.com', 'https://*.google.com', 'https://*.googleusercontent.com'],
+  connect: ['https://*.googleapis.com', 'https://*.google.com', 'https://*.gstatic.com'],
+  frame: ['https://*.google.com'],
+  font: ['https://fonts.gstatic.com'],
+  style: ['https://fonts.googleapis.com'],
+};
+
+/**
+ * Builds the website Content-Security-Policy.
+ *
+ * Styles allow `'unsafe-inline'` because react-native-web writes style tags at
+ * run time and the Expo export inlines its reset. Scripts stay limited to this
+ * origin and Google Maps. `'self'` also covers the same-origin `wss:` socket;
+ * the explicit `wss:` source is for browsers that predate that rule.
+ *
+ * @param mediaOrigins - Presigned media bucket origins.
+ * @param socketOrigin - `wss://` origin of the website host, when it is known.
+ * @returns The policy string.
+ */
+const contentSecurityPolicy = (mediaOrigins: readonly string[], socketOrigin?: string): string =>
+  [
+    "default-src 'self'",
+    `script-src 'self' blob: ${GOOGLE_MAPS.script.join(' ')}`,
+    `style-src 'self' 'unsafe-inline' ${GOOGLE_MAPS.style.join(' ')}`,
+    `img-src 'self' data: blob: ${[...mediaOrigins, ...GOOGLE_MAPS.img].join(' ')}`,
+    `font-src 'self' data: ${GOOGLE_MAPS.font.join(' ')}`,
+    `connect-src 'self' ${[...(socketOrigin === undefined ? [] : [socketOrigin]), ...mediaOrigins, ...GOOGLE_MAPS.connect, 'data:', 'blob:'].join(' ')}`,
+    `frame-src ${GOOGLE_MAPS.frame.join(' ')}`,
+    "worker-src 'self' blob:",
+    "manifest-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; ');
 
 /**
  * The website is a static build served by CloudFront. The same distribution
@@ -55,11 +170,23 @@ export class Website extends Construct {
       autoDeleteObjects: true,
     });
 
-    const edge = createSiteApiEdge(this);
+    const edge = createSiteApiEdge(this, props.socket.stageName);
+
+    const region = cdk.Stack.of(this).region;
+    const bucketName = props.mediaBucket.bucketName;
+    // The SDK signs regional virtual-hosted URLs; the global form covers older clients.
+    const mediaOrigins = [`https://${bucketName}.s3.${region}.amazonaws.com`, `https://${bucketName}.s3.amazonaws.com`];
 
     const responseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeaders', {
       comment: 'GamePlan website security headers',
       securityHeadersBehavior: {
+        contentSecurityPolicy: {
+          contentSecurityPolicy: contentSecurityPolicy(
+            mediaOrigins,
+            props.siteHostname === undefined ? undefined : `wss://${props.siteHostname}`,
+          ),
+          override: true,
+        },
         strictTransportSecurity: {
           accessControlMaxAge: cdk.Duration.days(365),
           includeSubdomains: true,
@@ -108,6 +235,9 @@ export class Website extends Construct {
       },
     });
     addSiteApiBehaviors(this.distribution, edge, props);
+    if (props.mediaKeyGroup !== undefined) {
+      addMediaBehavior(this, this.distribution, props.mediaBucket, props.mediaKeyGroup);
+    }
 
     this.siteUrl =
       props.siteHostname === undefined
@@ -118,5 +248,8 @@ export class Website extends Construct {
     new cdk.CfnOutput(this, 'SiteDistributionId', { value: this.distribution.distributionId });
     new cdk.CfnOutput(this, 'SiteUrl', { value: this.siteUrl });
     new cdk.CfnOutput(this, 'HttpApiUrl', { value: `${this.siteUrl}${SITE_API_PREFIX}` });
+    new cdk.CfnOutput(this, 'SiteWebSocketUrl', {
+      value: `${this.siteUrl.replace(/^https:/u, 'wss:')}${SITE_SOCKET_PATH}`,
+    });
   }
 }

@@ -2,11 +2,14 @@
  * Chat list for the active team plus private chats.
  */
 
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { ChatSummary } from '@gameplan/types';
+import { errorMessageKey } from '@/src/errors';
+import { chatsQuery, createPrivateChatMutation, createTeamChannelMutation } from '@/src/queries/chat';
 import { useApp } from '@/src/state';
 import { ErrorText, Field, SubmitButton } from '@/src/ui';
 
@@ -16,30 +19,27 @@ export default function ChatsScreen() {
   const { action } = useLocalSearchParams<{ action?: string }>();
   const mode = action === 'private' || action === 'channel' ? action : undefined;
   const { api } = useApp();
+  const queryClient = useQueryClient();
   const teamId = api.selectedTeamId;
-  const [chats, setChats] = useState<ChatSummary[]>([]);
+  const chatsLoaded = useQuery(chatsQuery(api));
+  const startPrivateChat = useMutation(createPrivateChatMutation(api, queryClient));
+  const startChannelChat = useMutation(createTeamChannelMutation(api, queryClient));
+  const chats = chatsLoaded.data ?? [];
   const [email, setEmail] = useState('');
   const [channelName, setChannelName] = useState('');
-  const [error, setError] = useState<string | undefined>();
-
-  const load = async (): Promise<void> => {
-    setChats(await api.listChats());
-  };
-
-  useEffect(() => {
-    void load().catch((err: unknown) => setError(err instanceof Error ? err.message : 'load_failed'));
-  }, [api, teamId]);
+  const error =
+    chatsLoaded.error !== undefined ? t(errorMessageKey(chatsLoaded.error, 'errors.common.loadFailed')) : undefined;
 
   const startPrivate = async (): Promise<void> => {
     const user = await api.searchChatUser(email);
     if (user.userId === api.user?.userId) throw new Error('self');
-    const chat = await api.createPrivateChat([user.userId]);
+    const chat = await startPrivateChat.mutateAsync([user.userId]);
     router.push(`/chats/${chat.chatId}`);
   };
 
   const startChannel = async (): Promise<void> => {
     if (teamId === undefined || channelName.trim().length === 0) throw new Error('name');
-    const chat = await api.createTeamChannel(teamId, channelName.trim());
+    const chat = await startChannelChat.mutateAsync({ teamId, name: channelName.trim() });
     router.push(`/chats/${chat.chatId}`);
   };
 
@@ -57,11 +57,9 @@ export default function ChatsScreen() {
           <SubmitButton
             label={t('chats.startPrivate')}
             onPress={startPrivate}
-            message={(err) => {
-              if (err instanceof Error && err.message === 'self') return t('chats.cannotChatSelf');
-              if (err instanceof Error && err.message === 'not_found') return t('chats.userNotFound');
-              return t('chats.searchFailed');
-            }}
+            message={(err) =>
+              t(errorMessageKey(err, 'chats.searchFailed', { self: 'chats.cannotChatSelf', not_found: 'chats.userNotFound' }))
+            }
           />
         </View>
       ) : null}
@@ -71,9 +69,7 @@ export default function ChatsScreen() {
           <SubmitButton
             label={t('chats.createChannel')}
             onPress={startChannel}
-            message={(err) =>
-              err instanceof Error && err.message === 'name' ? t('chats.channelNameRequired') : t('chats.createFailed')
-            }
+            message={(err) => t(errorMessageKey(err, 'chats.createFailed', { name: 'chats.channelNameRequired' }))}
           />
         </View>
       ) : null}

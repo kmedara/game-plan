@@ -185,6 +185,7 @@
     "removePhoto": "Remove",
     "uploading": "Uploading…",
     "attachFailed": "Could not upload the photo.",
+    "sendFailed": "Could not send the message.",
     "add": "Add chat",
     "newPrivate": "Private chat",
     "newChannel": "Team channel",
@@ -308,9 +309,29 @@
     "google": "Google Maps"
   },
   "errors": {
-    "join": {
+    "common": {
+      "loadFailed": "Could not load this. Try again.",
+      "requestFailed": "Something went wrong. Try again.",
+      "saveFailed": "Could not save your changes.",
+      "deleteFailed": "Could not delete that.",
+      "forbidden": "You don't have permission to do that."
+    },
+    "roles": {
       "minorCannotBeTeamAdmin": "A minor cannot be a team admin.",
       "minorCannotManagePermissions": "A minor cannot hold a role that manages permissions.",
+      "outranksCaller": "You can only change roles at or below your own."
+    },
+    "event": {
+      "invalidRepeat": "Check the repeat settings.",
+      "endsBeforeStart": "The end time must be after the start.",
+      "rsvpFailed": "Could not save your RSVP.",
+      "carpoolLoadFailed": "Could not load rides.",
+      "carpoolSaveFailed": "Could not update rides.",
+      "lineupLoadFailed": "Could not load the lineup.",
+      "lineupCopyFailed": "Could not copy the previous lineup.",
+      "messageFailed": "Could not open a chat with them."
+    },
+    "join": {
       "alreadyMember": "They are already on the team.",
       "notPending": "That request is no longer pending.",
       "updateFailed": "Could not update the join request."
@@ -339,7 +360,6 @@
     "memberProfile": {
       "notFound": "Could not find that person.",
       "loadFailed": "Could not load that profile.",
-      "roleOutranks": "You can only change roles at or below your own.",
       "saveRolesFailed": "Could not save those roles."
     },
     "teamAdmin": {

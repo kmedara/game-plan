@@ -4,12 +4,20 @@
  * HTTP routes reach the functions through CloudFront and Lambda function URLs,
  * which do not check the token. Each protected route verifies it here.
  *
- * When Cognito env vars are unset, local HS256 access tokens are accepted so
- * laptop work does not need a cloud deploy.
+ * Local HS256 access tokens are accepted only when `AUTH_PROVIDER=local` is set
+ * outside production. Missing Cognito configuration otherwise rejects every token.
  */
 
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
+import {
+  FailedAssertionError,
+  JwtInvalidSignatureError,
+  JwtParseError,
+  JwtWithoutValidKidError,
+  KidNotFoundInJwksError,
+  WaitPeriodNotYetEndedJwkError,
+} from 'aws-jwt-verify/error';
 import type { AuthUser } from '@gameplan/types';
 import { authorizationOf } from '../http.js';
 import { verifyLocalJwt } from './local-jwt.js';
@@ -28,6 +36,16 @@ let accessVerifier: AccessVerifier | undefined;
 export const isCognitoConfigured = (): boolean =>
   process.env.COGNITO_USER_POOL_ID !== undefined &&
   process.env.COGNITO_CLIENT_ID !== undefined;
+
+/**
+ * Returns whether this process may issue and accept local HS256 tokens.
+ *
+ * Requires an explicit `AUTH_PROVIDER=local`, and is always off in production.
+ *
+ * @returns `true` when local auth was requested outside production.
+ */
+export const isLocalAuthEnabled = (): boolean =>
+  process.env.AUTH_PROVIDER === 'local' && process.env.NODE_ENV !== 'production';
 
 /**
  * Reads the Cognito user pool and app client ids from the process environment.
@@ -79,19 +97,42 @@ export const toAuthUser = (payload: { sub: string; email?: unknown }): AuthUser 
 });
 
 /**
- * Verifies a raw access token (Cognito in the cloud, local HS256 on the laptop).
+ * Returns whether a verification error blames the token rather than the service.
+ *
+ * Expired, forged, and malformed tokens must answer `401` so clients refresh.
+ * JWKS fetch failures stay server errors.
+ *
+ * @param error - The error the verifier threw.
+ * @returns `true` for a token the caller should replace.
+ */
+const isRejectedToken = (error: unknown): boolean =>
+  error instanceof FailedAssertionError ||
+  error instanceof JwtParseError ||
+  error instanceof JwtInvalidSignatureError ||
+  error instanceof JwtWithoutValidKidError ||
+  error instanceof KidNotFoundInJwksError ||
+  error instanceof WaitPeriodNotYetEndedJwkError ||
+  (error instanceof Error && (error.message === 'invalid_token' || error.message === 'token_expired'));
+
+/**
+ * Verifies a raw access token against Cognito, or local HS256 when explicitly enabled.
  *
  * @param token - The JWT string without a `Bearer ` prefix.
  * @returns The authenticated user.
- * @throws When the token is invalid.
+ * @throws `unauthorized` when the token is rejected, or `cognito_not_configured`
+ *   when neither Cognito nor local auth is configured.
  */
 export const verifyAccessToken = async (token: string): Promise<AuthUser> => {
-  if (!isCognitoConfigured()) {
+  if (!isCognitoConfigured() && !isLocalAuthEnabled()) throw new Error('cognito_not_configured');
+  try {
+    if (isCognitoConfigured()) return toAuthUser(await getAccessVerifier().verify(token));
     const claims = verifyLocalJwt(token);
     if (claims.token_use !== 'access') throw new Error('unauthorized');
     return toAuthUser(claims);
+  } catch (error) {
+    if (isRejectedToken(error)) throw new Error('unauthorized');
+    throw error;
   }
-  return toAuthUser(await getAccessVerifier().verify(token));
 };
 
 /**

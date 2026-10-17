@@ -2,32 +2,34 @@
  * Pending join requests, with a role the caller is allowed to grant.
  */
 
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { callerCanGrant, roleAllowedForAccount } from '@gameplan/rules';
 import { TEAM_ROLES, type JoinRequest, type RolePermissions, type TeamRole } from '@gameplan/types';
+import { approveJoinRequestMutation, joinRequestsQuery, rejectJoinRequestMutation } from '@/src/queries/teams';
 import { joinRequestMessage } from '@/src/roles';
 import { RolePicker } from '@/src/role-picker';
 import { useApp } from '@/src/state';
 
 export const JoinRequests = ({
   teamId,
-  requests,
   roles,
   callerRole,
-  reload,
   onError,
 }: {
   teamId: string;
-  requests: JoinRequest[];
   roles: RolePermissions[];
   callerRole: TeamRole;
-  reload: () => Promise<void>;
   onError: (message: string) => void;
 }) => {
   const { t } = useTranslation();
   const { api } = useApp();
+  const queryClient = useQueryClient();
+  const { data: requests = [] } = useQuery(joinRequestsQuery(api, teamId));
+  const approve = useMutation(approveJoinRequestMutation(api, queryClient, teamId));
+  const reject = useMutation(rejectJoinRequestMutation(api, queryClient, teamId));
   const [joinRoles, setJoinRoles] = useState<Record<string, TeamRole>>({});
 
   const rolesFor = (request: JoinRequest): TeamRole[] =>
@@ -38,15 +40,14 @@ export const JoinRequests = ({
       return roleAllowedForAccount(request.accountKind, role, permissions);
     });
 
-  const approve = async (request: JoinRequest): Promise<void> => {
+  const grant = async (request: JoinRequest): Promise<void> => {
     const allowed = rolesFor(request);
     const role =
       joinRoles[request.requestId] ??
       (allowed.includes('player') ? 'player' : allowed[allowed.length - 1]);
     if (role === undefined) return;
     try {
-      await api.approveJoinRequest(teamId, request.requestId, role);
-      await reload();
+      await approve.mutateAsync({ requestId: request.requestId, role });
     } catch (err) {
       onError(t(joinRequestMessage(err)));
     }
@@ -54,8 +55,7 @@ export const JoinRequests = ({
 
   const decline = async (request: JoinRequest): Promise<void> => {
     try {
-      await api.rejectJoinRequest(teamId, request.requestId);
-      await reload();
+      await reject.mutateAsync(request.requestId);
     } catch (err) {
       onError(t(joinRequestMessage(err)));
     }
@@ -70,7 +70,7 @@ export const JoinRequests = ({
           <View key={request.requestId} className="mb-2 rounded-xl bg-inset p-3">
             <View className="flex-row items-center">
               <Text className="flex-1 text-ink" numberOfLines={1}>{request.displayName ?? request.userId}</Text>
-              <Pressable className="ml-3" onPress={() => void approve(request)}>
+              <Pressable className="ml-3" onPress={() => void grant(request)}>
                 <Text className="text-sm font-semibold text-safety">{t('teamAdmin.approve')}</Text>
               </Pressable>
               <Pressable className="ml-3" onPress={() => void decline(request)}>

@@ -1,10 +1,11 @@
 /**
  * Google Places / Static Maps client used by the places area.
  *
- * The API key stays on the server (`GOOGLE_MAPS_API_KEY`).
+ * The API key stays on the server. Deployed functions read it from Parameter Store.
  */
 
 import type { PlaceDetails, PlaceSuggestion } from "@gameplan/schemas";
+import { readSecret } from "../../lib/parameters.js";
 
 /** Places Autocomplete (New) HTTP endpoint. */
 const AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:autocomplete";
@@ -31,14 +32,14 @@ type PlacesDetailsResponse = {
 };
 
 /**
- * Reads the Google Maps / Places API key from the process environment.
+ * Reads the Google Maps / Places API key.
  *
  * @returns The key string.
  * @throws When the key is missing.
  */
-const requireApiKey = (): string => {
-  const key = process.env.GOOGLE_MAPS_API_KEY?.trim() ?? "";
-  if (key.length === 0) throw new Error("places_not_configured");
+const requireApiKey = async (): Promise<string> => {
+  const key = await readSecret("GOOGLE_MAPS_API_KEY_PARAMETER", "GOOGLE_MAPS_API_KEY");
+  if (key === undefined) throw new Error("places_not_configured");
   return key;
 };
 
@@ -69,7 +70,7 @@ const buildLabel = (name: string, address: string): string => {
 export const autocompletePlaces = async (
   query: string,
 ): Promise<PlaceSuggestion[]> => {
-  const apiKey = requireApiKey();
+  const apiKey = await requireApiKey();
   const response = await fetch(AUTOCOMPLETE_URL, {
     method: "POST",
     headers: {
@@ -109,7 +110,7 @@ export const autocompletePlaces = async (
  * @returns Place details for storing on an event.
  */
 export const resolvePlace = async (placeId: string): Promise<PlaceDetails> => {
-  const apiKey = requireApiKey();
+  const apiKey = await requireApiKey();
   const fieldMask = "id,displayName,formattedAddress,location";
   const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`;
   const response = await fetch(url, {
@@ -155,7 +156,7 @@ export const reverseGeocode = async (
   latitude: number,
   longitude: number,
 ): Promise<PlaceDetails> => {
-  const apiKey = requireApiKey();
+  const apiKey = await requireApiKey();
   const params = new URLSearchParams({
     latlng: `${latitude},${longitude}`,
     key: apiKey,
@@ -197,7 +198,7 @@ export const fetchStaticMapPng = async (
   latitude: number,
   longitude: number,
 ): Promise<Buffer> => {
-  const apiKey = requireApiKey();
+  const apiKey = await requireApiKey();
   const params = new URLSearchParams({
     center: `${latitude},${longitude}`,
     zoom: "15",

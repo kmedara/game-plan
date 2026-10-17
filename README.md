@@ -110,8 +110,9 @@ From the repository root, with Node.js 22 (API only; DynamoDB in Docker):
 `GET http://127.0.0.1:3000/identity/health` returns `{ "ok": true, "service": "identity" }`. The same path exists for
 teams, schedule, chat, media, socket, and fanout.
 
-`ws://127.0.0.1:3000/socket` is the local WebSocket. The cloud WebSocket expects the Amazon Cognito (Cognito) access
-token as `?token=`, because a browser WebSocket cannot set an Authorization header.
+`ws://127.0.0.1:3000/socket` is the local WebSocket. The cloud WebSocket is `wss://<site host>/api/socket` and expects
+a one-time `?ticket=` from `POST /identity/socket-ticket`, because a browser WebSocket cannot set an Authorization
+header.
 
 ### Identity and session
 
@@ -126,6 +127,11 @@ from `.env`):
 - `CLIENT_ORIGIN`
 
 Sign-in starts at `GET /identity/oauth/login` (PKCE → Hosted UI → `GET /identity/oauth/callback`).
+
+Without the Cognito variables the API rejects every token. To work fully offline, set `AUTH_PROVIDER=local` and a
+`LOCAL_JWT_SECRET`; identity then issues HS256 tokens from DynamoDB Local. Local auth is refused when
+`NODE_ENV=production`, so a deployed function can never fall back to it. The test suite sets both in
+[`vitest.config.ts`](vitest.config.ts).
 
 The API entrypoint also seeds two demo clubs (idempotent): **Peoria Pigs** (`peoria-admin@localhost` /
 `22222222-2222-4222-8222-222222222222`) and **Seacoast Men's Rugby** (`seacoast-admin@localhost` /
@@ -245,7 +251,12 @@ person has none, it publishes to the push topic using registered device tokens.
 Locally, chat and schedule `POST` to `/fanout/deliver`. Fan-out then posts to
 `http://127.0.0.1:3106/@connections/{id}` on the socket process.
 
-Connect with `ws://127.0.0.1:3000/socket?token=<accessToken>`.
+Connect with `ws://127.0.0.1:3000/socket?ticket=<ticket>`.
+
+In the cloud, clients connect to `/api/socket` on the website host so the connect passes the website firewall.
+CloudFront forwards it to the WebSocket stage and adds an `x-origin-verify` header holding the `socket-origin-verify` parameter value.
+The `$connect` authorizer rejects a connect without that header, so a client cannot skip the firewall by dialing the
+`execute-api` hostname directly.
 
 ### Media and devices
 
@@ -330,7 +341,7 @@ inserted into the hostnames:
 | `production` | `https://production.example.com` | `https://production.example.com/api` |
 
 The Cognito callback is `https://<environment>.example.com/api/identity/oauth/callback`. Logout returns to
-`https://<environment>.example.com/login`. The WebSocket URL stays on the API Gateway execute-api domain.
+`https://<environment>.example.com/login`. The WebSocket URL is `wss://<environment>.example.com/api/socket`.
 
 `GamePlanDns` creates the certificate validation records in the hosted zone from Parameter Store
 `hosted-zone-id` and `hosted-zone-name`. The zone id is the delegated zone in this account, and the name is the
@@ -338,8 +349,12 @@ registered domain used to build `<environment>.<name>`. `GamePlanSite` writes th
 
 ### Parameter Store
 
-Both accounts use the same prefix, `/gameplan/`. Every parameter is a **String**. Parameter Store holds only deploy
-inputs you set by hand. Stack outputs are not written back.
+Both accounts use the same prefix, `/gameplan/`. Parameters may be **String** or **SecureString**; run-time reads
+decrypt either. Parameter Store holds only inputs you set by hand. Stack outputs are not written back.
+
+Secret values never go into Lambda environment variables. `google-maps-api-key` and `vapid-private-key` are read
+by the functions at run time; their environment holds only the parameter name. `socket-origin-verify` is read the
+same way by the socket authorizer, and the site stack resolves it at deploy time for the CloudFront header.
 
 | Name                                                                    | Used for                                                                                         |
 | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -347,10 +362,12 @@ inputs you set by hand. Stack outputs are not written back.
 | `google-client-id`, `google-client-secret`                              | Optional Google IdP                                                                              |
 | `facebook-app-id`, `facebook-app-secret`                                | Optional Facebook IdP                                                                            |
 | `apple-client-id`, `apple-team-id`, `apple-key-id`, `apple-private-key` | Optional Apple IdP. Store the PEM, including line breaks.                                        |
-| `google-maps-api-key`                                                   | Places Lambda                                                                                    |
+| `google-maps-api-key`                                                   | Places Lambda, read at run time                                                                  |
 | `google-maps-browser-api-key`                                           | Website map                                                                                      |
-| `vapid-public-key`, `vapid-private-key`, `vapid-subject`                | Web Push. The public key is baked into the website. The private key stays on the fan-out function. `vapid-subject` is a `mailto:` contact. |
+| `vapid-public-key`, `vapid-private-key`, `vapid-subject`                | Web Push. The public key is baked into the website. The fan-out function reads the private key at run time. `vapid-subject` is a `mailto:` contact. |
+| `media-signing-public-key`, `media-signing-private-key`                 | Optional. Serves images from the website host through CloudFront's cache instead of presigned S3 links. Both are PEM files from `openssl genrsa -out media.pem 2048` and `openssl rsa -in media.pem -pubout -out media.pub.pem`; store them with `--value file://...`. The media function reads the private key at run time. A new key pair takes effect after the API and site stacks deploy. |
 | `staging-signup-allowlist`                                              | Staging only. Emails allowed to sign up, read by the pre-signup Lambda.                          |
+| `socket-origin-verify`                                                  | Required. A random **String** (not SecureString; CloudFront needs the literal value). Create it with `aws ssm put-parameter --type String --name /gameplan/socket-origin-verify --value "$(openssl rand -hex 32)"`. Changing it needs a site deploy. |
 
 An identity provider is created only when every field for that provider is set. CDK context still overrides these
 environment variables for a local `cdk deploy`.
@@ -367,11 +384,15 @@ The stacks create:
   only.
 - A time-to-live attribute, `ttl`, for socket rows.
 - A private Amazon Simple Storage Service (S3) bucket for message files, and a second bucket plus Amazon CloudFront
-  (CloudFront) for the static website and `/api`. An AWS WAF web ACL rate-limits `/api/`.
+  (CloudFront) for the static website, `/api`, and the `/api/socket` WebSocket connect. An AWS WAF web ACL
+  rate-limits `/api/`, with a separate per-IP limit for socket connects. The website sends a Content-Security-Policy.
+  With a media signing key, the distribution also serves `/uploads/*` from the media bucket, cached at the edge and
+  only for URLs the media function signed.
 - One IAM-only Lambda function URL per HTTP area, reachable only through the distribution. `GET /{area}/health` is
   open. Identity routes stay open so Hosted UI OAuth, register, and login can run before a token exists. The other
   areas verify a Cognito access token inside the function.
-- An API Gateway WebSocket API. `$connect` checks that same access token. The socket is delivery only.
+- An API Gateway WebSocket API, reached through the distribution. `$connect` redeems a one-time ticket and checks
+  the CloudFront origin header. The socket is delivery only.
 - A queue from chat and schedule to the fan-out function, and an Amazon Simple Notification Service (SNS) topic the
   fan-out function publishes to when a recipient has no open socket.
 

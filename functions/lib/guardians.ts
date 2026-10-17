@@ -56,6 +56,16 @@ export const listGuardianIds = async (minorId: string): Promise<string[]> => {
 };
 
 /**
+ * Returns whether an adult is linked as a minor's guardian.
+ *
+ * @param adultId - The possible guardian.
+ * @param minorId - The minor's user id.
+ * @returns `true` when the link exists.
+ */
+export const isGuardianOf = async (adultId: string, minorId: string): Promise<boolean> =>
+  (await getItem(userPk(minorId), guardianSk(adultId))) !== undefined;
+
+/**
  * Creates a pending invite from a minor to an adult email.
  *
  * @param minorId - The signed-in minor.

@@ -187,7 +187,12 @@ export const teamListSchema = z
   })
   .strict();
 
-/** One person on `GET /teams/:teamId/members`. */
+/**
+ * One person on `GET /teams/:teamId/members`.
+ *
+ * Carries photo, phone, and positions so a roster view needs no per-member reads.
+ * A minor's phone number is present only for that minor and their guardians.
+ */
 export const teamMemberSchema = z
   .object({
     userId: z.string().min(1),
@@ -199,19 +204,19 @@ export const teamMemberSchema = z
     displayName: displayNameSchema.optional(),
     email: z.string().min(1).optional(),
     accountKind: accountKindSchema.optional(),
+    photoKey: z.string().min(1).max(512).optional(),
+    phoneNumber: phoneNumberSchema.optional(),
+    positions: z.array(z.string().min(1).max(40)).optional(),
   })
   .strict();
 
 /**
  * One teammate on `GET /teams/:teamId/members/:userId`.
  *
- * Adds photo, phone, and positions for the profile view.
+ * Adds linked guardians for the profile view.
  */
 export const teamMemberProfileSchema = teamMemberSchema
   .extend({
-    photoKey: z.string().min(1).max(512).optional(),
-    phoneNumber: phoneNumberSchema.optional(),
-    positions: z.array(z.string().min(1).max(40)).optional(),
     /** Linked guardians. Present for coaches and those guardians. */
     guardianIds: z.array(z.string().min(1)).optional(),
   })

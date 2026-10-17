@@ -9,18 +9,18 @@ import { json } from './http.js';
 import { route, withBodyValidation } from './pipeline.js';
 
 const mockGetItem = vi.fn();
-const mockCan = vi.fn();
+const mockLoadMatrix = vi.fn();
 
 vi.mock('./dynamo/access.js', () => ({
   getItem: (...args: unknown[]) => mockGetItem(...args),
 }));
 
-vi.mock('./permissions.js', () => ({
-  can: (...args: unknown[]) => mockCan(...args),
+vi.mock('./permissions.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./permissions.js')>()),
+  loadRolePermissionMatrix: (...args: unknown[]) => mockLoadMatrix(...args),
 }));
 
 const {
-  assertPermission,
   requireMembership,
   requirePermission,
   requireTeam,
@@ -50,14 +50,7 @@ const event = (): APIGatewayProxyEventV2 =>
 describe('guards', () => {
   beforeEach(() => {
     mockGetItem.mockReset();
-    mockCan.mockReset();
-  });
-
-  it('assertPermission throws when can returns false', async () => {
-    mockCan.mockResolvedValueOnce(false);
-    await expect(assertPermission('u1', 't1', 'manage_events')).rejects.toThrow('forbidden');
-    mockCan.mockResolvedValueOnce(true);
-    await expect(assertPermission('u1', 't1', 'manage_events')).resolves.toBeUndefined();
+    mockLoadMatrix.mockReset();
   });
 
   it('requireUser attaches the authenticated user', async () => {
@@ -91,41 +84,40 @@ describe('guards', () => {
       json(200, {}),
     );
     await expect(notMember(event(), 't1')).rejects.toThrow('not_a_member');
-  });
-
-  it('requirePermission and withTeamIdFromBody enforce team scope', async () => {
-    mockCan.mockResolvedValueOnce(true);
-    const allowed = route(
-      withBodyValidation(z.object({ teamId: z.string() })),
-      withTeamIdFromBody(),
-      requireUser(),
-      requirePermission('invite_members'),
-      async (ctx) => json(200, { teamId: ctx.teamId }),
-    );
-    const ok = await allowed({
-      ...event(),
-      requestContext: {
-        http: { method: 'POST', path: '/' },
-      },
-      body: JSON.stringify({ teamId: 'team-body' }),
-    } as unknown as APIGatewayProxyEventV2);
-    expect(JSON.parse(ok.body ?? '')).toEqual({ teamId: 'team-body' });
-
-    mockCan.mockResolvedValueOnce(false);
-    await expect(
-      allowed({
-        ...event(),
-        requestContext: {
-          http: { method: 'POST', path: '/' },
-        },
-        body: JSON.stringify({ teamId: 'team-body' }),
-      } as unknown as APIGatewayProxyEventV2),
-    ).rejects.toThrow('forbidden');
 
     mockGetItem.mockResolvedValueOnce({ role: 123 });
     const badRole = route(['teamId'], requireUser(), requireMembership(), async () =>
       json(200, {}),
     );
     await expect(badRole(event(), 't1')).rejects.toThrow('not_a_member');
+  });
+
+  it('requirePermission checks the loaded member roles without re-reading the roster', async () => {
+    const allowed = route(
+      withBodyValidation(z.object({ teamId: z.string() })),
+      withTeamIdFromBody(),
+      requireUser(),
+      requireMembership(),
+      requirePermission('invite_members'),
+      async (ctx) => json(200, { teamId: ctx.teamId }),
+    );
+    const postEvent = {
+      ...event(),
+      requestContext: {
+        http: { method: 'POST', path: '/' },
+      },
+      body: JSON.stringify({ teamId: 'team-body' }),
+    } as unknown as APIGatewayProxyEventV2;
+
+    mockGetItem.mockResolvedValueOnce({ role: 'parent', roles: ['parent', 'coach'] });
+    mockLoadMatrix.mockResolvedValueOnce({ coach: ['invite_members'], parent: [] });
+    const ok = await allowed(postEvent);
+    expect(JSON.parse(ok.body ?? '')).toEqual({ teamId: 'team-body' });
+    expect(mockGetItem).toHaveBeenCalledTimes(1);
+    expect(mockLoadMatrix).toHaveBeenCalledWith('team-body');
+
+    mockGetItem.mockResolvedValueOnce({ role: 'player' });
+    mockLoadMatrix.mockResolvedValueOnce({ player: [] });
+    await expect(allowed(postEvent)).rejects.toThrow('forbidden');
   });
 });

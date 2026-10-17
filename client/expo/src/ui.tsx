@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, Platform, Pressable, ScrollView, type ScrollViewProps, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { errorMessageKey } from './errors';
 import { useApp } from './state';
 import { colors, fieldWash, fieldWashOpacity, muteColor } from './theme';
 import { searchTimeZones, timeZoneLabel } from './time-zones';
@@ -185,11 +186,9 @@ export const Button = ({
 export const ErrorText = ({ message }: { message: string | undefined }) =>
   message === undefined ? null : <Text className="mb-2 text-danger">{message}</Text>;
 
-const responseMessage = (err: unknown): string =>
-  err instanceof Error && err.message.length > 0 ? err.message : 'request_failed';
-
 /**
  * Form submit control. Shows a loader on the button, then a confirmation or the thrown error.
+ * Without `message`, the error shows the shared sentence for its code.
  * An empty `loadedText` keeps the original label after a successful press.
  */
 export const SubmitButton = ({
@@ -246,7 +245,7 @@ export const SubmitButton = ({
         showSaved();
       }
     } catch (err) {
-      setError((message ?? responseMessage)(err));
+      setError(message !== undefined ? message(err) : t(errorMessageKey(err, 'errors.common.requestFailed')));
     } finally {
       setBusy(false);
     }

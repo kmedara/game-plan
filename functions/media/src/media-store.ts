@@ -1,6 +1,7 @@
 /**
- * Presigned Amazon Simple Storage Service (S3) URLs, with a local object store
- * for laptop work when DynamoDB Local is in use.
+ * Presigned Amazon Simple Storage Service (S3) uploads, CloudFront or S3
+ * download URLs, and a local object store for laptop work when DynamoDB Local
+ * is in use.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -9,6 +10,8 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { MAX_UPLOAD_BYTES, type PresignUploadBody } from '@gameplan/schemas';
+import { readSecret } from '../../lib/parameters.js';
+import { CDN_KEY_PREFIX, cdnExpiry, signCloudFrontUrl } from './cdn-url.js';
 
 /** How long a presigned URL stays valid. */
 const PRESIGN_EXPIRES_SECONDS = 15 * 60;
@@ -110,22 +113,53 @@ export const createUploadUrl = async (
 };
 
 /**
- * Issues a short-lived download URL for an existing object key.
+ * Signs a website-distribution URL for an object, when CDN delivery is configured.
+ *
+ * @param objectKey - A validated object key.
+ * @param expiresAt - Expiry in epoch seconds.
+ * @returns The signed URL, or `undefined` to fall back to a presigned S3 URL.
+ */
+const cdnDownloadUrl = async (objectKey: string, expiresAt: number): Promise<string | undefined> => {
+  const origin = process.env.MEDIA_CDN_ORIGIN?.trim().replace(/\/+$/u, '') ?? '';
+  const keyPairId = process.env.MEDIA_SIGNING_KEY_ID?.trim() ?? '';
+  if (origin.length === 0 || keyPairId.length === 0 || !objectKey.startsWith(CDN_KEY_PREFIX)) {
+    return undefined;
+  }
+  const privateKey = await readSecret('MEDIA_SIGNING_PRIVATE_KEY_PARAMETER', 'MEDIA_SIGNING_PRIVATE_KEY');
+  if (privateKey === undefined) return undefined;
+  const path = objectKey.split('/').map(encodeURIComponent).join('/');
+  return signCloudFrontUrl(`${origin}/${path}`, keyPairId, privateKey, expiresAt);
+};
+
+/**
+ * Issues a download URL for an existing object key.
+ *
+ * Deployed stacks with a signing key return a cacheable website URL that stays
+ * the same for a whole signing window; otherwise a 15-minute presigned S3 URL.
  *
  * @param objectKey - The object key stored on a message.
- * @returns Download URL and object key.
+ * @param nowMs - Current time in epoch milliseconds.
+ * @returns Download URL, object key, and when the URL expires.
  */
 export const createDownloadUrl = async (
   objectKey: string,
-): Promise<{ downloadUrl: string; objectKey: string }> => {
+  nowMs: number = Date.now(),
+): Promise<{ downloadUrl: string; objectKey: string; expiresAt: string }> => {
   if (objectKey.includes('..') || objectKey.startsWith('/')) {
     throw new Error('invalid_object_key');
   }
+  const windowExpiry = cdnExpiry(nowMs);
   if (isLocalMedia()) {
     return {
       downloadUrl: `${localApiOrigin()}/media/local-objects/${encodeURIComponent(objectKey)}`,
       objectKey,
+      expiresAt: new Date(windowExpiry * 1000).toISOString(),
     };
+  }
+
+  const cdnUrl = await cdnDownloadUrl(objectKey, windowExpiry);
+  if (cdnUrl !== undefined) {
+    return { downloadUrl: cdnUrl, objectKey, expiresAt: new Date(windowExpiry * 1000).toISOString() };
   }
 
   const command = new GetObjectCommand({
@@ -135,7 +169,11 @@ export const createDownloadUrl = async (
   const downloadUrl = await getSignedUrl(getS3(), command, {
     expiresIn: PRESIGN_EXPIRES_SECONDS,
   });
-  return { downloadUrl, objectKey };
+  return {
+    downloadUrl,
+    objectKey,
+    expiresAt: new Date(nowMs + PRESIGN_EXPIRES_SECONDS * 1000).toISOString(),
+  };
 };
 
 /**

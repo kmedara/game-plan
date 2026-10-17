@@ -3,29 +3,20 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { canWithMatrix, canWithRoles, permissionMatrix, roleHasPermission } from '@gameplan/rules';
 import { DEFAULT_ROLE_PERMISSIONS } from '@gameplan/types';
-import { teamMemberSk, teamPk } from './dynamo/keys.js';
+import { teamPk } from './dynamo/keys.js';
 
-const mockGetItem = vi.fn();
 const mockQueryBySkPrefix = vi.fn();
 
 vi.mock('./dynamo/access.js', () => ({
-  getItem: (...args: unknown[]) => mockGetItem(...args),
   queryBySkPrefix: (...args: unknown[]) => mockQueryBySkPrefix(...args),
 }));
 
-const {
-  can,
-  canWithMatrix,
-  canWithRoles,
-  loadRolePermissionMatrix,
-  normalizeRolePermissions,
-  roleHasPermission,
-} = await import('./permissions.js');
+const { loadRolePermissionMatrix, normalizeRolePermissions } = await import('./permissions.js');
 
 describe('permissions', () => {
   beforeEach(() => {
-    mockGetItem.mockReset();
     mockQueryBySkPrefix.mockReset();
   });
 
@@ -77,31 +68,19 @@ describe('permissions', () => {
     expect(mockQueryBySkPrefix).toHaveBeenCalledWith(teamPk('team-1'), 'ROLE#');
   });
 
-  it('returns false from can when membership is missing or permission denied', async () => {
-    mockGetItem.mockResolvedValueOnce(undefined);
-    await expect(can('u1', 't1', 'manage_events')).resolves.toBe(false);
-
-    mockGetItem.mockResolvedValueOnce({ role: 'player' });
-    mockQueryBySkPrefix.mockResolvedValueOnce([]);
-    await expect(can('u1', 't1', 'manage_permissions')).resolves.toBe(false);
-
-    mockGetItem.mockResolvedValueOnce({ role: 'team_admin' });
-    mockQueryBySkPrefix.mockResolvedValueOnce([]);
-    await expect(can('u1', 't1', 'manage_events')).resolves.toBe(true);
-    expect(mockGetItem).toHaveBeenCalledWith(teamPk('t1'), teamMemberSk('u1'));
-  });
-
-  it('grants a permission when any held role includes it', async () => {
+  it('grants a permission when any held role includes it', () => {
     expect(
       canWithRoles(['parent', 'coach'], { coach: ['manage_events'], parent: [] }, 'manage_events'),
     ).toBe(true);
     expect(canWithRoles(['parent'], { parent: [] }, 'manage_events')).toBe(false);
+  });
 
-    mockGetItem.mockResolvedValueOnce({ role: 'parent', roles: ['parent', 'coach'] });
-    mockQueryBySkPrefix.mockResolvedValueOnce([
+  it('keys permission rows by role', () => {
+    const matrix = permissionMatrix([
       { role: 'coach', permissions: ['manage_events'] },
-      { role: 'parent', permissions: [] },
+      { role: 'player', permissions: [] },
     ]);
-    await expect(can('u1', 't1', 'manage_events')).resolves.toBe(true);
+    expect(canWithRoles(['player', 'coach'], matrix, 'manage_events')).toBe(true);
+    expect(canWithRoles(['parent'], matrix, 'manage_events')).toBe(false);
   });
 });

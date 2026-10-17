@@ -31,8 +31,8 @@ export const handleRegisterDevice = route(
   ['deviceId'],
   withMediaErrors(),
   validDeviceId(),
-  withBodyValidation(registerDeviceBodySchema),
   requireUser(),
+  withBodyValidation(registerDeviceBodySchema),
   async ({ deviceId, user, body }) => {
     const item = await putDevice({
       userId: user.userId,

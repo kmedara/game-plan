@@ -28,12 +28,13 @@ export const PARAMETER_ENV: Record<string, string> = {
   'vapid-public-key': 'VAPID_PUBLIC_KEY',
   'vapid-private-key': 'VAPID_PRIVATE_KEY',
   'vapid-subject': 'VAPID_SUBJECT',
+  'media-signing-public-key': 'MEDIA_SIGNING_PUBLIC_KEY',
 };
 
 /** Stack output ids, mapped to the environment variables the website build and upload read. */
 export const OUTPUT_ENV: Record<string, string> = {
   HttpApiUrl: 'API_BASE_URL',
-  WebSocketUrl: 'WS_BASE_URL',
+  SiteWebSocketUrl: 'WS_BASE_URL',
   SiteBucketName: 'SITE_BUCKET_NAME',
   SiteDistributionId: 'SITE_DISTRIBUTION_ID',
 };

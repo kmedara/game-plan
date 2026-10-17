@@ -295,11 +295,11 @@ describe('media handler', () => {
     expect(
       (await handler(httpEvent('DELETE', '/media/devices/phone-1', { headers: { authorization: 'Bearer bad' } })))
         .statusCode,
-    ).toBeGreaterThanOrEqual(400);
-    expect((await handler(httpEvent('GET', '/media/presign-download'))).statusCode).toBe(400);
+    ).toBe(401);
+    expect((await handler(httpEvent('GET', '/media/presign-download'))).statusCode).toBe(401);
     expect((await handler(httpEvent('DELETE', 'devices/phone-1'))).statusCode).toBe(401);
     expect((await handler(httpEvent('GET', 'local-objects/x'))).statusCode).toBe(404);
-    expect((await handler(httpEvent('GET', '/presign-download'))).statusCode).toBe(400);
+    expect((await handler(httpEvent('GET', '/presign-download'))).statusCode).toBe(401);
     expect((await handler(httpEvent('GET', '/health'))).statusCode).toBe(200);
     expect((await handler(httpEvent('GET', '/media/local-objects/x', {}))).statusCode).toBe(404);
     const dlUser = randomUUID();

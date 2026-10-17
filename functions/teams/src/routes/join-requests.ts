@@ -54,8 +54,8 @@ export const handleListJoinRequests = route(
   ["teamId"],
   withTeamsErrors(),
   requireUser(),
-  requirePermission("approve_join_requests"),
   requireMembership(),
+  requirePermission("approve_join_requests"),
   async ({ teamId }) => {
     const requests = await listJoinRequests(teamId);
     const enriched = await Promise.all(
@@ -90,8 +90,9 @@ export const handleListJoinRequests = route(
 export const handleApproveJoinRequest = route(
   ["teamId", "requestId"],
   withTeamsErrors(),
-  withBodyValidation(approveJoinRequestBodySchema),
   requireUser(),
+  withBodyValidation(approveJoinRequestBodySchema),
+  requireMembership(),
   requirePermission("approve_join_requests"),
   async ({ teamId, requestId, body }) => {
     const request = await getJoinRequest(teamId, requestId);
@@ -124,6 +125,7 @@ export const handleRejectJoinRequest = route(
   ["teamId", "requestId"],
   withTeamsErrors(),
   requireUser(),
+  requireMembership(),
   requirePermission("approve_join_requests"),
   async ({ teamId, requestId }) => {
     await rejectJoinRequest(teamId, requestId);

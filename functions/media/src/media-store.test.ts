@@ -1,7 +1,8 @@
 /**
- * Media store coverage for local objects, S3 presign paths, and key validation.
+ * Media store coverage for local objects, S3 presign and CDN paths, and key validation.
  */
 
+import { generateKeyPairSync } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -111,6 +112,51 @@ describe('media-store', () => {
 
     const download = await createDownloadUrl('uploads/user-1/a.png');
     expect(download.downloadUrl).toBe('https://s3.example/signed');
+  });
+
+  describe('CDN download URLs', () => {
+    const { privateKey } = generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+    });
+
+    beforeEach(() => {
+      delete process.env.DYNAMODB_ENDPOINT;
+      process.env.MEDIA_BUCKET = 'bucket';
+      process.env.MEDIA_CDN_ORIGIN = 'https://site.example.com/';
+      process.env.MEDIA_SIGNING_KEY_ID = 'K123';
+      process.env.MEDIA_SIGNING_PRIVATE_KEY = privateKey;
+    });
+
+    afterEach(() => {
+      delete process.env.MEDIA_CDN_ORIGIN;
+      delete process.env.MEDIA_SIGNING_KEY_ID;
+      delete process.env.MEDIA_SIGNING_PRIVATE_KEY;
+    });
+
+    it('signs a website URL that is stable within the signing window', async () => {
+      const now = Date.UTC(2026, 9, 17, 12, 5);
+      const first = await createDownloadUrl('uploads/user-1/a b', now);
+      const later = await createDownloadUrl('uploads/user-1/a b', now + 50 * 60 * 1000);
+
+      expect(first.downloadUrl.startsWith('https://site.example.com/uploads/user-1/a%20b?Expires=')).toBe(true);
+      expect(first.downloadUrl).toContain('&Key-Pair-Id=K123');
+      expect(first.expiresAt).toBe('2026-10-17T14:00:00.000Z');
+      expect(later.downloadUrl).toBe(first.downloadUrl);
+      expect(getSignedUrl).not.toHaveBeenCalled();
+    });
+
+    it('falls back to S3 for keys the distribution does not serve or without a key', async () => {
+      const now = Date.UTC(2026, 9, 17, 12, 5);
+      const other = await createDownloadUrl('teams/t1/logo', now);
+      expect(other.downloadUrl).toBe('https://s3.example/signed');
+      expect(other.expiresAt).toBe('2026-10-17T12:20:00.000Z');
+
+      delete process.env.MEDIA_SIGNING_PRIVATE_KEY;
+      const unsigned = await createDownloadUrl('uploads/user-1/a', now);
+      expect(unsigned.downloadUrl).toBe('https://s3.example/signed');
+    });
   });
 
   it('requires MEDIA_BUCKET for S3 presign', async () => {

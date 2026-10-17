@@ -19,8 +19,8 @@ import { withScheduleErrors } from "./errors.js";
 export const handleUpsertRsvp = route(
   ["teamId"],
   withScheduleErrors(),
-  withBodyValidation(rsvpBodySchema),
   requireUser(),
+  withBodyValidation(rsvpBodySchema),
   requireMembership(),
   async ({ teamId, user, body }) => {
     const rsvp = await upsertRsvp({

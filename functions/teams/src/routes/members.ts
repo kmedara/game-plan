@@ -5,7 +5,7 @@
 import { assignRoleBodySchema } from "@gameplan/schemas";
 import { assertCallerCanGrantRoles, highestRole, rolesFromMembership } from "@gameplan/rules";
 import { getProfile, toUserProfile } from "../../../lib/auth/index.js";
-import { listGuardianIds } from "../../../lib/guardians.js";
+import { isGuardianOf, listGuardianIds } from "../../../lib/guardians.js";
 import {
   requireMembership,
   requirePermission,
@@ -36,37 +36,68 @@ const roleFields = (
   return { role: highestRole(roles), roles };
 };
 
+type Profile = NonNullable<Awaited<ReturnType<typeof getProfile>>>;
+
+/**
+ * Roster fields teammates can see.
+ *
+ * @param member - The roster row.
+ * @param profile - The member's profile, when it exists.
+ * @param showPhone - Whether the viewer may see the phone number.
+ * @returns Wire fields, or `undefined` when the row has no role.
+ */
+const memberFields = (
+  member: { userId: string; joinedAt: string; role?: unknown; roles?: unknown; positions?: string[] },
+  profile: Profile | undefined,
+  showPhone: boolean,
+) => {
+  const roles = roleFields(member);
+  if (roles === undefined) return undefined;
+  return {
+    userId: member.userId,
+    ...roles,
+    joinedAt: member.joinedAt,
+    ...(member.positions !== undefined && member.positions.length > 0
+      ? { positions: member.positions }
+      : {}),
+    ...(profile !== undefined
+      ? {
+          displayName: profile.displayName,
+          email: profile.email,
+          accountKind: profile.accountKind,
+          ...(profile.photoKey !== undefined ? { photoKey: profile.photoKey } : {}),
+          ...(showPhone && profile.phoneNumber !== undefined
+            ? { phoneNumber: profile.phoneNumber }
+            : {}),
+        }
+      : {}),
+  };
+};
+
 /**
  * Handles `GET /teams/:teamId/members`.
  *
+ * A minor's phone number is included only for that minor and their guardians.
+ *
  * @param event - The HTTP API event.
  * @param teamId - The team id from the path.
- * @returns The roster with basic profile fields when available.
+ * @returns The roster with profile fields when available.
  */
 export const handleListMembers = route(
   ["teamId"],
   withTeamsErrors(),
   requireUser(),
   requireMembership(),
-  async ({ teamId }) => {
+  async ({ teamId, user }) => {
     const members = await listMembers(teamId);
     const enriched = await Promise.all(
       members.map(async (member) => {
         const profile = await getProfile(member.userId);
-        const roles = roleFields(member);
-        if (roles === undefined) return undefined;
-        return {
-          userId: member.userId,
-          ...roles,
-          joinedAt: member.joinedAt,
-          ...(profile !== undefined
-            ? {
-                displayName: profile.displayName,
-                email: profile.email,
-                accountKind: profile.accountKind,
-              }
-            : {}),
-        };
+        const showPhone =
+          profile?.accountKind !== "minor" ||
+          user.userId === member.userId ||
+          (profile.phoneNumber !== undefined && (await isGuardianOf(user.userId, member.userId)));
+        return memberFields(member, profile, showPhone);
       }),
     );
     return json(200, { members: enriched.filter((member) => member !== undefined) });
@@ -101,27 +132,11 @@ export const handleGetMember = route(
       viewer.roles.includes("team_admin") ||
       viewer.roles.includes("coach") ||
       guardianIds.includes(user.userId);
-    const roles = roleFields(member);
-    if (roles === undefined) throw new Error("member_not_found");
+    const fields = memberFields(member, profile, showPhone);
+    if (fields === undefined) throw new Error("member_not_found");
     return json(200, {
-      userId: member.userId,
-      ...roles,
-      joinedAt: member.joinedAt,
-      ...(member.positions !== undefined && member.positions.length > 0
-        ? { positions: member.positions }
-        : {}),
-      ...(profile !== undefined
-        ? {
-            displayName: profile.displayName,
-            email: profile.email,
-            accountKind: profile.accountKind,
-            ...(profile.photoKey !== undefined ? { photoKey: profile.photoKey } : {}),
-            ...(showPhone && profile.phoneNumber !== undefined
-              ? { phoneNumber: profile.phoneNumber }
-              : {}),
-            ...(showGuardians && guardianIds.length > 0 ? { guardianIds } : {}),
-          }
-        : {}),
+      ...fields,
+      ...(profile !== undefined && showGuardians && guardianIds.length > 0 ? { guardianIds } : {}),
     });
   },
 );
@@ -137,10 +152,10 @@ export const handleGetMember = route(
 export const handleAssignRole = route(
   ["teamId", "memberUserId"],
   withTeamsErrors(),
-  withBodyValidation(assignRoleBodySchema),
   requireUser(),
-  requirePermission("assign_roles"),
+  withBodyValidation(assignRoleBodySchema),
   requireMembership(),
+  requirePermission("assign_roles"),
   async ({ teamId, memberUserId, member, body }) => {
     const target = await loadMembership(teamId, memberUserId);
     const targetRoles = rolesFromMembership(target);

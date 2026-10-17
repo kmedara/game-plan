@@ -25,6 +25,7 @@ describe('area function urls', () => {
       hostedUiDomain: platform.hostedUiDomain,
       table: platform.table,
       mediaBucket: platform.mediaBucket,
+      ssmPrefix: '/gameplan',
     });
     const template = Template.fromStack(stack);
 
@@ -56,9 +57,40 @@ describe('area function urls', () => {
       });
     }
 
+    // Clients connect through the website distribution, so the client build never reads the execute-api URL.
     const outputKeys = Object.keys(template.toJSON().Outputs as object);
     const outputs = envFromOutputs({ GamePlanApi: Object.fromEntries(outputKeys.map((key) => [key, 'value'])) });
-    expect(Object.keys(outputs)).toEqual(['WS_BASE_URL']);
+    expect(Object.keys(outputs)).toEqual([]);
+
+    template.hasResourceProperties('AWS::ApiGatewayV2::Authorizer', {
+      IdentitySource: ['route.request.querystring.ticket', 'route.request.header.X-Origin-Verify'],
+    });
+    // Secrets reach the functions as parameter names. The values are read at run time.
+    const secretVariables = ['ORIGIN_VERIFY_SECRET', 'VAPID_PRIVATE_KEY', 'GOOGLE_MAPS_API_KEY'];
+    for (const fn of Object.values(template.findResources('AWS::Lambda::Function'))) {
+      const variables = Object.keys(fn.Properties.Environment?.Variables ?? {});
+      expect(variables.filter((name) => secretVariables.includes(name))).toEqual([]);
+    }
+    const parameterNames: Record<string, [string, string]> = {
+      'gameplan-socket-authorizer': ['ORIGIN_VERIFY_SECRET_PARAMETER', '/gameplan/socket-origin-verify'],
+      'gameplan-fanout': ['VAPID_PRIVATE_KEY_PARAMETER', '/gameplan/vapid-private-key'],
+      'gameplan-places': ['GOOGLE_MAPS_API_KEY_PARAMETER', '/gameplan/google-maps-api-key'],
+    };
+    for (const [functionName, [variable, parameter]] of Object.entries(parameterNames)) {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: functionName,
+        Environment: { Variables: Match.objectLike({ [variable]: parameter, NODE_ENV: 'production' }) },
+      });
+    }
+    const parameterReads = Object.values(template.findResources('AWS::IAM::Policy'))
+      .flatMap((policy) => policy.Properties.PolicyDocument.Statement as { Action: unknown; Resource: unknown }[])
+      .filter((statement) => statement.Action === 'ssm:GetParameter')
+      .map((statement) => JSON.stringify(statement.Resource));
+    expect(parameterReads).toHaveLength(3);
+    expect(parameterReads.join('\n')).toContain('parameter/gameplan/vapid-private-key');
+    expect(parameterReads.join('\n')).toContain('parameter/gameplan/google-maps-api-key');
+    expect(parameterReads.join('\n')).toContain('parameter/gameplan/socket-origin-verify');
+    template.resourceCountIs('AWS::SecretsManager::Secret', 0);
     // Synthesizing the API stack bundles every area Lambda.
   }, 120_000);
 });

@@ -1,8 +1,10 @@
 /**
- * Shared role labels and invite-code parsing.
+ * Shared role labels, invite-code parsing, and team error messages.
  */
 
-import type { TeamPermission, TeamRole } from '@gameplan/types';
+import { rolesFromMembership } from '@gameplan/rules';
+import type { TeamRole } from '@gameplan/types';
+import { errorMessageKey } from './errors';
 
 /** Translation keys for team roles on invite controls. */
 const ROLE_LABEL_KEYS: Record<TeamRole, string> = {
@@ -22,30 +24,19 @@ export const roleLabel = (role: string): string =>
   role in ROLE_LABEL_KEYS ? ROLE_LABEL_KEYS[role as TeamRole] : role;
 
 /**
- * Roles on a membership payload.
- *
- * Falls back to the single `role` when `roles` is absent.
+ * Translated, comma-separated roles for a membership payload.
  *
  * @param member - A roster row or team summary.
- * @returns The held roles.
+ * @param t - The translate function.
+ * @returns Text such as `Coach, Parent`.
  */
-export const heldRoles = (member: { role: TeamRole; roles?: readonly TeamRole[] }): TeamRole[] =>
-  member.roles !== undefined && member.roles.length > 0 ? [...member.roles] : [member.role];
-
-/**
- * True when any held role grants the permission.
- *
- * @param roles - Roles the member holds.
- * @param matrix - The team's role-permission rows.
- * @param permission - The permission under test.
- * @returns Whether the set grants it.
- */
-export const memberHasPermission = (
-  roles: readonly TeamRole[],
-  matrix: readonly { role: TeamRole; permissions: readonly TeamPermission[] }[],
-  permission: TeamPermission,
-): boolean =>
-  matrix.some((row) => roles.includes(row.role) && row.permissions.includes(permission));
+export const roleNames = (
+  member: { role?: TeamRole; roles?: readonly TeamRole[] },
+  t: (key: string) => string,
+): string =>
+  rolesFromMembership(member)
+    .map((role) => t(roleLabel(role)))
+    .join(', ');
 
 /**
  * Reads an invite code from a pasted link or a bare code.
@@ -74,14 +65,12 @@ export const inviteCodeFromInput = (raw: string): string => {
  * @param err - The error thrown by the API client.
  * @returns A catalog key.
  */
-export const joinRequestMessage = (err: unknown): string => {
-  const code = err instanceof Error ? err.message : '';
-  if (code === 'minor_cannot_be_team_admin') return 'errors.join.minorCannotBeTeamAdmin';
-  if (code === 'minor_cannot_hold_manage_permissions') return 'errors.join.minorCannotManagePermissions';
-  if (code === 'already_a_member') return 'errors.join.alreadyMember';
-  if (code === 'join_request_not_found' || code === 'not_found') return 'errors.join.notPending';
-  return 'errors.join.updateFailed';
-};
+export const joinRequestMessage = (err: unknown): string =>
+  errorMessageKey(err, 'errors.join.updateFailed', {
+    already_a_member: 'errors.join.alreadyMember',
+    join_request_not_found: 'errors.join.notPending',
+    not_found: 'errors.join.notPending',
+  });
 
 /**
  * Sentence key for a failed invite lookup or accept.
@@ -89,19 +78,11 @@ export const joinRequestMessage = (err: unknown): string => {
  * @param err - The error from the API client.
  * @returns A catalog key.
  */
-export const inviteErrorMessage = (err: unknown): string => {
-  const code = err instanceof Error ? err.message : '';
-  switch (code) {
-    case 'not_found':
-      return 'errors.invite.notValid';
-    case 'already_a_member':
-      return 'errors.invite.alreadyMember';
-    case 'minor_cannot_be_team_admin':
-    case 'minor_cannot_hold_manage_permissions':
-      return 'errors.invite.roleUnavailable';
-    case 'forbidden':
-      return 'errors.invite.cannotUse';
-    default:
-      return 'errors.invite.failed';
-  }
-};
+export const inviteErrorMessage = (err: unknown): string =>
+  errorMessageKey(err, 'errors.invite.failed', {
+    not_found: 'errors.invite.notValid',
+    already_a_member: 'errors.invite.alreadyMember',
+    minor_cannot_be_team_admin: 'errors.invite.roleUnavailable',
+    minor_cannot_hold_manage_permissions: 'errors.invite.roleUnavailable',
+    forbidden: 'errors.invite.cannotUse',
+  });

@@ -7,9 +7,11 @@
  */
 
 import * as cdk from 'aws-cdk-lib';
+import type * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import { rateLimitedWebAcl } from './api-edge';
 import { SITE_API_PREFIX } from './deploy-config';
@@ -23,12 +25,38 @@ import { HTTP_AREAS, type HttpArea } from './names';
  */
 export const VIEWER_AUTHORIZATION_HEADER = 'x-viewer-authorization';
 
-/** Area functions the website distribution forwards `/api` to. */
+/** Viewer path for WebSocket connects on the website host. */
+export const SITE_SOCKET_PATH = `${SITE_API_PREFIX}/socket`;
+
+/**
+ * Header CloudFront adds to each socket connect.
+ *
+ * Must match `ORIGIN_VERIFY_HEADER` in `functions/socket/src/authorize.ts`.
+ */
+export const SOCKET_ORIGIN_VERIFY_HEADER = 'x-origin-verify';
+
+/** WebSocket API the website distribution forwards {@link SITE_SOCKET_PATH} to. */
+export type SiteSocketProps = {
+  /** The delivery-only WebSocket API. */
+  webSocketApi: apigwv2.IWebSocketApi;
+  /** Stage the connect is rewritten to. */
+  stageName: string;
+  /**
+   * Parameter Store String whose value is sent in {@link SOCKET_ORIGIN_VERIFY_HEADER}.
+   *
+   * CloudFormation resolves it on each deploy, so a new value needs a site deploy.
+   */
+  originSecretParameter: string;
+};
+
+/** Area functions and the WebSocket API the website distribution forwards `/api` to. */
 export type SiteApiProps = {
   /** Function URL for each HTTP area. Each must use `AWS_IAM` auth. */
   functionUrls: Record<HttpArea, lambda.IFunctionUrl>;
   /** Function behind each URL. The distribution gets permission to invoke it. */
   functions: Record<HttpArea, lambda.IFunction>;
+  /** WebSocket API for live delivery. */
+  socket: SiteSocketProps;
 };
 
 /** Edge pieces the website distribution attaches when the shared host is on. */
@@ -39,6 +67,8 @@ export type SiteApiEdge = {
   spaRewrite: cloudfront.Function;
   /** Strips `/api` and moves the bearer token out of `Authorization`. */
   apiRewrite: cloudfront.Function;
+  /** Points socket connects at the WebSocket stage path. */
+  socketRewrite: cloudfront.Function;
   /** Signs every origin request to the function URLs. */
   originAccessControl: cloudfront.FunctionUrlOriginAccessControl;
 };
@@ -49,7 +79,7 @@ export type SiteApiEdge = {
  * @param scope - The website construct.
  * @returns Objects the distribution constructor and `/api` behaviors attach.
  */
-export const createSiteApiEdge = (scope: Construct): SiteApiEdge => {
+export const createSiteApiEdge = (scope: Construct, stageName: string): SiteApiEdge => {
   const region = cdk.Stack.of(scope).region;
   if (!cdk.Token.isUnresolved(region) && region !== 'us-east-1') {
     throw new Error('The website firewall must be deployed in us-east-1.');
@@ -98,10 +128,23 @@ export const createSiteApiEdge = (scope: Construct): SiteApiEdge => {
 `),
   });
 
+  // A WebSocket API only accepts connects on the stage path itself.
+  const socketRewrite = new cloudfront.Function(scope, 'SocketRewrite', {
+    comment: 'Send /api/socket connects to the WebSocket stage',
+    runtime: cloudfront.FunctionRuntime.JS_2_0,
+    code: cloudfront.FunctionCode.fromInline(`function handler(event) {
+  var request = event.request;
+  request.uri = '/${stageName}';
+  return request;
+}
+`),
+  });
+
   return {
-    webAcl: rateLimitedWebAcl(scope, 'SiteApiWebAcl', 'gameplan-site-api', `${SITE_API_PREFIX}/`),
+    webAcl: rateLimitedWebAcl(scope, 'SiteApiWebAcl', 'gameplan-site-api', `${SITE_API_PREFIX}/`, SITE_SOCKET_PATH),
     spaRewrite,
     apiRewrite,
+    socketRewrite,
     originAccessControl: new cloudfront.FunctionUrlOriginAccessControl(scope, 'ApiOriginAccess', {
       description: 'Signs website requests to the GamePlan area function URLs',
       signing: cloudfront.Signing.SIGV4_ALWAYS,
@@ -143,7 +186,8 @@ const allowDistribution = (
 };
 
 /**
- * Forwards `/api/<area>` and `/api/<area>/*` to that area's function URL.
+ * Forwards `/api/<area>` and `/api/<area>/*` to that area's function URL, and
+ * {@link SITE_SOCKET_PATH} to the WebSocket API.
  *
  * The viewer path keeps the prefix so it does not collide with website routes
  * such as `/teams`. The function removes it before the request reaches Lambda.
@@ -182,4 +226,32 @@ export const addSiteApiBehaviors = (
       },
     );
   }
+
+  // The viewer Host must not reach API Gateway, which routes on its own hostname.
+  // Every other header and the `ticket` query string pass through for the upgrade.
+  const socket = props.socket;
+  distribution.addBehavior(
+    SITE_SOCKET_PATH,
+    new origins.HttpOrigin(cdk.Fn.select(2, cdk.Fn.split('/', socket.webSocketApi.apiEndpoint)), {
+      protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+      customHeaders: {
+        [SOCKET_ORIGIN_VERIFY_HEADER]: ssm.StringParameter.valueForStringParameter(
+          distribution,
+          socket.originSecretParameter,
+        ),
+      },
+    }),
+    {
+      viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+      allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+      cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+      originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+      functionAssociations: [
+        {
+          function: edge.socketRewrite,
+          eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+        },
+      ],
+    },
+  );
 };

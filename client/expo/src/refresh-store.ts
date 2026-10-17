@@ -12,6 +12,15 @@ export const EXPO_REFRESH_KEY = 'ts_refresh';
 export const SELECTED_TEAM_KEY = 'selected-team-id';
 
 /**
+ * Website flag that a refresh cookie probably exists.
+ *
+ * The cookie is HttpOnly, so script cannot see it. Without this flag every
+ * signed-out visit waits on a refresh request before the login screen shows.
+ * It is a hint only: identity still decides whether the cookie is valid.
+ */
+export const SESSION_HINT_KEY = 'session-hint';
+
+/**
  * Refresh store for iOS and Android. The website uses {@link WebRefreshStore}.
  */
 export class ExpoRefreshStore implements RefreshStore {

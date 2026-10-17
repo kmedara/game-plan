@@ -21,6 +21,12 @@ describe('local-jwt', () => {
     expect(localJwtSecret()).toBe('from-env');
   });
 
+  it('has no default secret', () => {
+    expect(() => localJwtSecret()).toThrow('local_jwt_secret_missing');
+    process.env.LOCAL_JWT_SECRET = '';
+    expect(() => localJwtSecret()).toThrow('local_jwt_secret_missing');
+  });
+
   it('issues and verifies access and refresh token pairs', () => {
     process.env.LOCAL_JWT_SECRET = 'pair-secret';
     const { accessToken, refreshToken, expiresIn } = issueLocalTokens('u1', 'a@example.com');

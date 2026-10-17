@@ -49,8 +49,9 @@ export const handleGetPermissions = route(
 export const handleUpdatePermissions = route(
   ["teamId"],
   withTeamsErrors(),
-  withBodyValidation(updateRolePermissionsBodySchema),
   requireUser(),
+  withBodyValidation(updateRolePermissionsBodySchema),
+  requireMembership(),
   requirePermission("manage_permissions"),
   async ({ teamId, body }) => {
     await assertProposedRolePermissions(teamId, body.roles);

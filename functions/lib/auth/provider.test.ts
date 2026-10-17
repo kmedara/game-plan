@@ -15,13 +15,25 @@ describe('getIdentityProvider', () => {
     resetIdentityProvider();
     delete process.env.COGNITO_USER_POOL_ID;
     delete process.env.COGNITO_CLIENT_ID;
+    process.env.AUTH_PROVIDER = 'local';
+    process.env.NODE_ENV = 'test';
   });
 
-  it('returns the local provider when Cognito is not configured', () => {
+  it('returns the local provider when local auth is requested', () => {
     const first = getIdentityProvider();
     const second = getIdentityProvider();
     expect(first).toBe(second);
     expect(first.register).toBeTypeOf('function');
+  });
+
+  it('refuses to start without Cognito or an explicit local provider', () => {
+    delete process.env.AUTH_PROVIDER;
+    expect(() => getIdentityProvider()).toThrow('cognito_not_configured');
+  });
+
+  it('refuses the local provider in production', () => {
+    process.env.NODE_ENV = 'production';
+    expect(() => getIdentityProvider()).toThrow('cognito_not_configured');
   });
 
   it('returns the Cognito provider when pool and client ids are set', () => {

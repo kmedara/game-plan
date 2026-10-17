@@ -1,18 +1,18 @@
 /**
- * Shared team image upload and the trash control used under editable team settings.
+ * Shared team image settings and the trash control used under editable team settings.
  */
 
-import * as ImagePicker from 'expo-image-picker';
-import { useEffect, useState } from 'react';
+import Plus from 'lucide-react-native/icons/plus';
+import Trash from 'lucide-react-native/icons/trash';
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import Svg, { Line, Path } from 'react-native-svg';
+import { useTranslation } from 'react-i18next';
+import type { TeamTheme, UpdateTeamBody } from '@gameplan/types';
+import { pickAndUploadImage, type ImageUploadFailure } from './media';
 import { useApp } from './state';
 import { colors, fieldWash, muteColor } from './theme';
 
-const MAX_BYTES = 5 * 1024 * 1024;
-const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-
-export type TeamImageFailure = 'bad_type' | 'too_large' | 'upload_failed';
+const TEAM_IMAGE_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
 export type ChatBackgroundOverlay = 'dark' | 'light' | 'none';
 
@@ -24,30 +24,21 @@ export const chatOverlayColor = (overlay: ChatBackgroundOverlay | undefined): st
 };
 
 /** Translation key for a failed team image upload. */
-export const teamImageErrorKey = (error: TeamImageFailure): string => {
+export const teamImageErrorKey = (error: ImageUploadFailure): string => {
   if (error === 'bad_type') return 'errors.teamAdmin.badLogoType';
   if (error === 'too_large') return 'errors.teamAdmin.logoTooLarge';
   return 'errors.teamAdmin.logoUploadFailed';
 };
 
-/** Outline trash can in the Lucide style. Defaults to a muted danger. Pass a color for a tinted can. */
+/** Outline trash can. Defaults to a muted danger. Pass a color for a tinted can. */
 export const TrashIcon = ({ color = fieldWash(colors.danger, .5) }: { color?: string }) => (
-  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-    <Path d="M3 6h18" stroke={color} strokeWidth={2} strokeLinecap="round" />
-    <Path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-    <Path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-    <Line x1={10} x2={10} y1={11} y2={17} stroke={color} strokeWidth={2} strokeLinecap="round" />
-    <Line x1={14} x2={14} y1={11} y2={17} stroke={color} strokeWidth={2} strokeLinecap="round" />
-  </Svg>
+  <Trash size={16} color={color} strokeWidth={2} />
 );
 
 /** Plus shown inside an empty logo or background frame. */
 export const AddMark = () => (
   <View className="h-9 w-9 items-center justify-center rounded-full border border-line">
-    <View className="h-3.5 w-3.5 items-center justify-center">
-      <View className="absolute h-0.5 w-3.5 rounded-full bg-ink" />
-      <View className="absolute h-3.5 w-0.5 rounded-full bg-ink" />
-    </View>
+    <Plus size={16} color={colors.ink} strokeWidth={2.5} />
   </View>
 );
 
@@ -64,57 +55,52 @@ export const RemoveBadge = ({ label, onPress }: { label: string; onPress: () => 
   </Pressable>
 );
 
-/** Download URL for a stored team image. Empty when there is no key. */
-export const useTeamImageUrl = (teamId: string, key: string | undefined): string | undefined => {
-  const { api } = useApp();
-  const [uri, setUri] = useState<string | undefined>();
+/**
+ * Upload, replace, and remove one image stored on the team theme, such as the logo.
+ *
+ * @param options.teamId - The team being edited.
+ * @param options.themePatch - The theme fields to send for a new key, or for `undefined` on remove.
+ * @param options.onSaved - Receives the saved theme.
+ * @returns The current error message and the upload and clear actions.
+ */
+export const useTeamImageSetting = ({
+  teamId,
+  themePatch,
+  onSaved,
+}: {
+  teamId: string;
+  themePatch: (key: string | undefined) => NonNullable<UpdateTeamBody['theme']>;
+  onSaved: (theme: TeamTheme | undefined) => void;
+}): { error: string | undefined; upload: () => Promise<void>; clear: () => void } => {
+  const { t } = useTranslation();
+  const { api, patchTeam } = useApp();
+  const [error, setError] = useState<string | undefined>();
 
-  useEffect(() => {
-    if (key === undefined) {
-      setUri(undefined);
+  const save = async (key: string | undefined): Promise<void> => {
+    const saved = await api.updateTeam(teamId, { theme: themePatch(key) });
+    patchTeam(saved);
+    onSaved(saved.theme);
+  };
+
+  const upload = async (): Promise<void> => {
+    setError(undefined);
+    const result = await pickAndUploadImage(api, { types: TEAM_IMAGE_TYPES });
+    if (result === undefined) return;
+    if ('error' in result) {
+      setError(t(teamImageErrorKey(result.error)));
       return;
     }
-    let cancelled = false;
-    void api.presignDownload(key, { teamId }).then((download) => {
-      if (!cancelled) setUri(download.downloadUrl);
-    }).catch(() => {
-      if (!cancelled) setUri(undefined);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, key, teamId]);
+    try {
+      await save(result.key);
+    } catch {
+      setError(t('errors.teamAdmin.logoUploadFailed'));
+    }
+  };
 
-  return uri;
-};
+  const clear = (): void => {
+    setError(undefined);
+    void save(undefined).catch(() => setError(t('errors.teamAdmin.logoUploadFailed')));
+  };
 
-/**
- * Opens the image library and uploads the selection.
- *
- * @returns The stored object key, or undefined when the picker is canceled.
- */
-export const uploadTeamImage = async (
-  api: {
-    presignUpload: (contentType: string, bytes: number) => Promise<{ uploadUrl: string; objectKey: string }>;
-  },
-): Promise<{ key: string } | { error: TeamImageFailure } | undefined> => {
-  const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'] });
-  if (picked.canceled || picked.assets[0] === undefined) return undefined;
-  const asset = picked.assets[0];
-  const contentType = asset.mimeType ?? 'image/jpeg';
-  if (!IMAGE_TYPES.has(contentType)) return { error: 'bad_type' };
-  const blob = await (await fetch(asset.uri)).blob();
-  if (blob.size > MAX_BYTES) return { error: 'too_large' };
-  try {
-    const presign = await api.presignUpload(contentType, blob.size);
-    const uploadResponse = await fetch(presign.uploadUrl, {
-      method: 'PUT',
-      headers: { 'content-type': contentType },
-      body: blob,
-    });
-    if (!uploadResponse.ok) return { error: 'upload_failed' };
-    return { key: presign.objectKey };
-  } catch {
-    return { error: 'upload_failed' };
-  }
+  return { error, upload, clear };
 };

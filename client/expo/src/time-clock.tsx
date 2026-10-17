@@ -3,6 +3,7 @@
  */
 
 import { clockFromMinutes } from './schedule-calendar';
+import { colors } from './theme';
 
 export const TimeClock = ({
   minutes,
@@ -23,11 +24,11 @@ export const TimeClock = ({
     style={{
       width: '100%',
       borderRadius: 8,
-      border: '1px solid #cbd5e1',
-      backgroundColor: '#fff',
+      border: `1px solid ${colors.line}`,
+      backgroundColor: colors.paper,
       padding: '8px 12px',
       fontSize: 16,
-      color: '#0f172a',
+      color: colors.ink,
     }}
   />
 );

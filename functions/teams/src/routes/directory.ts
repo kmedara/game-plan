@@ -17,8 +17,8 @@ import { withTeamsErrors } from './errors.js';
  */
 export const handleSearchDirectory = route(
   withTeamsErrors(),
-  withQueryValidation(searchTeamDirectoryQuerySchema),
   requireUser(),
+  withQueryValidation(searchTeamDirectoryQuerySchema),
   async ({ query }) => {
     const page = await searchTeamDirectory(query.q ?? '', {
       limit: query.limit,

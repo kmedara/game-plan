@@ -19,8 +19,8 @@ import { withScheduleErrors } from "./errors.js";
 export const handleListSchedule = route(
   ["teamId"],
   withScheduleErrors(),
-  withQueryValidation(scheduleWindowQuerySchema),
   requireUser(),
+  withQueryValidation(scheduleWindowQuerySchema),
   requireMembership(),
   async ({ teamId, query }) => {
     const schedule = await listOccurrences(teamId, query.from, query.to);

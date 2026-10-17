@@ -21,8 +21,8 @@ import { withIdentityErrors } from './session.js';
  */
 export const handleCreateGuardianInvite = route(
   withIdentityErrors(),
-  withBodyValidation(createGuardianInviteBodySchema),
   requireUser(),
+  withBodyValidation(createGuardianInviteBodySchema),
   async ({ user, body }) => {
     const invite = await createGuardianInvite(user.userId, body.email);
     return json(201, invite);

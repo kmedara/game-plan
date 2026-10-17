@@ -6,7 +6,7 @@ import type { APIGatewayProxyEventV2 } from "aws-lambda";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { issueLocalTokens } from "./auth/index.js";
-import { requirePermission, requireUser } from "./guards.js";
+import { requireMembership, requirePermission, requireUser } from "./guards.js";
 import { json } from "./http.js";
 import {
   asStep,
@@ -210,12 +210,16 @@ describe("route pipeline", () => {
 const _typedPermission = route(
   ["teamId"],
   requireUser(),
+  requireMembership(),
   requirePermission("manage_events"),
   async (ctx): HttpResult =>
-    json(200, { userId: ctx.user.userId, teamId: ctx.teamId }),
+    json(200, { userId: ctx.user.userId, teamId: ctx.teamId, role: ctx.member.role }),
 );
 
-// @ts-expect-error permission requires a user already on the context
+// @ts-expect-error permission requires teamId and member already on the context
 route(requirePermission("manage_events"), async () => json(200, {}));
+
+// @ts-expect-error permission requires membership loaded first
+route(["teamId"], requireUser(), requirePermission("manage_events"), async () => json(200, {}));
 
 void _typedPermission;

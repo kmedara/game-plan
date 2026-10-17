@@ -65,7 +65,13 @@ import type {
   UpdateTeamBody,
 } from '@gameplan/types';
 import { config } from './config';
-import { ExpoRefreshStore, SELECTED_TEAM_KEY, readPreference, writePreference } from './refresh-store';
+import {
+  ExpoRefreshStore,
+  SELECTED_TEAM_KEY,
+  SESSION_HINT_KEY,
+  readPreference,
+  writePreference,
+} from './refresh-store';
 
 type Listener = () => void;
 
@@ -178,14 +184,34 @@ export class ApiClient {
     this.emit();
   }
 
+  /**
+   * Returns whether a stored session might restore.
+   *
+   * Native and local bypass runs always try, because the refresh call returns
+   * without a network request when nothing is stored. The website reads
+   * {@link SESSION_HINT_KEY}.
+   */
+  async mightHaveSession(): Promise<boolean> {
+    if (this.native || config.authDisabled) return true;
+    return (await readPreference(SESSION_HINT_KEY, false)) !== undefined;
+  }
+
   async refreshSession(): Promise<boolean> {
     try {
       await this.session.refresh();
+      this.setSessionHint(true);
       this.emit();
       return true;
-    } catch {
+    } catch (error) {
+      // A failed connection says nothing about the cookie, so the hint stays.
+      if (!(error instanceof TypeError)) this.setSessionHint(false);
       return false;
     }
+  }
+
+  private setSessionHint(present: boolean): void {
+    if (this.native) return;
+    void writePreference(SESSION_HINT_KEY, present ? '1' : undefined, false);
   }
 
   /**
@@ -211,6 +237,7 @@ export class ApiClient {
   async logout(): Promise<void> {
     this.setTeamId(undefined);
     this.teamsFlag = false;
+    this.setSessionHint(false);
     if (!config.authDisabled && !this.native && typeof window !== 'undefined') {
       const returnTo = encodeURIComponent(`${window.location.origin}/login`);
       window.location.href = `${config.apiBaseUrl}/identity/oauth/logout?returnTo=${returnTo}`;

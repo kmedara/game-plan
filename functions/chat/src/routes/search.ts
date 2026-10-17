@@ -20,8 +20,8 @@ import { withChatErrors } from './errors.js';
  */
 export const handleSearchUsers = route(
   withChatErrors(),
-  withQueryValidation(searchUsersQuerySchema),
   requireUser(),
+  withQueryValidation(searchUsersQuerySchema),
   async ({ query }) => {
     const profile = await findProfileByEmail(query.email.trim().toLowerCase());
     if (profile === undefined || !matchesUserSearchPolicy(profile.accountKind)) {

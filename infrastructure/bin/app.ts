@@ -80,6 +80,8 @@ const dnsStack = dns === undefined ? undefined : new GamePlanDns(app, 'GamePlanD
 
 const staging = deployEnv === 'staging';
 const ssmPrefix = (process.env.SSM_PREFIX ?? '/gameplan').replace(/\/+$/u, '');
+// Signed, edge-cached media URLs. The private key stays in Parameter Store for the media function.
+const mediaSigningPublicKey = definedString(process.env.MEDIA_SIGNING_PUBLIC_KEY);
 
 const platform = new GamePlanPlatform(app, 'GamePlanPlatform', {
   env,
@@ -88,6 +90,7 @@ const platform = new GamePlanPlatform(app, 'GamePlanPlatform', {
   logoutUrls,
   social,
   signupAllowlistParameter: staging ? `${ssmPrefix}/staging-signup-allowlist` : undefined,
+  mediaCdn: mediaSigningPublicKey !== undefined,
 });
 
 const api = new GamePlanApi(app, 'GamePlanApi', {
@@ -99,6 +102,8 @@ const api = new GamePlanApi(app, 'GamePlanApi', {
   hostedUiDomain: platform.hostedUiDomain,
   table: platform.table,
   mediaBucket: platform.mediaBucket,
+  ssmPrefix,
+  mediaSigningPublicKey,
 });
 
 new GamePlanSite(app, 'GamePlanSite', {
@@ -108,4 +113,7 @@ new GamePlanSite(app, 'GamePlanSite', {
   dns,
   functionUrls: api.functionUrls,
   functions: api.httpFunctions,
+  socket: api.socket,
+  mediaBucket: platform.mediaBucket,
+  mediaKeyGroup: api.mediaKeyGroup,
 });

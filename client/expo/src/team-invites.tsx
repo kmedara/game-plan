@@ -2,12 +2,14 @@
  * Role invite links the caller can email, text, copy, and delete.
  */
 
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { callerCanGrant } from '@gameplan/rules';
 import { TEAM_ROLES, type TeamInvite, type TeamRole } from '@gameplan/types';
+import { createInviteMutation, deleteInviteMutation, invitesQuery } from '@/src/queries/teams';
 import {
   inviteMessageBody,
   invitePageUrl,
@@ -16,6 +18,7 @@ import {
   smsBodySeparator,
   smsInviteUrl,
 } from '@/src/invite-share';
+import { errorMessageKey } from '@/src/errors';
 import { toE164Phone } from '@/src/phone';
 import { roleLabel } from '@/src/roles';
 import { RolePicker } from '@/src/role-picker';
@@ -26,38 +29,27 @@ import { Button, Field } from '@/src/ui';
 export const TeamInvites = ({
   teamId,
   teamName,
-  invites,
-  setInvites,
   callerRole,
   onError,
 }: {
   teamId: string;
   teamName: string;
-  invites: TeamInvite[];
-  setInvites: (update: (current: TeamInvite[]) => TeamInvite[]) => void;
   callerRole: TeamRole;
   onError: (message: string) => void;
 }) => {
   const { t } = useTranslation();
   const { api } = useApp();
+  const queryClient = useQueryClient();
+  const { data: invites = [] } = useQuery(invitesQuery(api, teamId));
+  const createInvite = useMutation(createInviteMutation(api, queryClient, teamId));
+  const remove = useMutation(deleteInviteMutation(api, queryClient, teamId));
   const [inviteRole, setInviteRole] = useState<TeamRole>('player');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [sending, setSending] = useState<'email' | 'text' | undefined>();
   const grantableRoles = TEAM_ROLES.filter((role) => callerCanGrant(callerRole, role));
 
-  const rememberInvite = (invite: TeamInvite): void => {
-    setInvites((current) => {
-      const rest = current.filter((item) => item.role !== invite.role);
-      return [invite, ...rest];
-    });
-  };
-
-  const ensureInvite = async (role: TeamRole): Promise<TeamInvite> => {
-    const invite = await api.createInvite(teamId, role);
-    rememberInvite(invite);
-    return invite;
-  };
+  const ensureInvite = async (role: TeamRole): Promise<TeamInvite> => createInvite.mutateAsync(role);
 
   const messageFor = (invite: TeamInvite): { subject: string; body: string } => {
     const origin =
@@ -75,12 +67,12 @@ export const TeamInvites = ({
     };
   };
 
-  const createInvite = async (role: TeamRole): Promise<void> => {
+  const copyInvite = async (role: TeamRole): Promise<void> => {
     try {
       const invite = await ensureInvite(role);
       await Clipboard.setStringAsync(invite.code);
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'request_failed');
+      onError(t(errorMessageKey(err, 'errors.teamAdmin.inviteFailed')));
     }
   };
 
@@ -112,7 +104,7 @@ export const TeamInvites = ({
       if (channel === 'email') setEmail('');
       else setPhone('');
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'request_failed');
+      onError(t(errorMessageKey(err, 'errors.teamAdmin.inviteFailed')));
     } finally {
       setSending(undefined);
     }
@@ -120,10 +112,9 @@ export const TeamInvites = ({
 
   const removeInvite = async (role: TeamRole): Promise<void> => {
     try {
-      await api.deleteInvite(teamId, role);
-      setInvites((current) => current.filter((invite) => invite.role !== role));
+      await remove.mutateAsync(role);
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'request_failed');
+      onError(t(errorMessageKey(err, 'errors.common.deleteFailed')));
     }
   };
 
@@ -164,7 +155,7 @@ export const TeamInvites = ({
             ? t('common.copyLink')
             : t('teamAdmin.createInviteLink')
         }
-        onPress={() => void createInvite(inviteRole)}
+        onPress={() => void copyInvite(inviteRole)}
       />
       {invites.map((invite) => (
         <View key={invite.role} className="mb-2 flex-row items-center rounded-xl bg-inset p-3">

@@ -11,7 +11,7 @@
 
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
-import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
@@ -64,26 +64,31 @@ const inspectApi = async () => {
 
 const inspectClient = async () => {
   const outDir = path.join(reportRoot, 'client');
+  const expoRoot = path.join(repoRoot, 'client/expo');
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
   await new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      [path.join(repoRoot, 'client/expo/scripts/run.mjs'), 'export', '--output-dir', outDir],
-      { cwd: repoRoot, stdio: 'inherit', env: process.env },
+      [path.join(expoRoot, 'scripts/run.mjs'), 'export', '--output-dir', outDir],
+      { cwd: expoRoot, stdio: 'inherit', env: process.env },
     );
     child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`expo export exited ${code}`))));
   });
   const files = await walk(outDir);
-  const scripts = files.filter((file) => file.endsWith('.js'));
+  const scripts = files.filter((file) => file.endsWith('.js')).sort();
   let total = 0;
+  let gzipTotal = 0;
   console.log('\nExpo web export');
   for (const file of scripts) {
-    const size = (await stat(file)).size;
+    const output = await readFile(file);
+    const size = output.length;
+    const gzip = gzipSync(output).length;
     total += size;
-    console.log(`  ${kb(size).padStart(8)}  ${path.relative(outDir, file)}`);
+    gzipTotal += gzip;
+    console.log(`  ${kb(size).padStart(8)} raw  ${kb(gzip).padStart(8)} gzip  ${path.relative(outDir, file)}`);
   }
-  console.log(`  ${kb(total).padStart(8)}  total javascript`);
+  console.log(`  ${kb(total).padStart(8)} raw  ${kb(gzipTotal).padStart(8)} gzip  total javascript`);
   console.log(`\nExport: ${outDir}`);
 };
 

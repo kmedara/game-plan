@@ -19,8 +19,8 @@ import { withScheduleErrors } from "./errors.js";
 export const handleGetLineup = route(
   ["teamId"],
   withScheduleErrors(),
-  withQueryValidation(lineupQuerySchema),
   requireUser(),
+  withQueryValidation(lineupQuerySchema),
   requireMembership(),
   async ({ teamId, query }) => {
     const lineup =
@@ -49,8 +49,9 @@ export const handleGetLineup = route(
 export const handlePutLineup = route(
   ["teamId"],
   withScheduleErrors(),
-  withBodyValidation(lineupBodySchema),
   requireUser(),
+  withBodyValidation(lineupBodySchema),
+  requireMembership(),
   requirePermission("manage_events"),
   async ({ teamId, body }) => {
     const lineup = await putLineup({

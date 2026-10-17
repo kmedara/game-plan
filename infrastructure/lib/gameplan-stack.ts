@@ -18,7 +18,7 @@ import { Auth, type AuthSocialContext } from './auth';
 import { Database } from './database';
 import { ZoneDns } from './dns';
 import type { HttpArea } from './names';
-import type { SiteApiProps } from './site-api';
+import type { SiteApiProps, SiteSocketProps } from './site-api';
 import { Storage } from './storage';
 import { Website } from './website';
 
@@ -76,6 +76,8 @@ export type GamePlanPlatformProps = cdk.StackProps & {
   selfSignUpEnabled?: boolean;
   /** Parameter Store name of the staging sign-up allowlist. */
   signupAllowlistParameter?: string;
+  /** Lets the website distribution read uploads, for signed media URLs. */
+  mediaCdn?: boolean;
 };
 
 /**
@@ -120,7 +122,10 @@ export class GamePlanPlatform extends cdk.Stack {
 
     this.table = new Database(this, 'Database').table;
 
-    this.mediaBucket = new Storage(this, 'Storage', { corsOrigin: props.corsOrigin }).mediaBucket;
+    this.mediaBucket = new Storage(this, 'Storage', {
+      corsOrigin: props.corsOrigin,
+      cdnReads: props.mediaCdn,
+    }).mediaBucket;
   }
 }
 
@@ -140,6 +145,10 @@ export type GamePlanApiProps = cdk.StackProps & {
   table: dynamodb.Table;
   /** Media bucket from {@link GamePlanPlatform}. */
   mediaBucket: s3.IBucket;
+  /** Parameter Store prefix the functions read their secrets from, such as `/gameplan`. */
+  ssmPrefix: string;
+  /** RSA public key PEM for signed media URLs on the website. Needs `mediaCdn` on the platform. */
+  mediaSigningPublicKey?: string;
 };
 
 /**
@@ -151,6 +160,12 @@ export class GamePlanApi extends cdk.Stack {
 
   /** Function behind each URL. */
   public readonly httpFunctions: Record<HttpArea, lambda.IFunction>;
+
+  /** WebSocket API the site stack forwards `/api/socket` to. */
+  public readonly socket: SiteSocketProps;
+
+  /** Key group the site trusts for signed media URLs, when configured. */
+  public readonly mediaKeyGroup?: cloudfront.IKeyGroup;
 
   /**
    * Wires the area functions to the platform resources.
@@ -170,9 +185,17 @@ export class GamePlanApi extends cdk.Stack {
       table: props.table,
       mediaBucket: props.mediaBucket,
       corsOrigin: props.corsOrigin,
+      ssmPrefix: props.ssmPrefix,
+      mediaSigningPublicKey: props.mediaSigningPublicKey,
     });
+    this.mediaKeyGroup = api.mediaKeyGroup;
     this.functionUrls = api.functionUrls;
     this.httpFunctions = api.httpFunctions;
+    this.socket = {
+      webSocketApi: api.webSocketApi,
+      stageName: api.webSocketStage.stageName,
+      originSecretParameter: api.socketOriginParameter,
+    };
   }
 }
 
@@ -185,6 +208,10 @@ export type GamePlanSiteProps = cdk.StackProps &
     certificateArn?: string;
     /** Present when the DNS stack owns the hosted zone. This stack writes the alias records. */
     dns?: DnsConfig;
+    /** Media bucket from {@link GamePlanPlatform}, allowed by the website CSP. */
+    mediaBucket: s3.IBucket;
+    /** Key group from {@link GamePlanApi}. Serves cached uploads at `/uploads/*` when set. */
+    mediaKeyGroup?: cloudfront.IKeyGroup;
   };
 
 /**
@@ -211,6 +238,9 @@ export class GamePlanSite extends cdk.Stack {
       certificateArn: props.certificateArn,
       functionUrls: props.functionUrls,
       functions: props.functions,
+      socket: props.socket,
+      mediaBucket: props.mediaBucket,
+      mediaKeyGroup: props.mediaKeyGroup,
     }).distribution;
 
     if (props.dns !== undefined) {

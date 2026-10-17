@@ -711,6 +711,9 @@ export type TeamMemberList = {
     displayName?: string;
     email?: string;
     accountKind?: 'adult' | 'minor';
+    photoKey?: string;
+    phoneNumber?: string;
+    positions?: string[];
   }[];
 }
 
@@ -742,6 +745,9 @@ export type TeamMember = {
   displayName?: string;
   email?: string;
   accountKind?: 'adult' | 'minor';
+  photoKey?: string;
+  phoneNumber?: string;
+  positions?: string[];
 }
 
 export type TeamPermission =
