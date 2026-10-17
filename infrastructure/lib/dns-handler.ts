@@ -192,6 +192,33 @@ const changeAlias = async (
 };
 
 /**
+ * Deletes an alias that a previous deploy left behind.
+ *
+ * A missing record is already gone. The website certificate is left in place
+ * until CloudFront stops using it.
+ *
+ * @param client - The Route 53 client.
+ * @param hostedZoneId - The zone that owns the name.
+ * @param name - The previous record name.
+ * @param dnsName - The alias target from the previous deploy.
+ * @param targetZoneId - The hosted zone id of that alias target.
+ */
+const deleteAlias = async (
+  client: Route53Client,
+  hostedZoneId: string,
+  name: string,
+  dnsName: string,
+  targetZoneId: string,
+): Promise<void> => {
+  try {
+    await changeAlias(client, hostedZoneId, 'DELETE', name, dnsName, targetZoneId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes('not found')) throw error;
+  }
+};
+
+/**
  * Finds an existing certificate for a domain, preferring one that is already issued.
  *
  * @param client - The ACM client for the certificate region.
@@ -375,26 +402,19 @@ export const handler = async (event: DnsEvent): Promise<{ PhysicalResourceId: st
         props.ApiTargetZoneId,
       );
     }
-    const previous = event.OldResourceProperties;
-    if (
-      event.RequestType === 'Update' &&
-      previous?.ApiName &&
-      previous.ApiTarget &&
-      previous.ApiTargetZoneId &&
-      previous.ApiName !== props.ApiName
-    ) {
-      try {
-        await changeAlias(
-          route53,
-          props.HostedZoneId,
-          'DELETE',
-          previous.ApiName,
-          previous.ApiTarget,
-          previous.ApiTargetZoneId,
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (!message.includes('not found')) throw error;
+    if (event.RequestType === 'Update') {
+      const previous = event.OldResourceProperties;
+      const retained = new Set(
+        [props.SiteName, props.ApiName].filter((name): name is string => name !== undefined),
+      );
+      const stale = [
+        { name: previous?.ApiName, target: previous?.ApiTarget, zoneId: previous?.ApiTargetZoneId },
+        { name: previous?.SiteName, target: previous?.SiteTarget, zoneId: previous?.SiteTargetZoneId },
+      ];
+      for (const record of stale) {
+        if (record.name === undefined || record.target === undefined || record.zoneId === undefined) continue;
+        if (retained.has(record.name)) continue;
+        await deleteAlias(route53, props.HostedZoneId, record.name, record.target, record.zoneId);
       }
     }
     return { PhysicalResourceId: physicalResourceId };
