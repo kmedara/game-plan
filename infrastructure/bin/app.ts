@@ -5,7 +5,7 @@
  * Instantiates DNS, platform, and API stacks in the caller account and region.
  * Cognito OAuth callback/logout URLs and optional social IdP credentials come
  * from CDK context, then from process environment. In CI, `DEPLOY_ENV` and
- * `HOSTED_ZONE_NAME` choose `app.<environment>.<zone>`. The HTTP API is `/api`
+ * `HOSTED_ZONE_NAME` choose `<environment>.<zone>`. The HTTP API is `/api`
  * on that host. `CLIENT_ORIGIN` overrides the local website CORS default. A
  * hosted zone id adds the DNS stack and connects the website hostname to it.
  */

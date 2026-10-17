@@ -23,12 +23,12 @@ describe('deploy config', () => {
 
   it('builds the website hostname and /api callback from the environment and domain', () => {
     expect(publicUrlsFor('staging', 'Example.com.')).toEqual({
-      clientOrigin: 'https://app.staging.example.com',
-      callbackUrl: 'https://app.staging.example.com/api/identity/oauth/callback',
-      logoutUrl: 'https://app.staging.example.com/login',
-      siteHostname: 'app.staging.example.com',
+      clientOrigin: 'https://staging.example.com',
+      callbackUrl: 'https://staging.example.com/api/identity/oauth/callback',
+      logoutUrl: 'https://staging.example.com/login',
+      siteHostname: 'staging.example.com',
     });
-    expect(siteApiBaseUrl('https://app.staging.example.com')).toBe('https://app.staging.example.com/api');
+    expect(siteApiBaseUrl('https://staging.example.com')).toBe('https://staging.example.com/api');
     expect(() => publicUrlsFor('staging', 'localhost')).toThrow(/HOSTED_ZONE_NAME/);
   });
 

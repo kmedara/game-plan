@@ -158,7 +158,7 @@ export type GamePlanApiProps = cdk.StackProps & {
   /** Present when the DNS stack owns the hosted zone. The API stack writes the alias records. */
   dns?: DnsConfig;
   /**
-   * Browser base URL for the HTTP API, such as `https://app.example.com/api`.
+   * Browser base URL for the HTTP API, such as `https://staging.example.com/api`.
    *
    * Clients and the OAuth callback use the website host. CloudFront calls the
    * HTTP API execute-api domain.

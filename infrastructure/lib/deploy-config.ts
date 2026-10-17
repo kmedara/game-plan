@@ -22,7 +22,7 @@ export type PublicUrls = {
   callbackUrl: string;
   /** Browser URL after Cognito logout. */
   logoutUrl: string;
-  /** Website hostname, `app.<environment>.<domain>`. */
+  /** Website hostname, `<environment>.<domain>`. */
   siteHostname: string;
 };
 
@@ -44,7 +44,7 @@ const DNS_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
 /**
  * Builds the website and API URLs for one environment under a registered domain.
  *
- * Staging becomes `app.staging.example.com`. The HTTP API is `/api` on that host.
+ * Staging becomes `staging.example.com`. The HTTP API is `/api` on that host.
  *
  * @param environment - GitHub environment name, such as `staging`.
  * @param domain - Hosted zone name, such as `example.com`.
@@ -57,7 +57,7 @@ export const publicUrlsFor = (environment: string, domain: string): PublicUrls =
   if (!DNS_LABEL.test(envLabel) || labels.length < 2 || labels.some((label) => !DNS_LABEL.test(label))) {
     throw new Error('DEPLOY_ENV and HOSTED_ZONE_NAME must be DNS names');
   }
-  const siteHostname = `app.${envLabel}.${apex}`;
+  const siteHostname = `${envLabel}.${apex}`;
   const clientOrigin = `https://${siteHostname}`;
   return {
     clientOrigin,

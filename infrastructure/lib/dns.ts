@@ -20,7 +20,7 @@ export type DnsZoneProps = {
   hostedZoneId: string;
   /** Role that can change the zone when it belongs to another account. */
   roleArn?: string;
-  /** Website hostname, `app.<environment>.<domain>`. */
+  /** Website hostname, `<environment>.<domain>`. */
   siteHostname: string;
   /**
    * Requests the website certificate. The alias-only stack sets this to false

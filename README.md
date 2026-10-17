@@ -302,17 +302,17 @@ Each GitHub environment (`staging`, `production`) has one secret, `AWS_ROLE_ARN`
 The hosted zone name in Parameter Store is the registered domain, such as `example.com`. The deploy environment name is
 inserted into the hostnames:
 
-| Environment  | Website                              | HTTP API                                      |
-| ------------ | ------------------------------------ | --------------------------------------------- |
-| `staging`    | `https://app.staging.example.com`    | `https://app.staging.example.com/api`         |
-| `production` | `https://app.production.example.com` | `https://app.production.example.com/api`      |
+| Environment  | Website                          | HTTP API                             |
+| ------------ | -------------------------------- | ------------------------------------ |
+| `staging`    | `https://staging.example.com`    | `https://staging.example.com/api`    |
+| `production` | `https://production.example.com` | `https://production.example.com/api` |
 
-The Cognito callback is `https://app.<environment>.example.com/api/identity/oauth/callback`. Logout returns to
-`https://app.<environment>.example.com/login`. The WebSocket URL stays on the API Gateway execute-api domain.
+The Cognito callback is `https://<environment>.example.com/api/identity/oauth/callback`. Logout returns to
+`https://<environment>.example.com/login`. The WebSocket URL stays on the API Gateway execute-api domain.
 
 `GamePlanDns` creates the certificate validation records in the hosted zone from Parameter Store
 `hosted-zone-id` and `hosted-zone-name`. The zone id is the delegated zone in this account, and the name is the
-registered domain used to build `app.<environment>.<name>`. `GamePlanApi` writes the alias records in that same zone.
+registered domain used to build `<environment>.<name>`. `GamePlanApi` writes the alias records in that same zone.
 
 ### Parameter Store
 

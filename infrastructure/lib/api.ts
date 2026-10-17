@@ -60,7 +60,7 @@ export type ApiProps = {
    */
   protectOrigin?: boolean;
   /**
-   * Public base URL the browser and the Expo app use, such as `https://app.example.com/api`.
+   * Public base URL the browser and the Expo app use, such as `https://staging.example.com/api`.
    *
    * When set, the published API URL points here. API Gateway stays on its execute-api domain.
    */
