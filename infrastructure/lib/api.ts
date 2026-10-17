@@ -254,6 +254,9 @@ export class Api extends Construct {
     this.httpApi = new apigwv2.HttpApi(this, 'HttpApi', {
       apiName: 'gameplan-http',
       createDefaultStage: true,
+      // The website distribution connects to the execute-api hostname. An earlier
+      // deploy turned it off, and removing the property does not turn it back on.
+      disableExecuteApiEndpoint: false,
       corsPreflight: {
         allowCredentials: true,
         allowHeaders: ['Authorization', 'Content-Type', 'Cookie', 'X-Refresh-Delivery'],
