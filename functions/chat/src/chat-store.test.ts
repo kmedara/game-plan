@@ -18,6 +18,7 @@ import {
   teamMetaSk,
   teamPk,
   messageSk,
+  profileSk,
   userChatSk,
   userPk,
 } from '../../lib/dynamo/keys.js';
@@ -145,6 +146,7 @@ const {
   loadChatParticipants,
   sendMessage,
 } = await import('./chat-store.js');
+const { renameChatMember } = await import('../../lib/chat-member-names.js');
 
 const seedProfile = (
   userId: string,
@@ -366,6 +368,55 @@ describe('chat-store', () => {
     });
     const page = await listMessages(chatId, { limit: 10 });
     expect(page.messages[0]?.senderDisplayName).toBe('Player');
+  });
+
+  it('names an unnamed private chat from the names stored on it', async () => {
+    const seedNamed = (displayName: string): string => {
+      const id = randomUUID();
+      profiles.set(id, { userId: id, email: `${id}@example.com`, displayName, accountKind: 'adult' });
+      store.set(itemKey(userPk(id), profileSk()), { [TABLE_PK]: userPk(id), [TABLE_SK]: profileSk(), displayName });
+      return id;
+    };
+    const userId = seedNamed('User');
+    const others = ['Sam', 'Alex', 'Jo', 'Pat'].map(seedNamed);
+    const pair = await createPrivateChat({ userId, body: { memberIds: [others[0]!] } });
+    expect(pair.name).toBe('Sam');
+    expect(store.get(itemKey(chatPk(pair.chatId), chatMetaSk()))?.memberNames).toEqual({
+      [userId]: 'User',
+      [others[0]!]: 'Sam',
+    });
+    await createPrivateChat({ userId, body: { memberIds: others } });
+    await createPrivateChat({ userId, body: { memberIds: [others[0]!], name: 'Ride home' } });
+    expect((await listUserChats(userId)).map((row) => row.name)).toEqual([
+      'Alex, Jo, Pat +1',
+      'Ride home',
+      'Sam',
+    ]);
+    expect((await listUserChats(others[0]!)).map((row) => row.name)).toContain('User');
+
+    await renameChatMember(others[0]!, 'Sammy');
+    expect((await listUserChats(userId)).map((row) => row.name)).toContain('Sammy');
+  });
+
+  it('stores member names on an older unnamed private chat when first listed', async () => {
+    const userId = randomUUID();
+    const otherId = randomUUID();
+    const chatId = randomUUID();
+    store.set(itemKey(userPk(otherId), profileSk()), { [TABLE_PK]: userPk(otherId), [TABLE_SK]: profileSk(), displayName: 'Sam' });
+    store.set(itemKey(chatPk(chatId), chatMetaSk()), {
+      [TABLE_PK]: chatPk(chatId),
+      [TABLE_SK]: chatMetaSk(),
+      chatId,
+      kind: 'private',
+      name: 'Private chat',
+      createdAt: new Date().toISOString(),
+    });
+    for (const id of [userId, otherId]) {
+      store.set(itemKey(chatPk(chatId), chatMemberSk(id)), { [TABLE_PK]: chatPk(chatId), [TABLE_SK]: chatMemberSk(id), userId: id });
+    }
+    store.set(itemKey(userPk(userId), userChatSk(chatId)), { [TABLE_PK]: userPk(userId), [TABLE_SK]: userChatSk(chatId), chatId });
+    expect((await listUserChats(userId))[0]?.name).toBe('Sam');
+    expect(store.get(itemKey(chatPk(chatId), chatMetaSk()))?.memberNames).toEqual({ [userId]: 'Player', [otherId]: 'Sam' });
   });
 
   it('rejects private chats with fewer than two members', async () => {

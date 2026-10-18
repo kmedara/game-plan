@@ -6,10 +6,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TABLE_NAME } from '../names.js';
 import { GSI_EMAIL, profileSk, userPk } from '../dynamo/keys.js';
 
-const { mockSend, mockGetItem, mockPutItem } = vi.hoisted(() => ({
+const { mockSend, mockGetItem, mockPutItem, mockRenameChatMember } = vi.hoisted(() => ({
   mockSend: vi.fn(),
   mockGetItem: vi.fn(),
   mockPutItem: vi.fn(),
+  mockRenameChatMember: vi.fn(),
+}));
+
+vi.mock('../chat-member-names.js', () => ({
+  renameChatMember: (...args: unknown[]) => mockRenameChatMember(...args),
 }));
 
 vi.mock('../dynamo/client.js', () => ({
@@ -29,6 +34,7 @@ describe('profile helpers', () => {
     mockSend.mockReset();
     mockGetItem.mockReset();
     mockPutItem.mockReset();
+    mockRenameChatMember.mockReset();
   });
 
   it('derives account kind from the birthday on read', async () => {
@@ -112,5 +118,19 @@ describe('profile helpers', () => {
     });
     expect(clearedPhoto.photoKey).toBeUndefined();
     expect(clearedPhoto.phoneNumber).toBeUndefined();
+  });
+
+  it('copies a changed display name onto private chats', async () => {
+    const input = { userId: 'u6', email: 'r@example.com', displayName: 'New', accountKind: 'adult' as const };
+    mockGetItem.mockResolvedValueOnce({ userId: 'u6', displayName: 'Old' });
+    await putProfile(input);
+    expect(mockRenameChatMember).toHaveBeenCalledWith('u6', 'New');
+
+    mockRenameChatMember.mockReset();
+    mockGetItem.mockResolvedValueOnce({ userId: 'u6', displayName: 'New' });
+    await putProfile(input);
+    mockGetItem.mockResolvedValueOnce(undefined);
+    await putProfile(input);
+    expect(mockRenameChatMember).not.toHaveBeenCalled();
   });
 });

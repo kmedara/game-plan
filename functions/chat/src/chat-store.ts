@@ -38,6 +38,12 @@ import {
   userChatSk,
   userPk,
 } from '../../lib/dynamo/index.js';
+import {
+  loadMemberNames,
+  memberChatName,
+  refreshChatMemberNames,
+  type ChatMemberNames,
+} from '../../lib/chat-member-names.js';
 import { enqueueFanout } from '../../lib/fanout-enqueue.js';
 import type { ChatParticipant } from '@gameplan/types';
 import { TABLE_NAME } from '../../lib/names.js';
@@ -76,6 +82,8 @@ export type ChatMetaItem = {
   teamId?: string;
   createdBy: string;
   createdAt: string;
+  /** Private chats only: everyone in the chat, for naming it per viewer. */
+  memberNames?: ChatMemberNames;
 };
 
 /** Member under `CHAT#id` / `MEMBER#userId`. */
@@ -145,6 +153,9 @@ const toStoredMessage = (
 /** Name shown when the sender's profile row is gone. */
 const FALLBACK_SENDER_NAME = 'Player';
 
+/** Stored name of a private chat created without one. */
+const DEFAULT_PRIVATE_CHAT_NAME = 'Private chat';
+
 /** Current public identity of a message author. */
 type SenderIdentity = {
   senderDisplayName: string;
@@ -189,6 +200,25 @@ const withSenderIdentity = async (items: readonly MessageItem[]): Promise<ChatMe
     ...toStoredMessage(item),
     ...identities.get(item.senderId)!,
   }));
+};
+
+/**
+ * Names an unnamed private chat after everyone in it except the viewer.
+ *
+ * The name is built per viewer from the names stored on the chat row. Chats
+ * written before those names existed get them on first list. Named chats and
+ * team chats keep their stored name.
+ *
+ * @param meta - The chat as stored.
+ * @param viewerId - The user the list is for.
+ * @returns The chat with the name that viewer sees.
+ */
+const withViewerName = async (meta: ChatMetaItem, viewerId: string): Promise<ChatSummary> => {
+  const chat = toChatResponse(meta);
+  if (chat.kind !== 'private' || chat.name !== DEFAULT_PRIVATE_CHAT_NAME) return chat;
+  const memberNames = meta.memberNames ?? (await refreshChatMemberNames(chat.chatId)) ?? {};
+  const name = memberChatName(memberNames, viewerId);
+  return name === undefined ? chat : { ...chat, name };
 };
 
 /**
@@ -350,7 +380,7 @@ export const listUserChats = async (userId: string): Promise<ChatSummary[]> => {
     if (typeof membership.chatId !== 'string') continue;
     const meta = await getItem<ChatMetaItem>(chatPk(membership.chatId), chatMetaSk());
     if (meta === undefined) continue;
-    chats.push(toChatResponse(meta));
+    chats.push(await withViewerName(meta, userId));
   }
 
   const kindOrder: Record<ChatKind, number> = { default: 0, channel: 1, private: 2, fixture: 3 };
@@ -430,7 +460,8 @@ export const createPrivateChat = async (input: {
   const chatId = randomUUID();
   const createdAt = new Date().toISOString();
   const trimmedName = input.body.name?.trim();
-  const name = trimmedName !== undefined && trimmedName.length > 0 ? trimmedName : 'Private chat';
+  const name =
+    trimmedName !== undefined && trimmedName.length > 0 ? trimmedName : DEFAULT_PRIVATE_CHAT_NAME;
   const meta: ChatMetaItem = {
     [TABLE_PK]: chatPk(chatId),
     [TABLE_SK]: chatMetaSk(),
@@ -439,11 +470,12 @@ export const createPrivateChat = async (input: {
     name,
     createdBy: input.userId,
     createdAt,
+    memberNames: await loadMemberNames(memberIds),
   };
 
   await putItem(meta);
   await writeMemberships({ chatId, kind: 'private', name }, memberIds, createdAt);
-  return toChatResponse(meta);
+  return withViewerName(meta, input.userId);
 };
 
 /**

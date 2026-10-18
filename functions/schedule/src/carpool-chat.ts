@@ -20,6 +20,7 @@ import {
   userChatSk,
   userPk,
 } from '../../lib/dynamo/index.js';
+import { refreshChatMemberNames } from '../../lib/chat-member-names.js';
 
 /** A stored offer, including the chat that belongs to this car. */
 export type StoredCarpoolOffer = CarpoolOffer & { chatId?: string };
@@ -100,7 +101,8 @@ const dissolveChat = async (chatId: string): Promise<void> => {
 };
 
 /**
- * Makes the chat members match the driver and the current riders.
+ * Makes the chat members match the driver and the current riders, and
+ * rewrites the stored member names when anyone joined or left.
  *
  * @param chatId - The car's chat.
  * @param memberIds - Driver first, then riders.
@@ -121,12 +123,20 @@ const ensureChat = async (chatId: string, memberIds: readonly string[]): Promise
   }
   const current = new Set(await memberUserIds(chatId));
   const desired = new Set(memberIds);
+  let changed = meta === undefined;
   for (const userId of current) {
-    if (!desired.has(userId)) await removeMembership(chatId, userId);
+    if (!desired.has(userId)) {
+      await removeMembership(chatId, userId);
+      changed = true;
+    }
   }
   for (const userId of desired) {
-    if (!current.has(userId)) await putMembership(chatId, userId, createdAt);
+    if (!current.has(userId)) {
+      await putMembership(chatId, userId, createdAt);
+      changed = true;
+    }
   }
+  if (changed) await refreshChatMemberNames(chatId);
 };
 
 /**

@@ -4,6 +4,7 @@
 
 import { QueryCommand } from '@aws-sdk/lib-dynamodb';
 import type { AccountKind } from '@gameplan/types';
+import { renameChatMember } from '../chat-member-names.js';
 import { getItem, putItem } from '../dynamo/access.js';
 import { getDocClient } from '../dynamo/client.js';
 import { GSI_EMAIL, TABLE_PK, TABLE_SK, profileSk, userPk } from '../dynamo/keys.js';
@@ -65,6 +66,7 @@ export const findProfileByEmail = async (
  * Writes (or overwrites) a user profile row.
  *
  * Local mode may include `passwordHash`. Cognito mode never stores a password.
+ * A changed display name is copied onto the user's private chats.
  *
  * @param input - Profile fields to persist.
  * @returns The stored profile item.
@@ -99,6 +101,10 @@ export const putProfile = async (input: {
       : {}),
     ...(input.passwordHash !== undefined ? { passwordHash: input.passwordHash } : {}),
   };
+  const previous = await getItem<UserProfileItem>(userPk(input.userId), profileSk());
   await putItem(item);
+  if (previous !== undefined && previous.displayName !== item.displayName) {
+    await renameChatMember(item.userId, item.displayName);
+  }
   return item;
 };
