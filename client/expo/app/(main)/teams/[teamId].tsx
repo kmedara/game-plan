@@ -32,10 +32,10 @@ import { ErrorText, Field, TimeZoneField } from '@/src/ui';
 export default function TeamAdminScreen() {
   const { t } = useTranslation();
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
-  const { api, teams, setPreviewTheme } = useApp();
+  const { api, setPreviewTheme } = useApp();
   const queryClient = useQueryClient();
   const id = teamId ?? '';
-  useBrandTeam(teams.length > 1 && id.length > 0 ? id : undefined);
+  useBrandTeam(id.length > 0 ? id : undefined);
   const enabled = id.length > 0;
   const teamLoaded = useQuery({ ...teamQuery(api, id), enabled });
   const membersLoaded = useQuery({ ...membersQuery(api, id), enabled });

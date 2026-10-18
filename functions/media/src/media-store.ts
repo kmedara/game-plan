@@ -4,13 +4,13 @@
  * is in use.
  */
 
-import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { MAX_UPLOAD_BYTES, type PresignUploadBody } from '@gameplan/schemas';
 import { readSecret } from '../../lib/parameters.js';
+import { newUploadKey } from '../../lib/upload-keys.js';
 import { CDN_KEY_PREFIX, cdnExpiry, signCloudFrontUrl } from './cdn-url.js';
 
 /** How long a presigned URL stays valid. */
@@ -72,15 +72,6 @@ const localApiOrigin = (): string =>
   process.env.MEDIA_PUBLIC_ORIGIN ?? 'http://127.0.0.1:3000';
 
 /**
- * Creates a new object key under the caller's prefix.
- *
- * @param userId - The uploading user id.
- * @returns An opaque object key.
- */
-export const newObjectKey = (userId: string): string =>
-  `uploads/${userId}/${randomUUID()}`;
-
-/**
  * Issues a short-lived upload URL and object key.
  *
  * @param userId - The caller who will own the object key prefix.
@@ -91,7 +82,7 @@ export const createUploadUrl = async (
   userId: string,
   body: PresignUploadBody,
 ): Promise<{ uploadUrl: string; objectKey: string; maxBytes: typeof MAX_UPLOAD_BYTES }> => {
-  const objectKey = newObjectKey(userId);
+  const objectKey = newUploadKey(userId);
   if (isLocalMedia()) {
     return {
       uploadUrl: `${localApiOrigin()}/media/local-objects/${encodeURIComponent(objectKey)}`,

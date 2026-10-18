@@ -6,7 +6,6 @@
  */
 
 import {
-  CHAT_MEMBER_SK_PREFIX,
   USER_CHAT_SK_PREFIX,
   chatMetaSk,
   chatPk,
@@ -16,6 +15,7 @@ import {
   queryBySkPrefix,
   userPk,
 } from './dynamo/index.js';
+import { listChatMemberIds } from './chat-membership.js';
 
 /** Display names by user id, as stored on the chat row. */
 export type ChatMemberNames = Record<string, string>;
@@ -51,10 +51,7 @@ export const loadMemberNames = async (userIds: readonly string[]): Promise<ChatM
 export const refreshChatMemberNames = async (chatId: string): Promise<ChatMemberNames | undefined> => {
   const meta = await getItem<Record<string, unknown>>(chatPk(chatId), chatMetaSk());
   if (meta === undefined) return undefined;
-  const rows = await queryBySkPrefix<{ userId?: string }>(chatPk(chatId), CHAT_MEMBER_SK_PREFIX);
-  const memberNames = await loadMemberNames(
-    rows.flatMap((row) => (typeof row.userId === 'string' ? [row.userId] : [])),
-  );
+  const memberNames = await loadMemberNames(await listChatMemberIds(chatId));
   await putItem({ ...meta, memberNames });
   return memberNames;
 };

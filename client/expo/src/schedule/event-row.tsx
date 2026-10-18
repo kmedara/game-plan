@@ -3,7 +3,8 @@
  */
 
 import Pencil from 'lucide-react-native/icons/pencil';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { RsvpStatus } from '@gameplan/types';
 import type { TeamOccurrence } from '@/src/athlete-schedule';
@@ -77,7 +78,7 @@ export const EventRow = ({
                   <Image
                     source={{ uri: logoUrl }}
                     accessibilityLabel={logoName ?? t('teamAdmin.teamLogo')}
-                    resizeMode="contain"
+                    contentFit="contain"
                     style={{ width: 80, height: 80 }}
                   />
                 ) : null}

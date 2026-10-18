@@ -8,12 +8,10 @@
 import { canWithRoles, rolesFromMembership } from '@gameplan/rules';
 import { loadRolePermissionMatrix } from './permissions.js';
 import {
-  CHAT_MEMBER_SK_PREFIX,
   FIXTURE_LINK_SK_PREFIX,
   TABLE_PK,
   TABLE_SK,
   TEAM_MEMBER_SK_PREFIX,
-  chatMemberSk,
   chatMetaSk,
   chatPk,
   deleteItem,
@@ -24,9 +22,8 @@ import {
   queryBySkPrefix,
   teamMemberSk,
   teamPk,
-  userChatSk,
-  userPk,
 } from './dynamo/index.js';
+import { listChatMemberIds, removeChatMember, syncChatMembers } from './chat-membership.js';
 
 /** Link row under `TEAM#id` / `FIXTURE#fixtureId`. */
 type FixtureLinkRow = {
@@ -80,37 +77,6 @@ export const eventManagerIds = async (teamId: string): Promise<string[]> => {
   });
 };
 
-const memberUserIds = async (chatId: string): Promise<string[]> => {
-  const rows = await queryBySkPrefix<{ userId?: string }>(chatPk(chatId), CHAT_MEMBER_SK_PREFIX);
-  return rows.flatMap((row) => (typeof row.userId === 'string' ? [row.userId] : []));
-};
-
-const putMembership = async (
-  chatId: string,
-  name: string,
-  userId: string,
-  joinedAt: string,
-): Promise<void> => {
-  await putItem({
-    [TABLE_PK]: chatPk(chatId),
-    [TABLE_SK]: chatMemberSk(userId),
-    userId,
-    joinedAt,
-  });
-  await putItem({
-    [TABLE_PK]: userPk(userId),
-    [TABLE_SK]: userChatSk(chatId),
-    chatId,
-    kind: 'fixture',
-    name,
-  });
-};
-
-const removeMembership = async (chatId: string, userId: string): Promise<void> => {
-  await deleteItem(chatPk(chatId), chatMemberSk(userId));
-  await deleteItem(userPk(userId), userChatSk(chatId));
-};
-
 /**
  * Chat title from the two club names, capped at the chat name limit.
  *
@@ -149,14 +115,7 @@ export const syncFixtureChat = async (input: {
   } else if (meta.name !== input.name) {
     await putItem({ ...meta, name: input.name });
   }
-  const current = new Set(await memberUserIds(input.chatId));
-  const desired = new Set(input.memberIds);
-  for (const userId of current) {
-    if (!desired.has(userId)) await removeMembership(input.chatId, userId);
-  }
-  for (const userId of desired) {
-    if (!current.has(userId)) await putMembership(input.chatId, input.name, userId, createdAt);
-  }
+  await syncChatMembers({ chatId: input.chatId, kind: 'fixture', name: input.name }, input.memberIds, createdAt);
 };
 
 /**
@@ -165,8 +124,7 @@ export const syncFixtureChat = async (input: {
  * @param chatId - The thread to close.
  */
 export const dissolveFixtureChat = async (chatId: string): Promise<void> => {
-  const members = await memberUserIds(chatId);
-  for (const userId of members) await removeMembership(chatId, userId);
+  for (const userId of await listChatMemberIds(chatId)) await removeChatMember(chatId, userId);
   await deleteItem(chatPk(chatId), chatMetaSk());
 };
 

@@ -5,15 +5,14 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { memoryTable } from '../../../lib/dynamo/memory-table.js';
 import type { UserProfileItem } from '../../../lib/auth/identity-provider.js';
 import { issueLocalTokens } from '../../../lib/auth/local-jwt.js';
 import { TABLE_PK, TABLE_SK, profileSk, rolePermissionsSk, teamMemberSk, teamMetaSk, teamPk, userPk } from '../../../lib/dynamo/keys.js';
 import type { TeamMemberItem } from '../team-store.js';
 import { DEFAULT_ROLE_PERMISSIONS } from '@gameplan/types';
 
-const { store, itemKey, assignMemberRole, getProfileMock } = vi.hoisted(() => {
-  const store = new Map<string, Record<string, unknown>>();
-  const itemKey = (pk: string, sk: string): string => `${pk}\0${sk}`;
+const { assignMemberRole, getProfileMock } = vi.hoisted(() => {
   const assignMemberRole = vi.fn(async (..._args: unknown[]): Promise<TeamMemberItem> => ({
     PK: 'PK',
     SK: 'SK',
@@ -24,39 +23,11 @@ const { store, itemKey, assignMemberRole, getProfileMock } = vi.hoisted(() => {
   const getProfileMock = vi.fn(
     async (..._args: unknown[]): Promise<UserProfileItem | undefined> => undefined,
   );
-  return { store, itemKey, assignMemberRole, getProfileMock };
+  return { assignMemberRole, getProfileMock };
 });
+const { store, itemKey } = memoryTable;
 
-vi.mock('../../../lib/dynamo/access.js', () => ({
-  getItem: async <T extends Record<string, unknown>>(pk: string, sk: string) =>
-    store.get(itemKey(pk, sk)) as T | undefined,
-  putItem: async (item: Record<string, unknown>): Promise<void> => {
-    store.set(itemKey(String(item[TABLE_PK]), String(item[TABLE_SK])), item);
-  },
-  transactWrite: async (
-    items: Array<{ Put?: { Item: Record<string, unknown> } }>,
-  ): Promise<void> => {
-    for (const entry of items) {
-      if (entry.Put?.Item !== undefined) {
-        const item = entry.Put.Item;
-        store.set(itemKey(String(item[TABLE_PK]), String(item[TABLE_SK])), item);
-      }
-    }
-  },
-  queryBySkPrefix: async <T extends Record<string, unknown>>(pk: string, skPrefix: string) => {
-    const items: T[] = [];
-    for (const [key, item] of store) {
-      const [itemPk, itemSk] = key.split('\0');
-      if (itemPk === pk && itemSk?.startsWith(skPrefix)) items.push(item as T);
-    }
-    return items;
-  },
-  queryPage: async () => ({ items: [] }),
-  queryAll: async () => [],
-  queryPartition: async () => [],
-  encodeCursor: () => undefined,
-  decodeCursor: () => undefined,
-}));
+vi.mock('../../../lib/dynamo/access.js', async () => (await import('../../../lib/dynamo/memory-table.js')).memoryAccess);
 
 vi.mock('../../../lib/auth/profile.js', () => ({
   getProfile: (...args: unknown[]) => getProfileMock(...args),
@@ -256,6 +227,10 @@ describe('handleListMembers', () => {
     expect(byId.get(minorId)?.phoneNumber).toBeUndefined();
     expect(byId.get(minorId)?.photoKey).toBe(`uploads/${minorId}/photo`);
     expect(byId.get(guardedId)?.phoneNumber).toBe('+12025550123');
+    expect(byId.get(minorId)?.hasGuardian).toBe(false);
+    expect(byId.get(guardedId)?.hasGuardian).toBe(true);
+    expect(byId.get(adultId)).not.toHaveProperty('hasGuardian');
+    expect(byId.get(guardedId)).not.toHaveProperty('guardianIds');
   });
 });
 

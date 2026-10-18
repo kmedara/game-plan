@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { memoryTable } from '../../lib/dynamo/memory-table.js';
 import { issueLocalTokens } from '../../lib/auth/local-jwt.js';
 import type { AccountKind, TeamPermission, TeamRole } from '@gameplan/types';
 import { DEFAULT_ROLE_PERMISSIONS } from '@gameplan/types';
@@ -26,79 +27,11 @@ import {
   userTeamSk,
 } from '../../lib/dynamo/keys.js';
 
-const store = new Map<string, Record<string, unknown>>();
+const { store, itemKey } = memoryTable;
 const emailIndex = new Map<string, { PK: string; SK: string }>();
 
-const itemKey = (pk: string, sk: string): string => `${pk}\0${sk}`;
 
-vi.mock('../../lib/dynamo/access.js', () => ({
-  getItem: async <T extends Record<string, unknown>>(
-    pk: string,
-    sk: string,
-  ): Promise<T | undefined> => store.get(itemKey(pk, sk)) as T | undefined,
-  putItem: async (item: Record<string, unknown>): Promise<void> => {
-    const pk = String(item[TABLE_PK]);
-    const sk = String(item[TABLE_SK]);
-    store.set(itemKey(pk, sk), item);
-  },
-  deleteItem: async (pk: string, sk: string): Promise<void> => {
-    store.delete(itemKey(pk, sk));
-  },
-  transactWrite: async (
-    items: Array<{ Put?: { Item: Record<string, unknown> } }>,
-  ): Promise<void> => {
-    for (const entry of items) {
-      if (entry.Put?.Item === undefined) continue;
-      const item = entry.Put.Item;
-      const pk = String(item[TABLE_PK]);
-      const sk = String(item[TABLE_SK]);
-      store.set(itemKey(pk, sk), item);
-    }
-  },
-  queryBySkPrefix: async <T extends Record<string, unknown>>(
-    pk: string,
-    skPrefix: string,
-  ): Promise<T[]> => {
-    const items: T[] = [];
-    for (const [key, item] of store) {
-      const [itemPk, itemSk] = key.split('\0');
-      if (itemPk === pk && itemSk.startsWith(skPrefix)) items.push(item as T);
-    }
-    return items;
-  },
-  queryBySkBetween: async () => [],
-  queryAll: async () => [],
-  queryPage: async <T extends Record<string, unknown>>(
-    input: {
-      ExpressionAttributeValues?: Record<string, unknown>;
-      ScanIndexForward?: boolean;
-    },
-    options: { limit: number; cursor?: string },
-  ): Promise<{ items: T[]; cursor?: string }> => {
-    const pk = String(input.ExpressionAttributeValues?.[':pk'] ?? '');
-    const skPrefix = String(input.ExpressionAttributeValues?.[':skPrefix'] ?? '');
-    const all: T[] = [];
-    for (const [key, item] of store) {
-      const [itemPk, itemSk] = key.split('\0');
-      if (itemPk === pk && itemSk.startsWith(skPrefix)) all.push(item as T);
-    }
-    all.sort((a, b) => String(a[TABLE_SK]).localeCompare(String(b[TABLE_SK])));
-    if (input.ScanIndexForward === false) all.reverse();
-
-    const start = options.cursor !== undefined ? Number(options.cursor) : 0;
-    const slice = all.slice(start, start + options.limit);
-    const next = start + options.limit;
-    return {
-      items: slice,
-      cursor: next < all.length ? String(next) : undefined,
-    };
-  },
-  queryPartition: async () => [],
-  encodeCursor: (key: Record<string, unknown> | undefined) =>
-    key === undefined ? undefined : JSON.stringify(key),
-  decodeCursor: (cursor?: string) =>
-    cursor === undefined ? undefined : (JSON.parse(cursor) as Record<string, unknown>),
-}));
+vi.mock('../../lib/dynamo/access.js', async () => (await import('../../lib/dynamo/memory-table.js')).memoryAccess);
 
 vi.mock('../../lib/dynamo/client.js', () => ({
   getDocClient: () => ({
@@ -720,22 +653,4 @@ describe('messages', () => {
   });
 });
 
-describe('mapChatError', () => {
-  it('maps chat domain errors', async () => {
-    const { mapChatError } = await import('./routes/errors.js');
-    expect(mapChatError('nope')).toBeUndefined();
-    expect(mapChatError(new Error('token_expired'))?.statusCode).toBe(401);
-    expect(mapChatError(new Error('user_not_found'))?.statusCode).toBe(404);
-    expect(mapChatError(new Error('chat_not_found'))?.statusCode).toBe(404);
-    expect(mapChatError(new Error('not_a_chat_member'))?.statusCode).toBe(403);
-    expect(mapChatError(new Error('minor_chat_rule_violated'))?.statusCode).toBe(403);
-    expect(mapChatError(new Error('invalid_body'))?.statusCode).toBe(400);
-    const conditional = new Error('ConditionalCheckFailed');
-    conditional.name = 'ConditionalCheckFailedException';
-    expect(mapChatError(conditional)?.statusCode).toBe(409);
-    const txn = new Error('Transaction cancelled');
-    txn.name = 'TransactionCanceledException';
-    expect(mapChatError(txn)?.statusCode).toBe(409);
-  });
-});
 

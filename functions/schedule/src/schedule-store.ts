@@ -25,12 +25,12 @@ import {
   parseInstant,
 } from '../../lib/expand-occurrences.js';
 import { enqueueFanout } from '../../lib/fanout-enqueue.js';
+import { listTeamMemberIds } from '../../lib/team-roster.js';
 import { deleteRemindersForEvent, syncReminders } from './reminders.js';
 import { publicCarpoolOffer, syncCarpoolChats, type StoredCarpoolOffer } from './carpool-chat.js';
 import {
   EVENT_SK_PREFIX,
   LINEUP_SK_PREFIX,
-  TEAM_MEMBER_SK_PREFIX,
   TABLE_PK,
   TABLE_SK,
   deleteItem,
@@ -1058,8 +1058,7 @@ export const putLineup = async (input: {
     input.eventId,
     input.occurrenceStartsAt,
   );
-  const members = await queryBySkPrefix<TeamMemberItem>(teamPk(input.teamId), TEAM_MEMBER_SK_PREFIX);
-  const memberIds = new Set(members.map((member) => member.userId));
+  const memberIds = new Set(await listTeamMemberIds(input.teamId));
   if (input.slots.some((slot) => !memberIds.has(slot.userId))) {
     throw new Error('lineup_member_not_found');
   }
@@ -1113,10 +1112,7 @@ const requireOccurrence = async (
   return occurrenceIso;
 };
 
-const memberIdsOf = async (teamId: string): Promise<Set<string>> => {
-  const members = await queryBySkPrefix<TeamMemberItem>(teamPk(teamId), TEAM_MEMBER_SK_PREFIX);
-  return new Set(members.map((member) => member.userId));
-};
+const memberIdsOf = async (teamId: string): Promise<Set<string>> => new Set(await listTeamMemberIds(teamId));
 
 const writeCarpool = async (
   teamId: string,

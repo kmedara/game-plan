@@ -6,10 +6,21 @@ import { devicePlatformSchema } from './enums.js';
 import { MAX_UPLOAD_BYTES } from './limits.js';
 import { z } from './zod.js';
 
+/**
+ * Image types an upload may declare.
+ *
+ * The presigned PUT signs this type, and the CDN serves it back as sent, so
+ * types a browser would run as a page or script, such as HTML or SVG, are left out.
+ */
+export const UPLOAD_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'] as const;
+
+/** One of {@link UPLOAD_IMAGE_TYPES}. */
+export const uploadImageTypeSchema = z.enum(UPLOAD_IMAGE_TYPES);
+
 /** Body for requesting a presigned upload URL. */
 export const presignUploadBodySchema = z
   .object({
-    contentType: z.string().min(1).max(128),
+    contentType: uploadImageTypeSchema,
     contentLength: z.number().int().min(1).max(MAX_UPLOAD_BYTES),
   })
   .strict();

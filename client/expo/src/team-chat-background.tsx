@@ -2,7 +2,8 @@
  * Wallpaper for the team's default chat. A dark overlay sits on top in the thread.
  */
 
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { TeamTheme } from '@gameplan/types';
 import { useDownloadUrl } from './media';
@@ -53,7 +54,7 @@ export const TeamChatBackground = ({
           accessibilityLabel={t(theme?.chatBackgroundKey === undefined ? 'teamAdmin.addBackground' : 'teamAdmin.changeBackground')}
         >
           {theme?.chatBackgroundKey !== undefined && uri !== undefined ? (
-            <Image source={{ uri }} style={{ width: '100%', height: 112 }} resizeMode="cover" />
+            <Image source={{ uri }} style={{ width: '100%', height: 112 }} contentFit="cover" />
           ) : null}
           {theme?.chatBackgroundKey !== undefined && scrim !== undefined ? (
             <View className="absolute bottom-0 left-0 right-0 top-0" style={{ backgroundColor: scrim }} />

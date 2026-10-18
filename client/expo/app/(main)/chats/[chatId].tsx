@@ -7,10 +7,11 @@ import Send from 'lucide-react-native/icons/send';
 import X from 'lucide-react-native/icons/x';
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { FlatList, Image, Linking, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image } from 'expo-image';
+import { FlatList, Linking, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { errorMessageKey, queryError } from '@/src/errors';
-import { usePullRefreshList } from '@/src/pull-refresh';
+import { PullRefreshFrame, usePullRefreshList } from '@/src/pull-refresh';
 import { pickAndUploadImage, useDownloadUrl, type UploadedImage } from '@/src/media';
 import { chatsQuery, messagesQuery, sendMessageMutation } from '@/src/queries/chat';
 import { useApp, useBrandTeam } from '@/src/state';
@@ -26,7 +27,7 @@ export default function ChatThreadScreen() {
   const chatsLoaded = useQuery(chatsQuery(api));
   const chat = chatsLoaded.data?.find((item) => item.chatId === id);
   const team = teams.find((item) => item.teamId === chat?.teamId);
-  useBrandTeam(teams.length > 1 ? team?.teamId : undefined);
+  useBrandTeam(team?.teamId);
   const backgroundKey = id.length > 0 && id === team?.defaultChatId ? team.theme?.chatBackgroundKey : undefined;
   const scrim = chatOverlayColor(team?.theme?.chatBackgroundOverlay);
   const backgroundUri = useDownloadUrl(backgroundKey, { teamId: team?.teamId });
@@ -70,38 +71,39 @@ export default function ChatThreadScreen() {
     <View className="flex-1">
       {backgroundUri !== undefined ? (
         <>
-          <Image source={{ uri: backgroundUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          <Image source={{ uri: backgroundUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
           {scrim !== undefined ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]} /> : null}
         </>
       ) : null}
-      {pull.indicator}
-      <FlatList
-        {...pull.listProps}
-        data={messages}
-        inverted
-        keyExtractor={(item) => item.messageId}
-        style={[{ backgroundColor: 'transparent' }, pull.listProps.style]}
-        contentContainerClassName="px-3 py-3"
-        renderItem={({ item }) => {
-          const mine = item.senderId === api.user?.userId;
-          return (
-            <View
-              className={`mb-3 max-w-[80%] rounded-2xl p-3 ${mine ? 'self-end' : 'self-start border border-line bg-paper'}`}
-              style={mine ? { backgroundColor: brand.primary } : undefined}
-            >
-              {mine ? null : (
-                <Text className="text-xs text-muted">{item.senderDisplayName ?? item.senderId}</Text>
-              )}
-              {item.body.length > 0 ? (
-                <Text className="text-ink" style={mine ? { color: brand.onPrimary } : undefined}>{item.body}</Text>
-              ) : null}
-              {item.attachmentKeys?.map((key) => (
-                <Attachment key={key} chatId={id} objectKey={key} />
-              ))}
-            </View>
-          );
-        }}
-      />
+      <PullRefreshFrame pull={pull.frame}>
+        <FlatList
+          {...pull.listProps}
+          data={messages}
+          inverted
+          keyExtractor={(item) => item.messageId}
+          style={[{ backgroundColor: 'transparent' }, pull.listProps.style]}
+          contentContainerClassName="px-3 py-3"
+          renderItem={({ item }) => {
+            const mine = item.senderId === api.user?.userId;
+            return (
+              <View
+                className={`mb-3 max-w-[80%] rounded-2xl p-3 ${mine ? 'self-end' : 'self-start border border-line bg-paper'}`}
+                style={mine ? { backgroundColor: brand.primary } : undefined}
+              >
+                {mine ? null : (
+                  <Text className="text-xs text-muted">{item.senderDisplayName ?? item.senderId}</Text>
+                )}
+                {item.body.length > 0 ? (
+                  <Text className="text-ink" style={mine ? { color: brand.onPrimary } : undefined}>{item.body}</Text>
+                ) : null}
+                {item.attachmentKeys?.map((key) => (
+                  <Attachment key={key} chatId={id} objectKey={key} />
+                ))}
+              </View>
+            );
+          }}
+        />
+      </PullRefreshFrame>
       <View className="border-t border-line bg-raised px-3 pb-4 pt-2">
         <ErrorText
           message={
@@ -118,7 +120,7 @@ export default function ChatThreadScreen() {
                 <Image
                   source={{ uri: photo.uri }}
                   style={{ width: 64, height: 64, borderRadius: 8 }}
-                  resizeMode="cover"
+                  contentFit="cover"
                 />
                 <Pressable
                   accessibilityLabel={t('chats.removePhoto')}
@@ -199,13 +201,13 @@ const Attachment = ({ chatId, objectKey }: { chatId: string; objectKey: string }
         <Image
           source={{ uri }}
           style={{ width: 220, height: 160, marginTop: 8, borderRadius: 8 }}
-          resizeMode="cover"
+          contentFit="cover"
         />
       </Pressable>
       <Modal visible={open} animationType="fade" transparent onRequestClose={() => setOpen(false)}>
         <View className="flex-1 bg-black/90">
           <Pressable className="flex-1 items-center justify-center" onPress={() => setOpen(false)}>
-            <Image source={{ uri }} style={{ width: '100%', height: '80%' }} resizeMode="contain" />
+            <Image source={{ uri }} style={{ width: '100%', height: '80%' }} contentFit="contain" />
           </Pressable>
           <View className="flex-row justify-center pb-8">
             <Pressable className="mr-8 px-3 py-2" onPress={() => void savePhoto(uri)}>

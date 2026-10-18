@@ -4,12 +4,12 @@
 
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { memoryTable } from '../../../lib/dynamo/memory-table.js';
 import { z } from 'zod';
 import { issueLocalTokens } from '../../../lib/auth/local-jwt.js';
 import { TABLE_PK, TABLE_SK, teamMemberSk, teamMetaSk, teamPk } from '../../../lib/dynamo/keys.js';
 
-const store = new Map<string, Record<string, unknown>>();
-const itemKey = (pk: string, sk: string): string => `${pk}\0${sk}`;
+const { store, itemKey } = memoryTable;
 
 vi.mock('@gameplan/schemas', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@gameplan/schemas')>();
@@ -26,20 +26,7 @@ vi.mock('@gameplan/schemas', async (importOriginal) => {
   };
 });
 
-vi.mock('../../../lib/dynamo/access.js', () => ({
-  getItem: async <T extends Record<string, unknown>>(pk: string, sk: string) =>
-    store.get(itemKey(pk, sk)) as T | undefined,
-  putItem: async (item: Record<string, unknown>): Promise<void> => {
-    store.set(itemKey(String(item[TABLE_PK]), String(item[TABLE_SK])), item);
-  },
-  transactWrite: async (): Promise<void> => undefined,
-  queryBySkPrefix: async () => [],
-  queryPage: async () => ({ items: [] }),
-  queryAll: async () => [],
-  queryPartition: async () => [],
-  encodeCursor: () => undefined,
-  decodeCursor: () => undefined,
-}));
+vi.mock('../../../lib/dynamo/access.js', async () => (await import('../../../lib/dynamo/memory-table.js')).memoryAccess);
 
 const { handler } = await import('../handler.js');
 

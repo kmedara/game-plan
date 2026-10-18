@@ -191,10 +191,13 @@
     "add": "Add chat",
     "newPrivate": "Private chat",
     "newChannel": "Team channel",
-    "chatName": "Chat name",
     "noTeammates": "No teammates to add.",
     "pickTeammates": "Choose at least one teammate.",
-    "chatNameRequired": "Enter a chat name.",
+    "teammates": "Teammates",
+    "searchTeammates": "Search by name",
+    "removeTeammate": "Remove {{name}}",
+    "guardiansAdded": "Guardians of {{names}} will be added to the chat.",
+    "noGuardian": "No linked guardian yet",
     "email": "Email",
     "findUser": "Find",
     "searching": "Searching…",
@@ -335,6 +338,10 @@
       "saveFailed": "Could not save your changes.",
       "deleteFailed": "Could not delete that.",
       "forbidden": "You don't have permission to do that."
+    },
+    "chat": {
+      "guardianRequired": "This player has no linked guardian yet, so they can't be messaged directly. Ask a parent to link their account first.",
+      "minorChatRule": "A player can only chat with people on their own team and their guardians."
     },
     "roles": {
       "minorCannotBeTeamAdmin": "A minor cannot be a team admin.",

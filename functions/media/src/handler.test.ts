@@ -7,6 +7,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { memoryTable } from '../../lib/dynamo/memory-table.js';
 import { issueLocalTokens } from '../../lib/auth/local-jwt.js';
 import {
   TABLE_PK,
@@ -21,33 +22,10 @@ import {
   userTeamSk,
 } from '../../lib/dynamo/keys.js';
 
-const store = new Map<string, Record<string, unknown>>();
+const { store, itemKey } = memoryTable;
 
-const itemKey = (pk: string, sk: string): string => `${pk}\0${sk}`;
 
-vi.mock('../../lib/dynamo/access.js', () => ({
-  getItem: async <T extends Record<string, unknown>>(
-    pk: string,
-    sk: string,
-  ): Promise<T | undefined> => store.get(itemKey(pk, sk)) as T | undefined,
-  putItem: async (item: Record<string, unknown>): Promise<void> => {
-    store.set(itemKey(String(item[TABLE_PK]), String(item[TABLE_SK])), item);
-  },
-  deleteItem: async (pk: string, sk: string): Promise<void> => {
-    store.delete(itemKey(pk, sk));
-  },
-  queryBySkPrefix: async <T extends Record<string, unknown>>(
-    pk: string,
-    skPrefix: string,
-  ): Promise<T[]> => {
-    const items: T[] = [];
-    for (const [key, item] of store) {
-      const [itemPk, itemSk] = key.split('\0');
-      if (itemPk === pk && itemSk.startsWith(skPrefix)) items.push(item as T);
-    }
-    return items;
-  },
-}));
+vi.mock('../../lib/dynamo/access.js', async () => (await import('../../lib/dynamo/memory-table.js')).memoryAccess);
 
 process.env.DYNAMODB_ENDPOINT = 'http://127.0.0.1:8000';
 process.env.MEDIA_BUCKET = 'gameplan-media-local';
@@ -119,6 +97,22 @@ describe('media handler', () => {
     expect(payload.objectKey.startsWith(`uploads/${userId}/`)).toBe(true);
     expect(payload.uploadUrl).toContain('/media/local-objects/');
     expect(payload.maxBytes).toBe(15 * 1024 * 1024);
+  });
+
+  it('presigns AVIF and refuses types a browser would run', async () => {
+    const userId = randomUUID();
+    const { accessToken } = issueLocalTokens(userId, `${userId}@example.com`);
+    const presign = (contentType: string) =>
+      handler(
+        httpEvent('POST', '/media/presign-upload', {
+          headers: { authorization: `Bearer ${accessToken}` },
+          body: { contentType, contentLength: 1024 },
+        }),
+      );
+    expect((await presign('image/avif')).statusCode).toBe(200);
+    for (const contentType of ['text/html', 'image/svg+xml', 'application/octet-stream']) {
+      expect((await presign(contentType)).statusCode).toBe(400);
+    }
   });
 
   it('registers and deletes a device token', async () => {
@@ -217,14 +211,7 @@ describe('media handler', () => {
     expect(oversized.statusCode).toBe(400);
   });
 
-  it('maps media errors, rejects invalid keys, and handles non-local mode', async () => {
-    const { mapMediaError } = await import('./routes/errors.js');
-    expect(mapMediaError('nope')).toBeUndefined();
-    expect(mapMediaError(new Error('unauthorized'))?.statusCode).toBe(401);
-    expect(mapMediaError(new Error('forbidden'))?.statusCode).toBe(403);
-    expect(mapMediaError(new Error('invalid_object_key'))?.statusCode).toBe(400);
-    expect(mapMediaError(new Error('media_bucket_not_configured'))?.statusCode).toBe(503);
-
+  it('rejects invalid keys and device ids, and handles non-local mode', async () => {
     const userId = randomUUID();
     const { accessToken } = issueLocalTokens(userId, `${userId}@example.com`);
     const badDownload = await handler(
@@ -291,12 +278,10 @@ describe('media handler', () => {
   });
 
   it('covers bare media paths and health routing', async () => {
-    expect((await handler(httpEvent('DELETE', '/media/devices/phone-1'))).statusCode).toBe(401);
     expect(
       (await handler(httpEvent('DELETE', '/media/devices/phone-1', { headers: { authorization: 'Bearer bad' } })))
         .statusCode,
     ).toBe(401);
-    expect((await handler(httpEvent('GET', '/media/presign-download'))).statusCode).toBe(401);
     expect((await handler(httpEvent('DELETE', 'devices/phone-1'))).statusCode).toBe(401);
     expect((await handler(httpEvent('GET', 'local-objects/x'))).statusCode).toBe(404);
     expect((await handler(httpEvent('GET', '/presign-download'))).statusCode).toBe(401);

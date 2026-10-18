@@ -548,7 +548,7 @@ export type PresignDownloadResponse = {
 }
 
 export type PresignUploadBody = {
-  contentType: string;
+  contentType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' | 'image/avif';
   contentLength: number;
 }
 
@@ -818,6 +818,7 @@ export type TeamMemberList = {
     photoKey?: string;
     phoneNumber?: string;
     positions?: string[];
+    hasGuardian?: boolean;
   }[];
 }
 
@@ -835,6 +836,7 @@ export type TeamMemberProfile = {
   photoKey?: string;
   phoneNumber?: string;
   positions?: string[];
+  hasGuardian?: boolean;
   guardianIds?: string[];
 }
 
@@ -852,6 +854,7 @@ export type TeamMember = {
   photoKey?: string;
   phoneNumber?: string;
   positions?: string[];
+  hasGuardian?: boolean;
 }
 
 export type TeamPermission =
@@ -992,6 +995,8 @@ export type UpdateTeamTheme = {
   chatBackgroundKey?: string | null;
   chatBackgroundOverlay?: ('dark' | 'light' | 'none') | null;
 }
+
+export type UploadImageType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' | 'image/avif';
 
 export type UserProfile = {
   userId: string;

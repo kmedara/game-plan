@@ -12,6 +12,8 @@ const SHARED_MESSAGES: Readonly<Record<string, string>> = {
   minor_cannot_be_team_admin: 'errors.roles.minorCannotBeTeamAdmin',
   minor_cannot_hold_manage_permissions: 'errors.roles.minorCannotManagePermissions',
   role_outranks_caller: 'errors.roles.outranksCaller',
+  guardian_required: 'errors.chat.guardianRequired',
+  minor_chat_rule_violated: 'errors.chat.minorChatRule',
   forbidden: 'errors.common.forbidden',
   invalid_interval: 'errors.event.invalidRepeat',
   invalid_by_week_day: 'errors.event.invalidRepeat',

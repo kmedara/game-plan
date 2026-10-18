@@ -327,13 +327,44 @@ export const isMinorChatMembershipAllowed = (members: readonly ChatParticipant[]
   return true;
 };
 
+/** The fields the guardian rules read from each chat member. */
+type GuardianRuleMember = Pick<ChatParticipant, 'userId' | 'accountKind' | 'guardianIds'>;
+
 /**
- * Returns whether adding one person keeps the minor chat rule intact.
+ * Whether a minor shares the chat with an adult who is not their guardian.
  *
- * @param existing - Current chat members.
- * @param adding - The person being added.
- * @returns `true` when the addition is allowed under the minor rule.
+ * @param minor - A minor in the chat.
+ * @param members - Everyone in the chat.
+ * @returns `true` when such an adult is present.
  */
+const hasOutsideAdult = (minor: GuardianRuleMember, members: readonly GuardianRuleMember[]): boolean => {
+  const guardians = new Set(minor.guardianIds ?? []);
+  return members.some(
+    (member) => member.accountKind === 'adult' && member.userId !== minor.userId && !guardians.has(member.userId),
+  );
+};
+
+/**
+ * Guardians who must join so no minor is with an outside adult alone.
+ *
+ * Every chat that adds members on its own (private chats, channels, carpools)
+ * adds these. Two minors with no outside adult need none.
+ *
+ * @param members - The proposed membership.
+ * @returns Guardian ids not already in the chat, without repeats.
+ */
+export const requiredGuardianIds = (members: readonly GuardianRuleMember[]): string[] => {
+  const present = new Set(members.map((member) => member.userId));
+  const needed = new Set<string>();
+  for (const minor of members) {
+    if (minor.accountKind !== 'minor' || !hasOutsideAdult(minor, members)) continue;
+    for (const guardianId of minor.guardianIds ?? []) {
+      if (!present.has(guardianId)) needed.add(guardianId);
+    }
+  }
+  return [...needed];
+};
+
 /**
  * Returns whether every minor who is chatting with a non-guardian adult has a guardian in the set.
  *
@@ -346,21 +377,20 @@ export const guardianPresentForAdultMinorChats = (
   members: readonly ChatParticipant[],
 ): boolean => {
   for (const minor of members) {
-    if (minor.accountKind !== 'minor') continue;
+    if (minor.accountKind !== 'minor' || !hasOutsideAdult(minor, members)) continue;
     const guardians = new Set(minor.guardianIds ?? []);
-    const outsideAdult = members.some(
-      (member) =>
-        member.accountKind === 'adult' &&
-        member.userId !== minor.userId &&
-        !guardians.has(member.userId),
-    );
-    if (!outsideAdult) continue;
-    const present = members.some((member) => guardians.has(member.userId));
-    if (!present) return false;
+    if (!members.some((member) => guardians.has(member.userId))) return false;
   }
   return true;
 };
 
+/**
+ * Returns whether adding one person keeps the minor chat rule intact.
+ *
+ * @param existing - Current chat members.
+ * @param adding - The person being added.
+ * @returns `true` when the addition is allowed under the minor rule.
+ */
 export const canAddChatMember = (
   existing: readonly ChatParticipant[],
   adding: ChatParticipant,

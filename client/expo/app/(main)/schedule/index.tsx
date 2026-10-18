@@ -128,7 +128,7 @@ export default function ScheduleScreen() {
     | undefined
   >();
   const focusedTeamId = viewing?.teamId ?? editing?.item.teamId ?? addingTeamId;
-  useBrandTeam(teams.length > 1 ? focusedTeamId : undefined);
+  useBrandTeam(focusedTeamId);
   const loadError = scheduleQueries.some((query) => queryError(query.error) !== undefined)
     ? t('errors.common.loadFailed')
     : undefined;

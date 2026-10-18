@@ -191,10 +191,13 @@
     "add": "Agregar chat",
     "newPrivate": "Chat privado",
     "newChannel": "Canal del equipo",
-    "chatName": "Nombre del chat",
     "noTeammates": "No hay compañeros para agregar.",
     "pickTeammates": "Elige al menos un compañero.",
-    "chatNameRequired": "Ingresa un nombre de chat.",
+    "teammates": "Compañeros",
+    "searchTeammates": "Buscar por nombre",
+    "removeTeammate": "Quitar a {{name}}",
+    "guardiansAdded": "Se agregarán al chat los tutores de {{names}}.",
+    "noGuardian": "Aún sin tutor vinculado",
     "email": "Correo",
     "findUser": "Buscar",
     "searching": "Buscando…",
@@ -337,6 +340,10 @@
       "saveFailed": "No se pudieron guardar los cambios.",
       "deleteFailed": "No se pudo eliminar.",
       "forbidden": "No tienes permiso para hacer eso."
+    },
+    "chat": {
+      "guardianRequired": "Este jugador aún no tiene un tutor vinculado, así que no se le puede escribir directamente. Pide a un padre que vincule su cuenta primero.",
+      "minorChatRule": "Un jugador solo puede chatear con personas de su propio equipo y con sus tutores."
     },
     "roles": {
       "minorCannotBeTeamAdmin": "Un menor no puede ser administrador del equipo.",

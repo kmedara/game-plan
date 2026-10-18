@@ -5,14 +5,14 @@
 import MessageCircle from 'lucide-react-native/icons/message-circle';
 import MessageSquareText from 'lucide-react-native/icons/message-square-text';
 import Phone from 'lucide-react-native/icons/phone';
-import { useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { TeamMember } from '@gameplan/types';
 import { errorMessageKey } from '@/src/errors';
 import { useDownloadUrl } from '@/src/media';
-import { queryKeys } from '@/src/queries/keys';
+import { createPrivateChatMutation } from '@/src/queries/chat';
 import { useApp } from '@/src/state';
 import { ProfilePhoto } from '@/src/ui';
 import { ICON } from './rsvp';
@@ -33,6 +33,7 @@ export const AttendanceRow = ({
   const { t } = useTranslation();
   const { api } = useApp();
   const queryClient = useQueryClient();
+  const startChat = useMutation(createPrivateChatMutation(api, queryClient));
   const router = useRouter();
   const photo = useDownloadUrl(member?.photoKey, { userId });
   const phone = member?.phoneNumber;
@@ -66,12 +67,9 @@ export const AttendanceRow = ({
           accessibilityLabel={t('schedule.message')}
           className="p-1.5"
           onPress={() => {
-            void api
-              .createPrivateChat({ memberIds: [userId] })
-              .then(async (chat) => {
-                await queryClient.invalidateQueries({ queryKey: queryKeys.chats });
-                router.push(`/chats/${chat.chatId}`);
-              })
+            void startChat
+              .mutateAsync({ memberIds: [userId] })
+              .then((chat) => router.push(`/chats/${chat.chatId}`))
               .catch((err: unknown) => onError(t(errorMessageKey(err, 'errors.event.messageFailed'))));
           }}
         >

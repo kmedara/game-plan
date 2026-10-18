@@ -12,6 +12,11 @@ describe('errorMessageKey', () => {
     expect(errorMessageKey(new Error('http_502'), 'fallback')).toBe('fallback');
   });
 
+  it('explains the minor chat rules wherever a private chat is started', () => {
+    expect(errorMessageKey(new Error('guardian_required'), 'fallback')).toBe('errors.chat.guardianRequired');
+    expect(errorMessageKey(new Error('minor_chat_rule_violated'), 'fallback')).toBe('errors.chat.minorChatRule');
+  });
+
   it('falls back for values that carry no code', () => {
     expect(errorMessageKey('oops', 'fallback')).toBe('fallback');
     expect(errorMessageKey(new Error(''), 'fallback')).toBe('fallback');

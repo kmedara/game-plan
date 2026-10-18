@@ -11,14 +11,18 @@ import {
   withTeamIdFromBody,
 } from '../../../lib/guards.js';
 import { json } from '../../../lib/http.js';
-import { guardianPresentForAdultMinorChats, isMinorChatMembershipAllowed } from '@gameplan/rules';
+import {
+  guardianPresentForAdultMinorChats,
+  isMinorChatMembershipAllowed,
+  requiredGuardianIds,
+} from '@gameplan/rules';
 import { route, withBodyValidation } from '../../../lib/pipeline.js';
 import {
   createPrivateChat,
   createTeamChannel,
-  listTeamMemberIds,
   loadChatParticipants,
 } from '../chat-store.js';
+import { listTeamMemberIds } from '../../../lib/team-roster.js';
 import { withChatErrors } from './errors.js';
 
 /**
@@ -27,20 +31,10 @@ import { withChatErrors } from './errors.js';
  * @param memberIds - The proposed member ids.
  * @returns Those ids plus any required guardians.
  */
-const withRequiredGuardians = async (memberIds: string[]): Promise<string[]> => {
-  const participants = await loadChatParticipants(memberIds);
-  const next = new Set(memberIds);
-  for (const minor of participants) {
-    if (minor.accountKind !== 'minor') continue;
-    const guardians = minor.guardianIds ?? [];
-    const outsideAdult = participants.some(
-      (member) => member.accountKind === 'adult' && !guardians.includes(member.userId),
-    );
-    if (!outsideAdult) continue;
-    for (const guardianId of guardians) next.add(guardianId);
-  }
-  return [...next];
-};
+const withRequiredGuardians = async (memberIds: string[]): Promise<string[]> => [
+  ...memberIds,
+  ...requiredGuardianIds(await loadChatParticipants(memberIds)),
+];
 
 /**
  * Handles `POST /chat/channels`.

@@ -13,6 +13,7 @@ import {
   canHoldManagePermissions,
   guardianPresentForAdultMinorChats,
   isMinorChatMembershipAllowed,
+  requiredGuardianIds,
   sharesTeam,
 } from '@gameplan/rules';
 
@@ -87,6 +88,15 @@ describe('minor chat rule', () => {
     const guardian = person('g', 'adult', []);
     expect(guardianPresentForAdultMinorChats([withGuardian, coach, guardian])).toBe(true);
     expect(isMinorChatMembershipAllowed([withGuardian, coach, guardian])).toBe(true);
+  });
+
+  it('names the guardians to add when a minor chats with an outside adult', () => {
+    const minor = person('m', 'minor', ['t1'], ['g1', 'g2']);
+    const coach = person('c', 'adult', ['t1']);
+    expect(requiredGuardianIds([minor, coach])).toEqual(['g1', 'g2']);
+    expect(requiredGuardianIds([minor, coach, person('g1', 'adult', [])])).toEqual(['g2']);
+    expect(requiredGuardianIds([minor, person('g1', 'adult', [])])).toEqual([]);
+    expect(requiredGuardianIds([minor, person('m2', 'minor', ['t1'], ['g3'])])).toEqual([]);
   });
 
   it('allows two minors on one team without a guardian', () => {

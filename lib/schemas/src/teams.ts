@@ -213,6 +213,11 @@ export const teamMemberSchema = z
     photoKey: z.string().min(1).max(512).optional(),
     phoneNumber: phoneNumberSchema.optional(),
     positions: z.array(z.string().min(1).max(40)).optional(),
+    /**
+     * Minors only: whether any guardian is linked. A private chat with an
+     * outside adult needs one. Who the guardians are stays on the profile view.
+     */
+    hasGuardian: z.boolean().optional(),
   })
   .strict();
 

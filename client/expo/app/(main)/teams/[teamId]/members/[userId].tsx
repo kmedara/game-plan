@@ -27,7 +27,7 @@ export default function MemberProfileScreen() {
   const queryClient = useQueryClient();
   const id = teamId ?? '';
   const memberId = userId ?? '';
-  useBrandTeam(teams.length > 1 && id.length > 0 ? id : undefined);
+  useBrandTeam(id.length > 0 ? id : undefined);
   const self = api.user?.userId === memberId;
   const access = useTeamAccess(teams.find((team) => team.teamId === id));
   const loaded = useQuery({

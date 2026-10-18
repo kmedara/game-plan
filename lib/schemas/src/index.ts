@@ -223,6 +223,8 @@ export {
   registerDeviceBodySchema,
   presignUploadBodySchema,
   presignUploadResponseSchema,
+  UPLOAD_IMAGE_TYPES,
+  uploadImageTypeSchema,
   type DeviceRegistration,
   type PresignDownloadQuery,
   type PresignDownloadResponse,

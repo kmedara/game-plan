@@ -4,6 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { memoryTable } from '../../lib/dynamo/memory-table.js';
 import type { AccountKind } from '@gameplan/types';
 import type { UserProfileItem } from '../../lib/auth/identity-provider.js';
 import { DEFAULT_ROLE_PERMISSIONS } from '@gameplan/types';
@@ -23,8 +24,7 @@ import {
   userPk,
 } from '../../lib/dynamo/keys.js';
 
-const { store, profiles, itemKey, findProfileByEmail, fanout } = vi.hoisted(() => {
-  const store = new Map<string, Record<string, unknown>>();
+const { profiles, findProfileByEmail, fanout } = vi.hoisted(() => {
   const profiles = new Map<
     string,
     {
@@ -35,13 +35,13 @@ const { store, profiles, itemKey, findProfileByEmail, fanout } = vi.hoisted(() =
       photoKey?: string;
     }
   >();
-  const itemKey = (pk: string, sk: string): string => `${pk}\0${sk}`;
   const findProfileByEmail = vi.fn(
     async (..._args: unknown[]): Promise<UserProfileItem | undefined> => undefined,
   );
   const fanout = vi.fn(async (..._args: unknown[]): Promise<void> => undefined);
-  return { store, profiles, itemKey, findProfileByEmail, fanout };
+  return { profiles, findProfileByEmail, fanout };
 });
+const { store, itemKey } = memoryTable;
 
 vi.mock('../../lib/auth/profile.js', async () => {
   const keys = await import('../../lib/dynamo/keys.js');
@@ -70,67 +70,7 @@ vi.mock('../../lib/auth/profile.js', async () => {
   };
 });
 
-vi.mock('../../lib/dynamo/access.js', async () => {
-  const keys = await import('../../lib/dynamo/keys.js');
-  return {
-    getItem: async <T extends Record<string, unknown>>(pk: string, sk: string) =>
-      store.get(itemKey(pk, sk)) as T | undefined,
-    putItem: async (item: Record<string, unknown>): Promise<void> => {
-      store.set(itemKey(String(item[keys.TABLE_PK]), String(item[keys.TABLE_SK])), item);
-    },
-    deleteItem: async (): Promise<void> => undefined,
-    transactWrite: async (
-      items: Array<{ Put?: { Item: Record<string, unknown> } }>,
-    ): Promise<void> => {
-      for (const entry of items) {
-        if (entry.Put?.Item !== undefined) {
-          const item = entry.Put.Item;
-          store.set(itemKey(String(item[keys.TABLE_PK]), String(item[keys.TABLE_SK])), item);
-        }
-      }
-    },
-    queryBySkPrefix: async <T extends Record<string, unknown>>(pk: string, skPrefix: string) => {
-      const items: T[] = [];
-      for (const [key, item] of store) {
-        const [itemPk, itemSk] = key.split('\0');
-        if (itemPk === pk && itemSk.startsWith(skPrefix)) items.push(item as T);
-      }
-      return items;
-    },
-    queryBySkBetween: async () => [],
-    queryAll: async () => [],
-    queryPage: async <T extends Record<string, unknown>>(
-      input: {
-        ExpressionAttributeValues?: Record<string, unknown>;
-        ScanIndexForward?: boolean;
-      },
-      options: { limit: number; cursor?: string },
-    ): Promise<{ items: T[]; cursor?: string }> => {
-      const pk = String(input.ExpressionAttributeValues?.[':pk'] ?? '');
-      const skPrefix = String(input.ExpressionAttributeValues?.[':skPrefix'] ?? '');
-      const all: T[] = [];
-      for (const [key, item] of store) {
-        const [itemPk, itemSk] = key.split('\0');
-        if (itemPk === pk && itemSk.startsWith(skPrefix)) all.push(item as T);
-      }
-      all.sort((a, b) =>
-        String(a[keys.TABLE_SK]).localeCompare(String(b[keys.TABLE_SK])),
-      );
-      if (input.ScanIndexForward === false) all.reverse();
-
-      const start = options.cursor !== undefined ? Number(options.cursor) : 0;
-      const slice = all.slice(start, start + options.limit);
-      const next = start + options.limit;
-      return {
-        items: slice,
-        cursor: next < all.length ? String(next) : undefined,
-      };
-    },
-    queryPartition: async () => [],
-    encodeCursor: () => undefined,
-    decodeCursor: () => undefined,
-  };
-});
+vi.mock('../../lib/dynamo/access.js', async () => (await import('../../lib/dynamo/memory-table.js')).memoryAccess);
 
 vi.mock('../../lib/fanout-enqueue.js', () => ({
   enqueueFanout: (...args: unknown[]) => fanout(...args),
@@ -146,7 +86,7 @@ const {
   loadChatParticipants,
   sendMessage,
 } = await import('./chat-store.js');
-const { renameChatMember } = await import('../../lib/chat-member-names.js');
+const { memberChatName, refreshChatMemberNames, renameChatMember } = await import('../../lib/chat-member-names.js');
 
 const seedProfile = (
   userId: string,
@@ -276,6 +216,43 @@ describe('chat-store', () => {
         body: { body: '   ' },
       }),
     ).rejects.toThrow('invalid_body');
+  });
+
+  it('renames only in private chats that already store member names', async () => {
+    const userId = randomUUID();
+    const chat = (chatId: string, kind: string, meta: Record<string, unknown> | undefined): void => {
+      store.set(itemKey(userPk(userId), userChatSk(chatId)), {
+        [TABLE_PK]: userPk(userId),
+        [TABLE_SK]: userChatSk(chatId),
+        chatId,
+        kind,
+      });
+      if (meta !== undefined) {
+        store.set(itemKey(chatPk(chatId), chatMetaSk()), {
+          [TABLE_PK]: chatPk(chatId),
+          [TABLE_SK]: chatMetaSk(),
+          chatId,
+          kind,
+          ...meta,
+        });
+      }
+    };
+    chat('team', 'default', { memberNames: { [userId]: 'Old' } });
+    chat('older', 'private', {});
+    chat('gone', 'private', undefined);
+    chat('named', 'private', { memberNames: { [userId]: 'Old', other: 'Sam' } });
+    store.set(itemKey(userPk(userId), userChatSk('broken')), {
+      [TABLE_PK]: userPk(userId),
+      [TABLE_SK]: userChatSk('broken'),
+      kind: 'private',
+    });
+
+    await renameChatMember(userId, 'New');
+    expect(store.get(itemKey(chatPk('named'), chatMetaSk()))?.memberNames).toEqual({ [userId]: 'New', other: 'Sam' });
+    expect(store.get(itemKey(chatPk('team'), chatMetaSk()))?.memberNames).toEqual({ [userId]: 'Old' });
+    expect(store.get(itemKey(chatPk('older'), chatMetaSk()))?.memberNames).toBeUndefined();
+    expect(await refreshChatMemberNames('gone')).toBeUndefined();
+    expect(memberChatName({ [userId]: 'Me' }, userId)).toBeUndefined();
   });
 
   it('createTeamChannel writes a channel without applying chat membership rules', async () => {

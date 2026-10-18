@@ -12,8 +12,6 @@ import { pickAndUploadImage, type ImageUploadFailure } from './media';
 import { useApp } from './state';
 import { colors, fieldWash, muteColor } from './theme';
 
-const TEAM_IMAGE_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-
 export type ChatBackgroundOverlay = 'dark' | 'light' | 'none';
 
 /** Scrim drawn over a chat wallpaper. Missing means the dark scrim. */
@@ -84,7 +82,7 @@ export const useTeamImageSetting = ({
 
   const upload = async (): Promise<void> => {
     setError(undefined);
-    const result = await pickAndUploadImage(api, { types: TEAM_IMAGE_TYPES });
+    const result = await pickAndUploadImage(api);
     if (result === undefined) return;
     if ('error' in result) {
       setError(t(teamImageErrorKey(result.error)));

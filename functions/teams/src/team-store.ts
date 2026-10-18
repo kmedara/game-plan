@@ -18,7 +18,6 @@ import {
   TEAM_INVITE_SK_PREFIX,
   TEAM_MEMBER_SK_PREFIX,
   USER_TEAM_SK_PREFIX,
-  chatMemberSk,
   chatMetaSk,
   chatPk,
   deleteItem,
@@ -37,10 +36,10 @@ import {
   teamDirectoryPk,
   teamDirectorySk,
   transactWrite,
-  userChatSk,
   userPk,
   userTeamSk,
 } from "../../lib/dynamo/index.js";
+import { chatMembershipItems } from "../../lib/chat-membership.js";
 import { getProfile } from "../../lib/auth/profile.js";
 import { refreshTeamFixtureChats } from "../../lib/fixture-chat.js";
 import { enqueueFanout } from "../../lib/fanout-enqueue.js";
@@ -321,29 +320,11 @@ const membershipPuts = (
         } satisfies UserTeamItem,
       },
     },
-    {
-      Put: {
-        TableName: table,
-        Item: {
-          [TABLE_PK]: chatPk(team.defaultChatId),
-          [TABLE_SK]: chatMemberSk(userId),
-          userId,
-          joinedAt,
-        },
-      },
-    },
-    {
-      Put: {
-        TableName: table,
-        Item: {
-          [TABLE_PK]: userPk(userId),
-          [TABLE_SK]: userChatSk(team.defaultChatId),
-          chatId: team.defaultChatId,
-          teamId: team.teamId,
-          kind: "default",
-        },
-      },
-    },
+    ...chatMembershipItems(
+      { chatId: team.defaultChatId, kind: "default", teamId: team.teamId },
+      userId,
+      joinedAt,
+    ).map((Item) => ({ Put: { TableName: table, Item } })),
   ];
 };
 

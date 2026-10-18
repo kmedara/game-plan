@@ -3,24 +3,22 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { requiredGuardianIds } from '@gameplan/rules';
 import type { CarpoolOffer } from '@gameplan/types';
 import {
-  CHAT_MEMBER_SK_PREFIX,
-  GUARDIAN_SK_PREFIX,
   TABLE_PK,
   TABLE_SK,
-  chatMemberSk,
   chatMetaSk,
   chatPk,
   deleteItem,
   getItem,
   profileSk,
   putItem,
-  queryBySkPrefix,
-  userChatSk,
   userPk,
 } from '../../lib/dynamo/index.js';
 import { refreshChatMemberNames } from '../../lib/chat-member-names.js';
+import { listChatMemberIds, removeChatMember, syncChatMembers } from '../../lib/chat-membership.js';
+import { listGuardianIds } from '../../lib/guardians.js';
 
 /** A stored offer, including the chat that belongs to this car. */
 export type StoredCarpoolOffer = CarpoolOffer & { chatId?: string };
@@ -40,63 +38,32 @@ export const publicCarpoolOffer = (offer: StoredCarpoolOffer): CarpoolOffer => (
 });
 
 /**
- * Linked guardians of a minor rider, so the carpool chat follows the same
- * adult-present rule as a private chat. Missing profiles are treated as adults.
+ * Driver, current riders, and the guardians the private-chat rule requires.
  *
- * @param userId - A driver or rider.
- * @returns Guardian user ids, or none.
- */
-const guardianIdsFor = async (userId: string): Promise<string[]> => {
-  const profile = await getItem<{ accountKind?: string }>(userPk(userId), profileSk());
-  if (profile?.accountKind !== 'minor') return [];
-  const rows = await queryBySkPrefix<{ adultId?: string }>(userPk(userId), GUARDIAN_SK_PREFIX);
-  return rows.flatMap((row) => (typeof row.adultId === 'string' ? [row.adultId] : []));
-};
-
-/**
- * Driver, current riders, and any linked guardians of minor riders.
+ * Missing profiles are treated as adults.
  *
  * @param driverId - The person offering the seats.
  * @param riderIds - People currently in the car.
  * @returns The chat membership.
  */
 const chatMemberIds = async (driverId: string, riderIds: readonly string[]): Promise<string[]> => {
-  const ids = new Set([driverId, ...riderIds]);
-  for (const userId of [...ids]) {
-    for (const guardianId of await guardianIdsFor(userId)) ids.add(guardianId);
-  }
-  return [...ids];
-};
-
-const memberUserIds = async (chatId: string): Promise<string[]> => {
-  const rows = await queryBySkPrefix<{ userId?: string }>(chatPk(chatId), CHAT_MEMBER_SK_PREFIX);
-  return rows.flatMap((row) => (typeof row.userId === 'string' ? [row.userId] : []));
-};
-
-const putMembership = async (chatId: string, userId: string, joinedAt: string): Promise<void> => {
-  await putItem({
-    [TABLE_PK]: chatPk(chatId),
-    [TABLE_SK]: chatMemberSk(userId),
-    userId,
-    joinedAt,
-  });
-  await putItem({
-    [TABLE_PK]: userPk(userId),
-    [TABLE_SK]: userChatSk(chatId),
-    chatId,
-    kind: 'private',
-    name: CARPOOL_CHAT_NAME,
-  });
-};
-
-const removeMembership = async (chatId: string, userId: string): Promise<void> => {
-  await deleteItem(chatPk(chatId), chatMemberSk(userId));
-  await deleteItem(userPk(userId), userChatSk(chatId));
+  const ids = [...new Set([driverId, ...riderIds])];
+  const people = await Promise.all(
+    ids.map(async (userId) => {
+      const profile = await getItem<{ accountKind?: string }>(userPk(userId), profileSk());
+      const accountKind = profile?.accountKind === 'minor' ? ('minor' as const) : ('adult' as const);
+      return {
+        userId,
+        accountKind,
+        ...(accountKind === 'minor' ? { guardianIds: await listGuardianIds(userId) } : {}),
+      };
+    }),
+  );
+  return [...ids, ...requiredGuardianIds(people)];
 };
 
 const dissolveChat = async (chatId: string): Promise<void> => {
-  const members = await memberUserIds(chatId);
-  for (const userId of members) await removeMembership(chatId, userId);
+  for (const userId of await listChatMemberIds(chatId)) await removeChatMember(chatId, userId);
   await deleteItem(chatPk(chatId), chatMetaSk());
 };
 
@@ -121,22 +88,12 @@ const ensureChat = async (chatId: string, memberIds: readonly string[]): Promise
       createdAt,
     });
   }
-  const current = new Set(await memberUserIds(chatId));
-  const desired = new Set(memberIds);
-  let changed = meta === undefined;
-  for (const userId of current) {
-    if (!desired.has(userId)) {
-      await removeMembership(chatId, userId);
-      changed = true;
-    }
-  }
-  for (const userId of desired) {
-    if (!current.has(userId)) {
-      await putMembership(chatId, userId, createdAt);
-      changed = true;
-    }
-  }
-  if (changed) await refreshChatMemberNames(chatId);
+  const changed = await syncChatMembers(
+    { chatId, kind: 'private', name: CARPOOL_CHAT_NAME },
+    memberIds,
+    createdAt,
+  );
+  if (changed || meta === undefined) await refreshChatMemberNames(chatId);
 };
 
 /**

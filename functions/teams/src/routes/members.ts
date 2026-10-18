@@ -5,7 +5,7 @@
 import { assignRoleBodySchema } from "@gameplan/schemas";
 import { assertCallerCanGrantRoles, highestRole, rolesFromMembership } from "@gameplan/rules";
 import { getProfile, toUserProfile } from "../../../lib/auth/index.js";
-import { isGuardianOf, listGuardianIds } from "../../../lib/guardians.js";
+import { listGuardianIds } from "../../../lib/guardians.js";
 import {
   requireMembership,
   requirePermission,
@@ -44,12 +44,14 @@ type Profile = NonNullable<Awaited<ReturnType<typeof getProfile>>>;
  * @param member - The roster row.
  * @param profile - The member's profile, when it exists.
  * @param showPhone - Whether the viewer may see the phone number.
+ * @param guardianIds - A minor's linked guardians. Only whether there are any is sent.
  * @returns Wire fields, or `undefined` when the row has no role.
  */
 const memberFields = (
   member: { userId: string; joinedAt: string; role?: unknown; roles?: unknown; positions?: string[] },
   profile: Profile | undefined,
   showPhone: boolean,
+  guardianIds: readonly string[],
 ) => {
   const roles = roleFields(member);
   if (roles === undefined) return undefined;
@@ -69,6 +71,7 @@ const memberFields = (
           ...(showPhone && profile.phoneNumber !== undefined
             ? { phoneNumber: profile.phoneNumber }
             : {}),
+          ...(profile.accountKind === "minor" ? { hasGuardian: guardianIds.length > 0 } : {}),
         }
       : {}),
   };
@@ -78,6 +81,7 @@ const memberFields = (
  * Handles `GET /teams/:teamId/members`.
  *
  * A minor's phone number is included only for that minor and their guardians.
+ * Each minor says whether any guardian is linked, but not who.
  *
  * @param event - The HTTP API event.
  * @param teamId - The team id from the path.
@@ -94,11 +98,14 @@ export const handleListMembers = route(
     const enriched = await Promise.all(
       members.map(async (member) => {
         const profile = await getProfile(member.userId);
+        // One guardian read per minor answers both the phone rule and hasGuardian.
+        const guardianIds =
+          profile?.accountKind === "minor" ? await listGuardianIds(member.userId) : [];
         const showPhone =
           profile?.accountKind !== "minor" ||
           user.userId === member.userId ||
-          (profile.phoneNumber !== undefined && (await isGuardianOf(user.userId, member.userId)));
-        return memberFields(member, profile, showPhone);
+          guardianIds.includes(user.userId);
+        return memberFields(member, profile, showPhone, guardianIds);
       }),
     );
     return json(200, { members: enriched.filter((member) => member !== undefined) });
@@ -134,7 +141,7 @@ export const handleGetMember = route(
       viewer.roles.includes("team_admin") ||
       viewer.roles.includes("coach") ||
       guardianIds.includes(user.userId);
-    const fields = memberFields(member, profile, showPhone);
+    const fields = memberFields(member, profile, showPhone, guardianIds);
     if (fields === undefined) throw new Error("member_not_found");
     return json(200, {
       ...fields,

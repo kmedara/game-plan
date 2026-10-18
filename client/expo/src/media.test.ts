@@ -13,6 +13,19 @@ jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: jest.fn(),
 }));
 
+const mockSaveAsync = jest.fn();
+const mockManipulate = jest.fn();
+
+jest.mock('expo-image-manipulator', () => ({
+  SaveFormat: { JPEG: 'jpeg' },
+  ImageManipulator: {
+    manipulate: (...args: unknown[]) => {
+      mockManipulate(...args);
+      return { renderAsync: async () => ({ saveAsync: (...save: unknown[]) => mockSaveAsync(...save) }) };
+    },
+  },
+}));
+
 jest.mock('./state', () => {
   const app = { api: { presignDownload: (...args: unknown[]) => mockPresignDownload(...args) } };
   return { useApp: () => app };
@@ -39,6 +52,8 @@ describe('pickAndUploadImage', () => {
 
   beforeEach(() => {
     pick.mockReset();
+    mockManipulate.mockReset();
+    mockSaveAsync.mockReset();
     presignUpload.mockReset();
     fetchMock.mockReset();
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -75,16 +90,40 @@ describe('pickAndUploadImage', () => {
     });
   });
 
-  it('rejects types outside the allowed set only when a set is given', async () => {
+  it('uploads AVIF as is and re-encodes HEIC as JPEG', async () => {
+    pick.mockResolvedValueOnce(picked('image/avif'));
+    stubFile(10);
+    presignUpload.mockResolvedValueOnce({ uploadUrl: 'https://upload', objectKey: 'a' });
+    await expect(pickAndUploadImage({ presignUpload })).resolves.toEqual({ key: 'a', uri: 'file:///photo' });
+    expect(presignUpload).toHaveBeenLastCalledWith('image/avif', 10);
+    expect(mockManipulate).not.toHaveBeenCalled();
+
     pick.mockResolvedValueOnce(picked('image/heic'));
+    mockSaveAsync.mockResolvedValueOnce({ uri: 'file:///photo.jpg' });
+    stubFile(10);
+    presignUpload.mockResolvedValueOnce({ uploadUrl: 'https://upload', objectKey: 'h' });
+    await expect(pickAndUploadImage({ presignUpload }, { quality: 0.7 })).resolves.toEqual({
+      key: 'h',
+      uri: 'file:///photo.jpg',
+    });
+    expect(mockManipulate).toHaveBeenCalledWith('file:///photo');
+    expect(mockSaveAsync).toHaveBeenCalledWith({ format: 'jpeg', compress: 0.7 });
+    expect(fetchMock).toHaveBeenCalledWith('file:///photo.jpg');
+    expect(presignUpload).toHaveBeenLastCalledWith('image/jpeg', 10);
+  });
+
+  it('checks the allowed set against the type that would be uploaded', async () => {
+    pick.mockResolvedValueOnce(picked('image/png'));
     await expect(
       pickAndUploadImage({ presignUpload }, { types: new Set(['image/jpeg']) }),
     ).resolves.toEqual({ error: 'bad_type' });
+    expect(presignUpload).not.toHaveBeenCalled();
+  });
 
+  it('reports a failed re-encode as upload_failed', async () => {
     pick.mockResolvedValueOnce(picked('image/heic'));
-    stubFile(10);
-    presignUpload.mockResolvedValueOnce({ uploadUrl: 'https://upload', objectKey: 'k' });
-    await expect(pickAndUploadImage({ presignUpload })).resolves.toEqual({ key: 'k', uri: 'file:///photo' });
+    mockSaveAsync.mockRejectedValueOnce(new Error('decode'));
+    await expect(pickAndUploadImage({ presignUpload })).resolves.toEqual({ error: 'upload_failed' });
   });
 
   it('reports files over the size limit without presigning', async () => {

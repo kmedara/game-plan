@@ -43,6 +43,8 @@ export default defineConfig({
       exclude: [
         'functions/**/*.test.ts',
         'functions/**/local.ts',
+        // Test double for the access helpers.
+        'functions/lib/dynamo/memory-table.ts',
       ],
       reporter: ['text', 'html', 'json'],
       thresholds: {

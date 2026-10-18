@@ -3,7 +3,8 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Image, Platform, Pressable, ScrollView, type ScrollViewProps, Text, TextInput, View } from 'react-native';
+import { Image } from 'expo-image';
+import { ActivityIndicator, Animated, Platform, Pressable, ScrollView, type ScrollViewProps, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { errorMessageKey } from './errors';
 import { useApp } from './state';
@@ -78,19 +79,41 @@ export const Field = ({
   </View>
 );
 
-export const TimeZoneField = ({
+/** One row in an {@link AutocompleteField} list. */
+export type AutocompleteChoice = {
+  id: string;
+  label: string;
+  /** Shown dimmed under the label and makes the row unpickable, such as why it cannot be chosen. */
+  disabledReason?: string;
+};
+
+/**
+ * Text field that lists matching choices underneath while it has focus.
+ *
+ * @param props.text - What the field shows while closed, such as the picked label.
+ * @param props.focusText - What the field holds once focused. Defaults to `text`.
+ * @param props.search - Choices for the typed query.
+ * @param props.onPick - Called with the tapped choice. The list then closes.
+ */
+export const AutocompleteField = ({
   label,
-  value,
-  onChange,
+  text,
+  focusText,
+  search,
+  onPick,
+  placeholder,
   onSave,
 }: {
   label: string;
-  value: string;
-  onChange: (value: string) => void;
-  /** Shown inside the field when the selected zone is not the saved one. */
+  text: string;
+  focusText?: string;
+  search: (query: string) => AutocompleteChoice[];
+  onPick: (choice: AutocompleteChoice) => void;
+  placeholder?: string;
+  /** Shown inside the field when the caller has something to store. */
   onSave?: () => void | Promise<void>;
 }) => {
-  const [query, setQuery] = useState(value);
+  const [query, setQuery] = useState(text);
   const [open, setOpen] = useState(false);
   const closing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -102,10 +125,10 @@ export const TimeZoneField = ({
 
   useEffect(() => {
     if (open) return;
-    setQuery(value.length === 0 ? '' : timeZoneLabel(value));
-  }, [open, value]);
+    setQuery(text);
+  }, [open, text]);
 
-  const choices = open ? searchTimeZones(query, new Date(), 400) : [];
+  const choices = open ? search(query) : [];
 
   return (
     <View className="mb-3" style={{ zIndex: open ? 20 : 0 }}>
@@ -115,12 +138,14 @@ export const TimeZoneField = ({
           <TextInput
             className="min-w-0 flex-1 px-3 py-2 text-base text-ink"
             value={query}
+            accessibilityLabel={label}
+            placeholder={placeholder}
             onChangeText={(next) => {
               setQuery(next);
               setOpen(true);
             }}
             onFocus={() => {
-              setQuery(value);
+              setQuery(focusText ?? text);
               setOpen(true);
             }}
             onBlur={() => {
@@ -151,14 +176,19 @@ export const TimeZoneField = ({
             <Pressable
               key={choice.id}
               className="border-b border-line px-3 py-2"
+              disabled={choice.disabledReason !== undefined}
+              accessibilityState={{ disabled: choice.disabledReason !== undefined }}
               onPressIn={() => {
                 cancelClose();
-                onChange(choice.id);
-                setQuery(choice.label);
+                if (choice.disabledReason !== undefined) return;
+                onPick(choice);
                 setOpen(false);
               }}
             >
-              <Text className="text-ink">{choice.label}</Text>
+              <Text className={choice.disabledReason !== undefined ? 'text-muted' : 'text-ink'}>{choice.label}</Text>
+              {choice.disabledReason !== undefined ? (
+                <Text className="text-xs text-muted">{choice.disabledReason}</Text>
+              ) : null}
             </Pressable>
           ))}
         </ScrollView>
@@ -167,6 +197,28 @@ export const TimeZoneField = ({
     </View>
   );
 };
+
+export const TimeZoneField = ({
+  label,
+  value,
+  onChange,
+  onSave,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  /** Shown inside the field when the selected zone is not the saved one. */
+  onSave?: () => void | Promise<void>;
+}) => (
+  <AutocompleteField
+    label={label}
+    text={value.length === 0 ? '' : timeZoneLabel(value)}
+    focusText={value}
+    search={(query) => searchTimeZones(query, new Date(), 400)}
+    onPick={(choice) => onChange(choice.id)}
+    onSave={onSave}
+  />
+);
 
 export type ButtonTone = 'primary' | 'secondary' | 'danger';
 
@@ -359,7 +411,7 @@ export const ProfilePhoto = ({
           <Image
             source={{ uri }}
             accessibilityLabel={name}
-            resizeMode={resizeMode}
+            contentFit={resizeMode}
             onLoad={() => setLoadedUri(uri)}
             style={{ width: size, height: size }}
           />

@@ -5,25 +5,9 @@
 import { toE164Phone, updateProfileBodySchema } from '@gameplan/schemas';
 import { getProfile, putProfile, requireUser, toUserProfile } from '../../../lib/auth/index.js';
 import { json } from '../../../lib/http.js';
+import { isOwnedUploadKey } from '../../../lib/upload-keys.js';
 import { route, withBodyValidation } from '../../../lib/pipeline.js';
 import { withIdentityErrors } from './session.js';
-
-/**
- * Returns whether an object key is an upload owned by this user.
- *
- * @param userId - The caller's user id.
- * @param photoKey - The media object key from a presigned upload.
- * @returns `true` when the key sits under that user's upload prefix.
- */
-const ownsPhotoKey = (userId: string, photoKey: string): boolean => {
-  const prefix = `uploads/${userId}/`;
-  return (
-    photoKey.startsWith(prefix) &&
-    photoKey.length > prefix.length &&
-    !photoKey.includes('..') &&
-    !photoKey.includes('\\')
-  );
-};
 
 /**
  * Handles `PATCH /identity/profile`.
@@ -41,7 +25,7 @@ export const handleUpdateProfile = route(
     if (body.photoKey === undefined && body.phoneNumber === undefined) {
       throw new Error('invalid_body');
     }
-    if (body.photoKey !== undefined && body.photoKey !== null && !ownsPhotoKey(user.userId, body.photoKey)) {
+    if (body.photoKey !== undefined && body.photoKey !== null && !isOwnedUploadKey(user.userId, body.photoKey)) {
       throw new Error('invalid_photo_key');
     }
 

@@ -11,7 +11,8 @@ import User from 'lucide-react-native/icons/user';
 import Users from 'lucide-react-native/icons/users';
 import { useIsRestoring, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Image, Platform, Pressable, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { Platform, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { canCreateTeam } from '@gameplan/rules';
 import { useDownloadUrl } from '@/src/media';
@@ -119,7 +120,7 @@ export default function MainLayout() {
             <Image
               source={{ uri: logoUrl }}
               accessibilityLabel={t('teamAdmin.teamLogo')}
-              resizeMode="contain"
+              contentFit="contain"
               style={{ position: 'absolute', right: '100%', top: -17, width: 56, height: 56, marginRight: 8 }}
             />
           ) : null}

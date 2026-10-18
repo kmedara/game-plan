@@ -123,17 +123,18 @@ export const useApp = (): AppState => {
 /**
  * Paints the shell with one team's brand while this screen is showing it.
  *
- * A single membership already brands the whole app, so this claim is only needed
- * when the athlete belongs to several teams and has opened one of them.
+ * A single membership already brands the whole app, so the claim is skipped
+ * unless the athlete belongs to several teams.
  *
  * @param teamId - The team to show, or `undefined` to leave the shell alone.
  */
 export const useBrandTeam = (teamId: string | undefined): void => {
-  const { pushBrandTeam } = useApp();
+  const { pushBrandTeam, teams } = useApp();
+  const claimed = teams.length > 1 ? teamId : undefined;
   useLayoutEffect(() => {
-    if (teamId === undefined) return;
-    return pushBrandTeam(teamId);
-  }, [pushBrandTeam, teamId]);
+    if (claimed === undefined) return;
+    return pushBrandTeam(claimed);
+  }, [pushBrandTeam, claimed]);
 };
 
 /** Active team summary, when the list has been loaded. */

@@ -3,10 +3,10 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { memoryTable } from '../../lib/dynamo/memory-table.js';
 import { TABLE_PK, TABLE_SK, eventSk, rsvpSk, teamMetaSk, teamPk } from '../../lib/dynamo/keys.js';
 
-const store = new Map<string, Record<string, unknown>>();
-const itemKey = (pk: string, sk: string): string => `${pk}\0${sk}`;
+const { store, itemKey } = memoryTable;
 const { fanoutJobs } = vi.hoisted(() => ({
   fanoutJobs: [] as Array<Record<string, unknown>>,
 }));
@@ -18,38 +18,7 @@ vi.mock('../../lib/fanout-enqueue.js', () => ({
   resetFanoutSqsClient: (): void => undefined,
 }));
 
-vi.mock('../../lib/dynamo/access.js', () => ({
-  getItem: async <T extends Record<string, unknown>>(pk: string, sk: string) =>
-    store.get(itemKey(pk, sk)) as T | undefined,
-  putItem: async (item: Record<string, unknown>): Promise<void> => {
-    store.set(itemKey(String(item[TABLE_PK]), String(item[TABLE_SK])), item);
-  },
-  deleteItem: async (pk: string, sk: string): Promise<void> => {
-    store.delete(itemKey(pk, sk));
-  },
-  queryBySkPrefix: async <T extends Record<string, unknown>>(pk: string, skPrefix: string) => {
-    const items: T[] = [];
-    for (const [key, item] of store) {
-      const [itemPk, itemSk] = key.split('\0');
-      if (itemPk === pk && itemSk.startsWith(skPrefix)) items.push(item as T);
-    }
-    return items;
-  },
-  queryBySkBetween: async <T extends Record<string, unknown>>(pk: string, lo: string, hi: string) => {
-    const items: T[] = [];
-    for (const [key, item] of store) {
-      const [itemPk, itemSk] = key.split('\0');
-      if (itemPk === pk && itemSk >= lo && itemSk <= hi) items.push(item as T);
-    }
-    return items;
-  },
-  transactWrite: async (): Promise<void> => undefined,
-  queryAll: async () => [],
-  queryPage: async () => ({ items: [] }),
-  queryPartition: async () => [],
-  encodeCursor: () => undefined,
-  decodeCursor: () => undefined,
-}));
+vi.mock('../../lib/dynamo/access.js', async () => (await import('../../lib/dynamo/memory-table.js')).memoryAccess);
 
 const { reminderInstants, syncReminders, runDueReminders } = await import('./reminders.js');
 

@@ -20,7 +20,6 @@ import {
   MESSAGE_SK_PREFIX,
   TABLE_PK,
   TABLE_SK,
-  TEAM_MEMBER_SK_PREFIX,
   USER_CHAT_SK_PREFIX,
   USER_TEAM_SK_PREFIX,
   chatMemberSk,
@@ -35,7 +34,6 @@ import {
   teamMetaSk,
   teamPk,
   transactWrite,
-  userChatSk,
   userPk,
 } from '../../lib/dynamo/index.js';
 import {
@@ -44,7 +42,11 @@ import {
   refreshChatMemberNames,
   type ChatMemberNames,
 } from '../../lib/chat-member-names.js';
+import { chatMembershipItems } from '../../lib/chat-membership.js';
 import { enqueueFanout } from '../../lib/fanout-enqueue.js';
+import { listGuardianIds } from '../../lib/guardians.js';
+import { listTeamMemberIds } from '../../lib/team-roster.js';
+import { isOwnedUploadKey } from '../../lib/upload-keys.js';
 import type { ChatParticipant } from '@gameplan/types';
 import { TABLE_NAME } from '../../lib/names.js';
 
@@ -256,19 +258,6 @@ export const requireTeamMembership = async (teamId: string, userId: string): Pro
 };
 
 /**
- * Loads the roster user ids for a team channel.
- *
- * @param teamId - The team id.
- * @returns User ids on the roster.
- */
-export const listTeamMemberIds = async (teamId: string): Promise<string[]> => {
-  const roster = await queryBySkPrefix<TeamMemberItem>(teamPk(teamId), TEAM_MEMBER_SK_PREFIX);
-  return roster
-    .map((row) => row.userId)
-    .filter((id): id is string => typeof id === 'string');
-};
-
-/**
  * Builds a {@link ChatParticipant} from the profile and team memberships.
  *
  * @param userId - The user id.
@@ -278,12 +267,7 @@ const toParticipant = async (userId: string): Promise<ChatParticipant> => {
   const profile = await getProfile(userId);
   if (profile === undefined) throw new Error('profile_not_found');
   const teams = await queryBySkPrefix<UserTeamItem>(userPk(userId), USER_TEAM_SK_PREFIX);
-  const guardianIds =
-    profile.accountKind === 'minor'
-      ? (await queryBySkPrefix<{ adultId?: string }>(userPk(userId), 'GUARDIAN#')).flatMap((row) =>
-          typeof row.adultId === 'string' ? [row.adultId] : [],
-        )
-      : undefined;
+  const guardianIds = profile.accountKind === 'minor' ? await listGuardianIds(userId) : undefined;
   return {
     userId,
     accountKind: profile.accountKind,
@@ -305,48 +289,6 @@ export const loadChatParticipants = async (
 ): Promise<ChatParticipant[]> => Promise.all(userIds.map((userId) => toParticipant(userId)));
 
 /**
- * Builds Put items for chat and user-side membership of one person.
- *
- * @param chat - Chat fields needed on the user-side row.
- * @param userId - The member's user id.
- * @param joinedAt - ISO timestamp.
- * @returns Two TransactWrite Put items.
- */
-const membershipPuts = (
-  chat: Pick<ChatMetaItem, 'chatId' | 'kind' | 'teamId' | 'name'>,
-  userId: string,
-  joinedAt: string,
-) => {
-  const table = TABLE_NAME;
-  return [
-    {
-      Put: {
-        TableName: table,
-        Item: {
-          [TABLE_PK]: chatPk(chat.chatId),
-          [TABLE_SK]: chatMemberSk(userId),
-          userId,
-          joinedAt,
-        } satisfies ChatMemberItem,
-      },
-    },
-    {
-      Put: {
-        TableName: table,
-        Item: {
-          [TABLE_PK]: userPk(userId),
-          [TABLE_SK]: userChatSk(chat.chatId),
-          chatId: chat.chatId,
-          kind: chat.kind,
-          ...(chat.teamId !== undefined ? { teamId: chat.teamId } : {}),
-          name: chat.name,
-        } satisfies UserChatItem,
-      },
-    },
-  ];
-};
-
-/**
  * Writes membership rows in TransactWrite batches that stay under the item cap.
  *
  * @param chat - Chat fields for the user-side rows.
@@ -362,7 +304,9 @@ const writeMemberships = async (
   const perBatch = Math.floor(TRANSACT_MAX_ITEMS / 2);
   for (let i = 0; i < userIds.length; i += perBatch) {
     const slice = userIds.slice(i, i + perBatch);
-    const items = slice.flatMap((userId) => membershipPuts(chat, userId, joinedAt));
+    const items = slice.flatMap((userId) =>
+      chatMembershipItems(chat, userId, joinedAt).map((Item) => ({ Put: { TableName: TABLE_NAME, Item } })),
+    );
     await transactWrite(items);
   }
 };
@@ -407,17 +351,8 @@ export const createTeamChannel = async (input: {
   if (team === undefined) throw new Error('team_not_found');
   await requireTeamMembership(input.body.teamId, input.userId);
 
-  const roster = await queryBySkPrefix<TeamMemberItem>(
-    teamPk(input.body.teamId),
-    TEAM_MEMBER_SK_PREFIX,
-  );
   const memberIds = [
-    ...new Set([
-      ...roster
-        .map((row) => row.userId)
-        .filter((id): id is string => typeof id === 'string'),
-      ...(input.extraMemberIds ?? []),
-    ]),
+    ...new Set([...(await listTeamMemberIds(input.body.teamId)), ...(input.extraMemberIds ?? [])]),
   ];
   if (!memberIds.includes(input.userId)) throw new Error('not_a_member');
 
@@ -508,18 +443,6 @@ export const listMessages = async (
     messages: await withSenderIdentity(page.items),
     ...(page.cursor !== undefined ? { cursor: page.cursor } : {}),
   };
-};
-
-/**
- * True when `key` is an upload object owned by `userId`.
- *
- * @param userId - The authenticated sender.
- * @param key - A media object key from the request.
- * @returns Whether the key is under that user's upload prefix.
- */
-const isOwnedUploadKey = (userId: string, key: string): boolean => {
-  const prefix = `uploads/${userId}/`;
-  return key.startsWith(prefix) && !key.includes('..') && key.length > prefix.length;
 };
 
 /**

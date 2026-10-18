@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { memoryTable } from '../../lib/dynamo/memory-table.js';
 import { issueLocalTokens } from '../../lib/auth/local-jwt.js';
 import type { TeamPermission, TeamRole } from '@gameplan/types';
 import { DEFAULT_ROLE_PERMISSIONS } from '@gameplan/types';
@@ -29,55 +30,10 @@ import {
   userPk,
 } from '../../lib/dynamo/keys.js';
 
-const store = new Map<string, Record<string, unknown>>();
+const { store, itemKey } = memoryTable;
 
-const itemKey = (pk: string, sk: string): string => `${pk}\0${sk}`;
 
-vi.mock('../../lib/dynamo/access.js', () => ({
-  getItem: async <T extends Record<string, unknown>>(
-    pk: string,
-    sk: string,
-  ): Promise<T | undefined> => store.get(itemKey(pk, sk)) as T | undefined,
-  putItem: async (item: Record<string, unknown>): Promise<void> => {
-    const pk = String(item[TABLE_PK]);
-    const sk = String(item[TABLE_SK]);
-    store.set(itemKey(pk, sk), item);
-  },
-  deleteItem: async (pk: string, sk: string): Promise<void> => {
-    store.delete(itemKey(pk, sk));
-  },
-  transactWrite: async (): Promise<void> => {
-    throw new Error('not_used');
-  },
-  queryBySkPrefix: async <T extends Record<string, unknown>>(
-    pk: string,
-    skPrefix: string,
-  ): Promise<T[]> => {
-    const items: T[] = [];
-    for (const [key, item] of store) {
-      const [itemPk, itemSk] = key.split('\0');
-      if (itemPk === pk && itemSk.startsWith(skPrefix)) items.push(item as T);
-    }
-    return items;
-  },
-  queryBySkBetween: async <T extends Record<string, unknown>>(
-    pk: string,
-    lo: string,
-    hi: string,
-  ): Promise<T[]> => {
-    const items: T[] = [];
-    for (const [key, item] of store) {
-      const [itemPk, itemSk] = key.split('\0');
-      if (itemPk === pk && itemSk >= lo && itemSk <= hi) items.push(item as T);
-    }
-    return items;
-  },
-  queryAll: async () => [],
-  queryPage: async () => ({ items: [] }),
-  queryPartition: async () => [],
-  encodeCursor: () => undefined,
-  decodeCursor: () => undefined,
-}));
+vi.mock('../../lib/dynamo/access.js', async () => (await import('../../lib/dynamo/memory-table.js')).memoryAccess);
 
 vi.mock('../../lib/fanout-enqueue.js', () => ({
   enqueueFanout: async (): Promise<void> => undefined,
@@ -1295,18 +1251,3 @@ describe('shared fixtures', () => {
   });
 });
 
-describe('mapScheduleError', () => {
-  it('maps schedule domain errors', async () => {
-    const { mapScheduleError } = await import('./routes/errors.js');
-    expect(mapScheduleError('nope')).toBeUndefined();
-    expect(mapScheduleError(new Error('token_expired'))?.statusCode).toBe(401);
-    expect(mapScheduleError(new Error('event_not_found'))?.statusCode).toBe(404);
-    expect(mapScheduleError(new Error('forbidden'))?.statusCode).toBe(403);
-    expect(mapScheduleError(new Error('invalid_window'))?.statusCode).toBe(400);
-    const conditional = new Error('ConditionalCheckFailed');
-    conditional.name = 'ConditionalCheckFailedException';
-    expect(mapScheduleError(conditional)?.statusCode).toBe(409);
-    expect(mapScheduleError(new Error('occurrence_not_found'))?.statusCode).toBe(404);
-    expect(mapScheduleError(new Error('unknown'))).toBeUndefined();
-  });
-});

@@ -3,7 +3,21 @@
  */
 
 import { QueryClient, QueryObserver } from '@tanstack/react-query';
-import { PULL_THRESHOLD, refetchOnScreen, shouldStartPullRefresh } from './pull-refresh';
+import { PULL_MAX_OFFSET, PULL_THRESHOLD, pullOffset, refetchOnScreen, shouldStartPullRefresh } from './pull-refresh';
+
+describe('pullOffset', () => {
+  it('stays put for an upward or empty pull', () => {
+    expect(pullOffset(0)).toBe(0);
+    expect(pullOffset(-20)).toBe(0);
+  });
+
+  it('follows the finger, then slows past the threshold and stops at the cap', () => {
+    const atThreshold = pullOffset(PULL_THRESHOLD);
+    expect(pullOffset(PULL_THRESHOLD / 2)).toBeCloseTo(atThreshold / 2);
+    expect(pullOffset(PULL_THRESHOLD + 40) - atThreshold).toBeLessThan(atThreshold * (40 / PULL_THRESHOLD));
+    expect(pullOffset(10_000)).toBe(PULL_MAX_OFFSET);
+  });
+});
 
 describe('shouldStartPullRefresh', () => {
   it('starts when the scroller is at the top and the pull reaches the threshold', () => {

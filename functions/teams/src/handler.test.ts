@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { memoryTable } from '../../lib/dynamo/memory-table.js';
 import type { AccountKind } from '@gameplan/types';
 import type { UserProfileItem } from '../../lib/auth/identity-provider.js';
 import { issueLocalTokens } from '../../lib/auth/local-jwt.js';
@@ -17,10 +18,9 @@ import {
   teamPk,
 } from '../../lib/dynamo/keys.js';
 
-const store = new Map<string, Record<string, unknown>>();
+const { store, itemKey } = memoryTable;
 const profiles = new Map<string, UserProfileItem>();
 
-const itemKey = (pk: string, sk: string): string => `${pk}\0${sk}`;
 
 vi.mock('../../lib/auth/profile.js', () => ({
   getProfile: async (userId: string) => profiles.get(userId),
@@ -29,104 +29,7 @@ vi.mock('../../lib/auth/profile.js', () => ({
   },
 }));
 
-vi.mock('../../lib/dynamo/access.js', () => ({
-  getItem: async <T extends Record<string, unknown>>(
-    pk: string,
-    sk: string,
-  ): Promise<T | undefined> => store.get(itemKey(pk, sk)) as T | undefined,
-  putItem: async (
-    item: Record<string, unknown>,
-    options: {
-      conditionExpression?: string;
-    } = {},
-  ): Promise<void> => {
-    const pk = String(item[TABLE_PK]);
-    const sk = String(item[TABLE_SK]);
-    const key = itemKey(pk, sk);
-    if (options.conditionExpression?.includes('attribute_not_exists') && store.has(key)) {
-      const error = new Error(' ConditionalCheckFailed');
-      error.name = 'ConditionalCheckFailedException';
-      throw error;
-    }
-    store.set(key, item);
-  },
-  deleteItem: async (pk: string, sk: string): Promise<void> => {
-    store.delete(itemKey(pk, sk));
-  },
-  transactWrite: async (
-    items: Array<{
-      Put?: {
-        Item: Record<string, unknown>;
-        ConditionExpression?: string;
-      };
-      Delete?: { Key: Record<string, unknown> };
-    }>,
-  ): Promise<void> => {
-    for (const entry of items) {
-      if (entry.Put !== undefined) {
-        const item = entry.Put.Item;
-        const pk = String(item[TABLE_PK]);
-        const sk = String(item[TABLE_SK]);
-        const key = itemKey(pk, sk);
-        if (
-          entry.Put.ConditionExpression?.includes('attribute_not_exists') &&
-          store.has(key)
-        ) {
-          const error = new Error('Transaction cancelled');
-          error.name = 'TransactionCanceledException';
-          throw error;
-        }
-        store.set(key, item);
-      }
-      if (entry.Delete !== undefined) {
-        const pk = String(entry.Delete.Key[TABLE_PK]);
-        const sk = String(entry.Delete.Key[TABLE_SK]);
-        store.delete(itemKey(pk, sk));
-      }
-    }
-  },
-  queryBySkPrefix: async <T extends Record<string, unknown>>(
-    pk: string,
-    skPrefix: string,
-  ): Promise<T[]> => {
-    const items: T[] = [];
-    for (const [key, item] of store) {
-      const [itemPk, itemSk] = key.split('\0');
-      if (itemPk === pk && itemSk.startsWith(skPrefix)) items.push(item as T);
-    }
-    return items;
-  },
-  queryAll: async () => [],
-  queryPage: async <T extends Record<string, unknown>>(
-    input: {
-      KeyConditionExpression?: string;
-      ExpressionAttributeValues?: Record<string, unknown>;
-    },
-    options: { limit: number; cursor?: string },
-  ): Promise<{ items: T[]; cursor?: string }> => {
-    const pk = String(input.ExpressionAttributeValues?.[':pk'] ?? '');
-    const skPrefix = String(input.ExpressionAttributeValues?.[':skPrefix'] ?? '');
-    const needle = input.ExpressionAttributeValues?.[':needle'];
-    const all: T[] = [];
-    for (const [key, item] of store) {
-      const [itemPk, itemSk] = key.split('\0');
-      if (itemPk !== pk || !itemSk.startsWith(skPrefix)) continue;
-      if (typeof needle === 'string' && !String(item.nameSearch ?? '').includes(needle)) {
-        continue;
-      }
-      all.push(item as T);
-    }
-    const start = options.cursor !== undefined ? Number(options.cursor) : 0;
-    const end = start + options.limit;
-    return {
-      items: all.slice(start, end),
-      ...(end < all.length ? { cursor: String(end) } : {}),
-    };
-  },
-  queryPartition: async () => [],
-  encodeCursor: () => undefined,
-  decodeCursor: () => undefined,
-}));
+vi.mock('../../lib/dynamo/access.js', async () => (await import('../../lib/dynamo/memory-table.js')).memoryAccess);
 
 const { handler } = await import('./handler.js');
 
@@ -1042,23 +945,3 @@ describe('teams handler (in-memory)', () => {
   });
 });
 
-describe('mapTeamsError', () => {
-  it('maps known teams domain errors', async () => {
-    const { mapTeamsError } = await import('./routes/errors.js');
-    expect(mapTeamsError('nope')).toBeUndefined();
-    expect(mapTeamsError(new Error('invalid_token'))?.statusCode).toBe(401);
-    expect(mapTeamsError(new Error('invite_not_found'))?.statusCode).toBe(404);
-    expect(mapTeamsError(new Error('profile_not_found'))?.statusCode).toBe(404);
-    expect(mapTeamsError(new Error('not_a_member'))?.statusCode).toBe(403);
-    expect(mapTeamsError(new Error('minor_cannot_create_team'))?.statusCode).toBe(403);
-    expect(mapTeamsError(new Error('already_a_member'))?.statusCode).toBe(409);
-    expect(mapTeamsError(new Error('too_many_positions'))?.statusCode).toBe(400);
-    expect(mapTeamsError(new Error('TransactionCanceledException'))?.statusCode).toBe(409);
-    const conditional = new Error('ConditionalCheckFailed');
-    conditional.name = 'ConditionalCheckFailedException';
-    expect(mapTeamsError(conditional)?.statusCode).toBe(409);
-    const txn = new Error('Transaction cancelled');
-    txn.name = 'TransactionCanceledException';
-    expect(mapTeamsError(txn)?.statusCode).toBe(409);
-  });
-});

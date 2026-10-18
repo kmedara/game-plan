@@ -8,6 +8,7 @@
  */
 
 import { getProfile } from '../../lib/auth/index.js';
+import { isOwnedUploadKey } from '../../lib/upload-keys.js';
 import type { PresignDownloadQuery } from '@gameplan/types';
 import {
   MESSAGE_SK_PREFIX,
@@ -24,23 +25,6 @@ import {
 
 /** Chat, profile, or team fields from {@link PresignDownloadQuery}. */
 export type DownloadContext = Pick<PresignDownloadQuery, 'chatId' | 'userId' | 'teamId'>;
-
-/**
- * Returns whether the key is an upload stored under this user.
- *
- * @param userId - The caller.
- * @param objectKey - The media object key.
- * @returns `true` when the key is that user's upload.
- */
-const isOwnedUploadKey = (userId: string, objectKey: string): boolean => {
-  const prefix = `uploads/${userId}/`;
-  return (
-    objectKey.startsWith(prefix) &&
-    objectKey.length > prefix.length &&
-    !objectKey.includes('..') &&
-    !objectKey.includes('\\')
-  );
-};
 
 /**
  * Loads team ids from the user-side membership rows.
