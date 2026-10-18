@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import { SessionService, WebRefreshStore, type RefreshStore } from './index.js';
+import { ACCESS_REFRESH_LEEWAY_MS, SessionService, WebRefreshStore, type RefreshStore } from './index.js';
 
 describe('WebRefreshStore', () => {
   it('never persists a readable refresh token', async () => {
@@ -77,6 +77,7 @@ describe('SessionService', () => {
 
     await session.login({ email: 'a@example.com', password: 'Password1' });
     expect(session.getAccessToken()).toBe('access-1');
+    expect(session.needsAccessRefresh()).toBe(false);
     expect(session.authorizationHeader()).toBe('Bearer access-1');
     await session.me();
     await session.refresh();
@@ -147,5 +148,156 @@ describe('SessionService', () => {
     await session.refresh();
     expect(await store.get()).toBe('refresh-n2');
     expect(session.getAccessToken()).toBe('access-n2');
+  });
+
+  it('shares one refresh request among overlapping callers', async () => {
+    let release!: (value: Response) => void;
+    const held = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (!String(input).endsWith('/refresh')) throw new Error(`unexpected ${String(input)}`);
+      return held;
+    });
+    const session = new SessionService({
+      baseUrl: 'http://127.0.0.1:3000/identity',
+      refreshStore: new WebRefreshStore(),
+      mode: 'web',
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+
+    const first = session.refresh();
+    const second = session.refresh();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    release(
+      new Response(
+        JSON.stringify({
+          accessToken: 'access-shared',
+          expiresIn: 3600,
+          user: {
+            userId: 'u1',
+            email: 'a@example.com',
+            displayName: 'Ada',
+            accountKind: 'adult',
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ accessToken: 'access-shared' }),
+      expect.objectContaining({ accessToken: 'access-shared' }),
+    ]);
+    expect(session.getAccessToken()).toBe('access-shared');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          accessToken: 'access-next',
+          expiresIn: 3600,
+          user: {
+            userId: 'u1',
+            email: 'a@example.com',
+            displayName: 'Ada',
+            accountKind: 'adult',
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    await expect(session.refresh()).resolves.toEqual(expect.objectContaining({ accessToken: 'access-next' }));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('lets a later refresh run after an overlapping refresh fails', async () => {
+    let release!: (value: Response) => void;
+    const held = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (!String(input).endsWith('/refresh')) throw new Error(`unexpected ${String(input)}`);
+      return held;
+    });
+    const session = new SessionService({
+      baseUrl: 'http://127.0.0.1:3000/identity',
+      refreshStore: new WebRefreshStore(),
+      mode: 'web',
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+
+    const first = session.refresh();
+    const second = session.refresh();
+    release(new Response(JSON.stringify({ error: 'invalid_token' }), { status: 401 }));
+    await expect(first).rejects.toThrow('invalid_token');
+    await expect(second).rejects.toThrow('invalid_token');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          accessToken: 'access-retry',
+          expiresIn: 3600,
+          user: {
+            userId: 'u1',
+            email: 'a@example.com',
+            displayName: 'Ada',
+            accountKind: 'adult',
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    await expect(session.refresh()).resolves.toEqual(expect.objectContaining({ accessToken: 'access-retry' }));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('refreshes when the next request would fall inside the last five minutes', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-17T12:00:00.000Z'));
+    const user = {
+      userId: 'u1',
+      email: 'a@example.com',
+      displayName: 'Ada',
+      accountKind: 'adult' as const,
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/login')) {
+        return new Response(JSON.stringify({ accessToken: 'access-1', expiresIn: 3600, user }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/refresh')) {
+        return new Response(JSON.stringify({ accessToken: 'access-2', expiresIn: 3600, user }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      throw new Error(`unexpected ${url}`);
+    });
+    const session = new SessionService({
+      baseUrl: 'http://127.0.0.1:3000/identity',
+      refreshStore: new WebRefreshStore(),
+      mode: 'web',
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+
+    try {
+      await session.login({ email: 'a@example.com', password: 'Password1' });
+      expect(session.needsAccessRefresh()).toBe(false);
+
+      vi.setSystemTime(new Date(Date.now() + 3600 * 1000 - ACCESS_REFRESH_LEEWAY_MS - 1));
+      expect(session.needsAccessRefresh()).toBe(false);
+
+      vi.setSystemTime(new Date(Date.now() + 1));
+      expect(session.needsAccessRefresh()).toBe(true);
+      await session.refresh();
+      expect(session.getAccessToken()).toBe('access-2');
+      expect(session.needsAccessRefresh()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -6,6 +6,7 @@ export { CONTENT_SHA256_HEADER, sha256Hex, withContentHash } from './content-has
 export { WebRefreshStore, type RefreshStore } from './refresh-store.js';
 
 export {
+  ACCESS_REFRESH_LEEWAY_MS,
   SessionService,
   type AccountKind,
   type LoginBody,

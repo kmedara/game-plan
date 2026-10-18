@@ -18,6 +18,13 @@ import type {
 
 export type { AccountKind, LoginBody, RegisterBody, SessionTokens, UserProfile };
 
+/**
+ * Refresh the access token when a product request would use one with this
+ * little lifetime left. Five minutes covers a slow identity call and clock skew
+ * on a one-hour Cognito token.
+ */
+export const ACCESS_REFRESH_LEEWAY_MS = 5 * 60 * 1000;
+
 /** How the client expects to receive and replay the refresh token. */
 export type SessionMode = 'web' | 'native';
 
@@ -80,7 +87,11 @@ const throwHttpError = async (response: Response): Promise<never> => {
  */
 export class SessionService {
   private accessToken: string | undefined;
+  /** Epoch ms when {@link accessToken} expires. Absent until a session is applied. */
+  private accessExpiresAt: number | undefined;
   private user: UserProfile | undefined;
+  /** Shared by overlapping refresh() calls so a 401 stampede hits identity once. */
+  private refreshInFlight: Promise<SessionTokens> | undefined;
   private readonly baseUrl: string;
   private readonly refreshStore: RefreshStore;
   private readonly mode: SessionMode;
@@ -118,6 +129,20 @@ export class SessionService {
   /** Returns whether an access token is currently held. */
   isAuthenticated(): boolean {
     return this.accessToken !== undefined;
+  }
+
+  /**
+   * Returns whether the next product request should refresh first.
+   *
+   * True when an access token is held and it expires within
+   * {@link ACCESS_REFRESH_LEEWAY_MS}. Missing expiry is treated as not due, so
+   * a bad payload cannot force a refresh on every call.
+   *
+   * @returns `true` when {@link refresh} should run before the next API call.
+   */
+  needsAccessRefresh(): boolean {
+    if (this.accessToken === undefined || this.accessExpiresAt === undefined) return false;
+    return this.accessExpiresAt - Date.now() <= ACCESS_REFRESH_LEEWAY_MS;
   }
 
   /**
@@ -186,9 +211,25 @@ export class SessionService {
   /**
    * Refreshes the access token from the cookie (web) or Preferences (native).
    *
+   * Overlapping callers share one request. A finished attempt, success or
+   * failure, leaves the next call free to try again.
+   *
    * @returns The new session tokens and profile.
    */
   async refresh(): Promise<SessionTokens> {
+    if (this.refreshInFlight !== undefined) return this.refreshInFlight;
+    this.refreshInFlight = this.refreshOnce().finally(() => {
+      this.refreshInFlight = undefined;
+    });
+    return this.refreshInFlight;
+  }
+
+  /**
+   * Performs one refresh against identity.
+   *
+   * @returns The new session tokens and profile.
+   */
+  private async refreshOnce(): Promise<SessionTokens> {
     const refreshToken =
       this.mode === 'native' ? ((await this.refreshStore.get()) ?? undefined) : undefined;
     if (this.mode === 'native' && (refreshToken === undefined || refreshToken.length === 0)) {
@@ -222,6 +263,7 @@ export class SessionService {
       });
     } finally {
       this.accessToken = undefined;
+      this.accessExpiresAt = undefined;
       this.user = undefined;
       await this.refreshStore.clear();
     }
@@ -293,6 +335,10 @@ export class SessionService {
    */
   private async applySession(tokens: SessionTokens): Promise<void> {
     this.accessToken = tokens.accessToken;
+    this.accessExpiresAt =
+      typeof tokens.expiresIn === 'number' && tokens.expiresIn > 0
+        ? Date.now() + tokens.expiresIn * 1000
+        : undefined;
     this.user = tokens.user;
     if (this.mode === 'native') {
       if (tokens.refreshToken === undefined) throw new Error('missing_refresh_token');

@@ -23,7 +23,7 @@ const ANONYMOUS_IP_LIMIT = 100;
  * phone reconnects whenever the app returns to the foreground, so a team on one
  * network needs more room than the anonymous limit gives.
  */
-const SOCKET_CONNECT_IP_LIMIT = 300;
+const SOCKET_CONNECT_IP_LIMIT = 1000;
 
 /**
  * Requests one IP address may make in {@link WINDOW}, with or without a token.
