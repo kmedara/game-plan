@@ -267,7 +267,18 @@ The Expo app loads product data through TanStack Query. Query keys, query functi
   known kinds (profile, teams, roster, permissions, schedule, chat list, and so on) to AsyncStorage for 24 hours.
   Presigned download URLs, message history, directory pages, and invite previews are left out: they expire, page,
   or are chat content. The refresh token stays in SecureStore or the HttpOnly cookie. A sibling storage key
-  records the user id the cache belongs to; a different user or sign-out clears both memory and storage.
+  records the user id the cache belongs to. Restore waits until the session user is known and uses
+  that id as the persist buster, so a different account's teams and profile are discarded instead of painted.
+  Sign-out clears both memory and storage.
+- **The schedule belongs to the athlete. Brand belongs to a team.** The client loads every membership for the
+  visible month and draws that month in the device time zone. Each event keeps its team's color, and the event
+  detail names that team's time zone. One membership brands the whole shell. Several memberships leave the shell
+  on the default field colors until the athlete opens a team, an event, or a chat, which then takes that team's
+  brand. Chats for different teams stay in one list, separated by a header per team. There is no team switcher.
+  A thread uses the team on that chat. Claiming a carpool seat opens one private chat for that car, named
+  Carpool, with the driver and the current riders. A later rider joins that chat. Leaving the car, or the last
+  rider, removes that person, and an empty car deletes the chat. A minor rider's linked guardian is added too.
+  The chat id stays on the stored offer and is not part of the carpool response.
 
 Trade-offs:
 
@@ -438,7 +449,7 @@ Four rate rules, each over a five-minute window, answer `429` with `{"error":"ra
 | ----------------- | --------------------- | ----- | ------------------------------------------------------------------------ |
 | `PerAccessToken`  | `Authorization` value | 600   | Per-user fairness for signed-in traffic.                                 |
 | `PerAnonymousIp`  | IP, no token          | 100   | Slows credential stuffing and signup abuse on open identity routes.      |
-| `SocketConnectIp` | IP, `/api/socket`     | 300   | Caps WebSocket connect floods.                                           |
+| `SocketConnectIp` | IP, `/api/socket`     | 1000  | Caps WebSocket connect floods.                                           |
 | `PerIpFlood`      | IP                    | 4000  | Stops a client that invents a fresh `Authorization` value per request.  |
 
 Static website files are outside the rules, so page loads do not consume a user's budget. Socket connects carry a
@@ -457,6 +468,16 @@ on a CloudFront flat-rate plan, because only the pay-as-you-go plan can key a ra
 - **Website refresh token in an HttpOnly cookie** (`ts_refresh`, `Secure` in production, `SameSite=Lax`,
   path `/api/identity`). Script cannot read it, and it is only sent to identity routes.
 - **Native refresh token in Expo SecureStore** (Keychain / Keystore), requested with `X-Refresh-Delivery: body`.
+- **One in-flight refresh.** `SessionService.refresh()` (`client/session`) keeps the current refresh promise.
+  Overlapping callers — the signed-in shell, `GET /` session restore, and every product request that sees `401` —
+  share that one `POST /identity/refresh`. Without the lock, a focus refetch or an expired access token would
+  start one refresh per in-flight query and spend the WAF `PerAccessToken` budget on identity. A finished
+  attempt, success or failure, clears the promise so the next call can try again. TanStack still does not retry
+  `unauthorized`; only that shared refresh plus one product retry runs.
+- **Refresh on the next request, not a timer.** Login and refresh store `expiresIn` as an in-memory `expiresAt`.
+  The next product call (including the socket ticket) runs `refresh()` when that token would expire within five
+  minutes, then sends the new bearer token. Idle tabs and backgrounded phones do not start a clock. A `401`
+  retry remains the backstop when expiry was unknown or the clock was wrong.
 - **Native sign-in handoff.** The system browser that completes Managed login cannot share cookies with the app,
   so the callback stores the refresh token under a random 32-byte, one-time code that expires after 60 seconds, and redirects to
   `gameplan://auth?code=…`. Redeeming it is a conditional delete, so a code works exactly once, and an expired
@@ -489,7 +510,8 @@ on a CloudFront flat-rate plan, because only the pay-as-you-go plan can key a ra
 
 - Each area function only has access to the DynamoDB **partition prefixes** it uses, through
   `dynamodb:LeadingKeys` conditions (`infrastructure/lib/table-access.ts`). For example, `places` has no table
-  access at all, `schedule` can only touch `TEAM#` and `REMINDERS`, and `fanout` is read-only.
+  access at all, `schedule` can touch `TEAM#`, `REMINDERS`, and the `CHAT#` / `USER#` rows for a
+  carpool's driver-and-riders chat, and `fanout` is read-only.
 - Transactions are allowed only where needed, and `ForAllValues` stops a transaction from mixing in a prefix
   outside the grant.
 - Identity may call `AdminGetUser` and `AdminDeleteUser` (to replace an unconfirmed signup), nothing broader.
