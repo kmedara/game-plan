@@ -14,7 +14,7 @@ import { RoleSetPicker } from '@/src/role-picker';
 import { useDownloadUrl } from '@/src/media';
 import { assignMemberRolesMutation, memberQuery } from '@/src/queries/teams';
 import { roleNames } from '@/src/roles';
-import { useApp } from '@/src/state';
+import { useApp, useBrandTeam } from '@/src/state';
 import { useTeamAccess } from '@/src/team-access';
 import { ErrorText, ProfilePhoto, SubmitButton } from '@/src/ui';
 
@@ -26,6 +26,7 @@ export default function MemberProfileScreen() {
   const queryClient = useQueryClient();
   const id = teamId ?? '';
   const memberId = userId ?? '';
+  useBrandTeam(teams.length > 1 && id.length > 0 ? id : undefined);
   const self = api.user?.userId === memberId;
   const access = useTeamAccess(teams.find((team) => team.teamId === id));
   const loaded = useQuery({

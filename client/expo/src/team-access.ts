@@ -5,9 +5,9 @@
  * so they share one request per team and the same multi-role check as the API.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { canWithRoles, permissionMatrix, rolesFromMembership } from '@gameplan/rules';
-import type { RolePermissions, TeamPermission, TeamRole } from '@gameplan/types';
+import type { RolePermissions, TeamPermission, TeamRole, TeamSummary } from '@gameplan/types';
 import { permissionsQuery } from './queries/teams';
 import { useApp } from './state';
 
@@ -45,4 +45,25 @@ export const useTeamAccess = (
     ready: teamId !== undefined && (rows !== undefined || isError),
     can: (permission) => canWithRoles(roles, matrix, permission),
   };
+};
+
+/**
+ * Memberships on which the caller holds a permission.
+ *
+ * Rows that have not loaded yet are left out, matching {@link useTeamAccess}.
+ *
+ * @param permission - The permission to test.
+ * @param enabled - When false, the permission rows are not requested.
+ * @returns The teams whose loaded matrix grants it.
+ */
+export const useTeamsWithPermission = (permission: TeamPermission, enabled = true): TeamSummary[] => {
+  const { api, teams } = useApp();
+  const loaded = useQueries({
+    queries: teams.map((team) => ({ ...permissionsQuery(api, team.teamId), enabled })),
+  });
+  return teams.filter((team, index) => {
+    const rows = loaded[index]?.data;
+    if (rows === undefined) return false;
+    return canWithRoles(rolesFromMembership(team), permissionMatrix(rows), permission);
+  });
 };

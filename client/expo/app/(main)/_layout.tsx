@@ -18,7 +18,7 @@ import { useDownloadUrl } from '@/src/media';
 import { adoptCacheOwner } from '@/src/query-client';
 import { useLiveQuerySync } from '@/src/use-live-query-sync';
 import { useApp } from '@/src/state';
-import { useTeamAccess } from '@/src/team-access';
+import { useTeamsWithPermission } from '@/src/team-access';
 import { colors } from '@/src/theme';
 
 const tabIcons = {
@@ -47,24 +47,22 @@ export default function MainLayout() {
   const { t } = useTranslation();
   const pathname = usePathname();
   const router = useRouter();
-  const { api, teams, brand, live } = useApp();
+  const { api, brand, brandTeam, live } = useApp();
   const queryClient = useQueryClient();
   const restoring = useIsRestoring();
   useLiveQuerySync();
   const [ready, setReady] = useState(api.isAuthenticated());
-  const activeTeamId = api.selectedTeamId;
-  const activeTeam = teams.find((team) => team.teamId === activeTeamId);
-  const logoUrl = useDownloadUrl(activeTeam?.theme?.logoKey, { teamId: activeTeamId });
+  const logoUrl = useDownloadUrl(brandTeam?.theme?.logoKey, { teamId: brandTeam?.teamId });
   const onChats = pathname === '/chats';
-  const access = useTeamAccess(onChats ? activeTeam : undefined);
+  const channelTeams = useTeamsWithPermission('create_team_channels', onChats);
+  const section = Object.keys(titles).find((path) => pathname === path || pathname.startsWith(`${path}/`));
+  const headerName = brandTeam?.name ?? (section !== undefined ? t(titles[section] ?? '') : '');
 
   useEffect(() => {
     void api.refreshSession().then(async (ok) => {
+      if (ok) await adoptCacheOwner(queryClient, api.user?.userId);
       setReady(true);
-      if (ok) {
-        live.connect();
-        await adoptCacheOwner(queryClient, api.user?.userId);
-      }
+      if (ok) live.connect();
     });
   }, [api, live, queryClient]);
 
@@ -75,7 +73,7 @@ export default function MainLayout() {
   }
 
   const nested = !Object.prototype.hasOwnProperty.call(titles, pathname);
-  const canCreateChannel = access.can('create_team_channels');
+  const canCreateChannel = channelTeams.length > 0;
   const onTeams = pathname === '/teams';
   const showCreate = api.user === undefined || canCreateTeam(api.user.accountKind);
   const openTeamAction = (action: 'join' | 'create'): void => {
@@ -128,7 +126,7 @@ export default function MainLayout() {
             numberOfLines={1}
             style={{ color: brand.onPrimary, fontSize: 18, lineHeight: 22 }}
           >
-            {activeTeam?.name ?? ''}
+            {headerName}
           </Text>
         </View>
       </View>

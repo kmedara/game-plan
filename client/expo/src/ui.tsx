@@ -10,6 +10,37 @@ import { useApp } from './state';
 import { colors, fieldWash, fieldWashOpacity, muteColor } from './theme';
 import { searchTimeZones, timeZoneLabel } from './time-zones';
 
+/** Compact save control that sits inside a text field once the value has changed. */
+const FieldSave = ({ onPress }: { onPress: () => void | Promise<void> }) => {
+  const { t } = useTranslation();
+  const { brand } = useApp();
+  const [busy, setBusy] = useState(false);
+
+  const press = (): void => {
+    if (busy) return;
+    setBusy(true);
+    void Promise.resolve(onPress()).finally(() => setBusy(false));
+  };
+
+  return (
+    <Pressable
+      className="mr-1.5 items-center justify-center rounded-lg px-2 py-1"
+      onPress={press}
+      disabled={busy}
+      accessibilityRole="button"
+      accessibilityLabel={t('common.save')}
+    >
+      {busy ? (
+        <ActivityIndicator size="small" color={brand.accent} />
+      ) : (
+        <Text className="text-sm font-semibold" style={{ color: brand.accent }}>
+          {t('common.save')}
+        </Text>
+      )}
+    </Pressable>
+  );
+};
+
 export const Field = ({
   label,
   value,
@@ -17,6 +48,7 @@ export const Field = ({
   placeholder,
   multiline,
   keyboardType,
+  onSave,
 }: {
   label: string;
   value: string;
@@ -24,20 +56,25 @@ export const Field = ({
   placeholder?: string;
   multiline?: boolean;
   keyboardType?: 'default' | 'email-address' | 'phone-pad';
+  /** Shown inside the field when the caller has something to store. */
+  onSave?: () => void | Promise<void>;
 }) => (
   <View className="mb-3">
     <Text className="mb-1 text-sm text-muted">{label}</Text>
-    <TextInput
-      className={`rounded-xl border border-line bg-inset px-3 py-2 text-base text-ink${multiline === true ? ' min-h-24' : ''}`}
-      value={value}
-      onChangeText={onChangeText}
-      accessibilityLabel={label}
-      placeholder={placeholder}
-      autoCapitalize={multiline === true ? 'sentences' : 'none'}
-      multiline={multiline}
-      keyboardType={keyboardType}
-      textAlignVertical={multiline === true ? 'top' : undefined}
-    />
+    <View className={`flex-row rounded-xl border border-line bg-inset${multiline === true ? ' items-end' : ' items-center'}`}>
+      <TextInput
+        className={`min-w-0 flex-1 px-3 py-2 text-base text-ink${multiline === true ? ' min-h-24' : ''}`}
+        value={value}
+        onChangeText={onChangeText}
+        accessibilityLabel={label}
+        placeholder={placeholder}
+        autoCapitalize={multiline === true ? 'sentences' : 'none'}
+        multiline={multiline}
+        keyboardType={keyboardType}
+        textAlignVertical={multiline === true ? 'top' : undefined}
+      />
+      {onSave !== undefined ? <FieldSave onPress={onSave} /> : null}
+    </View>
   </View>
 );
 
@@ -45,10 +82,13 @@ export const TimeZoneField = ({
   label,
   value,
   onChange,
+  onSave,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  /** Shown inside the field when the selected zone is not the saved one. */
+  onSave?: () => void | Promise<void>;
 }) => {
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
@@ -71,24 +111,27 @@ export const TimeZoneField = ({
     <View className="mb-3" style={{ zIndex: open ? 20 : 0 }}>
       <Text className="mb-1 text-sm text-muted">{label}</Text>
       <View>
-        <TextInput
-          className="rounded-xl border border-line bg-inset px-3 py-2 text-base text-ink"
-          value={query}
-          onChangeText={(next) => {
-            setQuery(next);
-            setOpen(true);
-          }}
-          onFocus={() => {
-            setQuery(value);
-            setOpen(true);
-          }}
-          onBlur={() => {
-            cancelClose();
-            closing.current = setTimeout(() => setOpen(false), 150);
-          }}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+        <View className="flex-row items-center rounded-xl border border-line bg-inset">
+          <TextInput
+            className="min-w-0 flex-1 px-3 py-2 text-base text-ink"
+            value={query}
+            onChangeText={(next) => {
+              setQuery(next);
+              setOpen(true);
+            }}
+            onFocus={() => {
+              setQuery(value);
+              setOpen(true);
+            }}
+            onBlur={() => {
+              cancelClose();
+              closing.current = setTimeout(() => setOpen(false), 150);
+            }}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {onSave !== undefined ? <FieldSave onPress={onSave} /> : null}
+        </View>
         {choices.length > 0 ? (
         <ScrollView
           className="absolute left-0 right-0 top-full z-20 max-h-60 rounded-xl border border-line bg-paper"

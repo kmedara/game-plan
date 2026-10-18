@@ -11,18 +11,21 @@ import { FlatList, Image, Linking, Modal, Platform, Pressable, StyleSheet, Text,
 import { useTranslation } from 'react-i18next';
 import { errorMessageKey, queryError } from '@/src/errors';
 import { pickAndUploadImage, useDownloadUrl, type UploadedImage } from '@/src/media';
-import { messagesQuery, sendMessageMutation } from '@/src/queries/chat';
-import { useActiveTeam, useApp } from '@/src/state';
+import { chatsQuery, messagesQuery, sendMessageMutation } from '@/src/queries/chat';
+import { useApp, useBrandTeam } from '@/src/state';
 import { chatOverlayColor } from '@/src/team-media';
 import { ErrorText } from '@/src/ui';
 
 export default function ChatThreadScreen() {
   const { t } = useTranslation();
   const { chatId } = useLocalSearchParams<{ chatId: string }>();
-  const { api, brand } = useApp();
+  const { api, brand, teams } = useApp();
   const queryClient = useQueryClient();
-  const { team } = useActiveTeam();
   const id = chatId ?? '';
+  const chatsLoaded = useQuery(chatsQuery(api));
+  const chat = chatsLoaded.data?.find((item) => item.chatId === id);
+  const team = teams.find((item) => item.teamId === chat?.teamId);
+  useBrandTeam(teams.length > 1 ? team?.teamId : undefined);
   const backgroundKey = id.length > 0 && id === team?.defaultChatId ? team.theme?.chatBackgroundKey : undefined;
   const scrim = chatOverlayColor(team?.theme?.chatBackgroundOverlay);
   const backgroundUri = useDownloadUrl(backgroundKey, { teamId: team?.teamId });

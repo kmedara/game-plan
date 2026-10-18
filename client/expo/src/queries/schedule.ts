@@ -177,55 +177,35 @@ export const bindPersistedMutations = (queryClient: QueryClient, api: ApiClient)
   queryClient.setMutationDefaults(mutationKeys.lineup, lineupMutation(api, queryClient));
 };
 
-export const createEventMutation = (
-  api: Pick<ApiClient, 'createEvent'>,
-  queryClient: QueryClient,
-  teamId: string,
-) =>
+export const createEventMutation = (api: Pick<ApiClient, 'createEvent'>, queryClient: QueryClient) =>
   mutationOptions({
-    mutationFn: (body: CreateEventBody) => api.createEvent(teamId, body),
-    onSuccess: () => invalidateTeamSchedule(queryClient, teamId),
+    mutationFn: ({ teamId, body }: { teamId: string; body: CreateEventBody }) => api.createEvent(teamId, body),
+    onSuccess: (_saved, { teamId }) => invalidateTeamSchedule(queryClient, teamId),
   });
 
-export const updateEventMutation = (
-  api: Pick<ApiClient, 'updateEvent'>,
-  queryClient: QueryClient,
-  teamId: string,
-) =>
+export const updateEventMutation = (api: Pick<ApiClient, 'updateEvent'>, queryClient: QueryClient) =>
   mutationOptions({
-    mutationFn: ({ eventId, body }: { eventId: string; body: UpdateEventBody }) =>
+    mutationFn: ({ teamId, eventId, body }: { teamId: string; eventId: string; body: UpdateEventBody }) =>
       api.updateEvent(teamId, eventId, body),
-    onSuccess: () => invalidateTeamSchedule(queryClient, teamId),
+    onSuccess: (_saved, { teamId }) => invalidateTeamSchedule(queryClient, teamId),
   });
 
-export const deleteEventMutation = (
-  api: Pick<ApiClient, 'deleteEvent'>,
-  queryClient: QueryClient,
-  teamId: string,
-) =>
+export const deleteEventMutation = (api: Pick<ApiClient, 'deleteEvent'>, queryClient: QueryClient) =>
   mutationOptions({
-    mutationFn: (eventId: string) => api.deleteEvent(teamId, eventId),
-    onSuccess: () => invalidateTeamSchedule(queryClient, teamId),
+    mutationFn: ({ teamId, eventId }: { teamId: string; eventId: string }) => api.deleteEvent(teamId, eventId),
+    onSuccess: (_saved, { teamId }) => invalidateTeamSchedule(queryClient, teamId),
   });
 
-export const saveOccurrenceMutation = (
-  api: Pick<ApiClient, 'saveOccurrence'>,
-  queryClient: QueryClient,
-  teamId: string,
-) =>
+export const saveOccurrenceMutation = (api: Pick<ApiClient, 'saveOccurrence'>, queryClient: QueryClient) =>
   mutationOptions({
-    mutationFn: ({ eventId, body }: { eventId: string; body: ExceptionEventBody }) =>
+    mutationFn: ({ teamId, eventId, body }: { teamId: string; eventId: string; body: ExceptionEventBody }) =>
       api.saveOccurrence(teamId, eventId, body),
-    onSuccess: () => invalidateTeamSchedule(queryClient, teamId),
+    onSuccess: (_saved, { teamId }) => invalidateTeamSchedule(queryClient, teamId),
   });
 
-export const cancelOccurrenceMutation = (
-  api: Pick<ApiClient, 'cancelOccurrence'>,
-  queryClient: QueryClient,
-  teamId: string,
-) =>
+export const cancelOccurrenceMutation = (api: Pick<ApiClient, 'cancelOccurrence'>, queryClient: QueryClient) =>
   mutationOptions({
-    mutationFn: ({ eventId, body }: { eventId: string; body: OccurrenceTarget }) =>
+    mutationFn: ({ teamId, eventId, body }: { teamId: string; eventId: string; body: OccurrenceTarget }) =>
       api.cancelOccurrence(teamId, eventId, body),
-    onSuccess: () => invalidateTeamSchedule(queryClient, teamId),
+    onSuccess: (_saved, { teamId }) => invalidateTeamSchedule(queryClient, teamId),
   });

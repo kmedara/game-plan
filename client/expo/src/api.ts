@@ -136,6 +136,12 @@ export class ApiClient {
     void writePreference(SELECTED_TEAM_KEY, teamId, this.native);
   }
 
+  /** Drops the previous account's team so the shell does not keep their tabs or selection. */
+  clearTeamContext(): void {
+    this.teamsFlag = false;
+    this.setTeamId(undefined);
+  }
+
   /** Stores a session returned by the native OAuth exchange. */
   async adoptSession(tokens: SessionTokens): Promise<void> {
     await this.session.adopt(tokens);
@@ -235,8 +241,7 @@ export class ApiClient {
   }
 
   async logout(): Promise<void> {
-    this.setTeamId(undefined);
-    this.teamsFlag = false;
+    this.clearTeamContext();
     this.setSessionHint(false);
     if (!config.authDisabled && !this.native && typeof window !== 'undefined') {
       const returnTo = encodeURIComponent(`${window.location.origin}/login`);
@@ -512,6 +517,7 @@ export class ApiClient {
   }
 
   private async fetchAuthorized(method: string, path: string, body?: unknown): Promise<Response> {
+    if (this.session.needsAccessRefresh()) await this.refreshSession();
     const headers: Record<string, string> = {};
     const auth = this.session.authorizationHeader();
     if (auth !== undefined) headers.authorization = auth;

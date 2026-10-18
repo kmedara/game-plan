@@ -59,26 +59,94 @@ export const bindQueryManagers = (): void => {
   onlineManager.setEventListener((setOnline) => NetInfo.addEventListener((state) => setOnline(isOnlineState(state))));
 };
 
+/** User id the in-memory cache was restored or claimed for. */
+let cacheRestoredFor: string | undefined;
+
+/** Records which user the next restore belongs to, before the persister hydrates. */
+export const noteCacheUser = (userId: string | undefined): void => {
+  cacheRestoredFor = userId;
+};
+
+/**
+ * Drops a saved cache that belongs to someone else, then returns the persist buster.
+ *
+ * The buster is the user id. A restored client with a different buster is discarded
+ * and never hydrated, so the previous account cannot paint after a reload.
+ *
+ * @param userId - The signed-in user.
+ * @returns The buster to give `PersistQueryClientProvider`.
+ */
+export const preparePersistedCache = async (userId: string): Promise<string> => {
+  const owner = await AsyncStorage.getItem(CACHE_OWNER_KEY).catch(() => null);
+  if (owner !== userId) {
+    await persister.removeClient();
+    await AsyncStorage.setItem(CACHE_OWNER_KEY, userId).catch(() => undefined);
+  }
+  return userId;
+};
+
+/**
+ * Chooses the buster before the persister restores.
+ *
+ * A signed-in user replaces a foreign cache first. A signed-out launch keeps the
+ * stored owner's buster so a failed refresh does not throw away the offline cache,
+ * and a later sign-in as someone else still misses that marker and clears it.
+ *
+ * @param userId - The signed-in user, when the session restored.
+ * @returns The buster for this launch.
+ */
+export const openPersistedCache = async (userId: string | undefined): Promise<string> => {
+  if (userId !== undefined) {
+    const buster = await preparePersistedCache(userId);
+    noteCacheUser(userId);
+    return buster;
+  }
+  const owner = await AsyncStorage.getItem(CACHE_OWNER_KEY).catch(() => null);
+  noteCacheUser(owner ?? undefined);
+  return owner ?? 'signed-out';
+};
+
+/**
+ * Whether the signed-in user is not the one the in-memory cache was restored for.
+ *
+ * @param userId - The signed-in user.
+ * @returns True when the shell must wait for {@link claimCacheUser}.
+ */
+export const cacheUserMismatch = (userId: string | undefined): boolean =>
+  userId !== undefined && cacheRestoredFor !== userId;
+
+/**
+ * Drops the in-memory cache when the signed-in user is not the one it was restored for.
+ *
+ * @param queryClient - The app client.
+ * @param userId - The signed-in user.
+ * @returns Whether the previous user's cache was cleared.
+ */
+export const claimCacheUser = (queryClient: QueryClient, userId: string | undefined): boolean => {
+  if (userId === undefined || cacheRestoredFor === userId) return false;
+  cacheRestoredFor = userId;
+  queryClient.clear();
+  void preparePersistedCache(userId);
+  return true;
+};
+
 /**
  * Keeps the persisted cache for the signed-in user only.
- *
- * When a different user signs in on the same device, the previous user's cache is
- * dropped from memory and storage before any of their screens can render.
  *
  * @param queryClient - The app client.
  * @param userId - The signed-in user.
  */
 export const adoptCacheOwner = async (queryClient: QueryClient, userId: string | undefined): Promise<void> => {
-  if (userId === undefined) return;
-  const owner = await AsyncStorage.getItem(CACHE_OWNER_KEY).catch(() => null);
-  if (owner === userId) return;
-  if (owner !== null) await clearPersistedCache(queryClient);
-  await AsyncStorage.setItem(CACHE_OWNER_KEY, userId).catch(() => undefined);
+  if (userId === undefined || cacheRestoredFor === userId) return;
+  cacheRestoredFor = userId;
+  queryClient.clear();
+  await preparePersistedCache(userId);
 };
 
 /** Drops every cached value from memory and storage, for sign-out. */
 export const clearPersistedCache = async (queryClient: QueryClient): Promise<void> => {
   queryClient.clear();
+  cacheRestoredFor = undefined;
   await persister.removeClient();
   await AsyncStorage.removeItem(CACHE_OWNER_KEY).catch(() => undefined);
 };

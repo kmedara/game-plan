@@ -18,7 +18,7 @@ import {
 import { errorMessageKey, queryError } from '@/src/errors';
 import { JoinRequests } from '@/src/join-requests';
 import { membersQuery, permissionsQuery, teamQuery, updateTeamMutation } from '@/src/queries/teams';
-import { useApp } from '@/src/state';
+import { useApp, useBrandTeam } from '@/src/state';
 import { TeamInvites } from '@/src/team-invites';
 import { TeamPermissions } from '@/src/team-permissions';
 import { TeamRoster } from '@/src/team-roster';
@@ -26,14 +26,15 @@ import { TeamColors } from '@/src/team-colors';
 import { TeamChatBackground } from '@/src/team-chat-background';
 import { TeamLogo } from '@/src/team-logo';
 import type { ChatBackgroundOverlay } from '@/src/team-media';
-import { ErrorText, Field, SubmitButton, TimeZoneField } from '@/src/ui';
+import { ErrorText, Field, TimeZoneField } from '@/src/ui';
 
 export default function TeamAdminScreen() {
   const { t } = useTranslation();
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
-  const { api, setPreviewTheme } = useApp();
+  const { api, teams, setPreviewTheme } = useApp();
   const queryClient = useQueryClient();
   const id = teamId ?? '';
+  useBrandTeam(teams.length > 1 && id.length > 0 ? id : undefined);
   const enabled = id.length > 0;
   const teamLoaded = useQuery({ ...teamQuery(api, id), enabled });
   const membersLoaded = useQuery({ ...membersQuery(api, id), enabled });
@@ -98,14 +99,81 @@ export default function TeamAdminScreen() {
 
   useEffect(() => () => setPreviewTheme(undefined), [setPreviewTheme]);
 
-  const saveSettings = async (): Promise<boolean | void> => {
-    if (baseline === undefined || draft === undefined) return false;
-    const body = settingsPatch(baseline, draft);
-    if (body === undefined) return false;
-    remember(await saveTeam.mutateAsync(body));
+  const reportSaveError = (err: unknown): void => {
+    setError(t(errorMessageKey(err, 'errors.common.saveFailed')));
   };
 
+  const saveName = async (): Promise<void> => {
+    if (baseline === undefined || draft === undefined) return;
+    const name = draft.name.trim();
+    if (name.length === 0 || name === baseline.name) return;
+    setError(undefined);
+    try {
+      const saved = await saveTeam.mutateAsync({ name });
+      adopt({ name: saved.name });
+    } catch (err) {
+      reportSaveError(err);
+    }
+  };
+
+  const saveTimeZone = async (): Promise<void> => {
+    if (baseline === undefined || draft === undefined) return;
+    const timeZone = draft.timeZone.trim();
+    if (timeZone.length === 0 || timeZone === baseline.timeZone) return;
+    setError(undefined);
+    try {
+      const saved = await saveTeam.mutateAsync({ timeZone });
+      adopt({ timeZone: saved.timeZone });
+    } catch (err) {
+      reportSaveError(err);
+    }
+  };
+
+  const saveOverlay = (choice: ChatBackgroundOverlay): void => {
+    if (baseline === undefined || choice === baseline.chatBackgroundOverlay) return;
+    const previous = baseline.chatBackgroundOverlay;
+    edit({ chatBackgroundOverlay: choice });
+    setError(undefined);
+    void saveTeam
+      .mutateAsync({ theme: { chatBackgroundOverlay: choice } })
+      .then((saved) => adopt({ chatBackgroundOverlay: saved.theme?.chatBackgroundOverlay ?? choice }))
+      .catch((err: unknown) => {
+        edit({ chatBackgroundOverlay: previous });
+        reportSaveError(err);
+      });
+  };
+
+  useEffect(() => {
+    if (baseline === undefined || draft === undefined) return;
+    const theme = colorPatch(baseline, draft);
+    if (theme === undefined) return;
+    const sent = { primary: draft.primary, secondary: draft.secondary, accent: draft.accent };
+    const handle = setTimeout(() => {
+      void saveTeam
+        .mutateAsync({ theme })
+        .then((team) => {
+          const next = {
+            primary: team.theme?.primary ?? '',
+            secondary: team.theme?.secondary ?? '',
+            accent: team.theme?.accent ?? '',
+          };
+          setBaseline((current) => (current === undefined ? current : { ...current, ...next }));
+          setDraft((current) => {
+            if (current === undefined) return current;
+            if (current.primary !== sent.primary || current.secondary !== sent.secondary || current.accent !== sent.accent) {
+              return current;
+            }
+            return { ...current, ...next };
+          });
+        })
+        .catch((err: unknown) => reportSaveError(err));
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [baseline?.primary, baseline?.secondary, baseline?.accent, draft?.primary, draft?.secondary, draft?.accent]);
+
   const theme = draft === undefined ? undefined : themeFromDraft(draft);
+  const nameChanged = baseline !== undefined && draft.name.trim() !== baseline.name && draft.name.trim().length > 0;
+  const timeZoneChanged = baseline !== undefined && draft.timeZone.trim() !== baseline.timeZone && draft.timeZone.trim().length > 0;
 
   return (
     <ScrollView className="flex-1 px-4 pt-4">
@@ -114,8 +182,18 @@ export default function TeamAdminScreen() {
         <>
           {can('manage_team_settings') ? (
             <>
-              <Field label={t('teams.team')} value={draft.name} onChangeText={(name) => edit({ name })} />
-              <TimeZoneField label={t('teams.timeZone')} value={draft.timeZone} onChange={(timeZone) => edit({ timeZone })} />
+              <Field
+                label={t('teams.team')}
+                value={draft.name}
+                onChangeText={(name) => edit({ name })}
+                onSave={nameChanged ? saveName : undefined}
+              />
+              <TimeZoneField
+                label={t('teams.timeZone')}
+                value={draft.timeZone}
+                onChange={(timeZone) => edit({ timeZone })}
+                onSave={timeZoneChanged ? saveTimeZone : undefined}
+              />
               <View className="w-full flex-row items-start justify-around">
                 <TeamColors primary={draft.primary} secondary={draft.secondary} accent={draft.accent} onChange={edit} />
                 <TeamLogo
@@ -128,7 +206,7 @@ export default function TeamAdminScreen() {
               <TeamChatBackground
                 teamId={id}
                 theme={theme}
-                onOverlayChange={(chatBackgroundOverlay) => edit({ chatBackgroundOverlay })}
+                onOverlayChange={saveOverlay}
                 onSaved={(saved) =>
                   adopt({
                     chatBackgroundKey: saved?.chatBackgroundKey,
@@ -136,7 +214,6 @@ export default function TeamAdminScreen() {
                   })
                 }
               />
-              <SubmitButton label={t('common.save')} onPress={saveSettings} />
             </>
           ) : null}
           <TeamRoster teamId={id} members={members} />
@@ -213,8 +290,8 @@ const changedText = (saved: string, current: string): string | null | undefined 
   return next.length === 0 ? null : next;
 };
 
-/** Fields that differ from the last saved team. An empty result means there is nothing to send. */
-const settingsPatch = (saved: SettingsDraft, draft: SettingsDraft): UpdateTeamBody | undefined => {
+/** Color fields that differ from the last saved team. */
+const colorPatch = (saved: SettingsDraft, draft: SettingsDraft): UpdateTeamBody['theme'] | undefined => {
   const theme: NonNullable<UpdateTeamBody['theme']> = {};
   const primary = changedText(saved.primary, draft.primary);
   const secondary = changedText(saved.secondary, draft.secondary);
@@ -222,23 +299,5 @@ const settingsPatch = (saved: SettingsDraft, draft: SettingsDraft): UpdateTeamBo
   if (primary !== undefined) theme.primary = primary;
   if (secondary !== undefined) theme.secondary = secondary;
   if (accent !== undefined) theme.accent = accent;
-  if (saved.logoKey !== draft.logoKey) theme.logoKey = draft.logoKey ?? null;
-  if (saved.chatBackgroundKey !== draft.chatBackgroundKey) theme.chatBackgroundKey = draft.chatBackgroundKey ?? null;
-  if (
-    draft.chatBackgroundKey !== undefined &&
-    saved.chatBackgroundOverlay !== draft.chatBackgroundOverlay
-  ) {
-    theme.chatBackgroundOverlay = draft.chatBackgroundOverlay;
-  }
-  if (draft.chatBackgroundKey === undefined && saved.chatBackgroundKey !== undefined) {
-    theme.chatBackgroundOverlay = null;
-  }
-
-  const body: UpdateTeamBody = {};
-  const name = draft.name.trim();
-  const timeZone = draft.timeZone.trim();
-  if (name !== saved.name) body.name = name;
-  if (timeZone !== saved.timeZone) body.timeZone = timeZone;
-  if (Object.keys(theme).length > 0) body.theme = theme;
-  return Object.keys(body).length > 0 ? body : undefined;
+  return Object.keys(theme).length > 0 ? theme : undefined;
 };

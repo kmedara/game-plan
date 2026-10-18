@@ -6,10 +6,11 @@ import '../global.css';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { bindQueryManagers, createQueryClient, persistOptions } from '@/src/query-client';
+import { ApiClient } from '@/src/api';
+import { bindQueryManagers, createQueryClient, openPersistedCache, persistOptions } from '@/src/query-client';
 import { AppStateProvider } from '@/src/state';
 import { colors } from '@/src/theme';
 import '@/src/i18n';
@@ -18,15 +19,32 @@ bindQueryManagers();
 
 export default function RootLayout() {
   const [queryClient] = useState(createQueryClient);
+  const [api] = useState(() => new ApiClient());
+  const [buster, setBuster] = useState<string | undefined>();
+
+  useEffect(() => {
+    void (async () => {
+      const ok = (await api.mightHaveSession()) && (await api.refreshSession());
+      setBuster(await openPersistedCache(ok ? api.user?.userId : undefined));
+    })();
+  }, [api]);
+
+  if (buster === undefined) {
+    return (
+      <SafeAreaProvider>
+        <View className="flex-1 bg-canvas" />
+      </SafeAreaProvider>
+    );
+  }
 
   return (
     <SafeAreaProvider>
       <PersistQueryClientProvider
         client={queryClient}
-        persistOptions={persistOptions}
+        persistOptions={{ ...persistOptions, buster }}
         onSuccess={() => void queryClient.resumePausedMutations()}
       >
-        <AppStateProvider>
+        <AppStateProvider api={api}>
           <StatusBar style="dark" />
           <View className="flex-1 bg-canvas">
             <Suspense fallback={<View className="flex-1 bg-canvas" />}>

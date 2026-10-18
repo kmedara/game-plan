@@ -8,15 +8,16 @@ import MessageCircle from 'lucide-react-native/icons/message-circle';
 import MessageSquareText from 'lucide-react-native/icons/message-square-text';
 import Pencil from 'lucide-react-native/icons/pencil';
 import Phone from 'lucide-react-native/icons/phone';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCalendars } from 'expo-localization';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
-import { Linking, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Image, Linking, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { rolesFromMembership } from '@gameplan/rules';
-import { EVENT_TYPES, RSVP_STATUSES, type EventResponse, type EventType, type RecurrenceRule, type RsvpStatus, type ScheduleOccurrence, type TeamMember, type UpdateEventBody } from '@gameplan/types';
+import { deviceTimeZone, mergeSchedules, type TeamOccurrence } from '@/src/athlete-schedule';
+import { EVENT_TYPES, RSVP_STATUSES, type EventResponse, type EventType, type RecurrenceRule, type RsvpStatus, type ScheduleList, type ScheduleOccurrence, type TeamMember, type UpdateEventBody } from '@gameplan/types';
 import { errorMessageKey, queryError } from '@/src/errors';
 import { EventTimeFields } from '@/src/event-time';
 import { RecurrenceFields } from '@/src/recurrence-fields';
@@ -57,9 +58,10 @@ import {
   scheduleQuery,
   updateEventMutation,
 } from '@/src/queries/schedule';
-import { useActiveTeam, useApp } from '@/src/state';
-import { useTeamAccess } from '@/src/team-access';
-import { colors, fieldWash, fieldWashOpacity } from '@/src/theme';
+import { useApp, useBrandTeam } from '@/src/state';
+import { useTeamsWithPermission } from '@/src/team-access';
+import { timeZoneLabel } from '@/src/time-zones';
+import { brandColors, colors, fieldWash, fieldWashOpacity } from '@/src/theme';
 import { TrashIcon } from '@/src/team-media';
 import { Button, ErrorText, Field, ProfilePhoto, SubmitButton } from '@/src/ui';
 
@@ -72,45 +74,60 @@ const monthRange = (month: CalendarMonth, timeZone: string): { from: string; to:
 
 export default function ScheduleScreen() {
   const { t } = useTranslation();
-  const { api, brand } = useApp();
+  const { api, brand, teams } = useApp();
   const queryClient = useQueryClient();
-  const { team } = useActiveTeam();
-  const zone = team?.timeZone ?? 'UTC';
-  const teamId = team?.teamId;
+  const zone = deviceTimeZone(useCalendars()[0]?.timeZone);
   const [month, setMonth] = useState<CalendarMonth>(() => {
-    const key = dayKeyInZone(new Date(), 'UTC');
+    const key = dayKeyInZone(new Date(), zone);
     const [year, monthNumber] = key.split('-').map(Number) as [number, number];
     return { year, month: monthNumber };
   });
-  const [selected, setSelected] = useState(() => dayKeyInZone(new Date(), 'UTC'));
+  const [selected, setSelected] = useState(() => dayKeyInZone(new Date(), zone));
   const range = monthRange(month, zone);
-  const schedule = useQuery({
-    ...scheduleQuery(api, teamId ?? '', range.from, range.to),
-    enabled: teamId !== undefined,
-    placeholderData: (previous, previousQuery) =>
-      previousQuery?.queryKey[1] === teamId ? previous : undefined,
+  const scheduleQueries = useQueries({
+    queries: teams.map((team) => ({
+      ...scheduleQuery(api, team.teamId, range.from, range.to),
+      placeholderData: (
+        previous: ScheduleList | undefined,
+        previousQuery: { queryKey: readonly unknown[] } | undefined,
+      ) => (previousQuery?.queryKey[1] === team.teamId ? previous : undefined),
+    })),
   });
-  const events = schedule.data?.occurrences ?? [];
-  const createEvent = useMutation(createEventMutation(api, queryClient, teamId ?? ''));
-  const updateEvent = useMutation(updateEventMutation(api, queryClient, teamId ?? ''));
-  const deleteEvent = useMutation(deleteEventMutation(api, queryClient, teamId ?? ''));
-  const saveOccurrence = useMutation(saveOccurrenceMutation(api, queryClient, teamId ?? ''));
-  const cancelOccurrence = useMutation(cancelOccurrenceMutation(api, queryClient, teamId ?? ''));
+  const events = mergeSchedules(
+    scheduleQueries.flatMap((query, index) => {
+      const team = teams[index];
+      if (team === undefined || query.data === undefined) return [];
+      return [{ teamId: team.teamId, occurrences: query.data.occurrences }];
+    }),
+  );
+  const createEvent = useMutation(createEventMutation(api, queryClient));
+  const updateEvent = useMutation(updateEventMutation(api, queryClient));
+  const deleteEvent = useMutation(deleteEventMutation(api, queryClient));
+  const saveOccurrence = useMutation(saveOccurrenceMutation(api, queryClient));
+  const cancelOccurrence = useMutation(cancelOccurrenceMutation(api, queryClient));
   const putRsvp = useMutation(rsvpMutation(api, queryClient));
-  const canManage = useTeamAccess(team).can('manage_events');
+  const manageable = useTeamsWithPermission('manage_events', teams.length > 0);
   const [error, setError] = useState<string | undefined>();
-  const [adding, setAdding] = useState(false);
-  const [viewingKey, setViewingKey] = useState<{ eventId: string; startsAt: string } | undefined>();
-  const viewing = events.find((item) => item.eventId === viewingKey?.eventId && item.startsAt === viewingKey?.startsAt);
-  const [editing, setEditing] = useState<{ item: ScheduleOccurrence; series: EventResponse } | undefined>();
+  const [addingTeamId, setAddingTeamId] = useState<string | undefined>();
+  const [choosingTeam, setChoosingTeam] = useState(false);
+  const [viewingKey, setViewingKey] = useState<{ teamId: string; eventId: string; startsAt: string } | undefined>();
+  const viewing = events.find(
+    (item) => item.teamId === viewingKey?.teamId && item.eventId === viewingKey?.eventId && item.startsAt === viewingKey?.startsAt,
+  );
+  const [editing, setEditing] = useState<{ item: TeamOccurrence; series: EventResponse } | undefined>();
   const [scopePrompt, setScopePrompt] = useState<
-    | { kind: 'delete'; item: ScheduleOccurrence }
-    | { kind: 'edit'; item: ScheduleOccurrence; body: UpdateEventBody }
+    | { kind: 'delete'; item: TeamOccurrence }
+    | { kind: 'edit'; item: TeamOccurrence; body: UpdateEventBody }
     | undefined
   >();
-  const loadError = queryError(schedule.error) !== undefined ? t('errors.common.loadFailed') : undefined;
+  const focusedTeamId = viewing?.teamId ?? editing?.item.teamId ?? addingTeamId;
+  useBrandTeam(teams.length > 1 ? focusedTeamId : undefined);
+  const loadError = scheduleQueries.some((query) => queryError(query.error) !== undefined)
+    ? t('errors.common.loadFailed')
+    : undefined;
+  const singleTeam = teams.length === 1;
 
-  if (team === undefined) {
+  if (teams.length === 0) {
     return (
       <View className="flex-1 px-4 pt-6">
         <Text>{t('schedule.empty')}</Text>
@@ -153,68 +170,85 @@ export default function ScheduleScreen() {
       </View>
       <View className="mb-4 flex-row flex-wrap">
         {cells.map((cell) => {
-          const has = events.some((item) => dayKeyInZone(new Date(item.startsAt), zone) === cell.key);
+          const dotColors = dayDotColors(events, teams, cell.key, zone, singleTeam ? brand.accent : undefined);
           return (
             <Pressable key={cell.key} className="w-[14.28%] items-center py-2" onPress={() => setSelected(cell.key)}>
               <Text
-                className={cell.key === selected ? 'font-bold' : cell.inMonth ? 'text-ink' : 'text-muted'}
-                style={cell.key === selected ? { color: brand.accent } : undefined}
+                className={cell.key === selected ? 'font-bold text-ink' : cell.inMonth ? 'text-ink' : 'text-muted'}
+                style={cell.key === selected && singleTeam ? { color: brand.accent } : undefined}
               >
                 {cell.day}
               </Text>
-              <View
-                className="mt-1 h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: has ? brand.accent : 'transparent' }}
-              />
+              <View className="mt-1 h-1.5 flex-row">
+                {dotColors.map((dot) => (
+                  <View key={dot.teamId} className="mx-px h-1.5 w-1.5 rounded-full" style={{ backgroundColor: dot.color }} />
+                ))}
+              </View>
             </Pressable>
           );
         })}
       </View>
       <Text className="mb-2 text-lg font-semibold text-ink">{dayTitle(selected, zone, appLocale)}</Text>
       {dayEvents.length === 0 ? <Text className="mb-3 text-muted">{t('schedule.nothingScheduled')}</Text> : null}
-      {dayEvents.map((item) => (
-        <EventRow
-          key={`${item.eventId}-${item.startsAt}`}
-          item={item}
-          zone={zone}
-          userId={api.user?.userId}
-          canManage={canManage}
-          onView={() => setViewingKey({ eventId: item.eventId, startsAt: item.startsAt })}
-          onEdit={() => {
-            const seriesId = item.seriesEventId ?? item.eventId;
-            void queryClient
-              .fetchQuery(eventQuery(api, team.teamId, seriesId))
-              .then((series) => setEditing({ item, series }))
-              .catch(() => setError(t('errors.common.loadFailed')));
-          }}
-          onDelete={() => {
-            if (!item.recurring) {
-              void deleteEvent
-                .mutateAsync(item.eventId)
-                .catch(() => setError(t('errors.common.deleteFailed')));
-              return;
-            }
-            setScopePrompt({ kind: 'delete', item });
-          }}
-          onRsvp={async (status) => {
-            if (api.user === undefined) return;
-            try {
-              await putRsvp.mutateAsync({
-                teamId: team.teamId,
-                userId: api.user.userId,
-                body: {
-                  eventId: item.eventId,
-                  occurrenceStartsAt: item.startsAt,
-                  status,
-                },
-              });
-            } catch {
-              setError(t('errors.event.rsvpFailed'));
-            }
+      {dayEvents.map((item) => {
+        const eventTeam = teams.find((team) => team.teamId === item.teamId);
+        return (
+          <EventRow
+            key={`${item.teamId}-${item.eventId}-${item.startsAt}`}
+            item={item}
+            zone={zone}
+            color={brandColors(eventTeam?.theme).accent}
+            teamName={singleTeam ? undefined : eventTeam?.name}
+            logoKey={eventTeam?.theme?.logoKey}
+            logoName={eventTeam?.name}
+            userId={api.user?.userId}
+            canManage={manageable.some((team) => team.teamId === item.teamId)}
+            onView={() => setViewingKey({ teamId: item.teamId, eventId: item.eventId, startsAt: item.startsAt })}
+            onEdit={() => {
+              const seriesId = item.seriesEventId ?? item.eventId;
+              void queryClient
+                .fetchQuery(eventQuery(api, item.teamId, seriesId))
+                .then((series) => setEditing({ item, series }))
+                .catch(() => setError(t('errors.common.loadFailed')));
+            }}
+            onDelete={() => {
+              if (!item.recurring) {
+                void deleteEvent
+                  .mutateAsync({ teamId: item.teamId, eventId: item.eventId })
+                  .catch(() => setError(t('errors.common.deleteFailed')));
+                return;
+              }
+              setScopePrompt({ kind: 'delete', item });
+            }}
+            onRsvp={async (status) => {
+              if (api.user === undefined) return;
+              try {
+                await putRsvp.mutateAsync({
+                  teamId: item.teamId,
+                  userId: api.user.userId,
+                  body: {
+                    eventId: item.eventId,
+                    occurrenceStartsAt: item.startsAt,
+                    status,
+                  },
+                });
+              } catch {
+                setError(t('errors.event.rsvpFailed'));
+              }
+            }}
+          />
+        );
+      })}
+      {manageable.length > 0 ? (
+        <Button
+          label={t('schedule.addEvent')}
+          onPress={() => {
+            const only = manageable.length === 1 ? manageable[0] : undefined;
+            if (only !== undefined) setAddingTeamId(only.teamId);
+            else setChoosingTeam(true);
           }}
         />
-      ))}
-      {canManage ? <Button label={t('schedule.addEvent')} onPress={() => setAdding(true)} /> : null}
+      ) : null}
       <Sheet
         visible={viewing !== undefined}
         title={viewing?.title ?? t('schedule.addEvent')}
@@ -224,16 +258,17 @@ export default function ScheduleScreen() {
         {viewing !== undefined ? (
           <EventDetail
             item={viewing}
-            teamId={team.teamId}
-            zone={zone}
+            teamId={viewing.teamId}
+            zone={teams.find((team) => team.teamId === viewing.teamId)?.timeZone ?? zone}
+            teamName={singleTeam ? undefined : teams.find((team) => team.teamId === viewing.teamId)?.name}
             userId={api.user?.userId}
             maps={primaryMaps}
-            canManage={canManage}
+            canManage={manageable.some((team) => team.teamId === viewing.teamId)}
             onRsvp={async (status) => {
               if (api.user === undefined) return;
               try {
                 await putRsvp.mutateAsync({
-                  teamId: team.teamId,
+                  teamId: viewing.teamId,
                   userId: api.user.userId,
                   body: {
                     eventId: viewing.eventId,
@@ -249,33 +284,55 @@ export default function ScheduleScreen() {
         ) : null}
       </Sheet>
       <Sheet
-        visible={adding}
-        title={t('schedule.addEvent')}
+        visible={choosingTeam || addingTeamId !== undefined}
+        title={addingTeamId === undefined ? t('schedule.chooseTeam') : t('schedule.addEvent')}
         closeLabel={t('common.cancel')}
-        onClose={() => setAdding(false)}
+        onClose={() => {
+          setChoosingTeam(false);
+          setAddingTeamId(undefined);
+        }}
       >
-        <AddEvent
-          dayKey={selected}
-          timeZone={zone}
-          onCreate={async (body) => {
-            const { endsAt, location, notes, latitude, longitude, recurrence, startsAt, ...rest } = body;
-            if (startsAt === undefined) return;
-            await createEvent.mutateAsync({
-              ...rest,
-              title: rest.title ?? '',
-              eventType: rest.eventType ?? 'practice',
-              startsAt,
-              ...(endsAt !== undefined && endsAt !== null ? { endsAt } : {}),
-              ...(location !== undefined && location !== null ? { location } : {}),
-              ...(notes !== undefined && notes !== null ? { notes } : {}),
-              ...(latitude !== undefined && latitude !== null && longitude !== undefined && longitude !== null
-                ? { latitude, longitude }
-                : {}),
-              ...(recurrence !== undefined && recurrence !== null ? { recurrence } : {}),
-            });
-            setAdding(false);
-          }}
-        />
+        {addingTeamId === undefined ? (
+          manageable.map((team) => (
+            <Pressable
+              key={team.teamId}
+              className="mb-2 rounded-xl bg-inset p-4"
+              onPress={() => {
+                setAddingTeamId(team.teamId);
+                setChoosingTeam(false);
+              }}
+            >
+              <Text className="text-lg font-semibold text-ink">{team.name}</Text>
+            </Pressable>
+          ))
+        ) : (
+          <AddEvent
+            key={addingTeamId}
+            dayKey={selected}
+            timeZone={teams.find((team) => team.teamId === addingTeamId)?.timeZone ?? zone}
+            onCreate={async (body) => {
+              const { endsAt, location, notes, latitude, longitude, recurrence, startsAt, ...rest } = body;
+              if (startsAt === undefined) return;
+              await createEvent.mutateAsync({
+                teamId: addingTeamId,
+                body: {
+                  ...rest,
+                  title: rest.title ?? '',
+                  eventType: rest.eventType ?? 'practice',
+                  startsAt,
+                  ...(endsAt !== undefined && endsAt !== null ? { endsAt } : {}),
+                  ...(location !== undefined && location !== null ? { location } : {}),
+                  ...(notes !== undefined && notes !== null ? { notes } : {}),
+                  ...(latitude !== undefined && latitude !== null && longitude !== undefined && longitude !== null
+                    ? { latitude, longitude }
+                    : {}),
+                  ...(recurrence !== undefined && recurrence !== null ? { recurrence } : {}),
+                },
+              });
+              setAddingTeamId(undefined);
+            }}
+          />
+        )}
       </Sheet>
       <Sheet
         visible={editing !== undefined}
@@ -286,12 +343,15 @@ export default function ScheduleScreen() {
         {editing !== undefined ? (
           <AddEvent
             key={`${editing.item.eventId}-${editing.item.startsAt}`}
-            dayKey={dayKeyInZone(new Date(editing.item.startsAt), zone)}
-            timeZone={zone}
+            dayKey={dayKeyInZone(
+              new Date(editing.item.startsAt),
+              teams.find((team) => team.teamId === editing.item.teamId)?.timeZone ?? zone,
+            )}
+            timeZone={teams.find((team) => team.teamId === editing.item.teamId)?.timeZone ?? zone}
             initial={{ item: editing.item, series: editing.series }}
             onCreate={async (body) => {
               if (!editing.item.recurring) {
-                await updateEvent.mutateAsync({ eventId: editing.item.eventId, body });
+                await updateEvent.mutateAsync({ teamId: editing.item.teamId, eventId: editing.item.eventId, body });
                 setEditing(undefined);
                 return;
               }
@@ -311,16 +371,21 @@ export default function ScheduleScreen() {
           const original = prompt.item.originalStartsAt ?? prompt.item.startsAt;
           if (prompt.kind === 'delete') {
             if (scope === 'one') {
-              await cancelOccurrence.mutateAsync({ eventId: seriesId, body: { occurrenceStartsAt: original } });
-            } else await deleteEvent.mutateAsync(seriesId);
+              await cancelOccurrence.mutateAsync({
+                teamId: prompt.item.teamId,
+                eventId: seriesId,
+                body: { occurrenceStartsAt: original },
+              });
+            } else await deleteEvent.mutateAsync({ teamId: prompt.item.teamId, eventId: seriesId });
           } else if (scope === 'one') {
             const { recurrence: _recurrence, ...rest } = prompt.body;
             await saveOccurrence.mutateAsync({
+              teamId: prompt.item.teamId,
               eventId: seriesId,
               body: { ...rest, occurrenceStartsAt: original },
             });
           } else {
-            const series = await queryClient.fetchQuery(eventQuery(api, team.teamId, seriesId));
+            const series = await queryClient.fetchQuery(eventQuery(api, prompt.item.teamId, seriesId));
             const nextStart = prompt.body.startsAt ?? prompt.item.startsAt;
             const delta = new Date(nextStart).getTime() - new Date(prompt.item.startsAt).getTime();
             const startsAt = new Date(new Date(series.startsAt).getTime() + delta).toISOString();
@@ -331,7 +396,11 @@ export default function ScheduleScreen() {
                     new Date(startsAt).getTime() +
                       (new Date(prompt.body.endsAt).getTime() - new Date(nextStart).getTime()),
                   ).toISOString();
-            await updateEvent.mutateAsync({ eventId: seriesId, body: { ...prompt.body, startsAt, endsAt } });
+            await updateEvent.mutateAsync({
+              teamId: prompt.item.teamId,
+              eventId: seriesId,
+              body: { ...prompt.body, startsAt, endsAt },
+            });
           }
           setScopePrompt(undefined);
           setEditing(undefined);
@@ -369,7 +438,10 @@ const RsvpChoices = ({
           key={status}
           className="mr-2 rounded-full px-3 py-1"
           style={mine === status ? { backgroundColor: fieldWash(rsvpColor(status), fieldWashOpacity.chip) } : undefined}
-          onPress={() => void onRsvp(status)}
+          onPress={() => {
+            if (mine === status) return;
+            void onRsvp(status);
+          }}
         >
           <Text className="text-ink">{t(rsvpLabelKey(status))}</Text>
         </Pressable>
@@ -378,9 +450,32 @@ const RsvpChoices = ({
   );
 };
 
+const dayDotColors = (
+  events: readonly TeamOccurrence[],
+  teams: readonly { teamId: string; theme?: { primary?: string; secondary?: string; accent?: string } }[],
+  dayKey: string,
+  zone: string,
+  singleAccent: string | undefined,
+): { teamId: string; color: string }[] => {
+  const seen = new Set<string>();
+  const colorsForDay: { teamId: string; color: string }[] = [];
+  for (const item of events) {
+    if (dayKeyInZone(new Date(item.startsAt), zone) !== dayKey || seen.has(item.teamId)) continue;
+    seen.add(item.teamId);
+    if (singleAccent !== undefined) return [{ teamId: item.teamId, color: singleAccent }];
+    const team = teams.find((candidate) => candidate.teamId === item.teamId);
+    colorsForDay.push({ teamId: item.teamId, color: brandColors(team?.theme).accent });
+  }
+  return colorsForDay;
+};
+
 const EventRow = ({
   item,
   zone,
+  color,
+  teamName,
+  logoKey,
+  logoName,
   userId,
   canManage,
   onView,
@@ -388,8 +483,12 @@ const EventRow = ({
   onDelete,
   onRsvp,
 }: {
-  item: ScheduleOccurrence;
+  item: TeamOccurrence;
   zone: string;
+  color: string;
+  teamName: string | undefined;
+  logoKey: string | undefined;
+  logoName: string | undefined;
   userId: string | undefined;
   canManage: boolean;
   onView: () => void;
@@ -399,17 +498,48 @@ const EventRow = ({
 }) => {
   const { t } = useTranslation();
   const hour12 = useHour12();
+  const logoUrl = useDownloadUrl(logoKey, { teamId: item.teamId });
   const mine = item.rsvps.find((rsvp) => rsvp.userId === userId)?.status;
+  const showLogo = logoKey !== undefined;
   return (
-    <View className="mb-3 rounded-xl bg-inset p-3">
-      <Pressable accessibilityRole="button" className={canManage ? 'pr-16' : ''} onPress={onView}>
-        <Text className="font-semibold text-ink">{item.title}</Text>
-        <Text className="text-muted">
-          {t(`eventType.${item.eventType}`)} · {clockLabel(item.startsAt, zone, appLocale, hour12)}
-        </Text>
-        {item.location !== undefined ? <Text className="text-link">{item.location}</Text> : null}
+    <View className="mb-3 rounded-xl bg-inset p-3" style={{ borderLeftWidth: 4, borderLeftColor: color }}>
+      <Pressable accessibilityRole="button" onPress={onView}>
+        <View className={showLogo ? 'pr-24' : canManage ? 'pr-16' : ''}>
+          <Text className="font-semibold text-ink">{item.title}</Text>
+          {teamName !== undefined ? <Text className="text-muted">{teamName}</Text> : null}
+          <Text className="text-muted">
+            {t(`eventType.${item.eventType}`)} · {clockLabel(item.startsAt, zone, appLocale, hour12)}
+          </Text>
+        </View>
+        {item.location !== undefined || showLogo ? (
+          <View style={{ overflow: 'visible' }}>
+            {item.location !== undefined ? (
+              <Text className={`text-link${showLogo ? ' pr-24' : ''}`}>{item.location}</Text>
+            ) : (
+              <View className="h-5" />
+            )}
+            {showLogo ? (
+              <View
+                className="absolute right-0 h-20 w-20 items-center justify-center"
+                style={{ top: '50%', marginTop: -40 }}
+                pointerEvents="none"
+              >
+                {logoUrl !== undefined ? (
+                  <Image
+                    source={{ uri: logoUrl }}
+                    accessibilityLabel={logoName ?? t('teamAdmin.teamLogo')}
+                    resizeMode="contain"
+                    style={{ width: 80, height: 80 }}
+                  />
+                ) : null}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
       </Pressable>
-      <RsvpChoices mine={mine} onRsvp={onRsvp} />
+      <View className={showLogo ? 'pr-24' : ''}>
+        <RsvpChoices mine={mine} onRsvp={onRsvp} />
+      </View>
       {canManage ? (
         <View className="absolute right-2 top-2 flex-row items-center">
           <Pressable accessibilityRole="button" accessibilityLabel={t('schedule.editEvent')} className="p-1.5" onPress={onEdit}>
@@ -428,6 +558,7 @@ const EventDetail = ({
   item,
   teamId,
   zone,
+  teamName,
   userId,
   maps,
   canManage,
@@ -436,6 +567,7 @@ const EventDetail = ({
   item: ScheduleOccurrence;
   teamId: string;
   zone: string;
+  teamName: string | undefined;
   userId: string | undefined;
   maps: MapsProvider;
   canManage: boolean;
@@ -464,9 +596,11 @@ const EventDetail = ({
   };
   return (
     <View>
+      {teamName !== undefined ? <Text className="mb-1 font-semibold text-ink">{teamName}</Text> : null}
       <Text className="text-muted">
         {t(`eventType.${item.eventType}`)} · {clockLabel(item.startsAt, zone, appLocale, hour12)}
       </Text>
+      <Text className="text-muted">{timeZoneLabel(zone, new Date(item.startsAt))}</Text>
       {item.location !== undefined ? (
         <Pressable className="mt-2" onPress={openMaps}>
           <Text className="text-link">{item.location}</Text>

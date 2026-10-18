@@ -3,13 +3,14 @@
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { TeamSummary, TeamTheme } from '@gameplan/types';
+import { View } from 'react-native';
 import { ApiClient } from './api';
 import { LiveSocket } from './live-socket';
 import { rememberTeam, teamsQuery } from './queries/teams';
 import { bindPersistedMutations } from './queries/schedule';
-import { adoptCacheOwner } from './query-client';
+import { cacheUserMismatch, claimCacheUser } from './query-client';
 import { brandColors, type Brand } from './theme';
 
 type AppState = {
@@ -21,6 +22,13 @@ type AppState = {
   selectTeam: (teamId: string) => void;
   /** Draft colors for the team settings page. The header uses these until cleared. */
   setPreviewTheme: (theme: TeamTheme | undefined) => void;
+  /**
+   * Remembers a team whose brand should cover the shell, and returns a function
+   * that forgets that claim. Later claims win until they are released.
+   */
+  pushBrandTeam: (teamId: string) => () => void;
+  /** The team painting the shell, when there is one. */
+  brandTeam: TeamSummary | undefined;
   brand: Brand;
 };
 
@@ -39,21 +47,39 @@ const applySelectedTeam = async (api: ApiClient, teams: TeamSummary[]): Promise<
 /**
  * Provides the API client for the signed-in and signed-out trees.
  */
-export const AppStateProvider = ({ children }: { children: ReactNode }) => {
+export const AppStateProvider = ({
+  api: providedApi,
+  children,
+}: {
+  /** Session already restored before the persisted cache hydrates. */
+  api?: ApiClient;
+  children: ReactNode;
+}) => {
   const queryClient = useQueryClient();
-  const api = useMemo(() => new ApiClient(), []);
+  const api = useMemo(() => providedApi ?? new ApiClient(), [providedApi]);
   const live = useMemo(() => new LiveSocket(api), [api]);
   const [previewTheme, setPreviewTheme] = useState<TeamTheme | undefined>();
-  const snapshot = useSyncExternalStore(api.subscribe, () => api.selectedTeamId);
+  const [brandStack, setBrandStack] = useState<{ token: number; teamId: string }[]>([]);
+  const brandToken = useRef(0);
+  const pushBrandTeam = useCallback((teamId: string): (() => void) => {
+    const token = brandToken.current + 1;
+    brandToken.current = token;
+    setBrandStack((current) => [...current, { token, teamId }]);
+    return () => setBrandStack((current) => current.filter((frame) => frame.token !== token));
+  }, []);
   const signedIn = useSyncExternalStore(api.subscribe, () => api.isAuthenticated());
-  const { data: teams } = useQuery({ ...teamsQuery(api), enabled: signedIn });
-  const list = teams ?? EMPTY_TEAMS;
+  const userId = useSyncExternalStore(api.subscribe, () => api.user?.userId);
+  const switchedUser = cacheUserMismatch(userId);
+  const { data: teams } = useQuery({ ...teamsQuery(api), enabled: signedIn && !switchedUser });
+  const list = switchedUser ? EMPTY_TEAMS : (teams ?? EMPTY_TEAMS);
   bindPersistedMutations(queryClient, api);
 
-  useEffect(() => {
-    if (!signedIn) return;
-    void adoptCacheOwner(queryClient, api.user?.userId);
-  }, [api, queryClient, signedIn]);
+  useLayoutEffect(() => {
+    if (!claimCacheUser(queryClient, userId)) return;
+    setPreviewTheme(undefined);
+    setBrandStack([]);
+    api.clearTeamContext();
+  }, [api, queryClient, userId]);
 
   const patchTeam = (team: TeamSummary): void => {
     rememberTeam(queryClient, team);
@@ -63,8 +89,11 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
     api.setTeamId(teamId);
   };
 
-  const active = list.find((team) => team.teamId === snapshot);
-  const brand = brandColors(previewTheme ?? active?.theme);
+  const contextTeamId = brandStack.at(-1)?.teamId;
+  const contextTeam = contextTeamId === undefined ? undefined : list.find((team) => team.teamId === contextTeamId);
+  const soleTeam = list.length === 1 ? list[0] : undefined;
+  const brandTeam = contextTeam ?? soleTeam;
+  const brand = brandColors(previewTheme ?? brandTeam?.theme);
 
   useEffect(() => {
     void api.restoreTeamId();
@@ -76,10 +105,11 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
   }, [api, teams]);
 
   const value = useMemo(
-    () => ({ api, live, teams: list, patchTeam, selectTeam, setPreviewTheme, brand }),
-    [api, live, list, snapshot, previewTheme, brand.primary, brand.secondary, brand.accent, brand.stops.join()],
+    () => ({ api, live, teams: list, patchTeam, selectTeam, setPreviewTheme, pushBrandTeam, brandTeam, brand }),
+    [api, live, list, previewTheme, pushBrandTeam, brandTeam, brand.primary, brand.secondary, brand.accent, brand.stops.join()],
   );
 
+  if (switchedUser) return <View className="flex-1 bg-canvas" />;
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
 
@@ -88,6 +118,22 @@ export const useApp = (): AppState => {
   const value = useContext(AppContext);
   if (value === undefined) throw new Error('useApp outside provider');
   return value;
+};
+
+/**
+ * Paints the shell with one team's brand while this screen is showing it.
+ *
+ * A single membership already brands the whole app, so this claim is only needed
+ * when the athlete belongs to several teams and has opened one of them.
+ *
+ * @param teamId - The team to show, or `undefined` to leave the shell alone.
+ */
+export const useBrandTeam = (teamId: string | undefined): void => {
+  const { pushBrandTeam } = useApp();
+  useLayoutEffect(() => {
+    if (teamId === undefined) return;
+    return pushBrandTeam(teamId);
+  }, [pushBrandTeam, teamId]);
 };
 
 /** Active team summary, when the list has been loaded. */
