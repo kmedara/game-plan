@@ -37,13 +37,13 @@ const { accessToken } = issueLocalTokens('guard-user', 'guard@example.com');
  *
  * @returns An HTTP API event.
  */
-const event = (): APIGatewayProxyEventV2 =>
+const event = (path = '/'): APIGatewayProxyEventV2 =>
   ({
     version: '2.0',
-    rawPath: '/',
+    rawPath: path,
     headers: { authorization: `Bearer ${accessToken}` },
     requestContext: {
-      http: { method: 'GET', path: '/' },
+      http: { method: 'GET', path },
     },
   }) as unknown as APIGatewayProxyEventV2;
 
@@ -61,35 +61,36 @@ describe('guards', () => {
 
   it('requireTeam and requireMembership load team rows', async () => {
     mockGetItem.mockResolvedValueOnce({ teamId: 't1' });
-    const teamHandle = route(['teamId'], requireTeam(), async (ctx) =>
+    const teamHandle = route('GET', '/teams/:teamId', requireTeam(), async (ctx) =>
       json(200, { teamId: ctx.team.teamId }),
     );
-    await expect(teamHandle(event(), 't1')).resolves.toMatchObject({ statusCode: 200 });
+    await expect(teamHandle(event('/teams/t1'))).resolves.toMatchObject({ statusCode: 200 });
 
     mockGetItem.mockResolvedValueOnce(undefined);
-    const missingTeam = route(['teamId'], requireTeam(), async () => json(200, {}));
-    await expect(missingTeam(event(), 'missing')).rejects.toThrow('team_not_found');
+    const missingTeam = route('GET', '/teams/:teamId', requireTeam(), async () => json(200, {}));
+    await expect(missingTeam(event('/teams/missing'))).rejects.toThrow('team_not_found');
 
     mockGetItem.mockResolvedValueOnce({ role: 'coach' });
     const memberHandle = route(
-      ['teamId'],
+      'GET',
+      '/teams/:teamId',
       requireUser(),
       requireMembership(),
       async (ctx) => json(200, { role: ctx.member.role }),
     );
-    await expect(memberHandle(event(), 't1')).resolves.toMatchObject({ statusCode: 200 });
+    await expect(memberHandle(event('/teams/t1'))).resolves.toMatchObject({ statusCode: 200 });
 
     mockGetItem.mockResolvedValueOnce(undefined);
-    const notMember = route(['teamId'], requireUser(), requireMembership(), async () =>
+    const notMember = route('GET', '/teams/:teamId', requireUser(), requireMembership(), async () =>
       json(200, {}),
     );
-    await expect(notMember(event(), 't1')).rejects.toThrow('not_a_member');
+    await expect(notMember(event('/teams/t1'))).rejects.toThrow('not_a_member');
 
     mockGetItem.mockResolvedValueOnce({ role: 123 });
-    const badRole = route(['teamId'], requireUser(), requireMembership(), async () =>
+    const badRole = route('GET', '/teams/:teamId', requireUser(), requireMembership(), async () =>
       json(200, {}),
     );
-    await expect(badRole(event(), 't1')).rejects.toThrow('not_a_member');
+    await expect(badRole(event('/teams/t1'))).rejects.toThrow('not_a_member');
   });
 
   it('requirePermission checks the loaded member roles without re-reading the roster', async () => {

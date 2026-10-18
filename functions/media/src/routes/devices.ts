@@ -28,7 +28,8 @@ const validDeviceId = (): Step<{ deviceId: string }, object> =>
  * @returns The stored device summary.
  */
 export const handleRegisterDevice = route(
-  ['deviceId'],
+  'PUT',
+  '/media/devices/:deviceId',
   withMediaErrors(),
   validDeviceId(),
   requireUser(),
@@ -56,7 +57,8 @@ export const handleRegisterDevice = route(
  * @returns An empty `204`.
  */
 export const handleDeleteDevice = route(
-  ['deviceId'],
+  'DELETE',
+  '/media/devices/:deviceId',
   withMediaErrors(),
   requireUser(),
   async ({ deviceId, user }) => {

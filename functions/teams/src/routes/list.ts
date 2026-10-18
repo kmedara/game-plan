@@ -15,6 +15,8 @@ import { withTeamsErrors } from './errors.js';
  * @returns The caller's team list.
  */
 export const handleListTeams = route(
+  'GET',
+  '/teams',
   withTeamsErrors(),
   requireUser(),
   async ({ user }) => {

@@ -27,7 +27,8 @@ import { withTeamsErrors } from './errors.js';
  * @returns The new invite code.
  */
 export const handleCreateInvite = route(
-  ['teamId'],
+  'POST',
+  '/teams/:teamId/invites',
   withTeamsErrors(),
   requireUser(),
   withBodyValidation(createInviteBodySchema),
@@ -59,7 +60,8 @@ export const handleCreateInvite = route(
  * @returns Active invites for the team.
  */
 export const handleListInvites = route(
-  ['teamId'],
+  'GET',
+  '/teams/:teamId/invites',
   withTeamsErrors(),
   requireUser(),
   requireMembership(),
@@ -88,7 +90,8 @@ export const handleListInvites = route(
  * @returns An empty response when the code is gone.
  */
 export const handleDeleteInvite = route(
-  ['teamId', 'role'],
+  'DELETE',
+  '/teams/:teamId/invites/:role',
   withTeamsErrors(),
   requireUser(),
   requireMembership(),
@@ -110,7 +113,8 @@ export const handleDeleteInvite = route(
  * @returns Invite metadata and the team name.
  */
 export const handleGetInvite = route(
-  ['code'],
+  'GET',
+  '/teams/invite/:code',
   withTeamsErrors(),
   requireUser(),
   async ({ code }) => {
@@ -134,7 +138,8 @@ export const handleGetInvite = route(
  * @returns The team membership created by accepting.
  */
 export const handleAcceptInvite = route(
-  ['code'],
+  'POST',
+  '/teams/invite/:code/accept',
   withTeamsErrors(),
   requireUser(),
   async ({ code, user }) => {

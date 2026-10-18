@@ -2,10 +2,7 @@
  * Cognito Hosted UI OAuth routes under `/identity/oauth/*`.
  */
 
-import type {
-  APIGatewayProxyEventV2,
-  APIGatewayProxyStructuredResultV2,
-} from "aws-lambda";
+import type { APIGatewayProxyStructuredResultV2 } from "aws-lambda";
 import {
   buildAuthorizeUrl,
   buildLogoutUrl,
@@ -22,6 +19,7 @@ import { readCookie, redirect } from "../../../lib/http.js";
 import type { UserProfile } from "@gameplan/types";
 import { errorMessage, functionArea, logError } from "../../../lib/log.js";
 import { issueOAuthHandoff } from "../../../lib/oauth-handoff.js";
+import { route } from "../../../lib/pipeline.js";
 import {
   NATIVE_AUTH_REDIRECT,
   OAUTH_NATIVE_COOKIE,
@@ -58,9 +56,7 @@ const resolveReturnTo = (raw: string | undefined): string => {
  * @param event - The HTTP API event.
  * @returns A redirect to Cognito Hosted UI.
  */
-export const handleOAuthLogin = async (
-  event: APIGatewayProxyEventV2,
-): Promise<APIGatewayProxyStructuredResultV2> => {
+export const handleOAuthLogin = route("GET", "/identity/oauth/login", async ({ event }) => {
   const native = event.queryStringParameters?.delivery === "native";
   const returnTo = resolveReturnTo(event.queryStringParameters?.returnTo);
   const state = generateOAuthState();
@@ -72,7 +68,7 @@ export const handleOAuthLogin = async (
     ...oauthSetCookie(OAUTH_RETURN_COOKIE, returnTo),
     ...oauthSetCookie(OAUTH_NATIVE_COOKIE, native ? "1" : "0"),
   ]);
-};
+});
 
 /**
  * Handles `GET /identity/oauth/callback`.
@@ -80,9 +76,9 @@ export const handleOAuthLogin = async (
  * @param event - The HTTP API event.
  * @returns A redirect to the website with a refresh cookie, or an error redirect.
  */
-export const handleOAuthCallback = async (
-  event: APIGatewayProxyEventV2,
-): Promise<APIGatewayProxyStructuredResultV2> => {
+export const handleOAuthCallback = route("GET", "/identity/oauth/callback", async ({
+  event,
+}) => {
   const clientOrigin = (
     process.env.CLIENT_ORIGIN ?? "http://localhost:4200"
   ).replace(/\/+$/u, "");
@@ -183,7 +179,7 @@ export const handleOAuthCallback = async (
       clearHandshake,
     );
   }
-};
+});
 
 /**
  * Handles `GET /identity/oauth/logout`.
@@ -191,9 +187,7 @@ export const handleOAuthCallback = async (
  * @param event - The HTTP API event.
  * @returns A redirect that clears the session cookie and sends the browser to Cognito Hosted UI.
  */
-export const handleOAuthLogout = async (
-  event: APIGatewayProxyEventV2,
-): Promise<APIGatewayProxyStructuredResultV2> => {
+export const handleOAuthLogout = route("GET", "/identity/oauth/logout", async ({ event }) => {
   const returnTo = resolveReturnTo(
     event.queryStringParameters?.returnTo ??
       `${(process.env.CLIENT_ORIGIN ?? "http://localhost:4200").replace(/\/+$/u, "")}/login`,
@@ -205,7 +199,7 @@ export const handleOAuthLogout = async (
   } catch {
     return redirect(returnTo, clear);
   }
-};
+});
 
 /**
  * Builds a pending-profile payload for authenticated callers without a birthday.

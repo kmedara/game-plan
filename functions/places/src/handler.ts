@@ -5,23 +5,8 @@
  * API key never reaches the client.
  */
 
-import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
-import { handleHealth, logHttpFailure, notFound } from '../../lib/http.js';
-import { handleAutocomplete, handleMapPreview, handleResolve, handleReverse } from './routes/index.js';
-
-/**
- * Normalizes a path to the places route suffix.
- *
- * @param path - The raw request path.
- * @returns The route key without a leading slash, or an empty string for `/places`.
- */
-const routeOf = (path: string): string => {
-  const normalized = path.replace(/\/+$/u, '') || '/';
-  if (normalized === '/places' || normalized === '/') return '';
-  if (normalized.startsWith('/places/')) return normalized.slice('/places/'.length);
-  if (normalized.startsWith('/')) return normalized.slice(1);
-  return normalized;
-};
+import { serveHttp } from '../../lib/pipeline.js';
+import { httpRoutes } from './routes/index.js';
 
 /**
  * Handles HTTP requests for the places area.
@@ -29,21 +14,4 @@ const routeOf = (path: string): string => {
  * @param event - The Amazon API Gateway HTTP API event.
  * @returns A route response, health check, or `404`.
  */
-export const handler = logHttpFailure(async (
-  event: APIGatewayProxyEventV2,
-): Promise<APIGatewayProxyStructuredResultV2> => {
-  const path = event.rawPath ?? '';
-  const method = event.requestContext.http.method;
-
-  if (method === 'GET' && (path === '/health' || path.endsWith('/health'))) {
-    return handleHealth(event, 'places');
-  }
-
-  const route = routeOf(path);
-  if (method === 'GET' && route === 'autocomplete') return handleAutocomplete(event);
-  if (method === 'GET' && route === 'resolve') return handleResolve(event);
-  if (method === 'GET' && route === 'reverse') return handleReverse(event);
-  if (method === 'GET' && route === 'map') return handleMapPreview(event);
-
-  return notFound();
-});
+export const handler = serveHttp('places', httpRoutes);

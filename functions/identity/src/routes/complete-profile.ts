@@ -22,6 +22,8 @@ import { withIdentityErrors } from './session.js';
  * @returns The completed profile, or an error.
  */
 export const handleCompleteProfile = route(
+  'POST',
+  '/identity/profile/complete',
   withIdentityErrors(),
   requireUser(),
   withBodyValidation(completeProfileBodySchema),

@@ -17,13 +17,14 @@ const event = (
   method: string,
   body?: string,
   headers: Record<string, string> = {},
+  rawPath = '/media/local-objects/uploads/u/x',
 ): APIGatewayProxyEventV2 =>
   ({
     version: '2.0',
-    rawPath: '/',
+    rawPath,
     headers,
     body,
-    requestContext: { http: { method, path: '/' } },
+    requestContext: { http: { method, path: rawPath } },
   }) as APIGatewayProxyEventV2;
 
 describe('local-objects routes', () => {
@@ -38,8 +39,8 @@ describe('local-objects routes', () => {
   });
 
   it('returns not found outside local media mode', async () => {
-    expect((await handleLocalGetObject(event('GET'), 'uploads/u/x')).statusCode).toBe(404);
-    expect((await handleLocalPutObject(event('PUT', 'bytes'), 'uploads/u/x')).statusCode).toBe(
+    expect((await handleLocalGetObject(event('GET'))).statusCode).toBe(404);
+    expect((await handleLocalPutObject(event('PUT', 'bytes'))).statusCode).toBe(
       404,
     );
   });

@@ -17,6 +17,8 @@ import { withIdentityErrors } from './session.js';
  * @returns `204` when the code matches the emailed one.
  */
 export const handleConfirmRegistration = route(
+  'POST',
+  '/identity/confirm',
   withIdentityErrors(),
   withBodyValidation(confirmRegistrationBodySchema),
   async ({ body }) => {
@@ -32,6 +34,8 @@ export const handleConfirmRegistration = route(
  * @returns `204` whether or not an unconfirmed account exists.
  */
 export const handleResendConfirmation = route(
+  'POST',
+  '/identity/confirm/resend',
   withIdentityErrors(),
   withBodyValidation(resendConfirmationBodySchema),
   async ({ body }) => {

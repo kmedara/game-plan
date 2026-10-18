@@ -19,6 +19,8 @@ import { withChatErrors } from './errors.js';
  * @returns The matching adult profile, or `user_not_found`.
  */
 export const handleSearchUsers = route(
+  'GET',
+  '/chat/users/search',
   withChatErrors(),
   requireUser(),
   withQueryValidation(searchUsersQuerySchema),

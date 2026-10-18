@@ -2,13 +2,13 @@
  * `POST /identity/logout`
  */
 
-import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import {
   clearRefreshSetCookie,
   getIdentityProvider,
   REFRESH_COOKIE,
 } from '../../../lib/auth/index.js';
 import { parseJsonBody, readCookie, withCookies } from '../../../lib/http.js';
+import { route } from '../../../lib/pipeline.js';
 
 /**
  * Handles `POST /identity/logout`.
@@ -16,9 +16,7 @@ import { parseJsonBody, readCookie, withCookies } from '../../../lib/http.js';
  * @param event - The HTTP API event.
  * @returns A cleared-cookie response.
  */
-export const handleLogout = async (
-  event: APIGatewayProxyEventV2,
-): Promise<APIGatewayProxyStructuredResultV2> => {
+export const handleLogout = route('POST', '/identity/logout', async ({ event }) => {
   const body = parseJsonBody(event) ?? {};
   const refreshToken =
     typeof body === 'object' &&
@@ -35,4 +33,4 @@ export const handleLogout = async (
   }
 
   return withCookies({ statusCode: 204 }, clearRefreshSetCookie());
-};
+});

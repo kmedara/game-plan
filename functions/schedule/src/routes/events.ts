@@ -35,7 +35,8 @@ import { withScheduleErrors } from "./errors.js";
  * @returns The created event.
  */
 export const handleCreateEvent = route(
-  ["teamId"],
+  "POST",
+  "/schedule/teams/:teamId/events",
   withScheduleErrors(),
   requireUser(),
   withBodyValidation(createEventBodySchema),
@@ -61,7 +62,8 @@ export const handleCreateEvent = route(
  * @returns The event definition.
  */
 export const handleGetEvent = route(
-  ["teamId", "eventId"],
+  "GET",
+  "/schedule/teams/:teamId/events/:eventId",
   withScheduleErrors(),
   requireUser(),
   requireMembership(),
@@ -80,7 +82,8 @@ export const handleGetEvent = route(
  * @returns The updated event.
  */
 export const handleUpdateEvent = route(
-  ["teamId", "eventId"],
+  "PATCH",
+  "/schedule/teams/:teamId/events/:eventId",
   withScheduleErrors(),
   requireUser(),
   withBodyValidation(updateEventBodySchema),
@@ -110,7 +113,8 @@ export const handleUpdateEvent = route(
  * @returns An empty response when the series is gone.
  */
 export const handleDeleteEvent = route(
-  ["teamId", "eventId"],
+  "DELETE",
+  "/schedule/teams/:teamId/events/:eventId",
   withScheduleErrors(),
   requireUser(),
   requireMembership(),
@@ -130,7 +134,8 @@ export const handleDeleteEvent = route(
  * @returns An empty response when that date is cancelled.
  */
 export const handleCancelOccurrence = route(
-  ["teamId", "eventId"],
+  "DELETE",
+  "/schedule/teams/:teamId/events/:eventId/occurrences",
   withScheduleErrors(),
   requireUser(),
   withBodyValidation(occurrenceTargetSchema),
@@ -155,7 +160,8 @@ export const handleCancelOccurrence = route(
  * @returns The split-off event for that date.
  */
 export const handleSaveOccurrence = route(
-  ["teamId", "eventId"],
+  "POST",
+  "/schedule/teams/:teamId/events/:eventId/occurrences",
   withScheduleErrors(),
   requireUser(),
   withBodyValidation(exceptionEventBodySchema),

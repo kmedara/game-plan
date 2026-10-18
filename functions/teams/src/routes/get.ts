@@ -23,7 +23,8 @@ import { withTeamsErrors } from './errors.js';
  * @returns The team record and the caller's role.
  */
 export const handleGetTeam = route(
-  ['teamId'],
+  'GET',
+  '/teams/:teamId',
   withTeamsErrors(),
   requireUser(),
   requireMembership(),

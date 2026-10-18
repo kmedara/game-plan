@@ -23,6 +23,8 @@ import { sessionResponse, withIdentityErrors } from './session.js';
  * @returns A session response or an error.
  */
 export const handleRefresh = route(
+  'POST',
+  '/identity/refresh',
   withIdentityErrors(),
   withBodyValidation(refreshBodySchema),
   async ({ event, body }) => {

@@ -18,15 +18,12 @@ const { handleLocalPutObject } = await import('./local-objects.js');
 describe('local-objects put in local mode', () => {
   it('uses an empty body and default content type when omitted', async () => {
     putLocalObject.mockClear();
-    const result = await handleLocalPutObject(
-      {
-        version: '2.0',
-        rawPath: '/',
-        headers: {},
-        requestContext: { http: { method: 'PUT', path: '/' } },
-      } as APIGatewayProxyEventV2,
-      'uploads/u/file.bin',
-    );
+    const result = await handleLocalPutObject({
+      version: '2.0',
+      rawPath: '/media/local-objects/uploads/u/file.bin',
+      headers: {},
+      requestContext: { http: { method: 'PUT', path: '/media/local-objects/uploads/u/file.bin' } },
+    } as APIGatewayProxyEventV2);
     expect(result.statusCode).toBe(204);
     expect(putLocalObject).toHaveBeenCalledWith(
       'uploads/u/file.bin',

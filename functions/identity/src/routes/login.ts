@@ -21,6 +21,8 @@ import { sessionResponse, withIdentityErrors } from './session.js';
  * @returns A session response or an error.
  */
 export const handleLogin = route(
+  'POST',
+  '/identity/login',
   withIdentityErrors(),
   withBodyValidation(loginBodySchema),
   async ({ event, body }) => {

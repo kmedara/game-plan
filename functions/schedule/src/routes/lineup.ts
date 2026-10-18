@@ -17,7 +17,8 @@ import { withScheduleErrors } from "./errors.js";
  * @returns The lineup for the occurrence, or the previous one in the series.
  */
 export const handleGetLineup = route(
-  ["teamId"],
+  "GET",
+  "/schedule/teams/:teamId/lineup",
   withScheduleErrors(),
   requireUser(),
   withQueryValidation(lineupQuerySchema),
@@ -47,7 +48,8 @@ export const handleGetLineup = route(
  * @returns The stored lineup.
  */
 export const handlePutLineup = route(
-  ["teamId"],
+  "PUT",
+  "/schedule/teams/:teamId/lineup",
   withScheduleErrors(),
   requireUser(),
   withBodyValidation(lineupBodySchema),

@@ -49,6 +49,8 @@ const withRequiredGuardians = async (memberIds: string[]): Promise<string[]> => 
  * @returns The created team channel.
  */
 export const handleCreateTeamChannel = route(
+  'POST',
+  '/chat/channels',
   withChatErrors(),
   requireUser(),
   withBodyValidation(createTeamChannelBodySchema),
@@ -79,6 +81,8 @@ export const handleCreateTeamChannel = route(
  * @returns The created private chat.
  */
 export const handleCreatePrivateChat = route(
+  'POST',
+  '/chat/private',
   withChatErrors(),
   requireUser(),
   withBodyValidation(createPrivateChatBodySchema),

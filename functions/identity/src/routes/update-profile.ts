@@ -32,6 +32,8 @@ const ownsPhotoKey = (userId: string, photoKey: string): boolean => {
  * @returns The updated profile.
  */
 export const handleUpdateProfile = route(
+  'PATCH',
+  '/identity/profile',
   withIdentityErrors(),
   requireUser(),
   withBodyValidation(updateProfileBodySchema),

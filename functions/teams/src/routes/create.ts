@@ -17,6 +17,8 @@ import { withTeamsErrors } from './errors.js';
  * @returns The created team or an error.
  */
 export const handleCreateTeam = route(
+  'POST',
+  '/teams',
   withTeamsErrors(),
   requireUser(),
   withBodyValidation(createTeamBodySchema),

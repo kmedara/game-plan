@@ -16,6 +16,8 @@ import { withTeamsErrors } from './errors.js';
  * @returns Matching teams and an optional page cursor.
  */
 export const handleSearchDirectory = route(
+  'GET',
+  '/teams/directory',
   withTeamsErrors(),
   requireUser(),
   withQueryValidation(searchTeamDirectoryQuerySchema),

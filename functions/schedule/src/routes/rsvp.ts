@@ -17,7 +17,8 @@ import { withScheduleErrors } from "./errors.js";
  * @returns The stored RSVP.
  */
 export const handleUpsertRsvp = route(
-  ["teamId"],
+  "PUT",
+  "/schedule/teams/:teamId/rsvps",
   withScheduleErrors(),
   requireUser(),
   withBodyValidation(rsvpBodySchema),

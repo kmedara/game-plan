@@ -84,7 +84,8 @@ const memberFields = (
  * @returns The roster with profile fields when available.
  */
 export const handleListMembers = route(
-  ["teamId"],
+  "GET",
+  "/teams/:teamId/members",
   withTeamsErrors(),
   requireUser(),
   requireMembership(),
@@ -105,7 +106,7 @@ export const handleListMembers = route(
 );
 
 /**
- * Handles `GET /teams/:teamId/members/:userId`.
+ * Handles `GET /teams/:teamId/members/:memberUserId`.
  *
  * @param event - The HTTP API event.
  * @param teamId - The team id from the path.
@@ -113,7 +114,8 @@ export const handleListMembers = route(
  * @returns Profile fields teammates can see on this team.
  */
 export const handleGetMember = route(
-  ["teamId", "memberUserId"],
+  "GET",
+  "/teams/:teamId/members/:memberUserId",
   withTeamsErrors(),
   requireUser(),
   requireMembership(),
@@ -142,7 +144,7 @@ export const handleGetMember = route(
 );
 
 /**
- * Handles `PATCH /teams/:teamId/members/:userId`.
+ * Handles `PATCH /teams/:teamId/members/:memberUserId`.
  *
  * @param event - The HTTP API event.
  * @param teamId - The team id from the path.
@@ -150,7 +152,8 @@ export const handleGetMember = route(
  * @returns The updated membership.
  */
 export const handleAssignRole = route(
-  ["teamId", "memberUserId"],
+  "PATCH",
+  "/teams/:teamId/members/:memberUserId",
   withTeamsErrors(),
   requireUser(),
   withBodyValidation(assignRoleBodySchema),

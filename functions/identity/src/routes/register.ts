@@ -47,6 +47,8 @@ const ensureProfile = async (
  * @returns A session response or an error.
  */
 export const handleRegister = route(
+  'POST',
+  '/identity/register',
   withIdentityErrors(),
   withBodyValidation(registerBodySchema),
   async ({ event, body }) => {

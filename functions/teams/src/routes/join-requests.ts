@@ -29,7 +29,8 @@ import { withTeamsErrors } from "./errors.js";
  * @returns The pending join request.
  */
 export const handleCreateJoinRequest = route(
-  ["teamId"],
+  "POST",
+  "/teams/:teamId/join-requests",
   withTeamsErrors(),
   requireUser(),
   async ({ teamId, user }) => {
@@ -51,7 +52,8 @@ export const handleCreateJoinRequest = route(
  * @returns Pending join requests for the team.
  */
 export const handleListJoinRequests = route(
-  ["teamId"],
+  "GET",
+  "/teams/:teamId/join-requests",
   withTeamsErrors(),
   requireUser(),
   requireMembership(),
@@ -88,7 +90,8 @@ export const handleListJoinRequests = route(
  * @returns The new membership.
  */
 export const handleApproveJoinRequest = route(
-  ["teamId", "requestId"],
+  "POST",
+  "/teams/:teamId/join-requests/:requestId/approve",
   withTeamsErrors(),
   requireUser(),
   withBodyValidation(approveJoinRequestBodySchema),
@@ -122,7 +125,8 @@ export const handleApproveJoinRequest = route(
  * @returns An empty success body.
  */
 export const handleRejectJoinRequest = route(
-  ["teamId", "requestId"],
+  "POST",
+  "/teams/:teamId/join-requests/:requestId/reject",
   withTeamsErrors(),
   requireUser(),
   requireMembership(),

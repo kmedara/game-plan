@@ -29,7 +29,8 @@ import { withScheduleErrors } from './errors.js';
  * @returns The proposed fixture.
  */
 export const handleProposeFixture = route(
-  ['teamId', 'eventId'],
+  'POST',
+  '/schedule/teams/:teamId/events/:eventId/fixture',
   withScheduleErrors(),
   requireUser(),
   withBodyValidation(proposeFixtureBodySchema),
@@ -49,7 +50,8 @@ export const handleProposeFixture = route(
  * @returns Pending invites and linked fixtures.
  */
 export const handleListFixtures = route(
-  ['teamId'],
+  'GET',
+  '/schedule/teams/:teamId/fixtures',
   withScheduleErrors(),
   requireUser(),
   requireMembership(),
@@ -64,7 +66,8 @@ export const handleListFixtures = route(
  * @returns The linked fixture.
  */
 export const handleAcceptFixture = route(
-  ['fixtureId'],
+  'POST',
+  '/schedule/fixtures/:fixtureId/accept',
   withScheduleErrors(),
   requireUser(),
   withBodyValidation(acceptFixtureBodySchema),
@@ -79,7 +82,8 @@ export const handleAcceptFixture = route(
  * @returns An empty response when the proposal is gone.
  */
 export const handleDeclineFixture = route(
-  ['fixtureId'],
+  'POST',
+  '/schedule/fixtures/:fixtureId/decline',
   withScheduleErrors(),
   requireUser(),
   async ({ fixtureId, user }) => {
@@ -96,7 +100,8 @@ export const handleDeclineFixture = route(
  * @returns The updated fixture.
  */
 export const handleUpdateFixture = route(
-  ['fixtureId'],
+  'PATCH',
+  '/schedule/fixtures/:fixtureId',
   withScheduleErrors(),
   requireUser(),
   withBodyValidation(updateFixtureBodySchema),
@@ -111,7 +116,8 @@ export const handleUpdateFixture = route(
  * @returns An empty response when both clubs are detached.
  */
 export const handleUnlinkFixture = route(
-  ['fixtureId'],
+  'DELETE',
+  '/schedule/fixtures/:fixtureId',
   withScheduleErrors(),
   requireUser(),
   async ({ fixtureId, user }) => {

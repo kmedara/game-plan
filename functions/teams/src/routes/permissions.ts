@@ -24,7 +24,8 @@ import { withTeamsErrors } from "./errors.js";
  * @returns The role-permission matrix.
  */
 export const handleGetPermissions = route(
-  ["teamId"],
+  "GET",
+  "/teams/:teamId/permissions",
   withTeamsErrors(),
   requireUser(),
   requireMembership(),
@@ -47,7 +48,8 @@ export const handleGetPermissions = route(
  * @returns The updated matrix.
  */
 export const handleUpdatePermissions = route(
-  ["teamId"],
+  "PUT",
+  "/teams/:teamId/permissions",
   withTeamsErrors(),
   requireUser(),
   withBodyValidation(updateRolePermissionsBodySchema),

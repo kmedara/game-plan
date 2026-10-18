@@ -17,7 +17,8 @@ import { withScheduleErrors } from "./errors.js";
  * @returns Offers for the occurrence, or an empty list.
  */
 export const handleGetCarpool = route(
-  ["teamId"],
+  "GET",
+  "/schedule/teams/:teamId/carpool",
   withScheduleErrors(),
   requireUser(),
   withQueryValidation(carpoolQuerySchema),
@@ -40,7 +41,8 @@ export const handleGetCarpool = route(
  * @returns The offers left after the caller's change.
  */
 export const handlePutCarpool = route(
-  ["teamId"],
+  "PUT",
+  "/schedule/teams/:teamId/carpool",
   withScheduleErrors(),
   requireUser(),
   withBodyValidation(carpoolOfferBodySchema),
@@ -65,7 +67,8 @@ export const handlePutCarpool = route(
  * @returns The offers left after the caller claims or leaves.
  */
 export const handleClaimCarpool = route(
-  ["teamId"],
+  "PUT",
+  "/schedule/teams/:teamId/carpool/claim",
   withScheduleErrors(),
   requireUser(),
   withBodyValidation(carpoolClaimBodySchema),

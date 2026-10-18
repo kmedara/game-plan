@@ -7,21 +7,8 @@
 
 import type { APIGatewayProxyStructuredResultV2, SQSBatchResponse } from 'aws-lambda';
 import { handleHealth, isHttpEvent, isSqsEvent, notFound } from '../../lib/http.js';
-import { handleDeliver, handleSqs } from './routes/index.js';
-
-/**
- * Normalizes a path to the fan-out route suffix.
- *
- * @param path - The raw request path.
- * @returns The route key without a leading slash.
- */
-const routeOf = (path: string): string => {
-  const normalized = path.replace(/\/+$/u, '') || '/';
-  if (normalized === '/fanout' || normalized === '/') return '';
-  if (normalized.startsWith('/fanout/')) return normalized.slice('/fanout/'.length);
-  if (normalized.startsWith('/')) return normalized.slice(1);
-  return normalized;
-};
+import { dispatch } from '../../lib/pipeline.js';
+import { handleSqs, httpRoutes } from './routes/index.js';
 
 /**
  * Handles Amazon Simple Queue Service (SQS) batches and HTTP health checks.
@@ -37,13 +24,9 @@ export const handler = async (
 
   const path = event.rawPath ?? '';
   const method = event.requestContext.http.method;
-
   if (method === 'GET' && (path === '/health' || path.endsWith('/health'))) {
     return handleHealth(event, 'fanout');
   }
 
-  const route = routeOf(path);
-  if (method === 'POST' && route === 'deliver') return handleDeliver(event);
-
-  return notFound();
+  return dispatch(httpRoutes, event);
 };

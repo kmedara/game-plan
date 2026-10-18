@@ -20,6 +20,8 @@ import { withIdentityErrors } from './session.js';
  * @returns The pending invite.
  */
 export const handleCreateGuardianInvite = route(
+  'POST',
+  '/identity/guardians',
   withIdentityErrors(),
   requireUser(),
   withBodyValidation(createGuardianInviteBodySchema),
@@ -37,7 +39,8 @@ export const handleCreateGuardianInvite = route(
  * @returns The confirmed link.
  */
 export const handleAcceptGuardianInvite = route(
-  ['inviteId'],
+  'POST',
+  '/identity/guardians/:inviteId/accept',
   withIdentityErrors(),
   requireUser(),
   async ({ user, inviteId }) => {
@@ -47,14 +50,15 @@ export const handleAcceptGuardianInvite = route(
 );
 
 /**
- * Handles `DELETE /identity/guardians/:userId`.
+ * Handles `DELETE /identity/guardians/:otherUserId`.
  *
  * @param event - The HTTP API event.
  * @param otherUserId - The other person in the link, or the minor when an admin removes it.
  * @returns An empty 204.
  */
 export const handleRemoveGuardianLink = route(
-  ['otherUserId'],
+  'DELETE',
+  '/identity/guardians/:otherUserId',
   withIdentityErrors(),
   requireUser(),
   async ({ user, otherUserId }) => {

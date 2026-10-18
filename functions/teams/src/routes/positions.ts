@@ -22,7 +22,8 @@ import { withTeamsErrors } from './errors.js';
  * @returns The team summary including the stored positions.
  */
 export const handleSetPositions = route(
-  ['teamId'],
+  'PUT',
+  '/teams/:teamId/positions',
   withTeamsErrors(),
   requireUser(),
   withBodyValidation(updatePositionsBodySchema),

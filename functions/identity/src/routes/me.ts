@@ -2,9 +2,9 @@
  * `GET /identity/me`
  */
 
-import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import { getProfile, toUserProfile, verifyAuthHeader } from '../../../lib/auth/index.js';
 import { authorizationOf, json, unauthorized } from '../../../lib/http.js';
+import { route } from '../../../lib/pipeline.js';
 import { pendingProfile } from './oauth.js';
 import { mapError } from './session.js';
 
@@ -14,9 +14,7 @@ import { mapError } from './session.js';
  * @param event - The HTTP API event.
  * @returns The caller's profile or `401`.
  */
-export const handleMe = async (
-  event: APIGatewayProxyEventV2,
-): Promise<APIGatewayProxyStructuredResultV2> => {
+export const handleMe = route('GET', '/identity/me', async ({ event }) => {
   try {
     const auth = await verifyAuthHeader(authorizationOf(event));
     const profile = await getProfile(auth.userId);
@@ -27,4 +25,4 @@ export const handleMe = async (
   } catch (error) {
     return mapError(error) ?? unauthorized();
   }
-};
+});

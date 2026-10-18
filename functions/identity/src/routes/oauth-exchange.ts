@@ -24,6 +24,8 @@ import { withIdentityErrors } from './session.js';
  * @returns A session response including `next`, or an error.
  */
 export const handleOAuthExchange = route(
+  'POST',
+  '/identity/oauth/exchange',
   withIdentityErrors(),
   withBodyValidation(oauthExchangeBodySchema),
   async ({ body }) => {

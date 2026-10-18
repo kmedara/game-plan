@@ -17,7 +17,8 @@ import { withChatErrors } from './errors.js';
  * @returns Newest-first messages and an optional page cursor.
  */
 export const handleListMessages = route(
-  ['chatId'],
+  'GET',
+  '/chat/:chatId/messages',
   withChatErrors(),
   requireUser(),
   withQueryValidation(messageHistoryQuerySchema),
@@ -36,7 +37,8 @@ export const handleListMessages = route(
  * @returns The persisted message.
  */
 export const handleSendMessage = route(
-  ['chatId'],
+  'POST',
+  '/chat/:chatId/messages',
   withChatErrors(),
   requireUser(),
   withBodyValidation(sendMessageBodySchema),

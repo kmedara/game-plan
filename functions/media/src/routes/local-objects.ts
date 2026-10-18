@@ -8,14 +8,15 @@ import { getLocalObject, isLocalMedia, putLocalObject } from '../media-store.js'
 import { withMediaErrors } from './errors.js';
 
 /**
- * Handles `PUT /media/local-objects/:objectKey`.
+ * Handles `PUT /media/local-objects/*objectKey`.
  *
  * @param event - The HTTP API event.
  * @param objectKey - The decoded object key.
  * @returns `204` when stored, or `404` outside local mode.
  */
 export const handleLocalPutObject = route(
-  ['objectKey'],
+  'PUT',
+  '/media/local-objects/*objectKey',
   withMediaErrors(),
   async ({ event, objectKey }) => {
     if (!isLocalMedia()) return notFound();
@@ -28,14 +29,15 @@ export const handleLocalPutObject = route(
 );
 
 /**
- * Handles `GET /media/local-objects/:objectKey`.
+ * Handles `GET /media/local-objects/*objectKey`.
  *
  * @param event - The HTTP API event.
  * @param objectKey - The decoded object key.
  * @returns The object bytes, or `404`.
  */
 export const handleLocalGetObject = route(
-  ['objectKey'],
+  'GET',
+  '/media/local-objects/*objectKey',
   withMediaErrors(),
   async ({ objectKey }) => {
     if (!isLocalMedia()) return notFound();

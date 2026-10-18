@@ -22,7 +22,8 @@ import { withTeamsErrors } from "./errors.js";
  * @returns The updated team summary.
  */
 export const handleUpdateTeam = route(
-  ["teamId"],
+  "PATCH",
+  "/teams/:teamId",
   withTeamsErrors(),
   requireUser(),
   withBodyValidation(updateTeamBodySchema),

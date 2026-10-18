@@ -10,6 +10,7 @@ import { requireMembership, requirePermission, requireUser } from "./guards.js";
 import { json } from "./http.js";
 import {
   asStep,
+  dispatch,
   route,
   withBodyValidation,
   withMappedErrors,
@@ -177,7 +178,8 @@ describe("route pipeline", () => {
       process.env.LOCAL_JWT_SECRET = "pipeline-test-secret";
       const { accessToken } = issueLocalTokens("user-1", "user-1@example.com");
       const handle = route(
-        ["teamId"],
+        "POST",
+        "/teams/:teamId",
         withBodyValidation(z.object({ name: z.string() })),
         requireUser(),
         async (ctx) =>
@@ -188,16 +190,14 @@ describe("route pipeline", () => {
           }),
       );
 
-      const result = await handle(
-        {
-          ...httpEvent({ name: "Wildcats" }),
-          headers: { authorization: `Bearer ${accessToken}` },
-          requestContext: {
-            http: { method: "POST", path: "/" },
-          },
-        } as unknown as APIGatewayProxyEventV2,
-        "team-1",
-      );
+      const result = await handle({
+        ...httpEvent({ name: "Wildcats" }),
+        rawPath: "/teams/team-1",
+        headers: { authorization: `Bearer ${accessToken}` },
+        requestContext: {
+          http: { method: "POST", path: "/teams/team-1" },
+        },
+      } as unknown as APIGatewayProxyEventV2);
       expect(JSON.parse(result.body ?? "")).toEqual({
         teamId: "team-1",
         userId: "user-1",
@@ -208,7 +208,8 @@ describe("route pipeline", () => {
 });
 
 const _typedPermission = route(
-  ["teamId"],
+  "GET",
+  "/teams/:teamId",
   requireUser(),
   requireMembership(),
   requirePermission("manage_events"),
@@ -220,6 +221,95 @@ const _typedPermission = route(
 route(requirePermission("manage_events"), async () => json(200, {}));
 
 // @ts-expect-error permission requires membership loaded first
-route(["teamId"], requireUser(), requirePermission("manage_events"), async () => json(200, {}));
+route("GET", "/teams/:teamId", requireUser(), requirePermission("manage_events"), async () =>
+  json(200, {}),
+);
+
+route(
+  "GET",
+  "/teams/:teamId",
+  async (ctx) =>
+    json(200, {
+      // @ts-expect-error memberUserId is not a parameter of this path
+      id: ctx.memberUserId,
+    }),
+);
 
 void _typedPermission;
+
+const dispatchEvent = (method: string, rawPath?: string): APIGatewayProxyEventV2 =>
+  ({
+    version: "2.0",
+    rawPath,
+    headers: {},
+    requestContext: { http: { method, path: rawPath ?? "" } },
+  }) as APIGatewayProxyEventV2;
+
+describe("dispatch", () => {
+  const directory = route("GET", "/teams/directory", async () => json(200, { which: "directory" }));
+  const team = route("GET", "/teams/:teamId", async (ctx) => json(200, { which: ctx.teamId }));
+  const sameShape = route("GET", "/teams/:id", async () => json(200, { which: "second" }));
+  const object = route("GET", "/media/local-objects/*objectKey", async (ctx) =>
+    json(200, { key: ctx.objectKey }),
+  );
+
+  it("fills parameters from the path and prefers more literal segments", async () => {
+    const result = await dispatch(
+      [team, directory],
+      dispatchEvent("GET", "/teams/directory"),
+    );
+    expect(JSON.parse(result.body ?? "")).toEqual({ which: "directory" });
+
+    const member = await team(dispatchEvent("GET", "/teams/abc%20d"));
+    expect(JSON.parse(member.body ?? "")).toEqual({ which: "abc d" });
+  });
+
+  it("keeps the earlier route when two patterns score the same", async () => {
+    const result = await dispatch(
+      [team, sameShape],
+      dispatchEvent("GET", "/teams/abc"),
+    );
+    expect(JSON.parse(result.body ?? "")).toEqual({ which: "abc" });
+  });
+
+  it("captures the rest of a splat, including slashes", async () => {
+    const result = await object(dispatchEvent("GET", "/media/local-objects/uploads/u/x%20y"));
+    expect(JSON.parse(result.body ?? "")).toEqual({ key: "uploads/u/x y" });
+  });
+
+  it("matches a path with the area prefix left off", async () => {
+    const result = await dispatch([team, directory], dispatchEvent("GET", "directory"));
+    expect(JSON.parse(result.body ?? "")).toEqual({ which: "directory" });
+  });
+
+  it("returns 404 when nothing matches", async () => {
+    await expect(dispatch([team], dispatchEvent("POST", "/teams/abc"))).resolves.toMatchObject({
+      statusCode: 404,
+    });
+    await expect(dispatch([team], dispatchEvent("GET"))).resolves.toMatchObject({
+      statusCode: 404,
+    });
+    const bare = route("GET", "/:teamId/members", async () => json(200, { which: "members" }));
+    await expect(dispatch([bare], dispatchEvent("GET", "/only"))).resolves.toMatchObject({
+      statusCode: 404,
+    });
+  });
+
+  it("treats a missing path as the area root and keeps a bad escape", async () => {
+    const list = route("GET", "/teams", async () => json(200, { which: "list" }));
+    const listed = await dispatch([list, team], dispatchEvent("GET"));
+    expect(JSON.parse(listed.body ?? "")).toEqual({ which: "list" });
+
+    const escaped = await team(dispatchEvent("GET", "/teams/%"));
+    expect(JSON.parse(escaped.body ?? "")).toEqual({ which: "%" });
+  });
+
+  it("rejects a splat that is not last and an empty segment", () => {
+    expect(() => route("GET", "/files/*key/tail", async () => json(200, {}))).toThrow(
+      /splat must be last/,
+    );
+    expect(() => route("GET", "/teams//:teamId", async () => json(200, {}))).toThrow(
+      /empty segment/,
+    );
+  });
+});

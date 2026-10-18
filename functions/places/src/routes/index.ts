@@ -26,6 +26,8 @@ import { withPlacesErrors } from './errors.js';
  * @returns Suggestion rows for the typed query.
  */
 export const handleAutocomplete = route(
+  'GET',
+  '/places/autocomplete',
   withPlacesErrors(),
   requireUser(),
   withQueryValidation(placesAutocompleteQuerySchema),
@@ -42,6 +44,8 @@ export const handleAutocomplete = route(
  * @returns Label and coordinates for the place id.
  */
 export const handleResolve = route(
+  'GET',
+  '/places/resolve',
   withPlacesErrors(),
   requireUser(),
   withQueryValidation(placesResolveQuerySchema),
@@ -58,6 +62,8 @@ export const handleResolve = route(
  * @returns Label and coordinates for a map pin.
  */
 export const handleReverse = route(
+  'GET',
+  '/places/reverse',
   withPlacesErrors(),
   requireUser(),
   withQueryValidation(placesReverseQuerySchema),
@@ -74,6 +80,8 @@ export const handleReverse = route(
  * @returns A PNG map preview (base64-encoded for API Gateway).
  */
 export const handleMapPreview = route(
+  'GET',
+  '/places/map',
   withPlacesErrors(),
   requireUser(),
   withQueryValidation(placesMapQuerySchema),
@@ -82,3 +90,11 @@ export const handleMapPreview = route(
     return binary(200, 'image/png', png);
   },
 );
+
+/** Every places HTTP route, matched by method and path. */
+export const httpRoutes = [
+  handleAutocomplete,
+  handleResolve,
+  handleReverse,
+  handleMapPreview,
+];

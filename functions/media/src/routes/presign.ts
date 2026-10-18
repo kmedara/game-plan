@@ -17,6 +17,8 @@ import { withMediaErrors } from './errors.js';
  * @returns A short-lived upload URL and object key.
  */
 export const handlePresignUpload = route(
+  'POST',
+  '/media/presign-upload',
   withMediaErrors(),
   requireUser(),
   withBodyValidation(presignUploadBodySchema),
@@ -33,6 +35,8 @@ export const handlePresignUpload = route(
  * @returns A short-lived download URL.
  */
 export const handlePresignDownload = route(
+  'GET',
+  '/media/presign-download',
   withMediaErrors(),
   requireUser(),
   withQueryValidation(presignDownloadQuerySchema),

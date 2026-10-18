@@ -73,6 +73,12 @@ const PROTECTED: Record<string, RouteCase[]> = {
     { route: 'handleGetCarpool', method: 'GET', path: '/schedule/teams/team-1/carpool' },
     { route: 'handlePutCarpool', method: 'PUT', path: '/schedule/teams/team-1/carpool' },
     { route: 'handleClaimCarpool', method: 'PUT', path: '/schedule/teams/team-1/carpool/claim' },
+    { route: 'handleListFixtures', method: 'GET', path: '/schedule/teams/team-1/fixtures' },
+    { route: 'handleProposeFixture', method: 'POST', path: '/schedule/teams/team-1/events/event-1/fixture' },
+    { route: 'handleAcceptFixture', method: 'POST', path: '/schedule/fixtures/fixture-1/accept' },
+    { route: 'handleDeclineFixture', method: 'POST', path: '/schedule/fixtures/fixture-1/decline' },
+    { route: 'handleUpdateFixture', method: 'PATCH', path: '/schedule/fixtures/fixture-1' },
+    { route: 'handleUnlinkFixture', method: 'DELETE', path: '/schedule/fixtures/fixture-1' },
   ],
   chat: [
     { route: 'handleListChats', method: 'GET', path: '/chat' },
@@ -173,12 +179,9 @@ describe('route inventory', () => {
   const root = path.dirname(fileURLToPath(import.meta.url));
 
   it.each(Object.keys(handlers))('%s lists every dispatched route', (area) => {
-    const source = readFileSync(path.join(root, area, 'src', 'handler.ts'), 'utf8');
-    const dispatched = new Set(
-      [...source.matchAll(/return (handle\w+)\(/gu)]
-        .map((match) => match[1]!)
-        .filter((name) => name !== 'handleHealth'),
-    );
+    const source = readFileSync(path.join(root, area, 'src', 'routes', 'index.ts'), 'utf8');
+    const list = source.match(/export const httpRoutes[^\[]*\[([\s\S]*?)\];/u)?.[1] ?? '';
+    const dispatched = new Set([...list.matchAll(/\b(handle\w+)\b/gu)].map((match) => match[1]!));
     const listed = new Set([
       ...(PROTECTED[area] ?? []).map((route) => route.route),
       ...(PUBLIC[area] ?? []),

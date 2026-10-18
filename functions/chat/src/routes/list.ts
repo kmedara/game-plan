@@ -15,6 +15,8 @@ import { withChatErrors } from './errors.js';
  * @returns Chats the caller belongs to.
  */
 export const handleListChats = route(
+  'GET',
+  '/chat',
   withChatErrors(),
   requireUser(),
   async ({ user }) => {

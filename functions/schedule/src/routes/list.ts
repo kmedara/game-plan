@@ -17,7 +17,8 @@ import { withScheduleErrors } from "./errors.js";
  * @returns Expanded occurrences and RSVPs in the window.
  */
 export const handleListSchedule = route(
-  ["teamId"],
+  "GET",
+  "/schedule/teams/:teamId",
   withScheduleErrors(),
   requireUser(),
   withQueryValidation(scheduleWindowQuerySchema),
