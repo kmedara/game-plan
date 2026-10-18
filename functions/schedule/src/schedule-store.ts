@@ -5,7 +5,6 @@
 import { randomUUID } from 'node:crypto';
 import type { CreateEventBody, ExceptionEventBody, UpdateEventBody } from '@gameplan/schemas';
 import type {
-  CarpoolOffer,
   CarpoolResponse,
   EventResponse,
   EventType,
@@ -26,6 +25,7 @@ import {
 } from '../../lib/expand-occurrences.js';
 import { enqueueFanout } from '../../lib/fanout-enqueue.js';
 import { deleteRemindersForEvent, syncReminders } from './reminders.js';
+import { publicCarpoolOffer, syncCarpoolChats, type StoredCarpoolOffer } from './carpool-chat.js';
 import {
   EVENT_SK_PREFIX,
   LINEUP_SK_PREFIX,
@@ -916,7 +916,7 @@ type CarpoolItem = {
   eventId: string;
   teamId: string;
   occurrenceStartsAt: string;
-  offers: CarpoolOffer[];
+  offers: StoredCarpoolOffer[];
 };
 
 /**
@@ -954,8 +954,10 @@ const writeCarpool = async (
   teamId: string,
   eventId: string,
   occurrenceIso: string,
-  offers: CarpoolOffer[],
+  previous: readonly StoredCarpoolOffer[],
+  next: readonly StoredCarpoolOffer[],
 ): Promise<CarpoolResponse> => {
+  const offers = await syncCarpoolChats(previous, next);
   if (offers.length === 0) {
     await deleteItem(teamPk(teamId), carpoolSk(occurrenceIso, eventId));
   } else {
@@ -969,7 +971,7 @@ const writeCarpool = async (
     };
     await putItem(item);
   }
-  return { eventId, occurrenceStartsAt: occurrenceIso, offers };
+  return { eventId, occurrenceStartsAt: occurrenceIso, offers: offers.map(publicCarpoolOffer) };
 };
 
 /**
@@ -989,7 +991,7 @@ export const getCarpool = async (input: {
   return {
     eventId: input.eventId,
     occurrenceStartsAt: occurrenceIso,
-    offers: item?.offers ?? [],
+    offers: (item?.offers ?? []).map(publicCarpoolOffer),
   };
 };
 
@@ -1011,14 +1013,15 @@ export const putCarpoolOffer = async (input: {
   const members = await memberIdsOf(input.teamId);
   if (!members.has(input.userId)) throw new Error('carpool_member_not_found');
   const item = await getItem<CarpoolItem>(teamPk(input.teamId), carpoolSk(occurrenceIso, input.eventId));
-  const others = (item?.offers ?? []).filter((offer) => offer.userId !== input.userId);
-  if (input.seats === 0) return writeCarpool(input.teamId, input.eventId, occurrenceIso, others);
-  const current = item?.offers.find((offer) => offer.userId === input.userId);
+  const previous = item?.offers ?? [];
+  const others = previous.filter((offer) => offer.userId !== input.userId);
+  if (input.seats === 0) return writeCarpool(input.teamId, input.eventId, occurrenceIso, previous, others);
+  const current = previous.find((offer) => offer.userId === input.userId);
   const riders = (current?.riderIds ?? []).filter((riderId) => riderId !== input.userId).slice(0, input.seats);
   if (riders.some((riderId) => !members.has(riderId))) throw new Error('carpool_member_not_found');
-  return writeCarpool(input.teamId, input.eventId, occurrenceIso, [
+  return writeCarpool(input.teamId, input.eventId, occurrenceIso, previous, [
     ...others,
-    { userId: input.userId, seats: input.seats, riderIds: riders },
+    { userId: input.userId, seats: input.seats, riderIds: riders, ...(current?.chatId !== undefined ? { chatId: current.chatId } : {}) },
   ]);
 };
 
@@ -1044,14 +1047,15 @@ export const claimCarpool = async (input: {
     throw new Error('carpool_member_not_found');
   }
   const item = await getItem<CarpoolItem>(teamPk(input.teamId), carpoolSk(occurrenceIso, input.eventId));
-  const offer = item?.offers.find((row) => row.userId === input.driverUserId);
+  const previous = item?.offers ?? [];
+  const offer = previous.find((row) => row.userId === input.driverUserId);
   if (offer === undefined) throw new Error('carpool_offer_not_found');
   const leaving = offer.riderIds.includes(input.userId);
   if (!leaving && offer.riderIds.length >= offer.seats) throw new Error('carpool_full');
-  const offers = (item?.offers ?? []).map((row) => {
+  const offers = previous.map((row) => {
     const without = row.riderIds.filter((riderId) => riderId !== input.userId);
     if (row.userId !== input.driverUserId) return { ...row, riderIds: without };
     return { ...row, riderIds: leaving ? without : [...without, input.userId] };
   });
-  return writeCarpool(input.teamId, input.eventId, occurrenceIso, offers);
+  return writeCarpool(input.teamId, input.eventId, occurrenceIso, previous, offers);
 };

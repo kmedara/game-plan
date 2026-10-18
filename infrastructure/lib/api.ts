@@ -437,8 +437,9 @@ export class Api extends Construct {
       transact: true,
     });
     grantPartitions(props.table, functions.schedule, {
-      read: [TEAM_PREFIX, REMINDERS_KEY],
-      write: [TEAM_PREFIX, REMINDERS_KEY],
+      // Carpool claims write the driver-and-riders chat under CHAT# and USER#.
+      read: [TEAM_PREFIX, REMINDERS_KEY, CHAT_PREFIX, USER_PREFIX],
+      write: [TEAM_PREFIX, REMINDERS_KEY, CHAT_PREFIX, USER_PREFIX],
     });
     grantPartitions(props.table, functions.chat, {
       read: [CHAT_PREFIX, USER_PREFIX, TEAM_PREFIX],

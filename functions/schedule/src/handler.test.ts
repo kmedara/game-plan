@@ -8,7 +8,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { issueLocalTokens } from '../../lib/auth/local-jwt.js';
 import type { TeamPermission, TeamRole } from '@gameplan/types';
 import { DEFAULT_ROLE_PERMISSIONS } from '@gameplan/types';
-import { TABLE_PK, TABLE_SK, eventSk, rolePermissionsSk, teamMemberSk, teamMetaSk, teamPk } from '../../lib/dynamo/keys.js';
+import {
+  TABLE_PK,
+  TABLE_SK,
+  chatMemberSk,
+  chatMetaSk,
+  chatPk,
+  eventSk,
+  guardianSk,
+  profileSk,
+  rolePermissionsSk,
+  teamMemberSk,
+  teamMetaSk,
+  teamPk,
+  userChatSk,
+  userPk,
+} from '../../lib/dynamo/keys.js';
 
 const store = new Map<string, Record<string, unknown>>();
 
@@ -882,6 +897,137 @@ describe('schedule handler (in-memory)', () => {
     const offers = bodyOf(moved).offers as Array<{ userId: string; riderIds: string[] }>;
     expect(offers.find((offer) => offer.userId === driver.userId)?.riderIds).toEqual([]);
     expect(offers.find((offer) => offer.userId === other.userId)?.riderIds).toEqual([rider.userId]);
+  });
+
+  it('opens a carpool chat for the driver and riders, then adds the next rider to it', async () => {
+    const admin = authFor();
+    const driver = authFor();
+    const first = authFor();
+    const second = authFor();
+    const teamId = seedTeam({ userId: admin.userId, role: 'team_admin' });
+    for (const user of [driver, first, second]) {
+      store.set(itemKey(teamPk(teamId), teamMemberSk(user.userId)), {
+        [TABLE_PK]: teamPk(teamId),
+        [TABLE_SK]: teamMemberSk(user.userId),
+        userId: user.userId,
+        role: 'player',
+        joinedAt: new Date().toISOString(),
+      });
+    }
+    const created = await handler(
+      httpEvent('POST', `/schedule/teams/${teamId}/events`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          eventType: 'practice',
+          title: 'Saturday practice',
+          startsAt: '2026-09-12T15:00:00.000Z',
+        },
+      }),
+    );
+    const eventId = bodyOf(created).eventId as string;
+    const query = { eventId, occurrenceStartsAt: '2026-09-12T15:00:00.000Z' };
+    await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/carpool`, {
+        headers: { authorization: driver.authorization },
+        body: { ...query, seats: 2 },
+      }),
+    );
+
+    const claimed = await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/carpool/claim`, {
+        headers: { authorization: first.authorization },
+        body: { ...query, driverUserId: driver.userId },
+      }),
+    );
+    expect(claimed.statusCode).toBe(200);
+    const chats = [...store.values()].filter((item) => item[TABLE_SK] === chatMetaSk() && item.kind === 'private');
+    expect(chats).toHaveLength(1);
+    const chatId = String(chats[0]?.chatId);
+    const members = (userId: string): boolean =>
+      store.has(itemKey(chatPk(chatId), chatMemberSk(userId))) &&
+      store.has(itemKey(userPk(userId), userChatSk(chatId)));
+    expect(members(driver.userId)).toBe(true);
+    expect(members(first.userId)).toBe(true);
+
+    const joined = await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/carpool/claim`, {
+        headers: { authorization: second.authorization },
+        body: { ...query, driverUserId: driver.userId },
+      }),
+    );
+    expect(joined.statusCode).toBe(200);
+    const still = [...store.values()].filter((item) => item[TABLE_SK] === chatMetaSk() && item.kind === 'private');
+    expect(still.map((item) => item.chatId)).toEqual([chatId]);
+    expect(members(second.userId)).toBe(true);
+
+    const left = await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/carpool/claim`, {
+        headers: { authorization: first.authorization },
+        body: { ...query, driverUserId: driver.userId },
+      }),
+    );
+    expect(left.statusCode).toBe(200);
+    expect(store.has(itemKey(chatPk(chatId), chatMemberSk(first.userId)))).toBe(false);
+    expect(store.has(itemKey(userPk(first.userId), userChatSk(chatId)))).toBe(false);
+    expect(members(driver.userId)).toBe(true);
+    expect(members(second.userId)).toBe(true);
+  });
+
+  it('adds a minor rider’s guardian to the carpool chat', async () => {
+    const admin = authFor();
+    const driver = authFor();
+    const rider = authFor();
+    const guardian = authFor();
+    const teamId = seedTeam({ userId: admin.userId, role: 'team_admin' });
+    for (const user of [driver, rider]) {
+      store.set(itemKey(teamPk(teamId), teamMemberSk(user.userId)), {
+        [TABLE_PK]: teamPk(teamId),
+        [TABLE_SK]: teamMemberSk(user.userId),
+        userId: user.userId,
+        role: 'player',
+        joinedAt: new Date().toISOString(),
+      });
+    }
+    store.set(itemKey(userPk(rider.userId), profileSk()), {
+      [TABLE_PK]: userPk(rider.userId),
+      [TABLE_SK]: profileSk(),
+      userId: rider.userId,
+      accountKind: 'minor',
+    });
+    store.set(itemKey(userPk(rider.userId), guardianSk(guardian.userId)), {
+      [TABLE_PK]: userPk(rider.userId),
+      [TABLE_SK]: guardianSk(guardian.userId),
+      adultId: guardian.userId,
+    });
+    const created = await handler(
+      httpEvent('POST', `/schedule/teams/${teamId}/events`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          eventType: 'practice',
+          title: 'Saturday practice',
+          startsAt: '2026-09-12T15:00:00.000Z',
+        },
+      }),
+    );
+    const eventId = bodyOf(created).eventId as string;
+    const query = { eventId, occurrenceStartsAt: '2026-09-12T15:00:00.000Z' };
+    await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/carpool`, {
+        headers: { authorization: driver.authorization },
+        body: { ...query, seats: 2 },
+      }),
+    );
+    const claimed = await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/carpool/claim`, {
+        headers: { authorization: rider.authorization },
+        body: { ...query, driverUserId: driver.userId },
+      }),
+    );
+    expect(claimed.statusCode).toBe(200);
+    const chat = [...store.values()].find((item) => item[TABLE_SK] === chatMetaSk() && item.kind === 'private');
+    const chatId = String(chat?.chatId);
+    expect(store.has(itemKey(chatPk(chatId), chatMemberSk(guardian.userId)))).toBe(true);
+    expect(store.has(itemKey(userPk(guardian.userId), userChatSk(chatId)))).toBe(true);
   });
 });
 
