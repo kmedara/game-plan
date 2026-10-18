@@ -48,7 +48,7 @@ export default function MainLayout() {
   const { t } = useTranslation();
   const pathname = usePathname();
   const router = useRouter();
-  const { api, brand, brandTeam, live } = useApp();
+  const { api, brand, brandTeam, live, teams } = useApp();
   const queryClient = useQueryClient();
   const restoring = useIsRestoring();
   useLiveQuerySync();
@@ -84,8 +84,9 @@ export default function MainLayout() {
     router.push({ pathname: '/chats', params: { action } });
   };
 
+  // Schedule and chats follow the restored team list, which survives a refresh.
   const tabs = [
-    ...(api.hasTeams
+    ...(teams.length > 0
       ? [
           { href: '/schedule' as const, label: t('nav.schedule') },
           { href: '/chats' as const, label: t('nav.chats') },

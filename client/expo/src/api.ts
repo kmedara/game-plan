@@ -94,7 +94,6 @@ export class ApiClient {
     refreshStore: this.native ? new ExpoRefreshStore() : new WebRefreshStore(),
   });
   private teamId: string | undefined;
-  private teamsFlag = false;
   private readonly listeners = new Set<Listener>();
 
   /** Subscribes to team and profile changes. */
@@ -113,10 +112,6 @@ export class ApiClient {
 
   get selectedTeamId(): string | undefined {
     return this.teamId;
-  }
-
-  get hasTeams(): boolean {
-    return this.teamsFlag;
   }
 
   isAuthenticated(): boolean {
@@ -141,9 +136,8 @@ export class ApiClient {
     void writePreference(SELECTED_TEAM_KEY, teamId, this.native);
   }
 
-  /** Drops the previous account's team so the shell does not keep their tabs or selection. */
+  /** Drops the previous account's selected team. */
   clearTeamContext(): void {
-    this.teamsFlag = false;
     this.setTeamId(undefined);
   }
 
@@ -271,16 +265,11 @@ export class ApiClient {
 
   async listTeams(): Promise<TeamList['teams']> {
     const body = await this.request<TeamList>('GET', '/teams');
-    this.teamsFlag = body.teams.length > 0;
-    this.emit();
     return body.teams;
   }
 
   async createTeam(input: CreateTeamBody): Promise<TeamSummary> {
-    const team = await this.request<TeamSummary>('POST', '/teams', input);
-    this.teamsFlag = true;
-    this.emit();
-    return team;
+    return this.request<TeamSummary>('POST', '/teams', input);
   }
 
   async getTeam(teamId: string): Promise<TeamSummary> {
@@ -349,13 +338,10 @@ export class ApiClient {
   }
 
   async acceptInvite(code: string): Promise<AcceptedInvite> {
-    const membership = await this.request<AcceptedInvite>(
+    return this.request<AcceptedInvite>(
       'POST',
       `/teams/invite/${encodeURIComponent(code)}/accept`,
     );
-    this.teamsFlag = true;
-    this.emit();
-    return membership;
   }
 
   async listMembers(teamId: string): Promise<TeamMemberList['members']> {
