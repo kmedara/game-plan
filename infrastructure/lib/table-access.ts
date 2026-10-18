@@ -39,6 +39,8 @@ export type PartitionGrant = {
   read?: readonly string[];
   /** Partition-key patterns for `PutItem` and `DeleteItem`. */
   write?: readonly string[];
+  /** Partition-key patterns for `DeleteItem` only. */
+  remove?: readonly string[];
   /** Also allow `TransactWriteItems` on the write prefixes. */
   transact?: boolean;
   /** Query the exact-email index. Its key is an email, not a `USER#` prefix. */
@@ -94,6 +96,7 @@ export const grantPartitions = (
   const writeActions = ['dynamodb:PutItem', 'dynamodb:DeleteItem'];
   if (grant.transact === true) writeActions.push('dynamodb:TransactWriteItems');
   allowPrefixes(fn, table, writeActions, grant.write ?? []);
+  allowPrefixes(fn, table, ['dynamodb:DeleteItem'], grant.remove ?? []);
 
   if (grant.emailIndex === true) {
     fn.grantPrincipal.addToPrincipalPolicy(

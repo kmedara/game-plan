@@ -413,6 +413,7 @@ export class Api extends Construct {
     queue.grantSendMessages(functions.chat);
     queue.grantSendMessages(functions.schedule);
     queue.grantSendMessages(functions.teams);
+    queue.grantSendMessages(functions.fanout);
     functions.fanout.addEventSource(
       new SqsEventSource(queue, { batchSize: 10, reportBatchItemFailures: true }),
     );
@@ -461,6 +462,8 @@ export class Api extends Construct {
     });
     grantPartitions(props.table, functions.fanout, {
       read: [CHAT_PREFIX, TEAM_PREFIX, USER_PREFIX],
+      // A gone socket is deleted. LeadingKeys cannot limit DeleteItem to CONN#.
+      remove: [USER_PREFIX],
     });
     // Replace an unconfirmed signup so a later register can prove the same inbox.
     // Confirmed users are not deleted. Sign-up confirmation uses the public client API.

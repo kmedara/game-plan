@@ -10,18 +10,23 @@ import {
   ROLE_PERMISSIONS_SK_PREFIX,
   TEAM_MEMBER_SK_PREFIX,
   chatPk,
+  connectionSk,
   teamPk,
   userPk,
 } from '../../lib/dynamo/keys.js';
 
 const {
   queryBySkPrefix,
+  deleteItem,
+  enqueueFanout,
   managementSend,
   snsSend,
   sendDevicePushes,
   ApiGatewayManagementApiClientMock,
 } = vi.hoisted(() => ({
   queryBySkPrefix: vi.fn(),
+  deleteItem: vi.fn(),
+  enqueueFanout: vi.fn(),
   managementSend: vi.fn(),
   snsSend: vi.fn(),
   sendDevicePushes: vi.fn(),
@@ -34,6 +39,11 @@ const {
 
 vi.mock('../../lib/dynamo/access.js', () => ({
   queryBySkPrefix: (...args: unknown[]) => queryBySkPrefix(...args),
+  deleteItem: (...args: unknown[]) => deleteItem(...args),
+}));
+
+vi.mock('../../lib/fanout-enqueue.js', () => ({
+  enqueueFanout: (...args: unknown[]) => enqueueFanout(...args),
 }));
 
 vi.mock('@aws-sdk/client-apigatewaymanagementapi', () => {
@@ -86,11 +96,23 @@ describe('parseFanoutJob', () => {
   it('rejects an unknown shape', () => {
     expect(parseFanoutJob({ type: 'nope' })).toBeUndefined();
   });
+
+  it('accepts a throttle slice and rejects an attempt past the cap', () => {
+    expect(parseFanoutJob({ ...chatJob, userIds: ['u2'], attempt: 1 })).toMatchObject({
+      userIds: ['u2'],
+      attempt: 1,
+    });
+    expect(parseFanoutJob({ ...chatJob, attempt: 6 })).toBeUndefined();
+  });
 });
 
 describe('deliverFanoutJob', () => {
   beforeEach(() => {
     queryBySkPrefix.mockReset();
+    deleteItem.mockReset();
+    deleteItem.mockResolvedValue(undefined);
+    enqueueFanout.mockReset();
+    enqueueFanout.mockResolvedValue(undefined);
     managementSend.mockReset();
     snsSend.mockReset();
     sendDevicePushes.mockReset();
@@ -100,6 +122,8 @@ describe('deliverFanoutJob', () => {
     delete process.env.WEBSOCKET_CALLBACK_URL;
     delete process.env.PUSH_TOPIC_ARN;
     delete process.env.AWS_REGION;
+    delete process.env.FANOUT_QUEUE_URL;
+    delete process.env.FANOUT_DELIVER_URL;
     resetFanoutClients();
   });
 
@@ -244,6 +268,7 @@ describe('deliverFanoutJob', () => {
     await deliverFanoutJob(chatJob);
 
     expect(warn).not.toHaveBeenCalled();
+    expect(deleteItem).toHaveBeenCalledWith(userPk('u1'), connectionSk('gone-1'));
     expect(info).toHaveBeenCalledWith(
       expect.stringContaining('"event":"push_skipped"'),
     );
@@ -268,6 +293,7 @@ describe('deliverFanoutJob', () => {
     await deliverFanoutJob(chatJob);
 
     expect(warn).not.toHaveBeenCalled();
+    expect(deleteItem).toHaveBeenCalledWith(userPk('u1'), connectionSk('gone-2'));
     info.mockRestore();
     warn.mockRestore();
   });
@@ -289,6 +315,7 @@ describe('deliverFanoutJob', () => {
     await deliverFanoutJob(chatJob);
 
     expect(warn).not.toHaveBeenCalled();
+    expect(deleteItem).toHaveBeenCalledWith(userPk('u1'), connectionSk('gone-3'));
     info.mockRestore();
     warn.mockRestore();
   });
@@ -494,7 +521,7 @@ describe('deliverFanoutJob', () => {
     expect(sendDevicePushes).not.toHaveBeenCalled();
   });
 
-  it('pushes event_moved even when a socket is open', async () => {
+  it('does not push event_moved when a socket accepts the event', async () => {
     process.env.WEBSOCKET_CALLBACK_URL = 'https://ws.example.com';
     process.env.PUSH_TOPIC_ARN = 'arn:aws:sns:us-east-1:123:push';
     queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
@@ -506,7 +533,6 @@ describe('deliverFanoutJob', () => {
       return [];
     });
     managementSend.mockResolvedValue(undefined);
-    snsSend.mockResolvedValue(undefined);
 
     await deliverFanoutJob({
       type: 'event_moved',
@@ -517,6 +543,31 @@ describe('deliverFanoutJob', () => {
     });
 
     expect(managementSend).toHaveBeenCalledTimes(1);
+    expect(queryBySkPrefix).not.toHaveBeenCalledWith(userPk('u1'), DEVICE_SK_PREFIX);
+    expect(sendDevicePushes).not.toHaveBeenCalled();
+    expect(snsSend).not.toHaveBeenCalled();
+  });
+
+  it('pushes event_moved when no socket is open', async () => {
+    process.env.PUSH_TOPIC_ARN = 'arn:aws:sns:us-east-1:123:push';
+    queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
+      if (pk === teamPk('t1') && prefix === TEAM_MEMBER_SK_PREFIX) return [{ userId: 'u1' }];
+      if (prefix === CONNECTION_SK_PREFIX) return [];
+      if (pk === userPk('u1') && prefix === DEVICE_SK_PREFIX) {
+        return [{ deviceId: 'dev-2', token: 'tok2', platform: 'ios' }];
+      }
+      return [];
+    });
+    snsSend.mockResolvedValue(undefined);
+
+    await deliverFanoutJob({
+      type: 'event_moved',
+      teamId: 't1',
+      eventId: 'e1',
+      title: 'Saturday game',
+      change: 'location',
+    });
+
     expect(sendDevicePushes).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'Saturday game',
@@ -566,6 +617,152 @@ describe('deliverFanoutJob', () => {
         body: 'Ada asked to join Hawks',
       }),
     );
+  });
+
+  it('delivers an event reminder without loading the roster', async () => {
+    queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
+      if (pk === userPk('u1') && prefix === CONNECTION_SK_PREFIX) return [];
+      if (prefix === DEVICE_SK_PREFIX) return [];
+      return [{ userId: 'roster-should-not-load' }];
+    });
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    await deliverFanoutJob({
+      type: 'event_reminder',
+      teamId: 't1',
+      eventId: 'e1',
+      title: 'Practice',
+      occurrenceStartsAt: '2026-01-02T15:00:00.000Z',
+      kind: 'hour',
+      userIds: ['u1'],
+    });
+
+    expect(queryBySkPrefix).not.toHaveBeenCalledWith(teamPk('t1'), TEAM_MEMBER_SK_PREFIX);
+    expect(queryBySkPrefix).toHaveBeenCalledWith(userPk('u1'), CONNECTION_SK_PREFIX);
+    info.mockRestore();
+  });
+
+  it('delivers a chat slice without loading chat members', async () => {
+    queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
+      if (pk === userPk('u2') && prefix === CONNECTION_SK_PREFIX) return [];
+      if (prefix === DEVICE_SK_PREFIX) return [];
+      return [];
+    });
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    await deliverFanoutJob({ ...chatJob, userIds: ['u2'], attempt: 1 });
+
+    expect(queryBySkPrefix).not.toHaveBeenCalledWith(chatPk('c1'), CHAT_MEMBER_SK_PREFIX);
+    expect(queryBySkPrefix).toHaveBeenCalledWith(userPk('u2'), CONNECTION_SK_PREFIX);
+    info.mockRestore();
+  });
+
+  it('deletes a gone connection and requeues only the throttled recipient', async () => {
+    process.env.WEBSOCKET_CALLBACK_URL = 'https://ws.example.com';
+    process.env.FANOUT_QUEUE_URL = 'https://sqs.example/fanout';
+    queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
+      if (pk === chatPk('c1') && prefix === CHAT_MEMBER_SK_PREFIX) {
+        return [{ userId: 'u1' }, { userId: 'u2' }];
+      }
+      if (pk === userPk('u1') && prefix === CONNECTION_SK_PREFIX) {
+        return [{ connectionId: 'gone-u1' }];
+      }
+      if (pk === userPk('u2') && prefix === CONNECTION_SK_PREFIX) {
+        return [{ connectionId: 'slow-u2' }];
+      }
+      if (prefix === DEVICE_SK_PREFIX) return [];
+      return [];
+    });
+    managementSend.mockImplementation(async (command: { input?: { ConnectionId?: string } }) => {
+      if (command.input?.ConnectionId === 'gone-u1') {
+        throw new GoneException({ message: 'gone', $metadata: {} });
+      }
+      throw Object.assign(new Error('Rate exceeded'), {
+        name: 'LimitExceededException',
+        $metadata: { httpStatusCode: 429 },
+      });
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    await deliverFanoutJob(chatJob);
+
+    expect(deleteItem).toHaveBeenCalledWith(userPk('u1'), connectionSk('gone-u1'));
+    expect(enqueueFanout).toHaveBeenCalledWith(
+      { ...chatJob, userIds: ['u2'], attempt: 1 },
+      { delaySeconds: 2 },
+    );
+    const posted = managementSend.mock.calls.map(
+      (call) => JSON.parse(Buffer.from(call[0].input.Data).toString('utf8')) as Record<string, unknown>,
+    );
+    expect(posted.every((body) => !('userIds' in body) && !('attempt' in body))).toBe(true);
+    expect(sendDevicePushes).not.toHaveBeenCalled();
+    warn.mockRestore();
+    info.mockRestore();
+  });
+
+  it('fails the current message when the throttle attempt cap is reached', async () => {
+    process.env.WEBSOCKET_CALLBACK_URL = 'https://ws.example.com';
+    process.env.FANOUT_QUEUE_URL = 'https://sqs.example/fanout';
+    queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
+      if (pk === userPk('u2') && prefix === CONNECTION_SK_PREFIX) {
+        return [{ connectionId: 'slow-u2' }];
+      }
+      return [];
+    });
+    managementSend.mockRejectedValue(
+      Object.assign(new Error('Rate exceeded'), { name: 'LimitExceededException' }),
+    );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await expect(
+      deliverFanoutJob({ ...chatJob, userIds: ['u2'], attempt: 5 }),
+    ).rejects.toThrow('fanout_throttled');
+    expect(enqueueFanout).not.toHaveBeenCalled();
+    expect(sendDevicePushes).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('fails the current message when a throttled post cannot be requeued', async () => {
+    process.env.WEBSOCKET_CALLBACK_URL = 'https://ws.example.com';
+    queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
+      if (pk === chatPk('c1') && prefix === CHAT_MEMBER_SK_PREFIX) return [{ userId: 'u1' }];
+      if (pk === userPk('u1') && prefix === CONNECTION_SK_PREFIX) {
+        return [{ connectionId: 'slow-u1' }];
+      }
+      return [];
+    });
+    managementSend.mockRejectedValue({ $metadata: { httpStatusCode: 429 }, message: 'slow' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await expect(deliverFanoutJob(chatJob)).rejects.toThrow('fanout_throttled');
+    expect(enqueueFanout).not.toHaveBeenCalled();
+    expect(sendDevicePushes).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('continues delivery when deleting a gone connection fails', async () => {
+    process.env.WEBSOCKET_CALLBACK_URL = 'https://ws.example.com';
+    queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
+      if (pk === chatPk('c1') && prefix === CHAT_MEMBER_SK_PREFIX) return [{ userId: 'u1' }];
+      if (pk === userPk('u1') && prefix === CONNECTION_SK_PREFIX) {
+        return [{ connectionId: 'gone-1' }];
+      }
+      if (prefix === DEVICE_SK_PREFIX) return [];
+      return [];
+    });
+    managementSend.mockRejectedValue(new GoneException({ message: 'gone', $metadata: {} }));
+    deleteItem.mockRejectedValue(new Error('conditional'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    await deliverFanoutJob(chatJob);
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('"event":"connection_delete_failed"'),
+    );
+    info.mockRestore();
+    warn.mockRestore();
   });
 
   it('resetFanoutClients allows a new management client on the next delivery', async () => {

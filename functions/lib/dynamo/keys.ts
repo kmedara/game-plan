@@ -76,8 +76,9 @@ export const CONNECTION_SK_PREFIX = 'CONN#' as const;
 /**
  * How long a socket connection row stays before time-to-live removes it.
  *
- * Dropped phones leave a stale connection id; the row expires so fan-out does
- * not keep posting to a dead socket.
+ * Dropped phones leave a stale connection id. Fan-out deletes the row when a
+ * post reports that connection gone. This expiry covers a row that never
+ * receives another post.
  */
 export const CONNECTION_TTL_SECONDS = 2 * 60 * 60;
 

@@ -5,6 +5,20 @@
 import { displayNameSchema } from './display-name.js';
 import { z } from './zod.js';
 
+/**
+ * Queue-only fields for a throttle retry.
+ *
+ * `userIds` limits delivery to that slice and skips roster lookup.
+ * `attempt` counts how many slices have already been enqueued.
+ * Neither field is posted to the socket or included in a push.
+ */
+const userIdsSchema = z.tuple([z.string().min(1)]).rest(z.string().min(1));
+
+const retryFields = {
+  userIds: userIdsSchema.optional(),
+  attempt: z.number().int().min(0).max(5).optional(),
+};
+
 /** Job posted to fan-out and delivered over an open WebSocket. */
 export const fanoutJobSchema = z.discriminatedUnion('type', [
   z
@@ -12,6 +26,7 @@ export const fanoutJobSchema = z.discriminatedUnion('type', [
       type: z.literal('schedule_changed'),
       teamId: z.string().min(1),
       eventId: z.string().min(1),
+      ...retryFields,
     })
     .strict(),
   z
@@ -22,6 +37,7 @@ export const fanoutJobSchema = z.discriminatedUnion('type', [
       title: z.string().min(1).max(200),
       occurrenceStartsAt: z.string().datetime().optional(),
       change: z.enum(['time', 'location', 'both']),
+      ...retryFields,
     })
     .strict(),
   z
@@ -33,7 +49,8 @@ export const fanoutJobSchema = z.discriminatedUnion('type', [
       occurrenceStartsAt: z.string().datetime(),
       location: z.string().max(500).optional(),
       kind: z.enum(['evening', 'hour']),
-      userIds: z.array(z.string().min(1)).min(1),
+      userIds: userIdsSchema,
+      attempt: retryFields.attempt,
     })
     .strict(),
   z
@@ -50,6 +67,7 @@ export const fanoutJobSchema = z.discriminatedUnion('type', [
       body: z.string().max(8_000),
       createdAt: z.string().min(1),
       attachmentKeys: z.array(z.string().min(1).max(512)).optional(),
+      ...retryFields,
     })
     .strict(),
   z
@@ -59,6 +77,7 @@ export const fanoutJobSchema = z.discriminatedUnion('type', [
       requestId: z.string().min(1),
       teamName: z.string().min(1).max(200),
       requesterDisplayName: displayNameSchema,
+      ...retryFields,
     })
     .strict(),
 ]);

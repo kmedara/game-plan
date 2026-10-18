@@ -110,6 +110,12 @@ for (const area of AREAS) {
   if (area === 'fanout') {
     env.WEBSOCKET_CALLBACK_URL =
       process.env.WEBSOCKET_CALLBACK_URL ?? `http://127.0.0.1:${areaPort('socket')}`;
+    // A throttled slice is posted back here when the queue is not running.
+    if ((process.env.FANOUT_QUEUE_URL ?? '').length === 0) {
+      env.FANOUT_DELIVER_URL =
+        process.env.FANOUT_DELIVER_URL ??
+        `http://127.0.0.1:${areaPort('fanout')}/fanout/deliver`;
+    }
     const vapidPublic = process.env.VAPID_PUBLIC_KEY?.trim();
     const vapidPrivate = process.env.VAPID_PRIVATE_KEY?.trim();
     if (vapidPublic !== undefined && vapidPublic.length > 0) env.VAPID_PUBLIC_KEY = vapidPublic;

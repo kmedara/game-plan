@@ -1,9 +1,10 @@
 /**
  * Fan-out delivery: open WebSockets first, then push when none are open.
  *
- * A live socket does not also get a push. Recipients come from chat members or
- * the team roster. Delivery failures on a single connection are ignored so one
- * stale socket does not block the rest of the batch.
+ * A live socket does not also get a push. Join requests and reminders still
+ * push when a socket accepted the event. Recipients come from chat members,
+ * the team roster, or `userIds` already on the job. A gone connection is
+ * deleted. A throttled post is requeued for those users only.
  */
 
 import {
@@ -12,7 +13,7 @@ import {
   PostToConnectionCommand,
 } from '@aws-sdk/client-apigatewaymanagementapi';
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
-import { rolesFromMembership } from '@gameplan/rules';
+import { canWithRoles, rolesFromMembership } from '@gameplan/rules';
 import { fanoutJobSchema } from '@gameplan/schemas';
 import type { FanoutJob } from '@gameplan/types';
 import {
@@ -21,13 +22,21 @@ import {
   DEVICE_SK_PREFIX,
   TEAM_MEMBER_SK_PREFIX,
   chatPk,
+  connectionSk,
+  deleteItem,
   queryBySkPrefix,
   teamPk,
   userPk,
 } from '../../lib/dynamo/index.js';
-import { canWithRoles } from '@gameplan/rules';
+import { enqueueFanout } from '../../lib/fanout-enqueue.js';
 import { loadRolePermissionMatrix } from '../../lib/permissions.js';
 import { sendDevicePushes } from './push-send.js';
+
+/** How many throttle retries may be enqueued before the queue's own retries take over. */
+const MAX_THROTTLE_ATTEMPT = 5;
+
+/** Result of one `PostToConnection` call. */
+type PostResult = 'delivered' | 'gone' | 'throttled' | 'failed';
 
 /** Chat member row under `CHAT#id` / `MEMBER#userId`. */
 type ChatMemberItem = { userId: string };
@@ -92,26 +101,91 @@ export const resetFanoutClients = (): void => {
 };
 
 /**
+ * Returns the distinct ids in `userIds`, preserving the first-seen order.
+ *
+ * @param userIds - Recipient ids from a job or a throttle retry.
+ * @returns Unique user ids.
+ */
+const distinctUserIds = (userIds: readonly string[]): string[] => [...new Set(userIds)];
+
+/**
+ * Reads the error name from an SDK or plain object rejection.
+ *
+ * @param error - The rejected value.
+ * @returns The name, or an empty string.
+ */
+const errorName = (error: unknown): string =>
+  typeof error === 'object' && error !== null && 'name' in error
+    ? String((error as { name: unknown }).name)
+    : '';
+
+/**
+ * Reads the HTTP status from an AWS SDK error, when it has one.
+ *
+ * @param error - The rejected value.
+ * @returns The status code, or `undefined`.
+ */
+const httpStatus = (error: unknown): number | undefined => {
+  if (typeof error !== 'object' || error === null || !('$metadata' in error)) return undefined;
+  const status = (error as { $metadata?: { httpStatusCode?: unknown } }).$metadata?.httpStatusCode;
+  return typeof status === 'number' ? status : undefined;
+};
+
+/**
+ * True when the management API reports that the connection is gone.
+ *
+ * Local servers often surface `410` as a generic error whose name contains `Gone`.
+ *
+ * @param error - The rejected value.
+ * @returns Whether the connection id should be deleted.
+ */
+const isGone = (error: unknown): boolean => {
+  if (error instanceof GoneException) return true;
+  const name = errorName(error);
+  return name === 'GoneException' || name.includes('Gone') || httpStatus(error) === 410;
+};
+
+/**
+ * True when the management API throttled the post.
+ *
+ * @param error - The rejected value.
+ * @returns Whether this recipient should be retried on a later slice.
+ */
+const isThrottled = (error: unknown): boolean => {
+  if (isGone(error)) return false;
+  const name = errorName(error);
+  return (
+    httpStatus(error) === 429 ||
+    name === 'LimitExceededException' ||
+    name === 'TooManyRequestsException' ||
+    name === 'ThrottlingException'
+  );
+};
+
+/**
  * Lists recipient user ids for a fan-out job.
+ *
+ * A job that already carries `userIds` delivers to that list. Reminders always
+ * do. Other jobs load chat members, the roster, or join-request approvers.
  *
  * @param job - The delivery job.
  * @returns Distinct user ids that should receive the event.
  */
 const recipientUserIds = async (job: FanoutJob): Promise<string[]> => {
+  if (job.userIds !== undefined) return distinctUserIds(job.userIds);
   if (job.type === 'chat_message') {
     const members = await queryBySkPrefix<ChatMemberItem>(
       chatPk(job.chatId),
       CHAT_MEMBER_SK_PREFIX,
     );
-    return [...new Set(members.map((member) => member.userId))];
+    return distinctUserIds(members.map((member) => member.userId));
   }
   const members = await queryBySkPrefix<TeamMemberItem>(
     teamPk(job.teamId),
     TEAM_MEMBER_SK_PREFIX,
   );
-  if (job.type === 'event_reminder') return [...new Set(job.userIds)];
   if (job.type !== 'join_requested') {
-    return [...new Set(members.map((member) => member.userId))];
+    return distinctUserIds(members.map((member) => member.userId));
   }
 
   const matrix = await loadRolePermissionMatrix(job.teamId);
@@ -119,25 +193,38 @@ const recipientUserIds = async (job: FanoutJob): Promise<string[]> => {
     const roles = rolesFromMembership(member);
     return canWithRoles(roles, matrix, 'approve_join_requests');
   });
-  return [...new Set(approvers.map((member) => member.userId))];
+  return distinctUserIds(approvers.map((member) => member.userId));
+};
+
+/**
+ * Event body for a socket frame or push, without queue-only retry fields.
+ *
+ * @param job - The delivery job.
+ * @returns The payload a client already understands.
+ */
+const clientPayload = (job: FanoutJob): Record<string, unknown> => {
+  const payload = { ...job } as Record<string, unknown>;
+  delete payload.userIds;
+  delete payload.attempt;
+  return payload;
 };
 
 /**
  * Posts a JSON payload to one open connection.
  *
- * Gone connections are ignored; other errors are logged and swallowed so the
- * rest of the fan-out can continue.
+ * Gone and throttled posts are reported to the caller. Other errors are logged
+ * so one bad socket does not stop the rest of the batch.
  *
  * @param connectionId - The WebSocket connection id.
  * @param payload - The JSON-serializable event body.
- * @returns `true` when the post succeeded.
+ * @returns How the post finished.
  */
 const postToConnection = async (
   connectionId: string,
   payload: unknown,
-): Promise<boolean> => {
+): Promise<PostResult> => {
   const client = getManagementClient();
-  if (client === undefined) return false;
+  if (client === undefined) return 'failed';
   try {
     await client.send(
       new PostToConnectionCommand({
@@ -145,15 +232,19 @@ const postToConnection = async (
         Data: Buffer.from(JSON.stringify(payload), 'utf8'),
       }),
     );
-    return true;
+    return 'delivered';
   } catch (error: unknown) {
-    if (error instanceof GoneException) return false;
-    const name =
-      typeof error === 'object' && error !== null && 'name' in error
-        ? String((error as { name: unknown }).name)
-        : '';
-    // Local servers often surface 410 as a generic error.
-    if (name === 'GoneException' || name.includes('Gone')) return false;
+    if (isGone(error)) return 'gone';
+    if (isThrottled(error)) {
+      console.warn(
+        JSON.stringify({
+          service: 'fanout',
+          event: 'post_throttled',
+          connectionId,
+        }),
+      );
+      return 'throttled';
+    }
     console.warn(
       JSON.stringify({
         service: 'fanout',
@@ -162,8 +253,56 @@ const postToConnection = async (
         error: error instanceof Error ? error.message : String(error),
       }),
     );
-    return false;
+    return 'failed';
   }
+};
+
+/**
+ * Deletes a connection row that the management API has reported gone.
+ *
+ * A failed delete is logged. The post already failed, so delivery continues.
+ *
+ * @param userId - The recipient who owned the connection.
+ * @param connectionId - The connection id from the failed post.
+ */
+const deleteGoneConnection = async (userId: string, connectionId: string): Promise<void> => {
+  try {
+    await deleteItem(userPk(userId), connectionSk(connectionId));
+  } catch (error: unknown) {
+    console.warn(
+      JSON.stringify({
+        service: 'fanout',
+        event: 'connection_delete_failed',
+        userId,
+        connectionId,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+};
+
+/**
+ * Enqueues one follow-up job for recipients whose posts were throttled.
+ *
+ * The follow-up carries only those user ids. Past the attempt cap, or when no
+ * queue is configured, this throws so the current message stays on the queue.
+ *
+ * @param job - The job that was throttled.
+ * @param userIds - Recipients to try again.
+ */
+const requeueThrottled = async (job: FanoutJob, userIds: readonly string[]): Promise<void> => {
+  const attempt = (job.attempt ?? 0) + 1;
+  const queueConfigured = (process.env.FANOUT_QUEUE_URL ?? '').length > 0;
+  const deliverConfigured = (process.env.FANOUT_DELIVER_URL ?? '').length > 0;
+  if (attempt > MAX_THROTTLE_ATTEMPT || (!queueConfigured && !deliverConfigured)) {
+    throw new Error('fanout_throttled');
+  }
+  const [first, ...rest] = distinctUserIds(userIds);
+  if (first === undefined) return;
+  await enqueueFanout(
+    { ...job, userIds: [first, ...rest], attempt },
+    { delaySeconds: Math.min(60, 2 ** attempt) },
+  );
 };
 
 /**
@@ -222,7 +361,7 @@ const publishPush = async (
         ? `${job.requesterDisplayName} asked to join ${job.teamName}`
         : (reminder ?? `${job.type === 'event_moved' ? job.title : 'Event'} ${moved ?? ''}`.trim());
 
-  await sendDevicePushes({ title, body, data: job, devices });
+  await sendDevicePushes({ title, body, data: clientPayload(job), devices });
   if (topicMissing || topicArn === undefined) return;
 
   await getSnsClient().send(
@@ -233,7 +372,7 @@ const publishPush = async (
         userId,
         title,
         body,
-        data: job,
+        data: clientPayload(job),
         devices: devices.map((device) => ({
           deviceId: device.deviceId,
           token: device.token,
@@ -248,13 +387,16 @@ const publishPush = async (
  * Delivers one fan-out job to every recipient.
  *
  * Open sockets get the WebSocket frame. Users with no live socket get a push
- * when devices and a topic are configured.
+ * when devices and a topic are configured. Throttled recipients are requeued
+ * on their own and are not pushed in this attempt.
  *
  * @param job - The delivery job parsed from the queue or local HTTP body.
  */
 export const deliverFanoutJob = async (job: FanoutJob): Promise<void> => {
   const userIds = await recipientUserIds(job);
-  const payload = job;
+  const payload = clientPayload(job);
+  const throttled: string[] = [];
+  const pushAnyway = job.type === 'join_requested' || job.type === 'event_reminder';
 
   for (const userId of userIds) {
     const connections = await queryBySkPrefix<ConnectionItem>(
@@ -262,18 +404,31 @@ export const deliverFanoutJob = async (job: FanoutJob): Promise<void> => {
       CONNECTION_SK_PREFIX,
     );
     let deliveredToSocket = false;
+    let retryUser = false;
     for (const connection of connections) {
-      const ok = await postToConnection(connection.connectionId, payload);
-      if (ok) deliveredToSocket = true;
+      const result = await postToConnection(connection.connectionId, payload);
+      if (result === 'delivered') deliveredToSocket = true;
+      if (result === 'gone') await deleteGoneConnection(userId, connection.connectionId);
+      if (result === 'throttled') retryUser = true;
     }
 
-    const pushAnyway =
-      job.type === 'join_requested' || job.type === 'event_moved' || job.type === 'event_reminder';
-    if (!deliveredToSocket || pushAnyway) {
-      const devices = await queryBySkPrefix<DeviceItem>(userPk(userId), DEVICE_SK_PREFIX);
-      await publishPush(userId, job, devices);
+    if (deliveredToSocket) {
+      if (pushAnyway) {
+        const devices = await queryBySkPrefix<DeviceItem>(userPk(userId), DEVICE_SK_PREFIX);
+        await publishPush(userId, job, devices);
+      }
+      continue;
     }
+    if (retryUser) {
+      throttled.push(userId);
+      continue;
+    }
+
+    const devices = await queryBySkPrefix<DeviceItem>(userPk(userId), DEVICE_SK_PREFIX);
+    await publishPush(userId, job, devices);
   }
+
+  if (throttled.length > 0) await requeueThrottled(job, throttled);
 };
 
 /**
@@ -285,9 +440,5 @@ export const deliverFanoutJob = async (job: FanoutJob): Promise<void> => {
 export const parseFanoutJob = (body: unknown): FanoutJob | undefined => {
   const parsed = fanoutJobSchema.safeParse(body);
   if (!parsed.success) return undefined;
-  const job = parsed.data;
-  if (job.type !== 'event_reminder') return job;
-  const [first, ...rest] = job.userIds;
-  if (first === undefined) return undefined;
-  return { ...job, userIds: [first, ...rest] };
+  return parsed.data;
 };

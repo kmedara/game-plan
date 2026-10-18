@@ -255,6 +255,11 @@ export type FanoutJob =
       type: 'schedule_changed';
       teamId: string;
       eventId: string;
+      /**
+       * @minItems 1
+       */
+      userIds?: [string, ...string[]];
+      attempt?: number;
     }
   | {
       type: 'event_moved';
@@ -263,6 +268,11 @@ export type FanoutJob =
       title: string;
       occurrenceStartsAt?: string;
       change: 'time' | 'location' | 'both';
+      /**
+       * @minItems 1
+       */
+      userIds?: [string, ...string[]];
+      attempt?: number;
     }
   | {
       type: 'event_reminder';
@@ -276,6 +286,7 @@ export type FanoutJob =
        * @minItems 1
        */
       userIds: [string, ...string[]];
+      attempt?: number;
     }
   | {
       type: 'chat_message';
@@ -287,6 +298,11 @@ export type FanoutJob =
       body: string;
       createdAt: string;
       attachmentKeys?: string[];
+      /**
+       * @minItems 1
+       */
+      userIds?: [string, ...string[]];
+      attempt?: number;
     }
   | {
       type: 'join_requested';
@@ -294,6 +310,11 @@ export type FanoutJob =
       requestId: string;
       teamName: string;
       requesterDisplayName: string;
+      /**
+       * @minItems 1
+       */
+      userIds?: [string, ...string[]];
+      attempt?: number;
     };
 
 export type FixtureList = {

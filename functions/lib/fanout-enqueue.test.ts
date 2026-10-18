@@ -68,7 +68,17 @@ describe('enqueueFanout', () => {
       QueueUrl: 'https://sqs.example/queue',
       MessageBody: JSON.stringify(sampleJob),
     });
+    expect(mockSqsSend.mock.calls[0][0].input.DelaySeconds).toBeUndefined();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('sets DelaySeconds when a throttle retry asks for a delay', async () => {
+    process.env.FANOUT_QUEUE_URL = 'https://sqs.example/queue';
+    mockSqsSend.mockResolvedValueOnce({});
+
+    await enqueueFanout(sampleJob, { delaySeconds: 2.8 });
+
+    expect(mockSqsSend.mock.calls[0][0].input.DelaySeconds).toBe(2);
   });
 
   it('posts to the deliver URL when the queue URL is unset', async () => {
