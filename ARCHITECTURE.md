@@ -1,12 +1,22 @@
 # GamePlan architecture
 
-This document explains how GamePlan is put together and why. It covers the stack choice, the code-level design of
-the API and the client cache, the DNS and hostname layout, what has been done for bundle size and latency, and the
-security model. Each section ends with the trade-offs that were weighed and the known gaps worth improving.
+How GamePlan is put together, and the costs of those choices. Setup and deploy steps are in [`README.md`](README.md).
 
-For setup steps, routes, and deploy instructions, see [`README.md`](README.md).
+| | Choice | Main cost |
+| --- | --- | --- |
+| [Stack](#stack) | TypeScript, one Expo app, Lambda + DynamoDB + Cognito | Generated types, a heavier website, cold starts, Cognito lock-in |
+| [HTTP edge](#http-edge) | CloudFront → Lambda function URLs | In-function JWT checks, client body hash, no API Gateway throttle |
+| [Realtime](#realtime) | HTTP writes, SQS delivery, push if no socket | Slight delay, at-least-once delivery |
+| [Stacks](#stacks-and-accounts) | Four stacks, staging and production in separate accounts | Exports cannot change while another stack imports them |
+| [Routes](#routes) | Typed pipeline; the path string is the matcher | A typo in a literal segment is a runtime `404` |
+| [Client cache](#client-cache) | TanStack Query, persisted per user | Product data can sit in website storage until sign-out |
+| [Hostnames](#hostnames) | One host per environment, API under `/api` | Website and API share cache and error behavior |
+| [Certificates](#certificates) | Custom-resource Lambda | More code to own; a failure can stall a deploy for 15 minutes |
+| [Security](#security) | Only CloudFront can invoke the API; BFF OAuth | IdP secrets in the template, no MFA, `DESTROY` on stateful resources |
 
 ## System overview
+
+The same picture is in [Lucidchart](https://lucid.app/lucidchart/5dd975a6-4a54-4ddd-893c-fae6ea78e583/edit).
 
 ```mermaid
 flowchart LR
@@ -51,122 +61,95 @@ flowchart LR
   URLs --> Cognito
 ```
 
-The product is split into **areas**: `identity`, `teams`, `schedule`, `chat`, `media`, `places`, `socket`, and
-`fanout`. Each area is one Lambda function with its own routes under `functions/<area>`. Areas never call each other
-directly. They share data through the DynamoDB table and hand off side effects through the fan-out queue.
+Areas are `identity`, `teams`, `schedule`, `chat`, `media`, `places`, `socket`, and `fanout`. Each is one Lambda under `functions/<area>`. Areas do not call each other. They share the DynamoDB table and pass side effects through the fan-out queue.
 
 ### Repository layout
 
-| Path               | Role                                                                                         |
-| ------------------ | -------------------------------------------------------------------------------------------- |
-| `lib/schemas`      | Zod request and response schemas. The single source of truth for wire contracts.            |
-| `lib/types`        | Plain TypeScript types generated from `lib/schemas`, plus domain constants.                  |
-| `lib/rules`        | Pure business rules shared by the API and the client (roles, minor rules, search policy).   |
-| `lib/pipeline`     | Typed middleware pipeline core. No dependencies and no HTTP types.                           |
-| `functions/lib`    | Server-only shared code: auth, DynamoDB access, route pipeline, guards, permissions.        |
-| `functions/<area>` | One Lambda per product area.                                                                 |
-| `client/session`   | Session client used by every platform (token refresh, request signing helper).              |
-| `client/expo`      | The website and the native apps, one Expo Router tree.                                       |
-| `infrastructure`   | AWS CDK app with four stacks.                                                                |
-| `local`            | Laptop stand-in: a proxy that runs every area as a local process against DynamoDB Local.    |
+| Path | Role |
+| --- | --- |
+| `lib/schemas` | Zod wire contracts. Source of truth. |
+| `lib/types` | Plain TypeScript generated from those schemas, plus domain constants. |
+| `lib/rules` | Pure rules shared by the API and the client (roles, minors, search). |
+| `lib/pipeline` | Middleware core. No HTTP types. |
+| `functions/lib` | Server-only auth, DynamoDB, guards, permissions. |
+| `functions/<area>` | One Lambda per area. |
+| `client/session` | Refresh and request signing for every platform. |
+| `client/expo` | Website and native apps, one Expo Router tree. |
+| `infrastructure` | CDK app, four stacks. |
+| `local` | Laptop proxy: every area as a process against DynamoDB Local. |
 
-`api`-side code and `client`-side code only meet through `lib/*`. The client never imports Zod or server code.
+The client and the API meet only through `lib/*`. The client does not import Zod or server code.
 
-## Stack choice
+## Stack
 
 ### TypeScript everywhere
 
-The API, the CDK app, the shared libraries, and the client are all TypeScript in one npm workspace.
-Contracts are written once in Zod (`lib/schemas`), validated on the server, and converted to plain types for the
-client by `npm run generate:types`.
+Contracts are written once in Zod, validated on the server, and emitted as plain types by `npm run generate:types`. `npm run typecheck` regenerates them so CI fails on a stale file.
 
-- **Why:** one language and one type system means a contract change breaks the build on both sides at once.
-- **Trade-off:** the generated types file is committed, so a schema edit needs a regeneration step. `npm run
-  typecheck` runs it so CI catches a stale file.
+- **Why:** one language, so a contract change breaks both sides in the same build.
+- **Cost:** the generated file is committed. A schema edit is not done until regeneration is committed too.
 
-### Expo (React Native) for web, iOS, and Android
+### One Expo app
 
-One Expo Router app produces the website (static export) and the store apps. Platform-specific pieces use
-`.native.tsx` files (map picker, day field, time clock).
+One Expo Router app is the website (static export) and the store apps. Maps, the day field, and the time clock use `.native.tsx` files.
 
-- **Why:** a small team gets three platforms from one codebase and one set of screens.
-- **Trade-off:** the website carries React Native Web, which is heavier than a web-only React app, and some
-  browser behaviors (maps, push) need separate web implementations.
+- **Why:** three platforms, one set of screens.
+- **Cost:** the website carries React Native Web, which is heavier than a web-only app. Maps and push need a separate web path.
 
-### Serverless on AWS: Lambda, DynamoDB, Cognito
+### Lambda, DynamoDB, Cognito
 
-- **Lambda per area.** Each area deploys and scales on its own, has its own IAM role, and its bundle only
-  contains its own routes. Functions run Node.js 22 on ARM64 (Graviton) with 512 MB, which is cheaper per
-  millisecond than x86.
-- **DynamoDB single table, on-demand.** Every access pattern starts at a partition key (`USER#`, `TEAM#`, `CHAT#`,
-  `INVITE#`, `TICKET#`, `HANDOFF#`). Global secondary indexes exist only where a lookup cannot start from a
-  partition: exact email search and finding a socket by connection id. Both project keys only.
-- **Cognito.** Managed login handles email/password, email verification, and Google, Apple, and Facebook sign-in
-  without running an auth server.
-- **No VPC.** Nothing needs private networking, so functions avoid VPC cold-start and NAT costs.
+- **Lambda per area.** Node.js 22, ARM64, 512 MB. Each area scales, deploys, and holds IAM on its own. Its bundle contains only its routes. Graviton is cheaper per millisecond than x86, and these functions mostly wait on AWS calls, so the lower rate is nearly all savings.
+- **One DynamoDB table, on demand.** Access starts at a partition (`USER#`, `TEAM#`, `CHAT#`, `INVITE#`, `TICKET#`, `HANDOFF#`). Two indexes exist, both keys-only: exact email (`EmailIndex`) and socket lookup by connection id (`ConnectionIndex`). Socket rows expire through `ttl`.
+- **Cognito Managed login** covers email and password, verification, and optional Google, Apple, and Facebook. No auth server to run.
+- **No VPC.** Nothing needs a private network, so there is no ENI on cold start and no NAT.
 
-Trade-offs weighed:
+- **Why:** weekend traffic can scale to zero. A query is one round trip when it starts at a partition.
+- **Cost:** cold starts, and per-request pricing can pass a small always-on container under steady load. A query that cannot start at a partition needs a new index or a copied row. Cognito password hashes cannot be exported, and Managed login styling is limited.
 
-- Serverless scales to zero, which suits a product with spiky weekend traffic. The cost is cold starts and
-  per-request pricing that can overtake a small always-on container at sustained high load.
-- A single table keeps queries to one round trip, but access patterns must be designed up front. Adding a new
-  query that cannot start at a partition key needs a new index or a denormalized row.
-- Cognito is low-maintenance but hard to migrate away from (password hashes cannot be exported), and its Managed
-  login styling is limited.
+### Shared games
 
-### Lambda function URLs instead of API Gateway HTTP API
+Each club keeps its own event for RSVP, lineup, carpool, title, and notes. Once linked, start, venue, and the two names live on one fixture row. Until then the opponent is a name and a home or away side, so the away club can put the game on its calendar first. A recurring event cannot be shared. If both clubs have a sport set and they differ, the link is rejected.
 
-HTTP traffic goes CloudFront → Lambda function URL. There is no API Gateway in the HTTP path. The WebSocket still
-uses API Gateway because function URLs cannot hold WebSocket connections.
+- **Why:** calendars must not diverge on time and place, and a club should not wait for the other to file the game.
+- **Cost:** a linked event cannot change those shared fields on its own row. Edits go through the fixture and fan out `event_moved` to both rosters. Unlink copies the last facts back onto each event and keeps both games.
 
-- **Why:** one fewer network hop, no API Gateway per-request charge, and CloudFront already provides TLS, the
-  custom domain, compression, and WAF.
-- **Costs of this choice:**
-  - There is no gateway JWT authorizer, so every protected route verifies the Cognito access token inside the
-    function (`functions/lib/auth/cognito.ts`).
-  - CloudFront origin access control (OAC) signs requests with SigV4 but does not hash the body, so clients must
-    send `x-amz-content-sha256` on writes (`withContentHash` in `client/session`). React Native has no Web Crypto
-    digest, so SHA-256 is implemented in plain TypeScript.
-  - OAC overwrites `Authorization`, so a CloudFront Function copies the bearer token into
-    `x-viewer-authorization` before signing.
-  - API Gateway throttling and X-Ray stage tracing are gone. WAF handles rate limiting, and functions enable
-    active X-Ray tracing themselves.
+The fixture thread is a `fixture` chat. Members are whoever holds `manage_events` on either club, including after a role or matrix change. Players and parents without that grant are not members.
 
-### Realtime: WebSocket for delivery, HTTP for writes
+## HTTP edge
 
-Clients send messages and RSVPs over HTTP. The writing area stores the row, then enqueues a fan-out job on SQS.
-The fan-out function posts to open sockets, and falls back to SNS / Web Push / device push for users with no
-open socket. A live socket never also gets a push.
+HTTP is CloudFront → Lambda function URL. There is no API Gateway on that path. WebSocket still uses API Gateway, because function URLs cannot hold connections.
 
-- **Why:** writes stay on the validated, rate-limited HTTP path. The socket carries no business logic, so a lost
-  connection never loses data. The queue makes delivery retryable (dead-letter queue after five attempts) without
-  slowing the write response.
-- **Trade-off:** a message reaches other users a little later than a direct socket broadcast would, and delivery is
-  at-least-once, so clients must tolerate duplicates.
+- **Why:** one fewer hop, no API Gateway request charge. CloudFront already terminates TLS, owns the hostname, compresses, and runs WAF.
+- **Cost:**
+  - No gateway JWT authorizer. Every protected route verifies the Cognito access token in the function (`functions/lib/auth/cognito.ts`).
+  - Origin access control signs with SigV4 and does not hash the body. Clients send `x-amz-content-sha256` on writes (`withContentHash` in `client/session`). React Native has no Web Crypto digest, so SHA-256 is plain TypeScript.
+  - Origin access control overwrites `Authorization`. A CloudFront Function copies the bearer token into `x-viewer-authorization` before signing.
+  - API Gateway throttling and stage tracing are gone. WAF rate-limits. Functions turn on X-Ray themselves.
 
-### Four CDK stacks
+## Realtime
 
-`GamePlanDns` → `GamePlanPlatform` → `GamePlanApi` → `GamePlanSite`, passing values through CloudFormation
-exports. Staging and production are the same stacks in **separate AWS accounts**.
+Clients write messages and RSVPs over HTTP. The area stores the row, then enqueues SQS. Fan-out posts to open sockets. Chat messages and moved events publish to SNS (Web Push or a device token) when no socket accepted the post. Join requests and reminders publish that push as well. A reminder job already lists its recipients, so fan-out delivers to those ids and skips the roster query. A post that reports the connection gone deletes that socket row. A throttled post is queued again for those recipients only, after a short delay, and does not also send a push.
 
-- **Why:** long-lived, stateful resources (Cognito, the table, the media bucket) sit in a stack that rarely
-  changes, so an API deploy cannot recreate them. The site stack deploys last, so the distribution can reference
-  the function URLs directly and the API stack never references the distribution (no dependency cycle).
-- **Why separate accounts:** a staging mistake cannot touch production data or IAM, and resource names can stay
-  identical in both.
-- **Trade-off:** CloudFormation refuses to change an export that another stack imports. Renames need a staged,
-  multi-step deploy (see the one-time migration in the README, and the pinned certificate below).
+- **Why:** writes stay validated and rate-limited. The socket has no business logic, so a dropped connection does not drop data. The queue retries (dead-letter after five attempts) without holding the write response.
+- **Cost:** other users see the change slightly later than a direct broadcast. Delivery is at-least-once, so clients must ignore duplicates.
 
-## Code-level design
+Locally, chat and schedule `POST` to `/fanout/deliver`.
 
-### Route pipelines
+## Stacks and accounts
 
-Every HTTP route is built with `route` from `functions/lib/pipeline.ts`: optional path-parameter names, a flat
-list of steps, then the handler.
+`GamePlanDns` → `GamePlanPlatform` → `GamePlanApi` → `GamePlanSite`, wired by CloudFormation exports. Staging and production are the same four stacks in separate accounts. Names stay the same in both.
+
+- **Why:** Cognito, the table, and the media bucket sit in a stack that rarely changes, so an API deploy cannot recreate them. The site stack is last, so it can point at the function URLs. The API stack never points at the distribution, which avoids a cycle. A staging mistake cannot touch production data or IAM.
+- **Cost:** CloudFormation will not change an export another stack still imports. A rename is a staged deploy. The certificate export can stay pinned to the previous ARN so an importer does not block the change (see [Certificates](#certificates)).
+
+## Routes
+
+Every HTTP route is `route(method, path, ...steps, handler)` from `functions/lib/pipeline.ts`. The path string is both the URL and the handler fields.
 
 ```ts
 export const handleSendMessage = route(
-  ['chatId'],
+  'POST',
+  '/chat/:chatId/messages',
   withChatErrors(),
   requireUser(),
   withBodyValidation(sendMessageBodySchema),
@@ -174,432 +157,184 @@ export const handleSendMessage = route(
 );
 ```
 
-Steps run in the order they are listed, and the first step is the outermost one. A step can stop the request by
-returning a response, or attach fields to the context and call `next`. The handler receives every field attached
-along the way.
+`:chatId` is the field `chatId`. `*objectKey` captures the rest of the path, including slashes, and has to be last. Each area passes its routes to `dispatch`. The route with more literal segments wins, so `/teams/directory` beats `/teams/:teamId`. The same score keeps the earlier route. `GET /health` is answered before that list.
 
-How this shapes the code:
+The matcher also accepts the path with the area prefix left off, so `devices/phone` still reaches `/media/devices/:deviceId`. A missing path is treated as `/`.
 
-- **Order is visible.** A route reads top to bottom as the order checks run. There are no nested wrappers to
-  unpick, and adding a guard is one line.
-- **The compiler checks step order.** Each step declares the fields it needs and the fields it adds. A step placed
-  before the step that provides its input fails to compile. For example, `requireMembership()` needs `teamId` and
-  `user`. The handler's context is typed exactly, so handlers never write `ctx.user!` or re-check that a guard
-  ran.
-- **Failures are thrown codes, not responses.** Guards and services throw short codes such as `not_a_member`,
-  `forbidden`, or `team_not_found`. Each area's error step (`withTeamsErrors()`, `withChatErrors()`, and so on)
-  is listed first and maps those codes to status codes in one place. Business code stays free of HTTP.
-- **Validation sits at the edge.** `withBodyValidation` and `withQueryValidation` parse the request before the
-  handler runs and return a stable `400 { errors: [{ field, message }] }`. Both accept any
-  [Standard Schema](https://standardschema.dev), which today means the Zod schemas in `lib/schemas`.
-- **The core does not know about HTTP.** `lib/pipeline` holds the step type, the compile-time checks, and generic
-  `catchErrors` and `validate` steps. `functions/lib/pipeline.ts` binds them to the Lambda event and result
-  types. The same core could run queue consumers or another HTTP framework, and it can be published on its own.
+Steps run in listed order. The first step is the outermost. A step returns a response to stop, or attaches fields and calls `next`. The handler sees every attached field.
 
-How this affects performance:
+- **Order is the source.** Adding a guard is one line. There is no wrapper nesting to unread.
+- **The compiler checks dependencies.** A step declares what it needs and what it adds. `requireMembership()` before `user` and `teamId` exist does not compile. Handlers do not write `ctx.user!`.
+- **Failures are codes.** Guards throw `not_a_member`, `forbidden`, `team_not_found`. The area's error step is listed first and maps codes to statuses. Business code does not build HTTP responses.
+- **Validation is at the edge.** Body and query schemas parse before the handler and return `400 { errors: [{ field, message }] }`. They accept [Standard Schema](https://standardschema.dev); today that is Zod in `lib/schemas`.
+- **The core is not HTTP.** `lib/pipeline` is the step type and the compile-time checks. `functions/lib/pipeline.ts` binds Lambda events. The same core could run a queue consumer.
 
-- **Cheap checks go first.** Routes list steps from cheapest to most expensive: error mapping, then `requireUser`
-  (token verification, local once the signing keys are cached), then body and query validation (CPU only), then
-  guards that read DynamoDB (`requireMembership`, then `requirePermission`). A malformed or unauthenticated request
-  is rejected before any table read. The types only enforce data dependencies, so this ordering is a convention to
-  keep in review.
-- **Guards reuse what earlier guards loaded.** `requirePermission` needs the `member` attached by
-  `requireMembership` and checks its roles, so it only reads the team's permission matrix. A permission-checked
-  route costs two DynamoDB calls: the roster row and the matrix.
-- **Chains are built once.** `route` composes the steps when the module loads. Per request, the cost is one
-  function call and one shallow context copy per step. There is no router library, reflection, or decorator
-  metadata, and the types are erased from the bundle.
-- **Path parameters are positional.** The area dispatcher passes path segments as plain arguments, and `route`
-  copies them onto the context by name. Nothing parses the URL a second time.
+Per request, the chain is one call and one shallow context copy per step. `route` composes the chain at load. There is no router, reflection, or decorator metadata.
 
-Trade-offs:
+Cheap checks are listed first: error mapping, `requireUser` (keys cached after the first verify), body and query parse, then DynamoDB guards. The types enforce data dependencies, not this cheap-to-expensive order, so review has to keep it. `requirePermission` reuses the member from `requireMembership` and only reads the matrix, so a permission check is two table reads.
 
-- The compile-time checks use recursive tuple types. They slow type checking slightly, and when a call fails both
-  `route` signatures, TypeScript reports only the second, so the message can be vague.
-- The path-parameter names in `route([...])` must match the order the dispatcher passes arguments in. That pairing
-  is not type-checked against the URL.
+`logHttpFailure` logs every `4xx` and `5xx`.
 
-### Hand-written dispatch per area
+- **Why:** the compiler copies parameter names out of the path, so `teamId` in the handler is the `:teamId` segment. No router dependency, and the pattern is split once when the route is created.
+- **Cost:** recursive tuple types slow checking a little, and a bad `route` call often reports only the second signature. A typo in a literal segment (`memebrs`) is a runtime `404`. Two patterns that can both match one URL are separated only by the literal-count rule.
 
-Each area's `handler.ts` matches the method and path segments with plain conditionals and calls the route
-function with the segments it needs. `logHttpFailure` wraps the dispatcher and logs every `4xx` and `5xx`.
+### Warm state
 
-- **Why:** no router dependency, nothing to build at cold start, and the full route table for an area is one
-  readable file.
-- **Trade-off:** branch order matters, and the URL shape is matched by hand. Function URLs forward every path, so
-  a missing branch shows up as a `404` at run time rather than a build error.
+The DynamoDB client, the Cognito verifier (and its JWKS), and a five-minute Parameter Store cache are created on first use and reused. Tests reset them with `resetDocClient`, `resetAccessVerifier`, and `resetParameterCache`.
 
-### State that survives warm invocations
+## Client cache
 
-Expensive setup lives at module scope and is created on first use: the DynamoDB document client, the Cognito
-token verifier with its cached signing keys, and the five-minute Parameter Store cache. A warm container pays
-these costs once. Each module exports a reset function (`resetDocClient`, `resetAccessVerifier`,
-`resetParameterCache`) for tests, so no handler holds its own copy.
+Screens load through TanStack Query. Keys, query functions, and cache writes live in `client/expo/src/queries/`. Screens do not fetch in `useEffect`.
 
-### Improvement opportunities
+- **Defaults.** `createQueryClient` reuses a value for 30 seconds and retries only `TypeError` or `http_5xx`, at most twice. `queryKeys` is the only place a cache entry is named.
+- **Permissions.** `useTeamAccess` reads `permissionsQuery` for 60 seconds. A save writes the returned rows back. The check is `canWithRoles` from `lib/rules`, the same function as `requirePermission`.
+- **Live events.** The signed-in shell prepends `chat_message` onto a thread that is already loaded, skips duplicates, and does not invent a one-message page. Schedule and join-request events invalidate that team's prefix.
+- **Pull to refresh.** The shell refetches every query a mounted screen is subscribed to. It does not keep a list of keys. A value that is only in the cache, with no subscriber, stays put. A screen still mounted underneath the visible one reloads too.
+- **Offline writes.** Most mutations use `networkMode: 'always'` and fail immediately offline. RSVP, carpool, and lineup use `online`, pause while disconnected, and resume after relaunch. Chat sends are not queued.
+- **Connectivity.** Unknown NetInfo (`null`) counts as online so launch does not flash offline. Only a definite `false` pauses. On iOS and Android, returning to the foreground refetches stale queries and reconnects the socket. The website uses `visibilitychange`.
+- **Persistence.** Successful queries of known kinds (profile, teams, roster, permissions, schedule, chat list) stay in AsyncStorage for 24 hours. Presigned URLs, message history, directory pages, and invite previews are left out. The refresh token stays in SecureStore or the HttpOnly cookie. Restore waits until the session user is known and uses that id as the persist buster, so another account's data is discarded. Sign-out clears memory and storage.
+- **Calendar and brand.** The schedule merges every membership for the visible month in the device time zone. One membership brands the shell. Several memberships stay on the default colors until the athlete opens a team, event, or chat. There is no team switcher. A carpool claim opens one private chat for that car; later riders join it; an empty car deletes it. A minor rider's guardian is added.
 
-- **Typed dispatch.** Declaring each route's method and path pattern (`/teams/:teamId/members/:memberUserId`)
-  once, and deriving both the dispatcher and the path-parameter names from it, would remove the hand-kept pairing
-  between `handler.ts` and `route([...])`.
+- **Cost:** AsyncStorage is `localStorage` on the website, so roster and schedule can remain on disk until sign-out. That is product data, not tokens.
+- **Open:** chat history is one page, and an offline send is not replayed. `useInfiniteQuery` (already used for directory search) and a persisted send would close that without a new cache.
 
-### Client queries
+## Hostnames
 
-The Expo app loads product data through TanStack Query. Query keys, query functions, and cache writes live in
-`client/expo/src/queries/`. Screens call those factories; they do not fetch in `useEffect` or keep a second cache.
+Each environment is `<environment>.<domain>`, for example `staging.example.com`. The website and the API share it. The API is `/api/<area>`.
 
-- **One client, one key space.** `createQueryClient` (`src/query-policy.ts`) reuses a loaded value for 30 seconds
-  and retries only transient failures (`TypeError` or `http_5xx`, at most twice). `queryKeys` in `queries/keys.ts`
-  is the only place a cache entry is named, so invalidation and `setQueryData` agree.
-- **Permissions share that cache.** `useTeamAccess` (`src/team-access.ts`) reads `permissionsQuery` with a
-  60-second stale time. Saving permissions writes the returned rows back into the cache. The check is still
-  `canWithRoles` from `lib/rules`, the same function the API's `requirePermission` uses.
-- **Live events update the cache, not the screen.** `useLiveQuerySync` in the signed-in shell prepends
-  `chat_message` onto a thread that is already loaded (skipping duplicates, never inventing a one-message page)
-  and invalidates the chat list. Schedule and join-request events invalidate the matching team prefix.
-- **Writes that can wait for the network.** Mutations default to `networkMode: 'always'`, so they fail as soon as
-  the device is offline. RSVP, carpool, and lineup use `networkMode: 'online'`, pause while disconnected, and
-  resume after a relaunch. Chat sends are not queued.
-- **NetInfo drives online state.** TanStack's `onlineManager` treats unknown connectivity (`null`) as online so
-  launch does not flash an offline state. Only a definite `false` pauses requests. On iOS and Android, focus
-  follows `AppState`, so returning to the foreground refetches stale data at the same time the live socket
-  reconnects. The website keeps TanStack's `visibilitychange` default.
-- **Persisted cache is per user, not credentials.** `PersistQueryClientProvider` writes successful queries of
-  known kinds (profile, teams, roster, permissions, schedule, chat list, and so on) to AsyncStorage for 24 hours.
-  Presigned download URLs, message history, directory pages, and invite previews are left out: they expire, page,
-  or are chat content. The refresh token stays in SecureStore or the HttpOnly cookie. A sibling storage key
-  records the user id the cache belongs to. Restore waits until the session user is known and uses
-  that id as the persist buster, so a different account's teams and profile are discarded instead of painted.
-  Sign-out clears both memory and storage.
-- **The schedule belongs to the athlete. Brand belongs to a team.** The client loads every membership for the
-  visible month and draws that month in the device time zone. Each event keeps its team's color, and the event
-  detail names that team's time zone. One membership brands the whole shell. Several memberships leave the shell
-  on the default field colors until the athlete opens a team, an event, or a chat, which then takes that team's
-  brand. Chats for different teams stay in one list, separated by a header per team. There is no team switcher.
-  A thread uses the team on that chat. Claiming a carpool seat opens one private chat for that car, named
-  Carpool, with the driver and the current riders. A later rider joins that chat. Leaving the car, or the last
-  rider, removes that person, and an empty car deletes the chat. A minor rider's linked guardian is added too.
-  The chat id stays on the stored offer and is not part of the carpool response.
+An earlier design used a separate `api.` host, its own distribution, and its own certificate.
 
-Trade-offs:
+- **Why this host:** same origin, so authenticated JSON does not pay a CORS preflight. That round trip matters on mobile networks. The refresh cookie is `SameSite=Lax` and scoped to `/api/identity`, with no cross-site cookie rules. One certificate, one distribution, one WAF.
+- **Cost:** cache behavior must split website routes (which rewrite to `index.html`) from API paths. There are no distribution-wide error pages, because they would turn API `403` and `404` into HTML.
 
-- AsyncStorage is `localStorage` on the website, so roster and schedule can sit on disk after a visit. That is
-  product data, not tokens, and it is dropped on sign-out.
-- Chat history is still one `MessagePage`. Older messages are not paged in, and an offline send is not replayed
-  after a relaunch.
+The socket is `wss://<host>/api/socket`. CloudFront forwards the upgrade, so connects pass the same WAF (WAF cannot attach to a WebSocket API directly) and skip a second DNS lookup and TLS handshake.
 
-## DNS and hostnames
+- **Cost:** one more CloudFront behavior, and a shared origin secret (see [Security](#security)).
 
-### One hostname per environment
+## Certificates
 
-Each environment is served from `<environment>.<domain>`, for example `staging.example.com`. The website and the
-HTTP API share that host: the API lives under `/api/<area>`.
+`GamePlanDns` uses a custom-resource Lambda (`infrastructure/lib/dns-handler.ts`) to request the ACM certificate and write validation and alias records.
 
-An earlier design used a separate `api.` hostname with its own distribution and certificate. It was removed because:
+- **Why:** the hosted zone may be in another account. The handler assumes a role there for Route 53 and keeps the certificate in this account. On a hostname change it issues the new certificate before CloudFront drops the old one, then deletes the stale alias. Built-in constructs replace the certificate in place and break the live distribution. The handler can keep returning the previous ARN on an existing export so an importing stack does not block the deploy. CloudFront requires the certificate in `us-east-1`.
+- **Cost:** more code to own and test than a one-line construct. A failed custom resource can leave CloudFormation waiting until its 15-minute timeout.
 
-- **Same origin means no CORS preflight.** Authenticated JSON requests from a different origin trigger an
-  `OPTIONS` round trip before the real request. On the same origin that round trip disappears, which matters most
-  on high-latency mobile networks.
-- **Cookies stay simple.** The refresh cookie is `SameSite=Lax`, scoped to `/api/identity`, and never needs
-  cross-site cookie rules.
-- **Less infrastructure.** One certificate, one distribution, one WAF.
+## Configuration
 
-The trade-off is that the website and API now share a distribution, so cache behaviors must be careful: website
-routes get an `index.html` rewrite, API paths do not, and there are deliberately no distribution-wide error pages
-(they would rewrite API `403` and `404` responses into HTML).
+Hand-set inputs (hosted zone, IdP credentials, map keys, VAPID keys, the staging signup allowlist) live in Parameter Store under `/gameplan/`. String and SecureString both decrypt on read. Stack outputs are not written back. The deploy workflow reads them from the `cdk deploy --outputs-file` JSON, so a parameter cannot keep a stale value from an older deploy.
 
-The WebSocket also connects on this host, at `/api/socket`. CloudFront forwards the upgrade to the API Gateway
-stage. This puts socket connects behind the same WAF (AWS WAF cannot attach to a WebSocket API directly) and saves
-the extra DNS lookup and TLS handshake a second hostname would cost. The trade-off is one more CloudFront behavior
-and a shared origin secret (see Security).
-
-### Certificates and records through a custom resource
-
-`GamePlanDns` uses a custom-resource Lambda (`infrastructure/lib/dns-handler.ts`) instead of CDK's built-in
-certificate construct to request the ACM certificate and write the validation and alias records.
-
-- **Cross-account zones.** The hosted zone can live in another account. The handler assumes a role in that
-  account for Route 53 calls, while the certificate stays in the app account.
-- **Safe hostname changes.** When the hostname changes, the handler issues the new certificate while keeping the
-  old one alive until CloudFront stops serving it, and deletes the stale alias record afterwards. Built-in
-  constructs would replace the certificate in place and break the live distribution during the update.
-- **Pinned export.** The handler can keep returning the previous certificate ARN on the existing export, so a
-  stack that still imports it does not block the deploy.
-- **CloudFront constraint.** The certificate is always requested in `us-east-1`, which CloudFront requires.
-
-Trade-off: the custom resource is more code to own and test than a one-line construct, and a failed custom
-resource can leave CloudFormation waiting until its timeout (15 minutes).
-
-### Configuration source
-
-Hand-set deploy inputs (hosted zone, IdP credentials, map keys, VAPID keys, staging signup allowlist) live in
-Parameter Store under `/gameplan/`. Stack outputs are **not** written back to Parameter Store; the deploy workflow
-reads them from the `cdk deploy --outputs-file` JSON instead. This removed a class of bugs where a parameter held
-a stale value from a previous deploy.
+Secret values themselves are covered under [Secrets at run time](#secrets-at-run-time).
 
 ## Bundle size and latency
 
-### API (Lambda)
+### API
 
-What is already done:
+- One esbuild bundle per area. `npm run inspect:api` prints sizes. `places` does not carry chat code.
+- ESM, minified, Node 22. A `createRequire` banner covers dependencies that still call `require`.
+- `sideEffects: false` on `lib/schemas`. Without it, fan-out shipped a phone-number library it never called.
+- No source maps in the deployed bundle. A 1.1 MB map was shipping for no runtime benefit.
+- AWS SDK v3 clients, created on first use and reused while the container is warm.
+- Writes return when the DynamoDB row is stored. Fan-out is later, on SQS.
+- File bytes never enter Lambda. `media` returns presigned S3 URLs (15 MB cap, 15-minute download).
+- A recurring event is stored once and expanded for the requested window, capped at about three months.
 
-- **One bundle per area.** esbuild bundles each area separately, so `places` does not carry chat code and
-  vice versa. `npm run inspect:api` prints the size of every bundle and its largest inputs.
-- **ESM, minified, Node 22 target.** ESM output lets esbuild tree-shake more aggressively. A `createRequire`
-  banner covers dependencies that still call `require`.
-- **`sideEffects: false` on `lib/schemas`.** Without it esbuild kept the whole schema barrel. For example, the
-  fan-out function was shipping the phone-number library it never used.
-- **No source maps in the deployed bundle.** A 1.1 MB source map was being shipped and loaded with no benefit.
-- **Modular AWS SDK v3 clients**, created lazily on first use and reused across warm invocations.
-- **Module-scoped Cognito verifier**, so the JWKS signing keys are fetched once per warm container instead of on
-  every request.
-- **ARM64 Graviton** for better price-performance. Lambda bills by GB-second, and the arm64 rate is about 20%
-  lower than x86 for the same memory size. AWS cites up to 34% better price-performance overall. These functions
-  spend most of their billed time waiting on DynamoDB, Cognito and other AWS calls rather than computing, so the
-  lower per-millisecond rate turns almost directly into savings.
-- **No VPC**, so no ENI attachment on cold start.
+**Open:** measure p95 cold start per area. If identity or chat cold starts hurt sign-in or sending, try provisioned concurrency on those functions only, or more memory (more memory is also more CPU during init). Everything is in `us-east-1`. Users far from Virginia pay that round trip on every call. Multi-region is a large change and only worth real demand.
 
-Latency-relevant design choices:
+### Client
 
-- Writes return as soon as the DynamoDB row is stored. Fan-out happens later through SQS.
-- File bytes never pass through Lambda. `media` hands out presigned S3 URLs and the client uploads or downloads
-  directly.
-- Recurring events are stored once and expanded for the requested window (capped at about three months), instead
-  of materializing every occurrence.
+- The client never ships Zod. The Docker image does not install `lib/schemas`.
+- `.native.tsx` keeps `react-native-maps` and the native date picker out of the web bundle. The web map injects the Maps script only when a map is shown. `expo-notifications` loads when push registration runs.
+- `GET /teams/:teamId/members` returns photo key, positions, and phone (a minor's phone only for that minor and their guardians), so an event is one roster read.
+- Web routes are `asyncRoutes`. The first visit downloads the shell plus the current route. Native production stays eager so a store build does not suspend on navigation. `npm run inspect:client` lists the export.
 
-### Client (Expo web)
+**Open:** the deploy syncs the site with no `Cache-Control`, then invalidates `/*`. Hashed assets should be `public, max-age=31536000, immutable` and `index.html` `no-cache`. `"output": "static"` would prerender login HTML, once every screen can render without `window`. Both `en.json` and `es.json` ship in the main bundle.
 
-What is already done:
+### Edge
 
-- **The client never ships Zod.** It imports generated plain types from `lib/types`; validation stays on the
-  server. The Docker client image doesn't even install the schemas package.
-- **Platform files keep native-only libraries out of the web bundle.** `react-native-maps` and the native date
-  picker only load on iOS and Android through `.native.tsx` files.
-- **Google Maps loads on demand.** The web map picker injects the Maps JavaScript API script only when a map is
-  shown and a browser key is configured.
-- **`expo-notifications` is dynamically imported** when push registration runs.
-- **`npm run inspect:client`** exports the web build and lists every JavaScript file and the total size.
-- **The roster carries what event details need.** `GET /teams/:teamId/members` returns each member's photo key,
-  positions, and phone number (a minor's phone only for that minor and their guardians), so opening an event makes
-  one roster request instead of one profile request per teammate.
-- **Permissions are fetched once per team** through TanStack Query (`staleTime` 60 seconds). `useTeamAccess`
-  checks them with `canWithRoles` from `lib/rules`, the same function the API's `requirePermission` uses. Saving
-  permissions replaces the cached rows.
-- **Screens load through TanStack Query.** Switching a query key never shows another input's value. The persisted
-  cache can fill the signed-in shell after a restart before the network answers. See [Client queries](#client-queries).
-- **Web routes load on demand.** Expo Router `asyncRoutes` is on for web, so Metro splits each screen into its
-  own chunk. The first visit downloads the shell (providers, session, query client) plus the current route, not
-  schedule, chat, and team admin together. Native production stays eager so a store build does not suspend on
-  navigation. Local Docker still uses the Metro dev server, which is unminified; restart it with a cache clear
-  after this setting changes.
-
-### Edge (CloudFront)
-
-- HTTP/2 and HTTP/3, compression on, `CACHING_OPTIMIZED` for static files and caching disabled for `/api`.
-- The SPA route rewrite runs in a CloudFront Function at the viewer, which is cheaper and faster than a Lambda@Edge
-  function or an S3 error-page round trip.
-- `PRICE_CLASS_100` (North America and Europe edges) keeps cost down. Users elsewhere connect to a farther edge.
-
-### Improvement opportunities
-
-- **Cache headers on the website.** The deploy runs `aws s3 sync` with no `Cache-Control` and then invalidates
-  `/*`. Hashed JavaScript and font assets should be uploaded with `public, max-age=31536000, immutable` and
-  `index.html` with `no-cache`, so repeat visits skip downloading unchanged bundles and invalidations become
-  unnecessary.
-- **Static rendering.** `"output": "static"` would prerender HTML for the login and landing pages and improve
-  first paint, at the cost of making every screen safe to render without `window`.
-- **Lazy-load i18n resources.** Both `en.json` and `es.json` ship in the main bundle; only the active locale is needed.
-- **Older chat messages and offline sends.** Threads still load a single page, and chat sends are not queued while
-  offline. `useInfiniteQuery` (already used for team directory search) and a persisted send mutation would close
-  that gap without a new cache.
-- **Cold starts.** Measure p95 cold-start duration per area. If identity or chat cold starts hurt sign-in or
-  sending, try provisioned concurrency on just those functions, or tune memory (more memory also means more CPU
-  for module init).
-- **Single region.** Everything runs in `us-east-1`. Users far from Virginia pay the round trip on every API call.
-  Multi-region is a large change and only worth it with real demand.
+HTTP/2 and HTTP/3, compression on. Static files use `CACHING_OPTIMIZED`. `/api` is not cached. The SPA rewrite is a CloudFront Function at the viewer, cheaper than Lambda@Edge or an S3 error-page round trip. `PRICE_CLASS_100` keeps edges in North America and Europe. Users elsewhere connect farther away.
 
 ## Security
 
-### Edge: only CloudFront can reach the API
+### Only CloudFront can reach the API
 
-- Function URLs use `AWS_IAM` auth. The site stack grants `lambda:InvokeFunctionUrl` and `lambda:InvokeFunction`
-  to the CloudFront service principal **scoped to this one distribution's ARN**. A direct request to a function
-  URL is rejected, so every HTTP request passes WAF.
-- The site bucket blocks all public access and is reachable only through OAC.
-- TLS 1.2 minimum (`TLS_V1_2_2021`), HTTP redirected to HTTPS.
-- Response headers on the website: HSTS (one year, subdomains, preload), `X-Content-Type-Options: nosniff`,
-  `X-Frame-Options: DENY`, and `Referrer-Policy: strict-origin-when-cross-origin`.
-- **Content-Security-Policy** (`infrastructure/lib/website.ts`). Scripts may only come from this origin and Google
-  Maps, with no `'unsafe-inline'` or `'unsafe-eval'`. Network calls may only go to this origin (including the
-  `wss:` socket), the media bucket's presigned URLs, and Google Maps. `object-src 'none'`, `base-uri 'self'`, and
-  `frame-ancestors 'none'` close the remaining injection and framing routes. Styles do allow `'unsafe-inline'`,
-  because react-native-web writes style tags at run time and the Expo export inlines a reset. That is a much
-  smaller risk than inline scripts. This matters because the access token lives in page memory, where an injected
-  script could read it.
-- The viewer function always overwrites or deletes `x-viewer-authorization`, so a client cannot forge it.
-- **The WebSocket is behind the same WAF.** CloudFront adds an `x-origin-verify` header, holding the
-  `socket-origin-verify` parameter value, to every socket connect it forwards. The header is a required identity source on the `$connect`
-  authorizer, so API Gateway answers `401` to a direct `execute-api` connect without invoking the function. The
-  authorizer compares the value in constant time before it spends the ticket.
+- Function URLs use `AWS_IAM`. The site stack grants `lambda:InvokeFunctionUrl` and `lambda:InvokeFunction` to the CloudFront service principal, scoped to this distribution's ARN. A direct call to a function URL fails, so HTTP passes WAF.
+- The site bucket blocks public access and is reachable only through origin access control.
+- TLS 1.2 minimum (`TLS_V1_2_2021`). HTTP redirects to HTTPS.
+- Website responses: HSTS (one year, subdomains, preload), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`.
+- **Content-Security-Policy** (`infrastructure/lib/website.ts`). Scripts may come only from this origin and Google Maps, with no `'unsafe-inline'` or `'unsafe-eval'`. Network calls may go only to this origin (including `wss:`), the media bucket, and Google Maps. `object-src 'none'`, `base-uri 'self'`, and `frame-ancestors 'none'`. Styles do allow `'unsafe-inline'`, because react-native-web injects style tags and the Expo export inlines a reset. The access token lives in page memory, so an injected script could read it. Inline styles are a smaller hole than inline scripts. Moving styles to nonces needs control of how react-native-web injects them.
+- The viewer function overwrites or deletes `x-viewer-authorization`, so a client cannot forge it.
+- CloudFront adds `x-origin-verify` (the `socket-origin-verify` parameter) to every socket connect. The `$connect` authorizer requires it and compares in constant time before spending the ticket. API Gateway returns `401` for a direct `execute-api` connect. Authorizer caching is off so a cached allow cannot replay a ticket.
 
-### Rate limiting (AWS WAF on `/api/`)
+### Rate limits
 
-Four rate rules, each over a five-minute window, answer `429` with `{"error":"rate_limited"}`:
+WAF on `/api/`, four rules, each a five-minute window, `429` with `{"error":"rate_limited"}`. Static files are outside the rules. WAF is pay-as-you-go, because a CloudFront flat-rate plan cannot key a rate rule on a header.
 
-| Rule              | Key                   | Limit | Purpose                                                                  |
-| ----------------- | --------------------- | ----- | ------------------------------------------------------------------------ |
-| `PerAccessToken`  | `Authorization` value | 600   | Per-user fairness for signed-in traffic.                                 |
-| `PerAnonymousIp`  | IP, no token          | 100   | Slows credential stuffing and signup abuse on open identity routes.      |
-| `SocketConnectIp` | IP, `/api/socket`     | 1000  | Caps WebSocket connect floods.                                           |
-| `PerIpFlood`      | IP                    | 4000  | Stops a client that invents a fresh `Authorization` value per request.  |
+| Rule | Key | Limit | Purpose |
+| --- | --- | --- | --- |
+| `PerAccessToken` | `Authorization` | 600 | Fairness for signed-in traffic. |
+| `PerAnonymousIp` | IP, no token | 100 | Slows stuffing and signup abuse on open identity routes. |
+| `SocketConnectIp` | IP, `/api/socket` | 1000 | Caps connect floods. Reconnects would burn the anonymous limit. |
+| `PerIpFlood` | IP | 4000 | Stops a client that invents a new `Authorization` per request, without blocking a club behind one NAT. |
 
-Static website files are outside the rules, so page loads do not consume a user's budget. Socket connects carry a
-ticket rather than an `Authorization` header, so they get their own limit instead of the anonymous one: every phone
-reconnects when the app returns to the foreground, and a team on one network would hit 100 quickly. The flood limit
-is set far above normal use so a school or club network behind one IP is not blocked. WAF runs pay-as-you-go rather than
-on a CloudFront flat-rate plan, because only the pay-as-you-go plan can key a rate rule on a header.
+- **Cost:** the token rule keys on the raw header, including tokens that are not verified yet. The flood rule bounds that. A verified-user limit would have to run inside the function.
 
-### Authentication and sessions
+### Sessions
 
-- **Backend-for-frontend OAuth.** The browser and app never talk to Cognito's token endpoint. `identity` runs the
-  authorization-code flow with PKCE against Managed login and exchanges the code server-side. The app client has
-  no secret (`generateSecret: false`) and `preventUserExistenceErrors` is on.
-- **Access token in memory only.** The website keeps the access token in a JavaScript variable, never in
-  `localStorage`.
-- **Website refresh token in an HttpOnly cookie** (`ts_refresh`, `Secure` in production, `SameSite=Lax`,
-  path `/api/identity`). Script cannot read it, and it is only sent to identity routes.
-- **Native refresh token in Expo SecureStore** (Keychain / Keystore), requested with `X-Refresh-Delivery: body`.
-- **One in-flight refresh.** `SessionService.refresh()` (`client/session`) keeps the current refresh promise.
-  Overlapping callers — the signed-in shell, `GET /` session restore, and every product request that sees `401` —
-  share that one `POST /identity/refresh`. Without the lock, a focus refetch or an expired access token would
-  start one refresh per in-flight query and spend the WAF `PerAccessToken` budget on identity. A finished
-  attempt, success or failure, clears the promise so the next call can try again. TanStack still does not retry
-  `unauthorized`; only that shared refresh plus one product retry runs.
-- **Refresh on the next request, not a timer.** Login and refresh store `expiresIn` as an in-memory `expiresAt`.
-  The next product call (including the socket ticket) runs `refresh()` when that token would expire within five
-  minutes, then sends the new bearer token. Idle tabs and backgrounded phones do not start a clock. A `401`
-  retry remains the backstop when expiry was unknown or the clock was wrong. Boot paths (`/`, the persist-cache
-  buster, the signed-in shell) use `ensureSession()`, which skips identity when a fresh token is already in
-  memory, so a full page load does not call `/identity/refresh` twice.
-- **Native sign-in handoff.** The system browser that completes Managed login cannot share cookies with the app,
-  so the callback stores the refresh token under a random 32-byte, one-time code that expires after 60 seconds, and redirects to
-  `gameplan://auth?code=…`. Redeeming it is a conditional delete, so a code works exactly once, and an expired
-  row is rejected even if DynamoDB TTL has not removed it yet.
-- **WebSocket tickets.** Browsers cannot set headers on a WebSocket, and putting the access token in the URL
-  would leak it into access logs. Clients instead get a one-time, 60-second ticket from `POST /identity/socket-ticket`. The
-  `$connect` authorizer redeems it with the same conditional-delete pattern, and authorizer caching is disabled so
-  a cached allow cannot replay a ticket.
-- **Staging signup allowlist.** A pre-signup Lambda rejects any email not on a Parameter Store list, so the
-  public staging site cannot collect real accounts.
+- **Backend-for-frontend OAuth.** The app never calls Cognito's token endpoint. `identity` runs the code flow with PKCE and exchanges the code. The app client has no secret (`generateSecret: false`). `preventUserExistenceErrors` is on.
+- **Access token in memory.** The website does not put it in `localStorage`.
+- **Website refresh** is an HttpOnly cookie (`ts_refresh`, `Secure` in production, `SameSite=Lax`, path `/api/identity`).
+- **Native refresh** is Expo SecureStore, requested with `X-Refresh-Delivery: body`. The system browser cannot share cookies with the app, so the callback stores the refresh token under a random 32-byte code for 60 seconds and redirects to `gameplan://auth?code=…`. Redeeming it is a conditional delete. An expired row is rejected even if TTL has not removed it.
+- **One refresh in flight.** `SessionService.refresh()` shares one `POST /identity/refresh` across the shell, session restore, and every `401`. A finished attempt clears the promise. TanStack does not retry `unauthorized`.
+- **Refresh on the next request.** `expiresIn` becomes an in-memory `expiresAt`. The next product call refreshes when the token would expire within five minutes. Idle tabs do not run a timer. A `401` is the backstop. Boot paths use `ensureSession()`, which skips identity when a fresh token is already in memory, so a full page load does not refresh twice.
+- **Socket ticket.** A browser WebSocket cannot set `Authorization`, and a token in the URL would land in access logs. `POST /identity/socket-ticket` returns a one-time 60-second ticket. `$connect` redeems it with the same conditional delete.
+- **Staging signups** are an allowlist in Parameter Store, read by a pre-signup Lambda.
 
 ### Authorization
 
-- **Every protected route verifies the Cognito access token** (signature, issuer, client id, `token_use=access`)
-  through `aws-jwt-verify`. Missing Cognito configuration rejects every token rather than falling back. Local HS256
-  tokens need an explicit `AUTH_PROVIDER=local` plus a `LOCAL_JWT_SECRET` (there is no default), and are refused
-  whenever `NODE_ENV=production`, which every deployed function sets.
-- **Team permissions are data, not code.** Each team has a role-to-permission matrix (`manage_events`,
-  `invite_members`, `assign_roles`, and so on). Route guards (`requireUser`, `requireMembership`,
-  `requirePermission`) load the caller's membership and check the matrix before the handler runs.
-- **Minor safety rules live in `lib/rules`** and are enforced on the server:
-  - A minor cannot create a team, be `team_admin`, or hold `manage_permissions`.
-  - A minor can only be in a chat with people who share a team with them or are a linked guardian.
-  - User search returns adults only and needs an exact email match, so it cannot be used to enumerate minors.
-- **Media downloads are checked against context.** Own uploads are allowed by key prefix. Other objects require
-  the chat, team, or profile they belong to, and the caller's membership there. Presigned URLs expire after 15
-  minutes and uploads are capped at 15 MB.
+- Every protected route checks the Cognito access token (signature, issuer, client id, `token_use=access`) with `aws-jwt-verify`. Missing Cognito settings reject every token. Local HS256 needs `AUTH_PROVIDER=local` and `LOCAL_JWT_SECRET`, and is refused when `NODE_ENV=production`.
+- Team permissions are data. The matrix (`manage_events`, `invite_members`, `assign_roles`, and the rest) is loaded by `requireMembership` and `requirePermission` before the handler.
+- Minor rules in `lib/rules` are enforced on the server. A minor cannot create a team, be `team_admin`, or hold `manage_permissions`. A minor's chat is limited to shared teammates and linked guardians. Search returns adults only, and only on an exact email.
+- Media downloads check context. Own uploads match a key prefix. Anything else requires the chat, team, or profile, and membership there.
 
 ### Least-privilege IAM
 
-- Each area function only has access to the DynamoDB **partition prefixes** it uses, through
-  `dynamodb:LeadingKeys` conditions (`infrastructure/lib/table-access.ts`). For example, `places` has no table
-  access at all, `schedule` can touch `TEAM#`, `REMINDERS`, and the `CHAT#` / `USER#` rows for a
-  carpool's driver-and-riders chat, and `fanout` is read-only.
-- Transactions are allowed only where needed, and `ForAllValues` stops a transaction from mixing in a prefix
-  outside the grant.
-- Identity may call `AdminGetUser` and `AdminDeleteUser` (to replace an unconfirmed signup), nothing broader.
-- CI deploys with GitHub OIDC (`AWS_ROLE_ARN` per environment), so no long-lived AWS keys are stored in GitHub.
-  Deploy logs pass through a redaction script.
+Each area's role is limited to the DynamoDB prefixes it uses, via `dynamodb:LeadingKeys` (`infrastructure/lib/table-access.ts`). `places` has no table access. `schedule` can touch `TEAM#`, `REMINDERS`, and the `CHAT#` / `USER#` rows for a carpool chat. `fanout` reads those prefixes and may delete a `USER#` item after a socket is reported gone. Identity and Access Management cannot limit that delete to the `CONN#` sort key; the function only deletes the connection id from the failed post. `ForAllValues` stops a transaction from mixing in another prefix. Identity may call `AdminGetUser` and `AdminDeleteUser` (to replace an unconfirmed signup). CI uses GitHub OIDC (`AWS_ROLE_ARN` per environment). Deploy logs are redacted.
 
-### Data protection
-
-- Buckets block public access, use S3-managed encryption, and enforce TLS. The media bucket's CORS allows only
-  the website origin.
-- SQS queues use SQS-managed encryption.
-- Input is validated with Zod at every HTTP boundary; validation errors return a stable `{ errors: [...] }` shape.
+Buckets block public access, use S3-managed encryption, and require TLS. Media CORS allows only the website origin. SQS uses SQS-managed encryption.
 
 ### Secrets at run time
 
-Secret values never go in Lambda environment variables. Anyone allowed `lambda:GetFunctionConfiguration`, which
-broad read-only roles include, can read environment variables in plain text. Published versions also keep them
-forever, and code or dependencies can leak them by logging `process.env`.
+Secret values are not Lambda environment variables. `lambda:GetFunctionConfiguration` can read those in plain text, published versions keep them, and a log of `process.env` would leak them.
 
-Instead, each function gets only a parameter **name** and reads the value at run time through
-`readSecret` in `functions/lib/parameters.ts`:
+A function receives the parameter name and reads the value through `readSecret` (`functions/lib/parameters.ts`).
 
-| Secret                    | Function          | Parameter                                                     |
-| ------------------------- | ----------------- | ------------------------------------------------------------- |
-| Google Maps server key    | places            | `<prefix>/google-maps-api-key`                                |
-| VAPID private key         | fanout            | `<prefix>/vapid-private-key`                                  |
-| Socket origin secret      | socket-authorizer | `<prefix>/socket-origin-verify`                               |
+| Secret | Function | Parameter |
+| --- | --- | --- |
+| Google Maps server key | places | `<prefix>/google-maps-api-key` |
+| VAPID private key | fanout | `<prefix>/vapid-private-key` |
+| Socket origin secret | socket authorizer | `<prefix>/socket-origin-verify` |
 
-- Each function's role has `ssm:GetParameter` on its own parameter only. The origin secret is a random String set
-  by hand. The site stack also resolves it at deploy time for the CloudFront header, which is why it cannot be a
-  SecureString.
-- Values are cached in memory for five minutes, so a rotated value is picked up without a deploy, and a failed read
-  is retried on the next request instead of being cached.
-- A missing or unreadable parameter counts as not configured. Places answers `503`, fan-out skips web push, and the
-  socket authorizer rejects every connect.
-- The laptop has no Parameter Store, so a function without a parameter name reads the plain variable (such as
-  `GOOGLE_MAPS_API_KEY`) instead. That path is ignored whenever `NODE_ENV=production`, which every deployed
-  function sets.
-- The cost is one Parameter Store call per warm container every five minutes, which adds a few milliseconds to
-  that one request.
+- Each role has `ssm:GetParameter` on its own parameter. The origin secret is a random String set by hand. CloudFront needs the literal value, so it cannot be a SecureString. The site stack resolves it at deploy time for the header.
+- Values stay in memory for five minutes. A rotation is picked up without a deploy. A failed read is not cached.
+- A missing parameter means not configured. Places returns `503`, fan-out skips web push, and the authorizer rejects every connect.
+- On the laptop, a function with no parameter name reads the plain variable (`GOOGLE_MAPS_API_KEY`). That path is ignored when `NODE_ENV=production`.
+- **Cost:** one Parameter Store read per warm container every five minutes.
 
 The VAPID public key and subject are not secret and stay in the environment.
 
-### Rollout notes for the edge and secret changes
+Other Parameter Store inputs (zone, IdP credentials, browser map key, VAPID public values, staging allowlist) are listed in the deploy configuration. An IdP is created only when every field for that provider is set. CDK context overrides those values for a local `cdk deploy`.
 
-- **Native builds need a rebuild.** Older app builds have the `execute-api` WebSocket URL baked in. That hostname now
-  rejects connects without the CloudFront header, so those builds lose live delivery until they are rebuilt with
-  `wss://<site host>/api/socket`. Messages still save, and push still works.
-- **Short socket gap during the first deploy.** `cdk deploy --all` updates the API stack before the site stack and
-  the website upload. In between, the authorizer already requires the header but the distribution doesn't send it
-  yet, so socket connects fail for a few minutes.
-- **Parameters must exist before secrets work.** The functions read `google-maps-api-key` and `vapid-private-key`
-  from Parameter Store at run time. A local `cdk deploy` can no longer inject these from environment variables.
-- **Local auth is opt-in.** A process without Cognito settings now rejects every token. Offline work needs
-  `AUTH_PROVIDER=local` and a `LOCAL_JWT_SECRET`.
+### Gaps
 
-### Security trade-offs and gaps
-
-These are known and worth addressing before production traffic grows:
-
-- **Social IdP secrets pass through the template.** They go through `SecretValue.unsafePlainText`, so they appear
-  in the synthesized CloudFormation template. Parameter Store entries are also still `String`, not `SecureString`.
-  The run-time reads already decrypt, so switching a parameter to `SecureString` needs no code change.
-- **The socket origin secret is in the CloudFront configuration.** CloudFront needs the literal value to send it,
-  so anyone with `cloudfront:GetDistributionConfig` or `ssm:GetParameter` on it can read it. Leaking it only lets a
-  caller skip the WAF; a valid ticket is still required. It is never rotated; rotating it means writing a new value,
-  then redeploying the site stack. The authorizer picks up the new value within its five-minute cache, so connects
-  can fail for a few minutes in between.
-- **Styles allow `'unsafe-inline'`** in the CSP, as explained above. Moving to nonces would need control over how
-  react-native-web injects styles.
-- **Stateful resources use `RemovalPolicy.DESTROY`.** The user pool, table, and media bucket are deleted with
-  their stack, and the table has no point-in-time recovery. That is convenient for staging and dangerous for
-  production. Production should use `RETAIN` and enable PITR.
-- **No MFA and an 8-character password minimum.** Acceptable for an early product, but optional TOTP MFA for team
-  admins and a longer minimum would be cheap improvements.
-- **The rate limit keys on the raw `Authorization` value**, including tokens that are not yet verified. The IP
-  flood rule bounds that, but a verified-user limit would require the check inside the function.
+- **IdP secrets pass through the template** via `SecretValue.unsafePlainText`, so they appear in the synthesized template. Several parameters are still `String`. Run-time reads already decrypt, so switching one to `SecureString` needs no code change. The origin secret cannot move, because CloudFront needs the literal.
+- **The origin secret is readable** by `cloudfront:GetDistributionConfig` or `ssm:GetParameter`. Leaking it only skips WAF. A ticket is still required. Rotation is a new value plus a site deploy. The authorizer's five-minute cache means connects can fail in between.
+- **Stateful resources use `RemovalPolicy.DESTROY`.** The user pool, table, and media bucket die with the stack. The table has no point-in-time recovery. Convenient for staging, dangerous for production. Production should use `RETAIN` and PITR.
+- **No MFA, 8-character password minimum.** Optional TOTP for team admins and a longer minimum are cheap later.
+- **First deploy socket gap.** `cdk deploy --all` updates the API before the site. For a few minutes the authorizer requires `x-origin-verify` and the distribution does not send it yet.
+- **Old native builds** still dial `execute-api` and lose live delivery until rebuilt against `wss://<site host>/api/socket`. Writes and push still work.
 
 ## Local development
 
-The `local` package runs every area as its own Node.js process behind a proxy on port 3000, against DynamoDB
-Local in Docker. Handlers are the same code that runs in Lambda. Compose signs in through a deployed Cognito pool.
-For fully offline work, `AUTH_PROVIDER=local` with a `LOCAL_JWT_SECRET` makes identity issue HS256 tokens instead.
-That mode has to be requested explicitly and never runs in production.
+`local` runs every area as its own process behind a proxy on port 3000, against DynamoDB Local. Handlers are the Lambda code. Compose signs in through a deployed Cognito pool. Offline work sets `AUTH_PROVIDER=local` and `LOCAL_JWT_SECRET`. That mode never runs in production.
 
-- **Why:** fast feedback, breakpoints in every area, and no shared dev account to fight over.
-- **Trade-off:** local mode skips CloudFront, OAC, WAF, and IAM, so edge behavior (body hashing, header
-  rewriting, rate limits) is only exercised in staging. Infrastructure tests in `infrastructure/lib/*.test.ts`
-  synthesize the stacks and assert those pieces to compensate.
+- **Why:** breakpoints in every area, and no shared dev account.
+- **Cost:** local mode skips CloudFront, origin access control, WAF, and IAM. Body hashing, header rewriting, and rate limits are exercised in staging. `infrastructure/lib/*.test.ts` synthesizes the stacks and asserts those pieces.

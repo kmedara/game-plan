@@ -1,15 +1,12 @@
 # GamePlan
 
-Teams keep practices, games, and chat in one product. This repository is the Amazon Web Services (AWS) side of that
-product: one Cloud Development Kit (CDK) app, one function per area, and a local stand-in that does not need a cloud
-deploy.
+Teams keep practices, games, and chat in one product. One CDK app, one Lambda per area, and an Expo app for the website and the phones.
 
-The website and the phone apps are the same Expo app under `client/expo`. Day-to-day API work runs on the laptop.
+Day-to-day work runs on the laptop. Design and cloud detail live in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Local stack
+## Run locally
 
-Docker Compose runs DynamoDB Local, the API proxy (every area Lambda), and the Expo
-website with live reload.
+`npm run up` starts DynamoDB, the API, and the website. `npm run down` stops them. Compose Watch syncs source into the containers; the API restarts and the website reloads. After a Dockerfile or lockfile change, run `npm run up:build` once.
 
 | Service   | URL                        |
 | --------- | -------------------------- |
@@ -18,75 +15,11 @@ website with live reload.
 | API docs  | http://localhost:3000/docs |
 | DynamoDB  | http://localhost:8000      |
 
-```bash
-npm run up
-```
+`GET http://127.0.0.1:3000/identity/health` returns `{ "ok": true, "service": "identity" }`. The same path exists for teams, schedule, chat, media, socket, and fanout.
 
-That starts DynamoDB, the API, and the website, and publishes the ports above.
-`docker compose up --watch` syncs `functions/`, `local/`, `config/`, and `client/` into the
-containers. The API restarts via `tsx watch`; the website reloads via Expo.
-Stop with `npm run down`.
+Startup seeds two demo clubs: Peoria Pigs and Seacoast Men's Rugby. `npm run db:seed` wipes the local table down to those clubs.
 
-### Breakpoints (API in Compose)
-
-`npm run up` / `up:build` only starts Compose — it does not attach the debugger. After the
-API is up and logs show `Debugger listening on ws://0.0.0.0:92xx/...`, set a breakpoint
-under `functions/` or `local/`, then use **Run and Debug** → **Attach teams** (or the
-matching area). **Attach API (all)** connects to every inspector at once.
-
-Compose sets `NODE_INSPECT_HOST`. Each area runs under `tsx watch`, and `--inspect` is
-passed to the child that runs the routes. A synced source edit restarts that child, and
-the debugger reattaches when the launch config has `restart` set.
-
-| Process  | Port |
-| -------- | ---- |
-| identity | 9229 |
-| teams    | 9230 |
-| schedule | 9231 |
-| chat     | 9232 |
-| media    | 9233 |
-| places   | 9234 |
-| socket   | 9235 |
-| fanout   | 9236 |
-| proxy    | 9237 |
-
-Configs live in [`.vscode/launch.json`](.vscode/launch.json) (`localRoot` → `remoteRoot`
-`/app`). Restart the API container (or re-run `npm run up`) after pulling changes that
-add `NODE_INSPECT_HOST` so the inspectors bind.
-
-After changing Dockerfiles or `package-lock.json`, rebuild images once:
-
-```bash
-npm run up:build
-```
-
-Compose builds separate images from [`local/Dockerfile.api`](local/Dockerfile.api) and
-[`local/Dockerfile.client`](local/Dockerfile.client). Each rewrites root `workspaces` before
-install so the API skips the Expo client and CDK, and the client installs only `lib/types` plus
-`client/*` (no schemas, functions, or CDK). Filtered workspaces no longer match the full
-lockfile, so the images use `npm install` (with a BuildKit npm cache mount) instead of
-`npm ci`. Workspace `package.json` files are copied before source, so code-only edits keep
-the install layer cached. Day-to-day `npm run up` does not pass `--build`; Compose Watch
-syncs source without reinstalling.
-
-Wire types for the client come from Zod schemas in [`lib/schemas`](lib/schemas).
-`npm run generate:types` converts those schemas to JSON Schema, then writes plain TypeScript
-into [`lib/types/src/generated/schema-types.ts`](lib/types/src/generated/schema-types.ts)
-(also run by `npm run typecheck`). Edit schemas, regenerate, and commit the generated file
-so the client image never needs the schemas package or Zod.
-
-Live reload deliberately avoids **Chokidar** polling and bind-mounted watchers (`CHOKIDAR_USEPOLLING`,
-Expo web polling, nodemon `--legacy-watch`). Polling is slow under load and keeps CPU high. Compose
-Watch copies edits into the container filesystem so `tsx watch` and Expo can use normal file
-events instead.
-
-Compose uses [`local/Dockerfile.client`](local/Dockerfile.client). A production website is
-`npm run client:build`, which writes a static export to `client/expo/dist`.
-
-### Laptop API without Compose for the app
-
-Amazon DynamoDB (DynamoDB) Local can still run alone. Each area is its own Node.js process.
-A proxy on port 3000 forwards a path prefix to that process.
+To run the API on the host instead of Compose: `npm install`, `npm run db:up`, `npm run db:create`, `npm run db:seed`, `npm run dev`. Add `npm run client:start` for the website.
 
 | Prefix      | Area     | Port |
 | ----------- | -------- | ---- |
@@ -98,302 +31,52 @@ A proxy on port 3000 forwards a path prefix to that process.
 | `/socket`   | socket   | 3106 |
 | `/fanout`   | fanout   | 3107 |
 
-From the repository root, with Node.js 22 (API only; DynamoDB in Docker):
+The local WebSocket is `ws://127.0.0.1:3000/socket?ticket=`. The cloud URL is `wss://<site host>/api/socket`. Mint the ticket with `POST /identity/socket-ticket`.
 
-1. `npm install`
-2. `npm run db:up`
-3. `npm run db:create`
-4. `npm run db:seed` (wipes the local table down to the demo clubs: Peoria Pigs, Seacoast Men's Rugby)
-5. `npm run dev`
-6. `npm run client:start` (optional; or use `npm run up` for the full Compose stack)
+## Debug the API
 
-`GET http://127.0.0.1:3000/identity/health` returns `{ "ok": true, "service": "identity" }`. The same path exists for
-teams, schedule, chat, media, socket, and fanout.
+`npm run up` does not attach a debugger. When the API logs `Debugger listening`, use **Run and Debug** → **Attach teams** (or the matching area). **Attach API (all)** connects to every inspector. Configs are in [`.vscode/launch.json`](.vscode/launch.json).
 
-`ws://127.0.0.1:3000/socket` is the local WebSocket. The cloud WebSocket is `wss://<site host>/api/socket` and expects
-a one-time `?ticket=` from `POST /identity/socket-ticket`, because a browser WebSocket cannot set an Authorization
-header.
+| Process  | Port | Process | Port |
+| -------- | ---- | ------- | ---- |
+| identity | 9229 | media   | 9233 |
+| teams    | 9230 | places  | 9234 |
+| schedule | 9231 | socket  | 9235 |
+| chat     | 9232 | fanout  | 9236 |
+| proxy    | 9237 |         |      |
 
-### Identity and session
+## Sign in
 
-Local and deployed sign-in uses Cognito Hosted UI. Set these on the API process (Compose reads them
-from `.env`):
+Compose reads Cognito settings from `.env`:
 
 - `COGNITO_USER_POOL_ID`
 - `COGNITO_CLIENT_ID`
 - `COGNITO_HOSTED_UI_DOMAIN`
-- `COGNITO_REGION` (defaults to `us-east-1`)
+- `COGNITO_REGION` (default `us-east-1`)
 - `AUTH_CALLBACK_URL` (`http://localhost:4200/api/identity/oauth/callback`)
 - `CLIENT_ORIGIN`
 
-Sign-in starts at `GET /identity/oauth/login` (PKCE → Hosted UI → `GET /identity/oauth/callback`).
+Sign-in starts at `GET /identity/oauth/login`. Without those variables the API rejects every token. Fully offline work sets `AUTH_PROVIDER=local` and `LOCAL_JWT_SECRET`. That mode is refused when `NODE_ENV=production`.
 
-Without the Cognito variables the API rejects every token. To work fully offline, set `AUTH_PROVIDER=local` and a
-`LOCAL_JWT_SECRET`; identity then issues HS256 tokens from DynamoDB Local. Local auth is refused when
-`NODE_ENV=production`, so a deployed function can never fall back to it. The test suite sets both in
-[`vitest.config.ts`](vitest.config.ts).
+The website keeps the refresh token in an HttpOnly cookie. The phone app sends `X-Refresh-Delivery: body` and stores the token in secure storage. Both send the access token as `Authorization: Bearer`.
 
-The API entrypoint also seeds two demo clubs (idempotent): **Peoria Pigs** (`peoria-admin@localhost` /
-`22222222-2222-4222-8222-222222222222`) and **Seacoast Men's Rugby** (`seacoast-admin@localhost` /
-`44444444-4444-4444-8444-444444444444`).
+Maps setup is in [docs/maps/README.md](docs/maps/README.md). Interactive route docs are in [docs/api-docs.md](docs/api-docs.md).
 
-Optional social IdP credentials can be passed as CDK context (`googleClientId` / `googleClientSecret`,
-`facebookAppId` / `facebookAppSecret`, `appleClientId` / `appleTeamId` / `appleKeyId` / `applePrivateKey`).
-They can also be attached in the Cognito console after deploy.
+## Repo
 
-First social sign-in without a birthday redirects to `/complete-profile`. `POST /identity/profile/complete`
-stores birthday and derives `accountKind`.
-
-Client config is read from `EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_WS_BASE_URL`,
-`EXPO_PUBLIC_AUTH_DISABLED`, `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`, and `EXPO_PUBLIC_VAPID_PUBLIC_KEY`.
-[`client/expo/scripts/run.mjs`](client/expo/scripts/run.mjs) copies `API_BASE_URL` and
-`WS_BASE_URL` onto those names. Production builds require `API_BASE_URL` and set
-`BUILD_CONFIGURATION=production`. The website uses Cognito sign-in. The native apps
-redeem a one-time code from `POST /identity/oauth/exchange`.
-
-Place autocomplete and reverse geocode use `GOOGLE_MAPS_API_KEY` on the **API**.
-The interactive map uses `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` on the web (copied from
-`GOOGLE_MAPS_BROWSER_API_KEY` by [`client/expo/scripts/run.mjs`](client/expo/scripts/run.mjs))
-and the Android key in the Expo app config. See [`docs/maps/README.md`](docs/maps/README.md).
-
-| Method | Path                         | Notes                                                                                                   |
-| ------ | ---------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `GET`  | `/identity/oauth/login`      | Start Cognito Hosted UI                                                                                 |
-| `GET`  | `/identity/oauth/callback`   | Code exchange; sets refresh cookie; redirects                                                           |
-| `GET`  | `/identity/oauth/logout`     | Clear cookie and redirect to Cognito logout                                                             |
-| `POST` | `/identity/oauth/exchange`   | Redeem a native handoff code for a session                                                              |
-| `POST` | `/identity/profile/complete` | Birthday + display name after social sign-in                                                            |
-| `POST` | `/identity/register`         | Email/password. Cognito returns `confirmationRequired` and no session until the email code is confirmed |
-| `POST` | `/identity/confirm`          | Submit the emailed signup code                                                                          |
-| `POST` | `/identity/confirm/resend`   | Send another signup code                                                                                |
-| `POST` | `/identity/login`            | Email/password session. Unconfirmed Cognito users get `email_not_confirmed`                             |
-| `POST` | `/identity/refresh`          | Cookie and/or `{ "refreshToken" }` body                                                                 |
-| `POST` | `/identity/logout`           | Clears the refresh cookie                                                                               |
-| `GET`  | `/identity/me`               | Bearer access token; returns the profile                                                                |
-
-Both clients send the **access token** as `Authorization: Bearer …`.
-
-- **Website:** identity sets an HttpOnly `ts_refresh` cookie. Refresh calls use `credentials: 'include'` and omit the
-  body token. The `@gameplan/client-session` package uses `WebRefreshStore` for this path.
-- **Native app:** send `X-Refresh-Delivery: body` so the refresh token is also returned in JSON. Store it with
-  `ExpoRefreshStore` (secure store). Refresh sends that token in the body.
-
-### Teams
-
-Adults create a team (and its default chat) in one write. Roster joins use an invite code or an approved join
-request. The admin screen updates the team name, time zone, and location, and reads and writes the role-permission
-matrix. A minor cannot create a team, cannot be `team_admin`, and cannot hold `manage_permissions`.
-
-| Method  | Path                                       | Notes                                                       |
-| ------- | ------------------------------------------ | ----------------------------------------------------------- |
-| `POST`  | `/teams`                                   | Create team + default chat; caller is admin                 |
-| `GET`   | `/teams`                                   | Teams the caller belongs to                                 |
-| `GET`   | `/teams/directory?q=`                      | Name-prefix search for join autocomplete                    |
-| `GET`   | `/teams/:teamId`                           | Team details for a member                                   |
-| `PATCH` | `/teams/:teamId`                           | Update name, time zone, and location (`manage_permissions`) |
-| `GET`   | `/teams/:teamId/members`                   | Roster                                                      |
-| `PATCH` | `/teams/:teamId/members/:userId`           | Assign role (`assign_roles`)                                |
-| `GET`   | `/teams/:teamId/permissions`               | Role-permission matrix                                      |
-| `PUT`   | `/teams/:teamId/permissions`               | Replace matrix (`manage_permissions`)                       |
-| `POST`  | `/teams/:teamId/invites`                   | Create invite code (`invite_members`)                       |
-| `GET`   | `/teams/:teamId/invites`                   | List invites (`invite_members`)                             |
-| `GET`   | `/teams/invite/:code`                      | Preview invite from a shared code                           |
-| `POST`  | `/teams/invite/:code/accept`               | Join via invite                                             |
-| `POST`  | `/teams/:teamId/join-requests`             | Request to join                                             |
-| `GET`   | `/teams/:teamId/join-requests`             | List requests (`approve_join_requests`)                     |
-| `POST`  | `/teams/:teamId/join-requests/:id/approve` | Approve and assign role                                     |
-| `POST`  | `/teams/:teamId/join-requests/:id/reject`  | Reject a request                                            |
-
-Teams routes require a bearer access token. The function verifies it.
-
-### Schedule
-
-Practices and games live on the team partition. Recurrence stays on the event row and is expanded
-for a visible window (capped at about three months). Each occurrence has its own RSVP. Creating or
-editing an event requires `manage_events`; every member can read the schedule and RSVP.
-
-| Method  | Path                                      | Notes                                     |
-| ------- | ----------------------------------------- | ----------------------------------------- |
-| `GET`   | `/schedule/teams/:teamId?from=&to=`       | Expand occurrences and attach RSVPs       |
-| `POST`  | `/schedule/teams/:teamId/events`          | Create practice or game (`manage_events`) |
-| `GET`   | `/schedule/teams/:teamId/events/:eventId` | Event definition                          |
-| `PATCH` | `/schedule/teams/:teamId/events/:eventId` | Edit practice or game (`manage_events`)   |
-| `PUT`   | `/schedule/teams/:teamId/rsvps`           | Upsert RSVP for one occurrence            |
-
-Schedule routes require a bearer access token. The function verifies it.
-
-### Chat
-
-Chats are listed from the caller's memberships. Creating a team channel needs
-`create_team_channels` and adds the current roster. Private chats are not gated by that
-permission; the minor chat rule still applies. Adult search is exact email on the EmailIndex
-and returns adults only under the v1 search policy. Sending a message writes the row, then
-enqueues fan-out.
-
-| Method | Path                        | Notes                                               |
-| ------ | --------------------------- | --------------------------------------------------- |
-| `GET`  | `/chat`                     | Chats the caller belongs to                         |
-| `POST` | `/chat/channels`            | Create a team channel (`create_team_channels`)      |
-| `POST` | `/chat/private`             | Create a private chat with one or more other people |
-| `GET`  | `/chat/users/search?email=` | Exact-email adult search                            |
-| `GET`  | `/chat/:chatId/messages`    | Newest-first history (`limit`, `cursor`)            |
-| `POST` | `/chat/:chatId/messages`    | Persist a message and enqueue fan-out               |
-
-Chat routes require a bearer access token. The function verifies it.
-
-### Realtime
-
-The WebSocket is delivery only. Clients send messages over HTTP. On `$connect` the
-socket Lambda stores `CONN#` under the user partition (with a time-to-live). Chat and
-schedule enqueue a fan-out job after they write. Fan-out posts to open sockets; if a
-person has none, it publishes to the push topic using registered device tokens.
-
-Locally, chat and schedule `POST` to `/fanout/deliver`. Fan-out then posts to
-`http://127.0.0.1:3106/@connections/{id}` on the socket process.
-
-Connect with `ws://127.0.0.1:3000/socket?ticket=<ticket>`.
-
-In the cloud, clients connect to `/api/socket` on the website host so the connect passes the website firewall.
-CloudFront forwards it to the WebSocket stage and adds an `x-origin-verify` header holding the `socket-origin-verify` parameter value.
-The `$connect` authorizer rejects a connect without that header, so a client cannot skip the firewall by dialing the
-`execute-api` hostname directly.
-
-### Media and devices
-
-Presigned Amazon Simple Storage Service (S3) upload and download keep file bytes out of
-Lambda. The default size cap is 15 MB. Device tokens live on the user partition so
-fan-out can push when no socket is open. On the laptop, DynamoDB Local mode stores
-objects in memory behind `/media/local-objects/…`.
-
-| Method   | Path                                 | Notes                                           |
-| -------- | ------------------------------------ | ----------------------------------------------- |
-| `POST`   | `/media/presign-upload`              | Returns `uploadUrl`, `objectKey`, `maxBytes`    |
-| `GET`    | `/media/presign-download?objectKey=` | Short-lived download URL                        |
-| `PUT`    | `/media/devices/:deviceId`           | Register push token (`ios` / `android` / `web`) |
-| `DELETE` | `/media/devices/:deviceId`           | Remove a device token                           |
-
-## Client
-
-The Expo app lives in `client/expo`. Schedule, chats, and teams share one Router
-tree on web, iOS, and Android. Store binaries are built with `expo prebuild` and
-the native toolchains (or GitHub Actions).
-
-Shared wire types live in [`lib/types`](lib/types) (`@gameplan/types`). Zod
-request schemas live in [`lib/schemas`](lib/schemas) (`@gameplan/schemas`). API
-functions import schemas for validation; the Expo app imports generated types only.
-
-```bash
-npm run client:start
-```
+- `client/expo` — website, iOS, and Android. `npm run client:start` for dev, `npm run client:build` for the static export.
+- `lib/schemas` — Zod contracts. `npm run generate:types` writes `lib/types` (also part of `npm run typecheck`). Commit the generated file.
+- `functions/<area>` — one Lambda per area. Areas share the table and do not call each other.
 
 ## Cloud
 
-`npm run synth` prints the AWS CloudFormation (CloudFormation) templates.
+`npm run synth` prints the CloudFormation templates. Staging and production are the same four stacks in separate accounts: `GamePlanDns`, `GamePlanPlatform`, `GamePlanApi`, `GamePlanSite`.
 
-Staging and production use the same four stacks in **separate AWS accounts**. Resource names stay `GamePlanDns`,
-`GamePlanPlatform`, `GamePlanApi`, and `GamePlanSite` in both. Each stack reads the earlier ones through CloudFormation
-exports, so they pass values to each other with no Parameter Store round trip.
+| Workflow | When |
+| -------- | ---- |
+| [ci.yml](.github/workflows/ci.yml) | Pull requests and pushes to `master`. Typecheck and tests. |
+| [deploy.yml](.github/workflows/deploy.yml) | Push to `master` updates staging. A GitHub release updates production. |
 
-| Workflow                                               | When                                                                                     |
-| ------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Pull requests and pushes to `master`. Typecheck and tests. No AWS credentials.           |
-| [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) | Push to `master` updates **staging**. A published GitHub release updates **production**. |
+The deploy job runs `cdk deploy --all`, builds the Expo site, syncs the bucket, and invalidates CloudFront. Re-run it from the Actions tab to choose `staging` or `production`.
 
-The deploy workflow is one job. It runs `cdk deploy --all`, which deploys the four stacks in dependency order and skips
-the unchanged ones. Then it reads the API URL, WebSocket URL, site bucket, and distribution id from the CDK outputs file,
-builds the Expo site, syncs it to the bucket, and invalidates the distribution. Re-run it from the Actions tab
-(`workflow_dispatch` chooses `staging` or `production`).
-
-`GamePlanSite` holds the website bucket and the CloudFront distribution. The distribution serves the website and
-forwards `/api/<area>` to each area's Lambda function URL. The function URLs require IAM, and only this distribution may
-invoke them, through origin access control. CloudFront signs each request, so clients send the SHA-256 of a `POST`,
-`PUT`, `PATCH`, or `DELETE` body in `x-amz-content-sha256` (`withContentHash` in `@gameplan/client-session`). The
-signature replaces `Authorization`, so the `/api` viewer function copies the bearer token into
-`x-viewer-authorization` first.
-
-#### One-time move to the site stack
-
-An account that still has the website in `GamePlanPlatform` cannot run the deploy workflow yet. The platform stack
-would delete the old distribution while the live API stack still imports it for the alias records. Deploy these two by
-hand first, each with `--exclusively`. The website is offline from step 1 until the workflow finishes.
-
-1. `GamePlanApi`: drops the alias records and the distribution import, adds the function URLs, removes the HTTP API.
-2. `GamePlanPlatform`: deletes the old site bucket, distribution, and firewall, which frees the hostname.
-3. The deploy workflow: updates `GamePlanDns`, creates `GamePlanSite` (bucket `gameplan-web-<account>`, distribution,
-   alias records), and uploads the website.
-
-Do not deploy `GamePlanDns` before step 2: it would drop a certificate export the old platform stack still imports.
-Afterwards, delete the parameters nothing reads anymore: `api-base-url`, `ws-base-url`, `site-bucket-name`,
-`site-distribution-id`, `site-url`, `site-certificate-arn`, `api-regional-domain`, `api-origin-verify-secret-arn`,
-`api-function-url-domains`, and `site-api-enabled`.
-
-### GitHub environment
-
-Each GitHub environment (`staging`, `production`) has one secret, `AWS_ROLE_ARN`. `AWS_REGION` defaults to `us-east-1`.
-`SSM_PREFIX` defaults to `/gameplan`.
-
-The hosted zone name in Parameter Store is the registered domain, such as `example.com`. The deploy environment name is
-inserted into the hostnames:
-
-| Environment  | Website                          | HTTP API                             |
-| ------------ | -------------------------------- | ------------------------------------ |
-| `staging`    | `https://staging.example.com`    | `https://staging.example.com/api`    |
-| `production` | `https://production.example.com` | `https://production.example.com/api` |
-
-The Cognito callback is `https://<environment>.example.com/api/identity/oauth/callback`. Logout returns to
-`https://<environment>.example.com/login`. The WebSocket URL is `wss://<environment>.example.com/api/socket`.
-
-`GamePlanDns` creates the certificate validation records in the hosted zone from Parameter Store
-`hosted-zone-id` and `hosted-zone-name`. The zone id is the delegated zone in this account, and the name is the
-registered domain used to build `<environment>.<name>`. `GamePlanSite` writes the alias records in that same zone.
-
-### Parameter Store
-
-Both accounts use the same prefix, `/gameplan/`. Parameters may be **String** or **SecureString**; run-time reads
-decrypt either. Parameter Store holds only inputs you set by hand. Stack outputs are not written back.
-
-Secret values never go into Lambda environment variables. `google-maps-api-key` and `vapid-private-key` are read
-by the functions at run time; their environment holds only the parameter name. `socket-origin-verify` is read the
-same way by the socket authorizer, and the site stack resolves it at deploy time for the CloudFront header.
-
-| Name                                                                    | Used for                                                                                         |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `hosted-zone-id`, `hosted-zone-name`                                    | Route 53 zone. The name is the registered domain used for the website hostname.                 |
-| `google-client-id`, `google-client-secret`                              | Optional Google IdP                                                                              |
-| `facebook-app-id`, `facebook-app-secret`                                | Optional Facebook IdP                                                                            |
-| `apple-client-id`, `apple-team-id`, `apple-key-id`, `apple-private-key` | Optional Apple IdP. Store the PEM, including line breaks.                                        |
-| `google-maps-api-key`                                                   | Places Lambda, read at run time                                                                  |
-| `google-maps-browser-api-key`                                           | Website map                                                                                      |
-| `vapid-public-key`, `vapid-private-key`, `vapid-subject`                | Web Push. The public key is baked into the website. The fan-out function reads the private key at run time. `vapid-subject` is a `mailto:` contact. |
-| `media-signing-public-key`, `media-signing-private-key`                 | Optional. Serves images from the website host through CloudFront's cache instead of presigned S3 links. Both are PEM files from `openssl genrsa -out media.pem 2048` and `openssl rsa -in media.pem -pubout -out media.pub.pem`; store them with `--value file://...`. The media function reads the private key at run time. A new key pair takes effect after the API and site stacks deploy. |
-| `staging-signup-allowlist`                                              | Staging only. Emails allowed to sign up, read by the pre-signup Lambda.                          |
-| `socket-origin-verify`                                                  | Required. A random **String** (not SecureString; CloudFront needs the literal value). Create it with `aws ssm put-parameter --type String --name /gameplan/socket-origin-verify --value "$(openssl rand -hex 32)"`. Changing it needs a site deploy. |
-
-An identity provider is created only when every field for that provider is set. CDK context still overrides these
-environment variables for a local `cdk deploy`.
-
-The stacks create:
-
-- A certificate for the website, plus the Route 53 validation record. The site stack adds the alias record
-  after the website distribution exists.
-- A Cognito user pool with Hosted UI (email/password plus optional Google / Apple / Facebook IdPs from CDK context or Parameter Store).
-  OAuth callback URLs default to the website host (`/api/identity/oauth/callback`).
-- One DynamoDB table, `gameplan`, with partition key `PK` and sort key `SK`. Billing is on-demand.
-- **EmailIndex** on `email`, for an exact-email lookup that cannot start from a user partition.
-- **ConnectionIndex** on `connectionId`, so WebSocket `$disconnect` can find the user item. Both indexes project keys
-  only.
-- A time-to-live attribute, `ttl`, for socket rows.
-- A private Amazon Simple Storage Service (S3) bucket for message files, and a second bucket plus Amazon CloudFront
-  (CloudFront) for the static website, `/api`, and the `/api/socket` WebSocket connect. An AWS WAF web ACL
-  rate-limits `/api/`, with a separate per-IP limit for socket connects. The website sends a Content-Security-Policy.
-  With a media signing key, the distribution also serves `/uploads/*` from the media bucket, cached at the edge and
-  only for URLs the media function signed.
-- One IAM-only Lambda function URL per HTTP area, reachable only through the distribution. `GET /{area}/health` is
-  open. Identity routes stay open so Hosted UI OAuth, register, and login can run before a token exists. The other
-  areas verify a Cognito access token inside the function.
-- An API Gateway WebSocket API, reached through the distribution. `$connect` redeems a one-time ticket and checks
-  the CloudFront origin header. The socket is delivery only.
-- A queue from chat and schedule to the fan-out function, and an Amazon Simple Notification Service (SNS) topic the
-  fan-out function publishes to when a recipient has no open socket.
-
-Functions stay out of a virtual private cloud. They do not call each other.
+Each GitHub environment has one secret, `AWS_ROLE_ARN`. Hostnames are `https://<environment>.example.com`, with the API at `/api` and the socket at `wss://<environment>.example.com/api/socket`. Parameter Store inputs are listed under **Secrets at run time** in [ARCHITECTURE.md](ARCHITECTURE.md).
