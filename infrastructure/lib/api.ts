@@ -283,7 +283,7 @@ export class Api extends Construct {
       ? undefined
       : createMediaSigningKey(this, props.mediaSigningPublicKey, props.corsOrigin);
     this.mediaKeyGroup = mediaSigning?.keyGroup;
-    const mediaCdnEnv = mediaSigning === undefined
+    const mediaCdnEnv: Record<string, string> = mediaSigning === undefined
       ? {}
       : {
           MEDIA_CDN_ORIGIN: props.corsOrigin,
