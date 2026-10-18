@@ -2,15 +2,17 @@
  * Every team's chats, grouped under that team's name, plus private chats.
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { ChatSummary } from '@gameplan/types';
 import { groupChatsByTeam } from '@/src/chat-groups';
 import { errorMessageKey, queryError } from '@/src/errors';
 import { chatsQuery, createPrivateChatMutation, createTeamChannelMutation } from '@/src/queries/chat';
+import { RefreshableScroll } from '@/src/pull-refresh';
+import { membersQuery } from '@/src/queries/teams';
 import { useApp } from '@/src/state';
 import { useTeamsWithPermission } from '@/src/team-access';
 import { brandColors } from '@/src/theme';
@@ -29,16 +31,39 @@ export default function ChatsScreen() {
   const channelTeams = useTeamsWithPermission('create_team_channels', mode === 'channel');
   const chats = chatsLoaded.data ?? [];
   const grouped = groupChatsByTeam(teams, chats);
-  const [email, setEmail] = useState('');
+  const [chatName, setChatName] = useState('');
+  const [pickedTeamId, setPickedTeamId] = useState<string | undefined>();
+  const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [channelName, setChannelName] = useState('');
   const [channelTeamId, setChannelTeamId] = useState<string | undefined>();
+  const rosters = useQueries({
+    queries: teams.map((team) => ({ ...membersQuery(api, team.teamId), enabled: mode === 'private' })),
+  });
   const failed = queryError(chatsLoaded.error);
   const error = failed !== undefined ? t(errorMessageKey(failed, 'errors.common.loadFailed')) : undefined;
+  const teammateGroups = teams.map((team, index) => ({
+    team,
+    members: (rosters[index]?.data ?? []).filter((member) => member.userId !== api.user?.userId),
+  }));
+
+  const toggleTeammate = (teamId: string, userId: string): void => {
+    if (pickedTeamId !== undefined && pickedTeamId !== teamId) {
+      setPickedTeamId(teamId);
+      setPickedIds([userId]);
+      return;
+    }
+    setPickedTeamId(teamId);
+    setPickedIds((current) =>
+      current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId],
+    );
+  };
 
   const startPrivate = async (): Promise<void> => {
-    const user = await api.searchChatUser(email);
-    if (user.userId === api.user?.userId) throw new Error('self');
-    const chat = await startPrivateChat.mutateAsync([user.userId]);
+    const name = chatName.trim();
+    if (name.length === 0) throw new Error('name');
+    const lead = pickedIds[0];
+    if (lead === undefined) throw new Error('members');
+    const chat = await startPrivateChat.mutateAsync({ memberIds: [lead, ...pickedIds.slice(1)], name });
     router.push(`/chats/${chat.chatId}`);
   };
 
@@ -50,17 +75,41 @@ export default function ChatsScreen() {
   };
 
   return (
-    <ScrollView className="flex-1 px-4 pt-4">
+    <RefreshableScroll className="flex-1 px-4 pt-4">
       <ErrorText message={error} />
       <Text className="mb-3 text-muted">{t('chats.hint')}</Text>
       {mode === 'private' ? (
         <View className="mb-4">
-          <Field label={t('chats.email')} value={email} onChangeText={setEmail} />
+          <Field label={t('chats.chatName')} value={chatName} onChangeText={setChatName} />
+          {teammateGroups.every((group) => group.members.length === 0) ? (
+            <Text className="mb-2 text-muted">{t('chats.noTeammates')}</Text>
+          ) : null}
+          {teammateGroups.map((group) =>
+            group.members.length === 0 ? null : (
+              <View key={group.team.teamId} className="mb-3">
+                {teams.length > 1 ? <Text className="mb-1 font-semibold text-ink">{group.team.name}</Text> : null}
+                {group.members.map((member) => {
+                  const selected = pickedTeamId === group.team.teamId && pickedIds.includes(member.userId);
+                  return (
+                    <Pressable
+                      key={`${group.team.teamId}-${member.userId}`}
+                      className={`mb-2 rounded-xl border px-3 py-2 ${selected ? 'border-ink bg-inset' : 'border-line'}`}
+                      onPress={() => toggleTeammate(group.team.teamId, member.userId)}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: selected }}
+                    >
+                      <Text className="text-ink">{member.displayName ?? t('common.unknownPerson')}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ),
+          )}
           <SubmitButton
             label={t('chats.startPrivate')}
             onPress={startPrivate}
             message={(err) =>
-              t(errorMessageKey(err, 'chats.searchFailed', { self: 'chats.cannotChatSelf', not_found: 'chats.userNotFound' }))
+              t(errorMessageKey(err, 'chats.createFailed', { name: 'chats.chatNameRequired', members: 'chats.pickTeammates' }))
             }
           />
         </View>
@@ -112,7 +161,7 @@ export default function ChatsScreen() {
       {grouped.privateChats.length > 0 ? (
         <ChatGroup title={t('chats.private')} items={grouped.privateChats} onOpen={(id) => router.push(`/chats/${id}`)} />
       ) : null}
-    </ScrollView>
+    </RefreshableScroll>
   );
 }
 

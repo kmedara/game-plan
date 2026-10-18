@@ -8,6 +8,7 @@ import type {
   CarpoolResponse,
   EventResponse,
   EventType,
+  GameSide,
   RecurrenceRule,
   LineupResponse,
   LineupSlot,
@@ -81,6 +82,12 @@ export type EventItem = {
   seriesEventId?: string;
   /** Series instant this exception replaced. */
   originalStartsAt?: string;
+  /** Free-text opponent until both clubs share one fixture. */
+  opponentName?: string;
+  /** Home or away. Set before a game can be shared. */
+  side?: GameSide;
+  /** Shared fixture, once this game is proposed or linked. */
+  fixtureId?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -172,6 +179,9 @@ export const toEventResponse = (item: EventItem): EventResponse => ({
   ...(item.seriesEventId !== undefined ? { seriesEventId: item.seriesEventId } : {}),
   ...(item.originalStartsAt !== undefined ? { originalStartsAt: item.originalStartsAt } : {}),
   ...(item.exdates !== undefined && item.exdates.length > 0 ? { exdates: item.exdates } : {}),
+  ...(item.opponentName !== undefined ? { opponentName: item.opponentName } : {}),
+  ...(item.side !== undefined ? { side: item.side } : {}),
+  ...(item.fixtureId !== undefined ? { fixtureId: item.fixtureId } : {}),
   createdBy: item.createdBy,
   createdAt: item.createdAt,
   updatedAt: item.updatedAt,
@@ -235,6 +245,10 @@ export const createEvent = async (input: {
     ...(input.body.latitude !== undefined ? { latitude: input.body.latitude } : {}),
     ...(input.body.longitude !== undefined ? { longitude: input.body.longitude } : {}),
     ...(input.body.recurrence !== undefined ? { recurrence: input.body.recurrence } : {}),
+    ...(input.body.eventType === 'game' && input.body.opponentName !== undefined
+      ? { opponentName: input.body.opponentName }
+      : {}),
+    ...(input.body.eventType === 'game' && input.body.side !== undefined ? { side: input.body.side } : {}),
     createdBy: input.userId,
     createdAt: now,
     updatedAt: now,
@@ -278,6 +292,23 @@ export const requireEvent = async (teamId: string, eventId: string): Promise<Eve
  * @param input - Caller, team, event id, and patch body.
  * @returns The updated event.
  */
+/**
+ * True when a patch would change the facts a linked fixture owns.
+ *
+ * @param body - The event patch.
+ * @returns Whether start, place, opponent, side, type, or recurrence is present.
+ */
+const fixtureLockedPatch = (body: UpdateEventBody): boolean =>
+  body.startsAt !== undefined ||
+  body.endsAt !== undefined ||
+  body.location !== undefined ||
+  body.latitude !== undefined ||
+  body.longitude !== undefined ||
+  body.opponentName !== undefined ||
+  body.side !== undefined ||
+  body.eventType !== undefined ||
+  body.recurrence !== undefined;
+
 export const updateEvent = async (input: {
   teamId: string;
   eventId: string;
@@ -285,6 +316,16 @@ export const updateEvent = async (input: {
 }): Promise<EventResponse> => {
   const team = await requireTeam(input.teamId);
   const existing = await requireEvent(input.teamId, input.eventId);
+  if (existing.fixtureId !== undefined && fixtureLockedPatch(input.body)) {
+    throw new Error('fixture_locked');
+  }
+  const nextType = input.body.eventType ?? existing.eventType;
+  if (
+    nextType !== 'game' &&
+    (input.body.opponentName !== undefined || input.body.side !== undefined)
+  ) {
+    throw new Error('not_a_game');
+  }
 
   const nextStartsAt =
     input.body.startsAt !== undefined
@@ -323,10 +364,22 @@ export const updateEvent = async (input: {
     buildRRule(parseInstant(nextStartsAt, 'starts_at'), nextRecurrence);
   }
 
+  let nextOpponent: string | undefined = existing.opponentName;
+  let nextSide: GameSide | undefined = existing.side;
+  if (nextType !== 'game') {
+    nextOpponent = undefined;
+    nextSide = undefined;
+  } else {
+    if (input.body.opponentName === null) nextOpponent = undefined;
+    else if (input.body.opponentName !== undefined) nextOpponent = input.body.opponentName;
+    if (input.body.side === null) nextSide = undefined;
+    else if (input.body.side !== undefined) nextSide = input.body.side;
+  }
+
   const now = new Date().toISOString();
   const item: EventItem = {
     ...existing,
-    eventType: input.body.eventType ?? existing.eventType,
+    eventType: nextType,
     title: input.body.title ?? existing.title,
     startsAt: nextStartsAt,
     ...(nextEndsAt !== undefined ? { endsAt: nextEndsAt } : {}),
@@ -335,6 +388,8 @@ export const updateEvent = async (input: {
     ...(nextLatitude !== undefined ? { latitude: nextLatitude } : {}),
     ...(nextLongitude !== undefined ? { longitude: nextLongitude } : {}),
     ...(nextRecurrence !== undefined ? { recurrence: nextRecurrence } : {}),
+    ...(nextOpponent !== undefined ? { opponentName: nextOpponent } : {}),
+    ...(nextSide !== undefined ? { side: nextSide } : {}),
     updatedAt: now,
   };
 
@@ -345,6 +400,8 @@ export const updateEvent = async (input: {
   if (nextLatitude === undefined) delete item.latitude;
   if (nextLongitude === undefined) delete item.longitude;
   if (nextRecurrence === undefined) delete item.recurrence;
+  if (nextOpponent === undefined) delete item.opponentName;
+  if (nextSide === undefined) delete item.side;
 
   await putItem(item);
   await syncReminders({
@@ -377,6 +434,113 @@ export const updateEvent = async (input: {
     after: item,
   });
   return toEventResponse(item);
+};
+
+/** Time, place, and opponent written onto one club's game from a fixture. */
+export type SharedEventFacts = {
+  startsAt: string;
+  endsAt?: string;
+  location?: string;
+  latitude?: number;
+  longitude?: number;
+  opponentName?: string;
+  side?: GameSide;
+  fixtureId?: string;
+};
+
+/**
+ * Writes shared fixture facts onto one event and notifies that club.
+ *
+ * The fixture store calls this. It is not the member-facing event patch, so a
+ * linked game can still move when the fixture itself changes.
+ *
+ * @param teamId - The team that owns the event.
+ * @param eventId - The event to update.
+ * @param facts - The next shared start, place, opponent, and fixture id.
+ * @returns The updated event.
+ */
+export const writeEventFacts = async (
+  teamId: string,
+  eventId: string,
+  facts: SharedEventFacts,
+): Promise<EventResponse> => {
+  const team = await requireTeam(teamId);
+  const existing = await requireEvent(teamId, eventId);
+  const now = new Date().toISOString();
+  const item: EventItem = {
+    ...existing,
+    startsAt: new Date(facts.startsAt).toISOString(),
+    updatedAt: now,
+    ...(facts.opponentName !== undefined ? { opponentName: facts.opponentName } : {}),
+    ...(facts.side !== undefined ? { side: facts.side } : {}),
+    ...(facts.fixtureId !== undefined ? { fixtureId: facts.fixtureId } : {}),
+  };
+  if (facts.endsAt !== undefined) item.endsAt = new Date(facts.endsAt).toISOString();
+  else delete item.endsAt;
+  if (facts.location !== undefined) item.location = facts.location;
+  else delete item.location;
+  if (facts.latitude !== undefined && facts.longitude !== undefined) {
+    item.latitude = facts.latitude;
+    item.longitude = facts.longitude;
+  } else {
+    delete item.latitude;
+    delete item.longitude;
+  }
+  await putItem(item);
+  await syncReminders({
+    teamId,
+    eventId,
+    title: item.title,
+    startsAt: item.startsAt,
+    location: item.location,
+    recurrence: item.recurrence,
+    exdates: item.exdates,
+    timeZone: team.timeZone,
+    now: new Date(now),
+  });
+  await enqueueFanout({ type: 'schedule_changed', teamId, eventId });
+  await enqueueMove({
+    teamId,
+    eventId,
+    title: item.title,
+    occurrenceStartsAt: item.recurrence === undefined ? item.startsAt : undefined,
+    before: existing,
+    after: item,
+  });
+  return toEventResponse(item);
+};
+
+/**
+ * Records that a game belongs to a fixture without changing its start or place.
+ *
+ * @param teamId - The team that owns the event.
+ * @param eventId - The event to mark.
+ * @param fixtureId - The fixture id.
+ */
+export const attachFixtureId = async (
+  teamId: string,
+  eventId: string,
+  fixtureId: string,
+): Promise<void> => {
+  const existing = await requireEvent(teamId, eventId);
+  const now = new Date().toISOString();
+  await putItem({ ...existing, fixtureId, updatedAt: now });
+  await enqueueFanout({ type: 'schedule_changed', teamId, eventId });
+};
+
+/**
+ * Drops the fixture id and leaves the last start, place, and opponent name.
+ *
+ * @param teamId - The team that owns the event.
+ * @param eventId - The event to detach.
+ */
+export const detachFixtureId = async (teamId: string, eventId: string): Promise<void> => {
+  const existing = await requireEvent(teamId, eventId);
+  if (existing.fixtureId === undefined) return;
+  const { fixtureId: _fixtureId, ...rest } = existing;
+  const now = new Date().toISOString();
+  await putItem({ ...rest, updatedAt: now });
+  await enqueueFanout({ type: 'schedule_changed', teamId, eventId });
 };
 
 /**
@@ -431,6 +595,7 @@ export const deleteEvent = async (teamId: string, eventId: string): Promise<void
   const rows = events.filter(
     (event) => event.eventId === series.eventId || event.seriesEventId === series.eventId,
   );
+  if (rows.some((row) => row.fixtureId !== undefined)) throw new Error('fixture_linked');
   for (const row of rows) {
     await deleteItem(teamPk(teamId), eventSk(row.eventId));
     await deleteRemindersForEvent(row.eventId);
@@ -699,6 +864,9 @@ export const listOccurrences = async (
         ...(event.notes !== undefined ? { notes: event.notes } : {}),
         ...(event.latitude !== undefined ? { latitude: event.latitude } : {}),
         ...(event.longitude !== undefined ? { longitude: event.longitude } : {}),
+        ...(event.opponentName !== undefined ? { opponentName: event.opponentName } : {}),
+        ...(event.side !== undefined ? { side: event.side } : {}),
+        ...(event.fixtureId !== undefined ? { fixtureId: event.fixtureId } : {}),
         recurring,
         ...(seriesEventId !== undefined ? { seriesEventId } : {}),
         ...(originalStartsAt !== undefined ? { originalStartsAt } : {}),

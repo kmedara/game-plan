@@ -59,7 +59,7 @@ export const createPrivateChatMutation = (
   queryClient: QueryClient,
 ) =>
   mutationOptions({
-    mutationFn: (memberIds: CreatePrivateChatBody['memberIds']) => api.createPrivateChat(memberIds),
+    mutationFn: (body: CreatePrivateChatBody) => api.createPrivateChat(body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.chats }),
   });
 

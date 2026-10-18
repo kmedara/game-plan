@@ -26,7 +26,7 @@ export default function LoginScreen() {
 
   useEffect(() => {
     if (!config.authDisabled) return;
-    void api.refreshSession().then((ok) => {
+    void api.ensureSession().then((ok) => {
       if (ok) setSeedEmail(api.user?.email ?? '');
     });
   }, [api]);
@@ -34,12 +34,12 @@ export default function LoginScreen() {
   const enter = (): void => {
     live.connect();
     void registerPush(api);
-    router.replace(api.user?.needsProfileCompletion ? '/complete-profile' : '/teams');
+    router.replace(api.user?.needsProfileCompletion ? '/complete-profile' : '/schedule');
   };
 
   const startHostedUi = async (): Promise<void> => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const returnTo = encodeURIComponent(`${window.location.origin}/teams`);
+      const returnTo = encodeURIComponent(`${window.location.origin}/schedule`);
       window.location.href = `${config.apiBaseUrl}/identity/oauth/login?returnTo=${returnTo}`;
       return;
     }
@@ -56,11 +56,11 @@ export default function LoginScreen() {
     const session = await api.exchangeOAuth(code);
     live.connect();
     void registerPush(api);
-    router.replace(session.next === 'complete-profile' ? '/complete-profile' : '/teams');
+    router.replace(session.next === 'complete-profile' ? '/complete-profile' : '/schedule');
   };
 
   const continueLocal = async (): Promise<void> => {
-    const ok = await api.refreshSession();
+    const ok = await api.ensureSession();
     if (!ok) throw new Error('seed_session_failed');
     setSeedEmail(api.user?.email ?? '');
     enter();

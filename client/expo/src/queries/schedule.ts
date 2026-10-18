@@ -6,15 +6,18 @@
 
 import { mutationOptions, queryOptions, type QueryClient } from '@tanstack/react-query';
 import type {
+  AcceptFixtureBody,
   CarpoolClaimBody,
   CarpoolOfferBody,
   CreateEventBody,
   ExceptionEventBody,
   LineupBody,
   OccurrenceTarget,
+  ProposeFixtureBody,
   RsvpBody,
   ScheduleList,
   UpdateEventBody,
+  UpdateFixtureBody,
 } from '@gameplan/types';
 import type { ApiClient } from '../api';
 import { PERSIST_MAX_AGE_MS } from '../query-policy';
@@ -30,6 +33,18 @@ export const scheduleQuery = (
     queryKey: queryKeys.schedule(teamId, from, to),
     queryFn: () => api.getSchedule(teamId, from, to),
   });
+
+export const fixturesQuery = (api: Pick<ApiClient, 'listFixtures'>, teamId: string) =>
+  queryOptions({
+    queryKey: queryKeys.fixtures(teamId),
+    queryFn: () => api.listFixtures(teamId),
+  });
+
+/** Marks fixture lists stale for every club a shared game touches. */
+export const invalidateFixtures = (queryClient: QueryClient, teamIds: readonly string[]): Promise<void> =>
+  Promise.all(teamIds.map((teamId) => queryClient.invalidateQueries({ queryKey: queryKeys.fixtures(teamId) }))).then(
+    () => undefined,
+  );
 
 export const eventQuery = (api: Pick<ApiClient, 'getEvent'>, teamId: string, eventId: string) =>
   queryOptions({
@@ -176,6 +191,60 @@ export const bindPersistedMutations = (queryClient: QueryClient, api: ApiClient)
   queryClient.setMutationDefaults(mutationKeys.carpoolClaim, carpoolClaimMutation(api, queryClient));
   queryClient.setMutationDefaults(mutationKeys.lineup, lineupMutation(api, queryClient));
 };
+
+export const proposeFixtureMutation = (api: Pick<ApiClient, 'proposeFixture'>, queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ teamId, eventId, body }: { teamId: string; eventId: string; body: ProposeFixtureBody }) =>
+      api.proposeFixture(teamId, eventId, body),
+    onSuccess: (saved) => invalidateFixtures(queryClient, [saved.proposerTeamId, saved.inviteeTeamId]),
+  });
+
+export const acceptFixtureMutation = (api: Pick<ApiClient, 'acceptFixture'>, queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ fixtureId, body }: { fixtureId: string; body: AcceptFixtureBody }) =>
+      api.acceptFixture(fixtureId, body),
+    onSuccess: async (saved) => {
+      await invalidateFixtures(queryClient, [saved.proposerTeamId, saved.inviteeTeamId]);
+      await invalidateTeamSchedule(queryClient, saved.inviteeTeamId);
+      await invalidateTeamSchedule(queryClient, saved.proposerTeamId);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.chats });
+    },
+  });
+
+export const declineFixtureMutation = (
+  api: Pick<ApiClient, 'declineFixture'>,
+  queryClient: QueryClient,
+) =>
+  mutationOptions({
+    mutationFn: ({ fixtureId, teamIds }: { fixtureId: string; teamIds: string[] }) => api.declineFixture(fixtureId),
+    onSuccess: async (_saved, { teamIds }) => {
+      await invalidateFixtures(queryClient, teamIds);
+      await Promise.all(teamIds.map((teamId) => invalidateTeamSchedule(queryClient, teamId)));
+    },
+  });
+
+export const updateFixtureMutation = (api: Pick<ApiClient, 'updateFixture'>, queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ fixtureId, body }: { fixtureId: string; body: UpdateFixtureBody }) =>
+      api.updateFixture(fixtureId, body),
+    onSuccess: async (saved) => {
+      const teamIds = [saved.proposerTeamId, saved.inviteeTeamId, saved.homeTeamId, saved.awayTeamId].filter(
+        (teamId): teamId is string => teamId !== undefined,
+      );
+      await invalidateFixtures(queryClient, teamIds);
+      await Promise.all(teamIds.map((teamId) => invalidateTeamSchedule(queryClient, teamId)));
+    },
+  });
+
+export const unlinkFixtureMutation = (api: Pick<ApiClient, 'unlinkFixture'>, queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ fixtureId, teamIds }: { fixtureId: string; teamIds: string[] }) => api.unlinkFixture(fixtureId),
+    onSuccess: async (_saved, { teamIds }) => {
+      await invalidateFixtures(queryClient, teamIds);
+      await Promise.all(teamIds.map((teamId) => invalidateTeamSchedule(queryClient, teamId)));
+      await queryClient.invalidateQueries({ queryKey: queryKeys.chats });
+    },
+  });
 
 export const createEventMutation = (api: Pick<ApiClient, 'createEvent'>, queryClient: QueryClient) =>
   mutationOptions({

@@ -5,7 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { canWithRoles, highestRole, permissionMatrix, rolesFromMembership } from '@gameplan/rules';
 import {
@@ -16,6 +16,7 @@ import {
   type UpdateTeamBody,
 } from '@gameplan/types';
 import { errorMessageKey, queryError } from '@/src/errors';
+import { RefreshableScroll } from '@/src/pull-refresh';
 import { JoinRequests } from '@/src/join-requests';
 import { membersQuery, permissionsQuery, teamQuery, updateTeamMutation } from '@/src/queries/teams';
 import { useApp, useBrandTeam } from '@/src/state';
@@ -56,7 +57,7 @@ export default function TeamAdminScreen() {
     membersLoaded.data !== undefined &&
     (permissionsLoaded.data !== undefined || permissionsLoaded.isError);
 
-  const remember = (team: { name: string; timeZone: string; theme?: TeamTheme }): void => {
+  const remember = (team: { name: string; timeZone: string; sport?: string; theme?: TeamTheme }): void => {
     const next = draftFromTeam(team);
     setDraft(next);
     setBaseline(next);
@@ -103,27 +104,15 @@ export default function TeamAdminScreen() {
     setError(t(errorMessageKey(err, 'errors.common.saveFailed')));
   };
 
-  const saveName = async (): Promise<void> => {
+  const saveText = (field: 'name' | 'timeZone' | 'sport') => async (): Promise<void> => {
     if (baseline === undefined || draft === undefined) return;
-    const name = draft.name.trim();
-    if (name.length === 0 || name === baseline.name) return;
+    const value = draft[field].trim();
+    if (value === baseline[field]) return;
+    if (field !== 'sport' && value.length === 0) return;
     setError(undefined);
     try {
-      const saved = await saveTeam.mutateAsync({ name });
-      adopt({ name: saved.name });
-    } catch (err) {
-      reportSaveError(err);
-    }
-  };
-
-  const saveTimeZone = async (): Promise<void> => {
-    if (baseline === undefined || draft === undefined) return;
-    const timeZone = draft.timeZone.trim();
-    if (timeZone.length === 0 || timeZone === baseline.timeZone) return;
-    setError(undefined);
-    try {
-      const saved = await saveTeam.mutateAsync({ timeZone });
-      adopt({ timeZone: saved.timeZone });
+      const saved = await saveTeam.mutateAsync(field === 'sport' ? { sport: value.length === 0 ? null : value } : { [field]: value });
+      adopt({ [field]: saved[field] ?? '' });
     } catch (err) {
       reportSaveError(err);
     }
@@ -172,11 +161,20 @@ export default function TeamAdminScreen() {
   }, [baseline?.primary, baseline?.secondary, baseline?.accent, draft?.primary, draft?.secondary, draft?.accent]);
 
   const theme = draft === undefined ? undefined : themeFromDraft(draft);
-  const nameChanged = baseline !== undefined && draft.name.trim() !== baseline.name && draft.name.trim().length > 0;
-  const timeZoneChanged = baseline !== undefined && draft.timeZone.trim() !== baseline.timeZone && draft.timeZone.trim().length > 0;
+  const nameChanged =
+    baseline !== undefined &&
+    draft !== undefined &&
+    draft.name.trim() !== baseline.name &&
+    draft.name.trim().length > 0;
+  const sportChanged = baseline !== undefined && draft !== undefined && draft.sport.trim() !== baseline.sport;
+  const timeZoneChanged =
+    baseline !== undefined &&
+    draft !== undefined &&
+    draft.timeZone.trim() !== baseline.timeZone &&
+    draft.timeZone.trim().length > 0;
 
   return (
-    <ScrollView className="flex-1 px-4 pt-4">
+    <RefreshableScroll className="flex-1 px-4 pt-4">
       <ErrorText message={error} />
       {ready && draft !== undefined ? (
         <>
@@ -186,13 +184,19 @@ export default function TeamAdminScreen() {
                 label={t('teams.team')}
                 value={draft.name}
                 onChangeText={(name) => edit({ name })}
-                onSave={nameChanged ? saveName : undefined}
+                onSave={nameChanged ? saveText('name') : undefined}
+              />
+              <Field
+                label={t('teamAdmin.sport')}
+                value={draft.sport}
+                onChangeText={(sport) => edit({ sport })}
+                onSave={sportChanged ? saveText('sport') : undefined}
               />
               <TimeZoneField
                 label={t('teams.timeZone')}
                 value={draft.timeZone}
                 onChange={(timeZone) => edit({ timeZone })}
-                onSave={timeZoneChanged ? saveTimeZone : undefined}
+                onSave={timeZoneChanged ? saveText('timeZone') : undefined}
               />
               <View className="w-full flex-row items-start justify-around">
                 <TeamColors primary={draft.primary} secondary={draft.secondary} accent={draft.accent} onChange={edit} />
@@ -236,13 +240,14 @@ export default function TeamAdminScreen() {
           />
         </>
       ) : null}
-    </ScrollView>
+    </RefreshableScroll>
   );
 }
 
 type SettingsDraft = {
   name: string;
   timeZone: string;
+  sport: string;
   primary: string;
   secondary: string;
   accent: string;
@@ -251,9 +256,10 @@ type SettingsDraft = {
   chatBackgroundOverlay: ChatBackgroundOverlay;
 };
 
-const draftFromTeam = (team: { name: string; timeZone: string; theme?: TeamTheme }): SettingsDraft => ({
+const draftFromTeam = (team: { name: string; timeZone: string; sport?: string; theme?: TeamTheme }): SettingsDraft => ({
   name: team.name,
   timeZone: team.timeZone,
+  sport: team.sport ?? '',
   primary: team.theme?.primary ?? '',
   secondary: team.theme?.secondary ?? '',
   accent: team.theme?.accent ?? '',

@@ -353,7 +353,7 @@ export const listUserChats = async (userId: string): Promise<ChatSummary[]> => {
     chats.push(toChatResponse(meta));
   }
 
-  const kindOrder: Record<ChatKind, number> = { default: 0, channel: 1, private: 2 };
+  const kindOrder: Record<ChatKind, number> = { default: 0, channel: 1, private: 2, fixture: 3 };
   chats.sort((a, b) => {
     const byKind = kindOrder[a.kind] - kindOrder[b.kind];
     if (byKind !== 0) return byKind;
@@ -429,7 +429,8 @@ export const createPrivateChat = async (input: {
 
   const chatId = randomUUID();
   const createdAt = new Date().toISOString();
-  const name = 'Private chat';
+  const trimmedName = input.body.name?.trim();
+  const name = trimmedName !== undefined && trimmedName.length > 0 ? trimmedName : 'Private chat';
   const meta: ChatMetaItem = {
     [TABLE_PK]: chatPk(chatId),
     [TABLE_SK]: chatMetaSk(),

@@ -24,7 +24,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     void (async () => {
-      const ok = (await api.mightHaveSession()) && (await api.refreshSession());
+      const ok = (await api.mightHaveSession()) && (await api.ensureSession());
       setBuster(await openPersistedCache(ok ? api.user?.userId : undefined));
     })();
   }, [api]);

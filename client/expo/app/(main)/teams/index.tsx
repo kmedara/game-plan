@@ -11,6 +11,7 @@ import { canCreateTeam } from '@gameplan/rules';
 import type { TeamDirectoryHit } from '@gameplan/types';
 import { errorMessageKey } from '@/src/errors';
 import { createTeamMutation, directoryQuery, requestJoinMutation } from '@/src/queries/teams';
+import { RefreshableScroll } from '@/src/pull-refresh';
 import { inviteCodeFromInput } from '@/src/roles';
 import { useApp } from '@/src/state';
 import { Button, ErrorText, Field, SubmitButton, TimeZoneField } from '@/src/ui';
@@ -26,6 +27,7 @@ export default function TeamsScreen() {
   const requestJoinTeam = useMutation(requestJoinMutation(api));
   const showCreate = api.user === undefined || canCreateTeam(api.user.accountKind);
   const [name, setName] = useState('');
+  const [sport, setSport] = useState('');
   const [timeZone, setTimeZone] = useState('America/New_York');
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | undefined>();
@@ -43,7 +45,11 @@ export default function TeamsScreen() {
 
   const create = async (): Promise<boolean | void> => {
     if (name.trim().length === 0) return false;
-    const team = await createTeam.mutateAsync({ name: name.trim(), timeZone: timeZone.trim() });
+    const team = await createTeam.mutateAsync({
+      name: name.trim(),
+      timeZone: timeZone.trim(),
+      ...(sport.trim().length > 0 ? { sport: sport.trim() } : {}),
+    });
     selectTeam(team.teamId);
     router.push(`/teams/${team.teamId}`);
   };
@@ -55,7 +61,7 @@ export default function TeamsScreen() {
   };
 
   return (
-    <ScrollView className="flex-1 px-4 pt-4">
+    <RefreshableScroll className="flex-1 px-4 pt-4">
       <ErrorText message={error} />
       {message !== undefined ? <Text className="mb-2" style={{ color: brand.secondary }}>{message}</Text> : null}
       {teams.length === 0 ? <Text className="mb-4 text-muted">{t('teams.empty')}</Text> : null}
@@ -82,11 +88,12 @@ export default function TeamsScreen() {
       {showCreate && mode === 'create' ? (
         <View className="mb-6">
           <Field label={t('teams.team')} value={name} onChangeText={setName} />
+          <Field label={t('teams.sport')} value={sport} onChangeText={setSport} />
           <TimeZoneField label={t('teams.timeZone')} value={timeZone} onChange={setTimeZone} />
           <SubmitButton label={t('common.create')} onPress={create} />
         </View>
       ) : null}
-    </ScrollView>
+    </RefreshableScroll>
   );
 }
 

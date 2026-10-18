@@ -42,6 +42,7 @@ import {
   userTeamSk,
 } from "../../lib/dynamo/index.js";
 import { getProfile } from "../../lib/auth/profile.js";
+import { refreshTeamFixtureChats } from "../../lib/fixture-chat.js";
 import { enqueueFanout } from "../../lib/fanout-enqueue.js";
 import { TABLE_NAME } from "../../lib/names.js";
 import {
@@ -57,6 +58,8 @@ export type TeamMetaItem = {
   name: string;
   timeZone: string;
   location?: string;
+  /** Lowercase sport name. Omitted until the club sets one. */
+  sport?: string;
   /** Team colors and logo. Omitted when the team uses the default brand. */
   theme?: TeamTheme;
   defaultChatId: string;
@@ -175,6 +178,7 @@ export const toTeamSummary = (
     | "name"
     | "timeZone"
     | "location"
+    | "sport"
     | "theme"
     | "defaultChatId"
     | "createdAt"
@@ -188,6 +192,7 @@ export const toTeamSummary = (
     name: team.name,
     timeZone: team.timeZone,
     ...(team.location !== undefined ? { location: team.location } : {}),
+    ...(team.sport !== undefined ? { sport: team.sport } : {}),
     ...(team.theme !== undefined ? { theme: team.theme } : {}),
     defaultChatId: team.defaultChatId,
     createdAt: team.createdAt,
@@ -352,18 +357,21 @@ export const createTeam = async (input: {
   userId: string;
   name: string;
   timeZone: string;
+  sport?: string;
 }): Promise<TeamMetaItem> => {
   const teamId = randomUUID();
   const chatId = randomUUID();
   const createdAt = new Date().toISOString();
   const table = TABLE_NAME;
 
+  const sport = normalizeSport(input.sport);
   const team: TeamMetaItem = {
     [TABLE_PK]: teamPk(teamId),
     [TABLE_SK]: teamMetaSk(),
     teamId,
     name: input.name.trim(),
     timeZone: input.timeZone.trim(),
+    ...(sport !== undefined ? { sport } : {}),
     defaultChatId: chatId,
     createdBy: input.userId,
     createdAt,
@@ -459,11 +467,18 @@ const mergeTheme = (
  * @param input - The team id and the fields to change. A `null` location or theme clears it.
  * @returns The updated team metadata.
  */
+/** Stores a sport in lowercase, or drops a blank value. */
+const normalizeSport = (sport: string | undefined): string | undefined => {
+  const value = sport?.trim().toLowerCase();
+  return value === undefined || value.length === 0 ? undefined : value;
+};
+
 export const updateTeamSettings = async (input: {
   teamId: string;
   name?: string;
   timeZone?: string;
   location?: string | null;
+  sport?: string | null;
   theme?: ThemePatch | null;
 }): Promise<TeamMetaItem> => {
   const existing = await requireTeam(input.teamId);
@@ -482,6 +497,10 @@ export const updateTeamSettings = async (input: {
 
   let theme = mergeTheme(existing.theme, input.theme);
 
+  let sport = existing.sport;
+  if (input.sport === null) sport = undefined;
+  else if (input.sport !== undefined) sport = normalizeSport(input.sport);
+
   const next: TeamMetaItem = {
     [TABLE_PK]: existing.PK,
     [TABLE_SK]: existing.SK,
@@ -492,6 +511,7 @@ export const updateTeamSettings = async (input: {
     createdBy: existing.createdBy,
     createdAt: existing.createdAt,
     ...(location !== undefined ? { location } : {}),
+    ...(sport !== undefined ? { sport } : {}),
     ...(theme !== undefined ? { theme } : {}),
   };
 
@@ -697,6 +717,7 @@ export const assignMemberRole = async (
       },
     },
   ]);
+  await refreshTeamFixtureChats(teamId);
   return updated;
 };
 
@@ -792,6 +813,7 @@ export const updateRolePermissions = async (
     })),
   );
 
+  await refreshTeamFixtureChats(teamId);
   return next;
 };
 

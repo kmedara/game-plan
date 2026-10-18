@@ -42,8 +42,8 @@ export const teamPermissionSchema = z.enum(TEAM_PERMISSIONS);
 /** Inferred type for {@link teamPermissionSchema}. */
 export type TeamPermission = z.infer<typeof teamPermissionSchema>;
 
-/** Chat kinds in v1. */
-export const CHAT_KINDS = ["default", "channel", "private"] as const;
+/** Chat kinds in v1. `fixture` is the staff thread for one shared game. */
+export const CHAT_KINDS = ["default", "channel", "private", "fixture"] as const;
 
 /** Schema for {@link CHAT_KINDS}. */
 export const chatKindSchema = z.enum(CHAT_KINDS);
@@ -59,6 +59,24 @@ export const eventTypeSchema = z.enum(EVENT_TYPES);
 
 /** Inferred type for {@link eventTypeSchema}. */
 export type EventType = z.infer<typeof eventTypeSchema>;
+
+/** Which side of a shared game a club is on. */
+export const GAME_SIDES = ["home", "away"] as const;
+
+/** Schema for {@link GAME_SIDES}. */
+export const gameSideSchema = z.enum(GAME_SIDES);
+
+/** Inferred type for {@link gameSideSchema}. */
+export type GameSide = z.infer<typeof gameSideSchema>;
+
+/** A shared game before and after the other club accepts. */
+export const FIXTURE_STATUSES = ["proposed", "linked"] as const;
+
+/** Schema for {@link FIXTURE_STATUSES}. */
+export const fixtureStatusSchema = z.enum(FIXTURE_STATUSES);
+
+/** Inferred type for {@link fixtureStatusSchema}. */
+export type FixtureStatus = z.infer<typeof fixtureStatusSchema>;
 
 /** Per-occurrence RSVP answers. */
 export const RSVP_STATUSES = ["going", "not_going", "maybe"] as const;

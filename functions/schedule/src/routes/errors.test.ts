@@ -18,7 +18,12 @@ describe('mapScheduleError', () => {
       expect(mapScheduleError(new Error(message))?.statusCode).toBe(401);
     }
 
-    for (const message of ['team_not_found', 'event_not_found', 'occurrence_not_found'] as const) {
+    for (const message of [
+      'team_not_found',
+      'event_not_found',
+      'occurrence_not_found',
+      'fixture_not_found',
+    ] as const) {
       expect(mapScheduleError(new Error(message))?.statusCode).toBe(404);
     }
 
@@ -37,9 +42,20 @@ describe('mapScheduleError', () => {
       'invalid_by_week_day',
       'invalid_occurrence_starts_at',
       'invalid_body',
+      'side_required',
+      'fixture_exists',
+      'recurring_event',
+      'same_team',
+      'fixture_not_proposed',
+      'fixture_not_linked',
+      'event_already_linked',
+      'fixture_locked',
+      'fixture_linked',
     ] as const) {
       expect(mapScheduleError(new Error(message))?.statusCode).toBe(400);
     }
+
+    expect(mapScheduleError(new Error('sport_mismatch'))?.statusCode).toBe(409);
 
     const conditional = new Error('x');
     conditional.name = 'ConditionalCheckFailedException';

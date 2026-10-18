@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { callerCanGrant, highestRole, rolesFromMembership } from '@gameplan/rules';
 import { TEAM_ROLES, type TeamRole } from '@gameplan/types';
 import { errorMessageKey, queryError } from '@/src/errors';
+import { RefreshableScroll } from '@/src/pull-refresh';
 import { RoleSetPicker } from '@/src/role-picker';
 import { useDownloadUrl } from '@/src/media';
 import { assignMemberRolesMutation, memberQuery } from '@/src/queries/teams';
@@ -60,7 +61,7 @@ export default function MemberProfileScreen() {
   };
 
   return (
-    <View className="flex-1 px-4 pt-4">
+    <RefreshableScroll className="flex-1 px-4 pt-4">
       <ErrorText message={queryError(loaded.error) !== undefined ? t('errors.memberProfile.notFound') : undefined} />
       <View className="mb-3">
         <ProfilePhoto name={member?.displayName} uri={photoUrl} />
@@ -83,6 +84,6 @@ export default function MemberProfileScreen() {
       {member?.positions !== undefined && member.positions.length > 0 ? (
         <Text className="mt-2 text-ink">{member.positions.join(', ')}</Text>
       ) : null}
-    </View>
+    </RefreshableScroll>
   );
 }

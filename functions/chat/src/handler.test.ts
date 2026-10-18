@@ -366,6 +366,28 @@ describe('chat channels and private chats', () => {
     expect(JSON.parse(result.body ?? '')).toMatchObject({ kind: 'private' });
   });
 
+  it('stores the name on a private chat with teammates', async () => {
+    const a = authFor();
+    const b = authFor();
+    seedProfile({ userId: a.userId, email: `${a.userId}@example.com`, accountKind: 'adult' });
+    seedProfile({ userId: b.userId, email: `${b.userId}@example.com`, accountKind: 'adult' });
+    seedTeam({
+      members: [
+        { userId: a.userId, role: 'coach' },
+        { userId: b.userId, role: 'player' },
+      ],
+    });
+
+    const result = await handler(
+      httpEvent('POST', '/chat/private', {
+        headers: { authorization: a.authorization },
+        body: { memberIds: [b.userId], name: 'Ride home' },
+      }),
+    );
+    expect(result.statusCode).toBe(201);
+    expect(JSON.parse(result.body ?? '')).toMatchObject({ kind: 'private', name: 'Ride home' });
+  });
+
   it('rejects a private chat that puts a minor with an outsider', async () => {
     const minor = authFor();
     const outsider = authFor();

@@ -200,6 +200,24 @@ export const carpoolSk = (occurrenceStartsAt: string, eventId: string): string =
 /** Sort-key prefix shared by every carpool on a team. */
 export const CARPOOL_SK_PREFIX = 'CARPOOL#' as const;
 
+/** `FIXTURE#<fixtureId>` — one shared game. */
+export const fixturePk = (fixtureId: string): string => `FIXTURE#${fixtureId}`;
+
+/** Fixed sort key for the fixture metadata row. */
+export const fixtureMetaSk = (): string => 'META';
+
+/** Sort key for a team's link to a fixture, under the team partition. */
+export const fixtureLinkSk = (fixtureId: string): string => `FIXTURE#${fixtureId}`;
+
+/** Sort-key prefix for every fixture link on a team. */
+export const FIXTURE_LINK_SK_PREFIX = 'FIXTURE#' as const;
+
+/** Sort key for an incoming fixture proposal, under the invitee team. */
+export const fixtureInviteSk = (fixtureId: string): string => `FIXTURE_INVITE#${fixtureId}`;
+
+/** Sort-key prefix for every incoming fixture proposal on a team. */
+export const FIXTURE_INVITE_SK_PREFIX = 'FIXTURE_INVITE#' as const;
+
 /** Partition that holds due reminder rows for every team. */
 export const REMINDERS_PK = 'REMINDERS' as const;
 

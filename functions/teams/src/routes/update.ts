@@ -55,6 +55,7 @@ export const handleUpdateTeam = route(
       ...(timeZone !== undefined ? { timeZone } : {}),
       ...(location !== undefined ? { location } : {}),
       ...(body.theme !== undefined ? { theme: body.theme } : {}),
+      ...(body.sport !== undefined ? { sport: body.sport } : {}),
     });
     return json(200, toTeamSummary(team, member.roles));
   },

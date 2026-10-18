@@ -477,7 +477,9 @@ on a CloudFront flat-rate plan, because only the pay-as-you-go plan can key a ra
 - **Refresh on the next request, not a timer.** Login and refresh store `expiresIn` as an in-memory `expiresAt`.
   The next product call (including the socket ticket) runs `refresh()` when that token would expire within five
   minutes, then sends the new bearer token. Idle tabs and backgrounded phones do not start a clock. A `401`
-  retry remains the backstop when expiry was unknown or the clock was wrong.
+  retry remains the backstop when expiry was unknown or the clock was wrong. Boot paths (`/`, the persist-cache
+  buster, the signed-in shell) use `ensureSession()`, which skips identity when a fresh token is already in
+  memory, so a full page load does not call `/identity/refresh` twice.
 - **Native sign-in handoff.** The system browser that completes Managed login cannot share cookies with the app,
   so the callback stores the refresh token under a random 32-byte, one-time code that expires after 60 seconds, and redirects to
   `gameplan://auth?code=…`. Redeeming it is a conditional delete, so a code works exactly once, and an expired

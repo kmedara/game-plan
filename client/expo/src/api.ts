@@ -26,7 +26,10 @@ import type {
   CreateTeamBody,
   CreateTeamChannelBody,
   DeviceRegistration,
+  AcceptFixtureBody,
   EventResponse,
+  Fixture,
+  FixtureList,
   InvitePreview,
   JoinRequestCreated,
   JoinRequestList,
@@ -34,6 +37,7 @@ import type {
   OauthExchangeResponse,
   PresignDownloadQuery,
   PresignDownloadResponse,
+  ProposeFixtureBody,
   PresignUploadBody,
   PresignUploadResponse,
   RegisterDeviceBody,
@@ -60,6 +64,7 @@ import type {
   TeamMemberProfile,
   TeamSummary,
   UpdateEventBody,
+  UpdateFixtureBody,
   UpdatePositionsBody,
   UpdateProfileBody,
   UpdateTeamBody,
@@ -213,6 +218,18 @@ export class ApiClient {
       if (!(error instanceof TypeError)) this.setSessionHint(false);
       return false;
     }
+  }
+
+  /**
+   * Restores a session when none is in memory, or refreshes one that is about
+   * to expire. A fresh access token is left alone so `/`, the persist-cache
+   * buster, and the signed-in shell do not each call `/identity/refresh`.
+   *
+   * Use {@link refreshSession} after a `401`. That path must hit identity.
+   */
+  async ensureSession(): Promise<boolean> {
+    if (this.isAuthenticated() && !this.session.needsAccessRefresh()) return true;
+    return this.refreshSession();
   }
 
   private setSessionHint(present: boolean): void {
@@ -386,6 +403,34 @@ export class ApiClient {
     return this.request('PATCH', `/schedule/teams/${teamId}/events/${encodeURIComponent(eventId)}`, body);
   }
 
+  async listFixtures(teamId: string): Promise<FixtureList> {
+    return this.request('GET', `/schedule/teams/${teamId}/fixtures`);
+  }
+
+  async proposeFixture(teamId: string, eventId: string, body: ProposeFixtureBody): Promise<Fixture> {
+    return this.request(
+      'POST',
+      `/schedule/teams/${teamId}/events/${encodeURIComponent(eventId)}/fixture`,
+      body,
+    );
+  }
+
+  async acceptFixture(fixtureId: string, body: AcceptFixtureBody): Promise<Fixture> {
+    return this.request('POST', `/schedule/fixtures/${encodeURIComponent(fixtureId)}/accept`, body);
+  }
+
+  async declineFixture(fixtureId: string): Promise<void> {
+    await this.request('POST', `/schedule/fixtures/${encodeURIComponent(fixtureId)}/decline`);
+  }
+
+  async updateFixture(fixtureId: string, body: UpdateFixtureBody): Promise<Fixture> {
+    return this.request('PATCH', `/schedule/fixtures/${encodeURIComponent(fixtureId)}`, body);
+  }
+
+  async unlinkFixture(fixtureId: string): Promise<void> {
+    await this.request('DELETE', `/schedule/fixtures/${encodeURIComponent(fixtureId)}`);
+  }
+
   async deleteEvent(teamId: string, eventId: string): Promise<void> {
     await this.request('DELETE', `/schedule/teams/${teamId}/events/${encodeURIComponent(eventId)}`);
   }
@@ -479,8 +524,8 @@ export class ApiClient {
     return body.user;
   }
 
-  async createPrivateChat(memberIds: CreatePrivateChatBody['memberIds']): Promise<ChatSummary> {
-    return this.request('POST', '/chat/private', { memberIds });
+  async createPrivateChat(body: CreatePrivateChatBody): Promise<ChatSummary> {
+    return this.request('POST', '/chat/private', body);
   }
 
   async createTeamChannel(teamId: string, name: CreateTeamChannelBody['name']): Promise<ChatSummary> {

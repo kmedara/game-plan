@@ -4,7 +4,11 @@
 
 import type { ChatSummary } from '@gameplan/types';
 
-const kindRank = (kind: ChatSummary['kind']): number => (kind === 'default' ? 0 : kind === 'channel' ? 1 : 2);
+const kindRank = (kind: ChatSummary['kind']): number =>
+  kind === 'default' ? 0 : kind === 'channel' ? 1 : 2;
+
+/** Fixture threads have no single team, so they sit with private chats. */
+const isLooseChat = (kind: ChatSummary['kind']): boolean => kind === 'private' || kind === 'fixture';
 
 /**
  * Groups team chats under the membership they belong to.
@@ -24,10 +28,10 @@ export const groupChatsByTeam = <T extends { teamId: string }>(
   sections: teams.map((team) => ({
     team,
     chats: chats
-      .filter((chat) => chat.kind !== 'private' && chat.teamId === team.teamId)
+      .filter((chat) => !isLooseChat(chat.kind) && chat.teamId === team.teamId)
       .sort((left, right) => kindRank(left.kind) - kindRank(right.kind) || left.name.localeCompare(right.name)),
   })),
   privateChats: chats
-    .filter((chat) => chat.kind === 'private')
+    .filter((chat) => isLooseChat(chat.kind))
     .sort((left, right) => left.name.localeCompare(right.name)),
 });

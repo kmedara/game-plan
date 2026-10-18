@@ -31,6 +31,7 @@ export const mapScheduleError: ErrorMappingFn = (
     case "team_not_found":
     case "event_not_found":
     case "occurrence_not_found":
+    case "fixture_not_found":
       return notFound();
     case "not_a_member":
     case "forbidden":
@@ -50,7 +51,18 @@ export const mapScheduleError: ErrorMappingFn = (
     case "carpool_member_not_found":
     case "carpool_full":
     case "carpool_own_offer":
+    case "side_required":
+    case "fixture_exists":
+    case "recurring_event":
+    case "same_team":
+    case "fixture_not_proposed":
+    case "fixture_not_linked":
+    case "event_already_linked":
+    case "fixture_locked":
+    case "fixture_linked":
       return badRequest(error.message);
+    case "sport_mismatch":
+      return conflict("sport_mismatch");
     case "carpool_offer_not_found":
       return notFound();
     default:

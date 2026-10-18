@@ -28,7 +28,7 @@ export default function CompleteProfileScreen() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void api.refreshSession().then((ok) => {
+    void api.ensureSession().then((ok) => {
       const name = prefilledName(api.user?.displayName);
       if (ok && name.length > 0) setDisplayName(name);
     });
@@ -39,11 +39,11 @@ export default function CompleteProfileScreen() {
     setBusy(true);
     try {
       if (!api.isAuthenticated()) {
-        const restored = await api.refreshSession();
+        const restored = await api.ensureSession();
         if (!restored) throw new Error('unauthorized');
       }
       await api.completeProfile({ birthday: birthday.trim(), displayName: displayName.trim() });
-      router.replace('/teams');
+      router.replace('/schedule');
     } finally {
       setBusy(false);
     }

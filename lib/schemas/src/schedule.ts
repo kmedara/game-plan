@@ -2,7 +2,7 @@
  * Team schedule wire contracts.
  */
 
-import { eventTypeSchema, rsvpStatusSchema } from './enums.js';
+import { eventTypeSchema, fixtureStatusSchema, gameSideSchema, rsvpStatusSchema } from './enums.js';
 import { teamPositionSchema } from './teams.js';
 import { z } from './zod.js';
 
@@ -38,6 +38,28 @@ const hasPairedCoordinates = (value: {
   return hasLat === hasLng;
 };
 
+/** Opponent label on a game. A linked fixture replaces this with the other club's name. */
+const opponentNameSchema = z.string().trim().min(1).max(100);
+
+/**
+ * Opponent and side belong only on games.
+ *
+ * @param body - A create or patch body.
+ * @param ctx - The Zod issue collector.
+ */
+const rejectGameFieldsOnOtherTypes = (
+  body: { eventType?: string; opponentName?: string | null; side?: string | null },
+  ctx: z.RefinementCtx,
+): void => {
+  if (body.eventType === undefined || body.eventType === 'game') return;
+  if (body.opponentName !== undefined && body.opponentName !== null) {
+    ctx.addIssue({ code: 'custom', message: 'not_a_game', path: ['opponentName'] });
+  }
+  if (body.side !== undefined && body.side !== null) {
+    ctx.addIssue({ code: 'custom', message: 'not_a_game', path: ['side'] });
+  }
+};
+
 /** Body for creating a team event. */
 export const createEventBodySchema = z
   .object({
@@ -50,9 +72,12 @@ export const createEventBodySchema = z
     latitude: latitudeSchema.optional(),
     longitude: longitudeSchema.optional(),
     recurrence: recurrenceRuleSchema.optional(),
+    opponentName: opponentNameSchema.optional(),
+    side: gameSideSchema.optional(),
   })
   .strict()
-  .refine(hasPairedCoordinates, { message: 'coordinates_incomplete' });
+  .refine(hasPairedCoordinates, { message: 'coordinates_incomplete' })
+  .superRefine(rejectGameFieldsOnOtherTypes);
 
 /** Query for expanding events into a visible date window. */
 export const scheduleWindowQuerySchema = z.object({
@@ -70,13 +95,16 @@ const eventPatchShape = {
   latitude: z.union([latitudeSchema, z.null()]).optional(),
   longitude: z.union([longitudeSchema, z.null()]).optional(),
   recurrence: z.union([recurrenceRuleSchema, z.null()]).optional(),
+  opponentName: z.union([opponentNameSchema, z.null()]).optional(),
+  side: z.union([gameSideSchema, z.null()]).optional(),
 };
 
 /** Body for editing a team event. */
 export const updateEventBodySchema = z
   .object(eventPatchShape)
   .strict()
-  .refine(hasPairedCoordinates, { message: 'coordinates_incomplete' });
+  .refine(hasPairedCoordinates, { message: 'coordinates_incomplete' })
+  .superRefine(rejectGameFieldsOnOtherTypes);
 
 /** Identifies one expanded instant of a series. */
 export const occurrenceTargetSchema = z
@@ -92,7 +120,8 @@ export const exceptionEventBodySchema = z
     ...eventPatchShape,
   })
   .strict()
-  .refine(hasPairedCoordinates, { message: 'coordinates_incomplete' });
+  .refine(hasPairedCoordinates, { message: 'coordinates_incomplete' })
+  .superRefine(rejectGameFieldsOnOtherTypes);
 
 /** Body for a per-occurrence RSVP. */
 export const rsvpBodySchema = z
@@ -126,6 +155,9 @@ export const scheduleOccurrenceSchema = z
     recurring: z.boolean(),
     seriesEventId: z.string().min(1).optional(),
     originalStartsAt: z.string().datetime().optional(),
+    opponentName: z.string().min(1).optional(),
+    side: gameSideSchema.optional(),
+    fixtureId: z.string().min(1).optional(),
     rsvps: z.array(scheduleOccurrenceRsvpSchema),
   })
   .strict()
@@ -158,6 +190,9 @@ export const eventResponseSchema = z
     seriesEventId: z.string().min(1).optional(),
     originalStartsAt: z.string().datetime().optional(),
     exdates: z.array(z.string().datetime()).optional(),
+    opponentName: z.string().min(1).optional(),
+    side: gameSideSchema.optional(),
+    fixtureId: z.string().min(1).optional(),
     createdBy: z.string().min(1),
     createdAt: z.string().min(1),
     updatedAt: z.string().min(1),
@@ -251,6 +286,72 @@ export const carpoolResponseSchema = z
   })
   .strict();
 
+/** Body for proposing a game to another club. */
+export const proposeFixtureBodySchema = z
+  .object({
+    teamId: z.string().min(1),
+  })
+  .strict();
+
+/** Shared start and venue, used when accepting or editing a fixture. */
+const fixtureFactsShape = {
+  startsAt: z.string().datetime().optional(),
+  endsAt: z.union([z.string().datetime(), z.null()]).optional(),
+  location: z.union([z.string().max(500), z.null()]).optional(),
+  latitude: z.union([latitudeSchema, z.null()]).optional(),
+  longitude: z.union([longitudeSchema, z.null()]).optional(),
+};
+
+/** Body for accepting a proposed fixture onto a new or existing game. */
+export const acceptFixtureBodySchema = z
+  .object({
+    eventId: z.string().min(1).optional(),
+    ...fixtureFactsShape,
+  })
+  .strict()
+  .refine(hasPairedCoordinates, { message: 'coordinates_incomplete' });
+
+/** Body for changing the shared start or venue. */
+export const updateFixtureBodySchema = z
+  .object(fixtureFactsShape)
+  .strict()
+  .refine(hasPairedCoordinates, { message: 'coordinates_incomplete' })
+  .refine((body) => Object.keys(body).length > 0, { message: 'invalid_body' });
+
+/** One shared game from the fixture routes. */
+export const fixtureSchema = z
+  .object({
+    fixtureId: z.string().min(1),
+    status: fixtureStatusSchema,
+    startsAt: z.string().min(1),
+    endsAt: z.string().min(1).optional(),
+    location: z.string().optional(),
+    latitude: latitudeSchema.optional(),
+    longitude: longitudeSchema.optional(),
+    homeName: z.string().min(1),
+    awayName: z.string().min(1),
+    homeTeamId: z.string().min(1).optional(),
+    awayTeamId: z.string().min(1).optional(),
+    homeEventId: z.string().min(1).optional(),
+    awayEventId: z.string().min(1).optional(),
+    proposerTeamId: z.string().min(1),
+    inviteeTeamId: z.string().min(1),
+    sport: z.string().min(1).max(40).optional(),
+    chatId: z.string().min(1).optional(),
+    createdAt: z.string().min(1),
+    updatedAt: z.string().min(1),
+  })
+  .strict()
+  .refine(hasPairedCoordinates, { message: 'coordinates_incomplete' });
+
+/** `GET /schedule/teams/:teamId/fixtures`. */
+export const fixtureListSchema = z
+  .object({
+    teamId: z.string().min(1),
+    fixtures: z.array(fixtureSchema),
+  })
+  .strict();
+
 /** Stored RSVP from `PUT /schedule/teams/:teamId/rsvps`. */
 export const rsvpResponseSchema = z
   .object({
@@ -321,3 +422,18 @@ export type CarpoolClaimBody = z.infer<typeof carpoolClaimBodySchema>;
 
 /** Inferred type for {@link carpoolResponseSchema}. */
 export type CarpoolResponse = z.infer<typeof carpoolResponseSchema>;
+
+/** Inferred type for {@link proposeFixtureBodySchema}. */
+export type ProposeFixtureBody = z.infer<typeof proposeFixtureBodySchema>;
+
+/** Inferred type for {@link acceptFixtureBodySchema}. */
+export type AcceptFixtureBody = z.infer<typeof acceptFixtureBodySchema>;
+
+/** Inferred type for {@link updateFixtureBodySchema}. */
+export type UpdateFixtureBody = z.infer<typeof updateFixtureBodySchema>;
+
+/** Inferred type for {@link fixtureSchema}. */
+export type Fixture = z.infer<typeof fixtureSchema>;
+
+/** Inferred type for {@link fixtureListSchema}. */
+export type FixtureList = z.infer<typeof fixtureListSchema>;

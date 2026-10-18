@@ -31,6 +31,7 @@ export const applyLiveEvent = (queryClient: QueryClient, event: FanoutJob): void
   }
   if (event.type === 'schedule_changed' || event.type === 'event_moved' || event.type === 'event_reminder') {
     void queryClient.invalidateQueries({ queryKey: queryKeys.teamSchedule(event.teamId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.fixtures(event.teamId) });
     return;
   }
   if (event.type === 'join_requested') {

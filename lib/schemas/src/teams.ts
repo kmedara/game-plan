@@ -15,11 +15,15 @@ export const noSpecialCharsString = z
     message: "Name must be alphanumeric and contain only letters and numbers",
   });
 
+/** Sport name stored lowercase so two clubs can be compared. */
+export const sportSchema = z.string().trim().min(1).max(40);
+
 /** Body for creating a team (also creates the default chat). */
 export const createTeamBodySchema = z
   .object({
     name: displayNameSchema,
     timeZone: timeZoneSchema,
+    sport: sportSchema.optional(),
   })
   .strict();
 
@@ -82,6 +86,7 @@ export const updateTeamBodySchema = z
     name: z.string().min(1).max(30).optional(),
     timeZone: z.string().min(1).max(64).optional(),
     location: z.union([z.string().max(200), z.null()]).optional(),
+    sport: z.union([sportSchema, z.null()]).optional(),
     theme: z.union([updateTeamThemeSchema, z.null()]).optional(),
   })
   .strict();
@@ -149,6 +154,7 @@ export const teamSummarySchema = z
     name: z.string().min(1),
     timeZone: z.string().min(1),
     location: z.string().optional(),
+    sport: z.string().min(1).max(40).optional(),
     theme: teamThemeSchema.optional(),
     /** Highest-ranked role the caller holds. */
     role: teamRoleSchema,
@@ -331,6 +337,9 @@ export const rolePermissionsResponseSchema = z
 
 /** Inferred type for {@link teamThemeSchema}. */
 export type TeamTheme = z.infer<typeof teamThemeSchema>;
+
+/** Inferred type for {@link sportSchema}. */
+export type Sport = z.infer<typeof sportSchema>;
 
 /** Inferred type for {@link createTeamBodySchema}. */
 export type CreateTeamBody = z.infer<typeof createTeamBodySchema>;

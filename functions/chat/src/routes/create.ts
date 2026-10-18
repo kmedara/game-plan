@@ -89,9 +89,13 @@ export const handleCreatePrivateChat = route(
     const participants = await loadChatParticipants(memberIds);
     if (!isMinorChatMembershipAllowed(participants)) throw new Error('minor_chat_rule_violated');
     if (!guardianPresentForAdultMinorChats(participants)) throw new Error('guardian_required');
+    const trimmedName = body.name?.trim();
     const created = await createPrivateChat({
       userId: user.userId,
-      body: { memberIds: memberIds.filter((id) => id !== user.userId) },
+      body: {
+        memberIds: memberIds.filter((id) => id !== user.userId),
+        ...(trimmedName !== undefined && trimmedName.length > 0 ? { name: trimmedName } : {}),
+      },
     });
     return json(201, created);
   },

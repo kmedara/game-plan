@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { FlatList, Image, Linking, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { errorMessageKey, queryError } from '@/src/errors';
+import { usePullRefreshList } from '@/src/pull-refresh';
 import { pickAndUploadImage, useDownloadUrl, type UploadedImage } from '@/src/media';
 import { chatsQuery, messagesQuery, sendMessageMutation } from '@/src/queries/chat';
 import { useApp, useBrandTeam } from '@/src/state';
@@ -63,6 +64,7 @@ export default function ChatThreadScreen() {
   const removePhoto = (key: string): void => {
     setPhotos((current) => current.filter((photo) => photo.key !== key));
   };
+  const pull = usePullRefreshList();
 
   return (
     <View className="flex-1">
@@ -72,11 +74,13 @@ export default function ChatThreadScreen() {
           {scrim !== undefined ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]} /> : null}
         </>
       ) : null}
+      {pull.indicator}
       <FlatList
+        {...pull.listProps}
         data={messages}
         inverted
         keyExtractor={(item) => item.messageId}
-        style={{ backgroundColor: 'transparent' }}
+        style={[{ backgroundColor: 'transparent' }, pull.listProps.style]}
         contentContainerClassName="px-3 py-3"
         renderItem={({ item }) => {
           const mine = item.senderId === api.user?.userId;

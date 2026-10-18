@@ -20,6 +20,7 @@ export const queryKeys = {
   joinRequests: (teamId: string) => ['joinRequests', teamId] as const,
   teamSchedule: (teamId: string) => ['schedule', teamId] as const,
   schedule: (teamId: string, from: string, to: string) => ['schedule', teamId, from, to] as const,
+  fixtures: (teamId: string) => ['fixtures', teamId] as const,
   event: (teamId: string, eventId: string) => ['event', teamId, eventId] as const,
   lineup: (teamId: string, eventId: string, occurrenceStartsAt: string) =>
     ['lineup', teamId, eventId, occurrenceStartsAt] as const,

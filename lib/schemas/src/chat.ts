@@ -18,6 +18,8 @@ export const createTeamChannelBodySchema = z
 export const createPrivateChatBodySchema = z
   .object({
     memberIds: z.array(z.string().min(1)).min(1),
+    /** Shown in the chat list. Omitted chats keep the default private-chat name. */
+    name: z.string().min(1).max(100).optional(),
   })
   .strict();
 

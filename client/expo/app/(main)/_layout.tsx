@@ -17,6 +17,7 @@ import { canCreateTeam } from '@gameplan/rules';
 import { useDownloadUrl } from '@/src/media';
 import { adoptCacheOwner } from '@/src/query-client';
 import { useLiveQuerySync } from '@/src/use-live-query-sync';
+import { PullRefreshProvider } from '@/src/pull-refresh';
 import { useApp } from '@/src/state';
 import { useTeamsWithPermission } from '@/src/team-access';
 import { colors } from '@/src/theme';
@@ -59,7 +60,7 @@ export default function MainLayout() {
   const headerName = brandTeam?.name ?? (section !== undefined ? t(titles[section] ?? '') : '');
 
   useEffect(() => {
-    void api.refreshSession().then(async (ok) => {
+    void api.ensureSession().then(async (ok) => {
       if (ok) await adoptCacheOwner(queryClient, api.user?.userId);
       setReady(true);
       if (ok) live.connect();
@@ -146,7 +147,9 @@ export default function MainLayout() {
       ) : null}
       </LinearGradient>
       <View className="flex-1">
-        <Slot />
+        <PullRefreshProvider>
+          <Slot />
+        </PullRefreshProvider>
       </View>
       <View className="flex-row border-t border-line bg-raised pb-6 pt-2">
         {tabs.map((tab) => {

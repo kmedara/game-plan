@@ -14,6 +14,15 @@ export type AcceptedInvite = {
   joinedAt: string;
 }
 
+export type AcceptFixtureBody = {
+  eventId?: string;
+  startsAt?: string;
+  endsAt?: string | null;
+  location?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
 export type AccountKind = 'adult' | 'minor';
 
 export type ApprovedJoinRequest = {
@@ -73,12 +82,12 @@ export type CarpoolResponse = {
   }[];
 }
 
-export type ChatKind = 'default' | 'channel' | 'private';
+export type ChatKind = 'default' | 'channel' | 'private' | 'fixture';
 
 export type ChatList = {
   chats: {
     chatId: string;
-    kind: 'default' | 'channel' | 'private';
+    kind: 'default' | 'channel' | 'private' | 'fixture';
     name: string;
     teamId?: string;
     createdBy: string;
@@ -106,7 +115,7 @@ export type ChatParticipant = {
 
 export type ChatSummary = {
   chatId: string;
-  kind: 'default' | 'channel' | 'private';
+  kind: 'default' | 'channel' | 'private' | 'fixture';
   name: string;
   teamId?: string;
   createdBy: string;
@@ -144,6 +153,8 @@ export type CreateEventBody = {
     count?: number;
     byWeekDay?: string[];
   };
+  opponentName?: string;
+  side?: 'home' | 'away';
 }
 
 export type CreateGuardianInviteBody = {
@@ -159,11 +170,13 @@ export type CreatePrivateChatBody = {
    * @minItems 1
    */
   memberIds: [string, ...string[]];
+  name?: string;
 }
 
 export type CreateTeamBody = {
   name: string;
   timeZone: string;
+  sport?: string;
 }
 
 export type CreateTeamChannelBody = {
@@ -206,6 +219,9 @@ export type EventResponse = {
   seriesEventId?: string;
   originalStartsAt?: string;
   exdates?: string[];
+  opponentName?: string;
+  side?: 'home' | 'away';
+  fixtureId?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -230,6 +246,8 @@ export type ExceptionEventBody = {
     count?: number;
     byWeekDay?: string[];
   } | null;
+  opponentName?: string | null;
+  side?: ('home' | 'away') | null;
 }
 
 export type FanoutJob =
@@ -277,6 +295,57 @@ export type FanoutJob =
       teamName: string;
       requesterDisplayName: string;
     };
+
+export type FixtureList = {
+  teamId: string;
+  fixtures: {
+    fixtureId: string;
+    status: 'proposed' | 'linked';
+    startsAt: string;
+    endsAt?: string;
+    location?: string;
+    latitude?: number;
+    longitude?: number;
+    homeName: string;
+    awayName: string;
+    homeTeamId?: string;
+    awayTeamId?: string;
+    homeEventId?: string;
+    awayEventId?: string;
+    proposerTeamId: string;
+    inviteeTeamId: string;
+    sport?: string;
+    chatId?: string;
+    createdAt: string;
+    updatedAt: string;
+  }[];
+}
+
+export type Fixture = {
+  fixtureId: string;
+  status: 'proposed' | 'linked';
+  startsAt: string;
+  endsAt?: string;
+  location?: string;
+  latitude?: number;
+  longitude?: number;
+  homeName: string;
+  awayName: string;
+  homeTeamId?: string;
+  awayTeamId?: string;
+  homeEventId?: string;
+  awayEventId?: string;
+  proposerTeamId: string;
+  inviteeTeamId: string;
+  sport?: string;
+  chatId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type FixtureStatus = 'proposed' | 'linked';
+
+export type GameSide = 'home' | 'away';
 
 export type GuardianLink = {
   inviteId?: string;
@@ -454,6 +523,7 @@ export type PresignDownloadQuery = {
 export type PresignDownloadResponse = {
   downloadUrl: string;
   objectKey: string;
+  expiresAt: string;
 }
 
 export type PresignUploadBody = {
@@ -465,6 +535,10 @@ export type PresignUploadResponse = {
   uploadUrl: string;
   objectKey: string;
   maxBytes: 15728640;
+}
+
+export type ProposeFixtureBody = {
+  teamId: string;
 }
 
 export type RecurrenceRule = {
@@ -556,6 +630,9 @@ export type ScheduleList = {
     recurring: boolean;
     seriesEventId?: string;
     originalStartsAt?: string;
+    opponentName?: string;
+    side?: 'home' | 'away';
+    fixtureId?: string;
     rsvps: {
       userId: string;
       status: 'going' | 'not_going' | 'maybe';
@@ -576,6 +653,9 @@ export type ScheduleOccurrence = {
   recurring: boolean;
   seriesEventId?: string;
   originalStartsAt?: string;
+  opponentName?: string;
+  side?: 'home' | 'away';
+  fixtureId?: string;
   rsvps: {
     userId: string;
     status: 'going' | 'not_going' | 'maybe';
@@ -637,6 +717,8 @@ export type SocketTicket = {
   expiresIn: number;
 }
 
+export type Sport = string;
+
 export type TeamDirectoryHit = {
   teamId: string;
   name: string;
@@ -680,6 +762,7 @@ export type TeamList = {
     name: string;
     timeZone: string;
     location?: string;
+    sport?: string;
     theme?: {
       primary?: string;
       secondary?: string;
@@ -766,6 +849,7 @@ export type TeamSummary = {
   name: string;
   timeZone: string;
   location?: string;
+  sport?: string;
   theme?: {
     primary?: string;
     secondary?: string;
@@ -811,6 +895,16 @@ export type UpdateEventBody = {
     count?: number;
     byWeekDay?: string[];
   } | null;
+  opponentName?: string | null;
+  side?: ('home' | 'away') | null;
+}
+
+export type UpdateFixtureBody = {
+  startsAt?: string;
+  endsAt?: string | null;
+  location?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export type UpdatePositionsBody = {
@@ -858,6 +952,7 @@ export type UpdateTeamBody = {
   name?: string;
   timeZone?: string;
   location?: string | null;
+  sport?: string | null;
   theme?: {
     primary?: string | null;
     secondary?: string | null;
@@ -894,11 +989,15 @@ export type UserSearchPolicy = {
 
 export const ACCOUNT_KINDS = ["adult", "minor"] as const;
 
-export const CHAT_KINDS = ["default", "channel", "private"] as const;
+export const CHAT_KINDS = ["default", "channel", "private", "fixture"] as const;
 
 export const DEVICE_PLATFORMS = ["ios", "android", "web"] as const;
 
 export const EVENT_TYPES = ["practice", "game", "meeting", "other"] as const;
+
+export const FIXTURE_STATUSES = ["proposed", "linked"] as const;
+
+export const GAME_SIDES = ["home", "away"] as const;
 
 export const RSVP_STATUSES = ["going", "not_going", "maybe"] as const;
 

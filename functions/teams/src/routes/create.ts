@@ -26,6 +26,7 @@ export const handleCreateTeam = route(
       userId: user.userId,
       name: body.name,
       timeZone: body.timeZone,
+      ...(body.sport !== undefined ? { sport: body.sport } : {}),
     });
     return json(201, toTeamSummary(team, 'team_admin'));
   },

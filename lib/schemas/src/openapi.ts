@@ -47,8 +47,11 @@ import {
   userProfileSchema,
 } from './auth.js';
 import {
+  acceptFixtureBodySchema,
   createEventBodySchema,
   eventResponseSchema,
+  fixtureListSchema,
+  fixtureSchema,
   carpoolClaimBodySchema,
   carpoolOfferBodySchema,
   carpoolQuerySchema,
@@ -61,8 +64,10 @@ import {
   scheduleListSchema,
   exceptionEventBodySchema,
   occurrenceTargetSchema,
+  proposeFixtureBodySchema,
   scheduleWindowQuerySchema,
   updateEventBodySchema,
+  updateFixtureBodySchema,
 } from './schedule.js';
 import {
   chatListSchema,
@@ -373,6 +378,34 @@ const AREAS: Record<string, AreaSpec> = {
           body: carpoolClaimBodySchema,
           response: carpoolResponseSchema,
         },
+      },
+      '/schedule/teams/{teamId}/events/{eventId}/fixture': {
+        post: {
+          summary: 'Propose this game to another club',
+          body: proposeFixtureBodySchema,
+          response: fixtureSchema,
+        },
+      },
+      '/schedule/teams/{teamId}/fixtures': {
+        get: { summary: 'Pending invites and linked fixtures', response: fixtureListSchema },
+      },
+      '/schedule/fixtures/{fixtureId}/accept': {
+        post: {
+          summary: 'Accept a proposed fixture',
+          body: acceptFixtureBodySchema,
+          response: fixtureSchema,
+        },
+      },
+      '/schedule/fixtures/{fixtureId}/decline': {
+        post: { summary: 'Decline a proposed fixture' },
+      },
+      '/schedule/fixtures/{fixtureId}': {
+        patch: {
+          summary: 'Change the shared start or venue',
+          body: updateFixtureBodySchema,
+          response: fixtureSchema,
+        },
+        delete: { summary: 'Unlink both clubs and keep each game' },
       },
     },
   },

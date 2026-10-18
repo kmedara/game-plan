@@ -13,11 +13,12 @@ import { useCalendars } from 'expo-localization';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
-import { Image, Linking, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Image, Linking, Modal, Platform, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { rolesFromMembership } from '@gameplan/rules';
 import { deviceTimeZone, mergeSchedules, type TeamOccurrence } from '@/src/athlete-schedule';
-import { EVENT_TYPES, RSVP_STATUSES, type EventResponse, type EventType, type RecurrenceRule, type RsvpStatus, type ScheduleList, type ScheduleOccurrence, type TeamMember, type UpdateEventBody } from '@gameplan/types';
+import { EVENT_TYPES, RSVP_STATUSES, type EventResponse, type EventType, type Fixture, type GameSide, type RecurrenceRule, type RsvpStatus, type ScheduleList, type ScheduleOccurrence, type TeamMember, type UpdateEventBody } from '@gameplan/types';
+import { GameFixture, IncomingFixtures } from '@/src/fixture-panel';
 import { errorMessageKey, queryError } from '@/src/errors';
 import { EventTimeFields } from '@/src/event-time';
 import { RecurrenceFields } from '@/src/recurrence-fields';
@@ -42,6 +43,7 @@ import {
 } from '@/src/schedule-calendar';
 import { Sheet } from '@/src/sheet';
 import { queryKeys } from '@/src/queries/keys';
+import { RefreshableScroll } from '@/src/pull-refresh';
 import { membersQuery } from '@/src/queries/teams';
 import {
   cancelOccurrenceMutation,
@@ -51,12 +53,14 @@ import {
   createEventMutation,
   deleteEventMutation,
   eventQuery,
+  fixturesQuery,
   lineupMutation,
   lineupQuery,
   rsvpMutation,
   saveOccurrenceMutation,
   scheduleQuery,
   updateEventMutation,
+  updateFixtureMutation,
 } from '@/src/queries/schedule';
 import { useApp, useBrandTeam } from '@/src/state';
 import { useTeamsWithPermission } from '@/src/team-access';
@@ -93,6 +97,10 @@ export default function ScheduleScreen() {
       ) => (previousQuery?.queryKey[1] === team.teamId ? previous : undefined),
     })),
   });
+  const fixtureQueries = useQueries({
+    queries: teams.map((team) => fixturesQuery(api, team.teamId)),
+  });
+  const fixtures = fixtureQueries.flatMap((query) => query.data?.fixtures ?? []);
   const events = mergeSchedules(
     scheduleQueries.flatMap((query, index) => {
       const team = teams[index];
@@ -102,6 +110,7 @@ export default function ScheduleScreen() {
   );
   const createEvent = useMutation(createEventMutation(api, queryClient));
   const updateEvent = useMutation(updateEventMutation(api, queryClient));
+  const updateFixture = useMutation(updateFixtureMutation(api, queryClient));
   const deleteEvent = useMutation(deleteEventMutation(api, queryClient));
   const saveOccurrence = useMutation(saveOccurrenceMutation(api, queryClient));
   const cancelOccurrence = useMutation(cancelOccurrenceMutation(api, queryClient));
@@ -129,9 +138,9 @@ export default function ScheduleScreen() {
 
   if (teams.length === 0) {
     return (
-      <View className="flex-1 px-4 pt-6">
+      <RefreshableScroll className="flex-1 px-4 pt-6">
         <Text>{t('schedule.empty')}</Text>
-      </View>
+      </RefreshableScroll>
     );
   }
 
@@ -140,8 +149,9 @@ export default function ScheduleScreen() {
   const primaryMaps: MapsProvider = Platform.OS === 'ios' ? 'apple' : 'google';
 
   return (
-    <ScrollView className="flex-1 px-3 pt-3">
+    <RefreshableScroll className="flex-1 px-3 pt-3">
       <ErrorText message={error ?? loadError} />
+      <IncomingFixtures fixtures={fixtures} teamIds={manageable.map((team) => team.teamId)} games={events} />
       <View className="mb-2 flex-row items-center justify-between">
         <Pressable
           accessibilityRole="button"
@@ -197,12 +207,13 @@ export default function ScheduleScreen() {
             key={`${item.teamId}-${item.eventId}-${item.startsAt}`}
             item={item}
             zone={zone}
-            color={brandColors(eventTeam?.theme).accent}
+            color={singleTeam ? undefined : brandColors(eventTeam?.theme).accent}
             teamName={singleTeam ? undefined : eventTeam?.name}
-            logoKey={eventTeam?.theme?.logoKey}
+            logoKey={singleTeam ? undefined : eventTeam?.theme?.logoKey}
             logoName={eventTeam?.name}
             userId={api.user?.userId}
             canManage={manageable.some((team) => team.teamId === item.teamId)}
+            canDelete={manageable.some((team) => team.teamId === item.teamId) && item.fixtureId === undefined}
             onView={() => setViewingKey({ teamId: item.teamId, eventId: item.eventId, startsAt: item.startsAt })}
             onEdit={() => {
               const seriesId = item.seriesEventId ?? item.eventId;
@@ -264,6 +275,8 @@ export default function ScheduleScreen() {
             userId={api.user?.userId}
             maps={primaryMaps}
             canManage={manageable.some((team) => team.teamId === viewing.teamId)}
+            canShare={manageable.some((team) => team.teamId === viewing.teamId)}
+            fixture={fixtures.find((fixture) => fixture.fixtureId === viewing.fixtureId)}
             onRsvp={async (status) => {
               if (api.user === undefined) return;
               try {
@@ -311,7 +324,7 @@ export default function ScheduleScreen() {
             dayKey={selected}
             timeZone={teams.find((team) => team.teamId === addingTeamId)?.timeZone ?? zone}
             onCreate={async (body) => {
-              const { endsAt, location, notes, latitude, longitude, recurrence, startsAt, ...rest } = body;
+              const { endsAt, location, notes, latitude, longitude, recurrence, startsAt, opponentName, side, ...rest } = body;
               if (startsAt === undefined) return;
               await createEvent.mutateAsync({
                 teamId: addingTeamId,
@@ -327,6 +340,8 @@ export default function ScheduleScreen() {
                     ? { latitude, longitude }
                     : {}),
                   ...(recurrence !== undefined && recurrence !== null ? { recurrence } : {}),
+                  ...(typeof opponentName === 'string' ? { opponentName } : {}),
+                  ...(side !== undefined && side !== null ? { side } : {}),
                 },
               });
               setAddingTeamId(undefined);
@@ -350,6 +365,33 @@ export default function ScheduleScreen() {
             timeZone={teams.find((team) => team.teamId === editing.item.teamId)?.timeZone ?? zone}
             initial={{ item: editing.item, series: editing.series }}
             onCreate={async (body) => {
+              if (editing.item.fixtureId !== undefined && !editing.item.recurring) {
+                const { startsAt, endsAt, location, latitude, longitude, title, notes } = body;
+                if (startsAt !== undefined) {
+                  await updateFixture.mutateAsync({
+                    fixtureId: editing.item.fixtureId,
+                    body: {
+                      startsAt,
+                      ...(endsAt !== undefined ? { endsAt } : {}),
+                      ...(location !== undefined ? { location } : {}),
+                      ...(latitude !== undefined ? { latitude } : {}),
+                      ...(longitude !== undefined ? { longitude } : {}),
+                    },
+                  });
+                }
+                if (manageable.some((team) => team.teamId === editing.item.teamId)) {
+                  await updateEvent.mutateAsync({
+                    teamId: editing.item.teamId,
+                    eventId: editing.item.eventId,
+                    body: {
+                      ...(title !== undefined ? { title } : {}),
+                      ...(notes !== undefined ? { notes } : {}),
+                    },
+                  });
+                }
+                setEditing(undefined);
+                return;
+              }
               if (!editing.item.recurring) {
                 await updateEvent.mutateAsync({ teamId: editing.item.teamId, eventId: editing.item.eventId, body });
                 setEditing(undefined);
@@ -406,7 +448,7 @@ export default function ScheduleScreen() {
           setEditing(undefined);
         }}
       />
-    </ScrollView>
+    </RefreshableScroll>
   );
 }
 
@@ -478,6 +520,7 @@ const EventRow = ({
   logoName,
   userId,
   canManage,
+  canDelete,
   onView,
   onEdit,
   onDelete,
@@ -485,12 +528,13 @@ const EventRow = ({
 }: {
   item: TeamOccurrence;
   zone: string;
-  color: string;
+  color: string | undefined;
   teamName: string | undefined;
   logoKey: string | undefined;
   logoName: string | undefined;
   userId: string | undefined;
   canManage: boolean;
+  canDelete: boolean;
   onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -502,7 +546,10 @@ const EventRow = ({
   const mine = item.rsvps.find((rsvp) => rsvp.userId === userId)?.status;
   const showLogo = logoKey !== undefined;
   return (
-    <View className="mb-3 rounded-xl bg-inset p-3" style={{ borderLeftWidth: 4, borderLeftColor: color }}>
+    <View
+      className="mb-3 rounded-xl bg-inset p-3"
+      style={color === undefined ? undefined : { borderLeftWidth: 4, borderLeftColor: color }}
+    >
       <Pressable accessibilityRole="button" onPress={onView}>
         <View className={showLogo ? 'pr-24' : canManage ? 'pr-16' : ''}>
           <Text className="font-semibold text-ink">{item.title}</Text>
@@ -545,9 +592,11 @@ const EventRow = ({
           <Pressable accessibilityRole="button" accessibilityLabel={t('schedule.editEvent')} className="p-1.5" onPress={onEdit}>
             <Pencil {...ICON} />
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={t('schedule.deleteEvent')} className="p-1.5" onPress={onDelete}>
-            <TrashIcon />
-          </Pressable>
+          {canDelete ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={t('schedule.deleteEvent')} className="p-1.5" onPress={onDelete}>
+              <TrashIcon />
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -562,6 +611,8 @@ const EventDetail = ({
   userId,
   maps,
   canManage,
+  canShare,
+  fixture,
   onRsvp,
 }: {
   item: ScheduleOccurrence;
@@ -571,6 +622,8 @@ const EventDetail = ({
   userId: string | undefined;
   maps: MapsProvider;
   canManage: boolean;
+  canShare: boolean;
+  fixture: Fixture | undefined;
   onRsvp: (status: RsvpStatus) => Promise<void>;
 }) => {
   const { t } = useTranslation();
@@ -614,6 +667,7 @@ const EventDetail = ({
           <Text className="text-ink">{item.notes}</Text>
         </View>
       ) : null}
+      <GameFixture item={item} teamId={teamId} canShare={canShare} fixture={fixture} />
       {item.latitude !== undefined && item.longitude !== undefined ? (
         <View className="mt-3">
           <MapPicker latitude={item.latitude} longitude={item.longitude} readOnly />
@@ -720,7 +774,7 @@ const AttendanceRow = ({
           className="p-1.5"
           onPress={() => {
             void api
-              .createPrivateChat([userId])
+              .createPrivateChat({ memberIds: [userId] })
               .then(async (chat) => {
                 await queryClient.invalidateQueries({ queryKey: queryKeys.chats });
                 router.push(`/chats/${chat.chatId}`);
@@ -1079,6 +1133,8 @@ const AddEvent = ({
   const seeded = initial === undefined ? undefined : repeatFromSeries(initial.series.recurrence, timeZone);
   const [eventType, setEventType] = useState<EventType>(initial?.item.eventType ?? 'practice');
   const [title, setTitle] = useState(initial?.item.title ?? '');
+  const [opponentName, setOpponentName] = useState(initial?.item.opponentName ?? '');
+  const [side, setSide] = useState<GameSide | undefined>(initial?.item.side);
   const [startMinutes, setStartMinutes] = useState(
     initial === undefined ? DEFAULT_START_MINUTES : minutesInZone(new Date(initial.item.startsAt), timeZone),
   );
@@ -1113,6 +1169,7 @@ const AddEvent = ({
 
   const submit = async (): Promise<boolean | void> => {
     if (title.trim().length === 0) return false;
+    if (eventType === 'game' && side === undefined) return false;
     const window = eventWindow(timeZone, dayKey, startMinutes, end);
     const { startsAt, endsAt } = window;
     const recurrence = recurrenceFromForm({
@@ -1134,6 +1191,12 @@ const AddEvent = ({
       latitude: coords?.latitude ?? null,
       longitude: coords?.longitude ?? null,
       recurrence: recurrence ?? null,
+      ...(eventType === 'game'
+        ? {
+            opponentName: opponentName.trim().length > 0 ? opponentName.trim() : null,
+            side: side ?? null,
+          }
+        : { opponentName: null, side: null }),
     });
   };
 
@@ -1147,6 +1210,18 @@ const AddEvent = ({
         ))}
       </View>
       <Field label={t('addEvent.title')} value={title} onChangeText={setTitle} />
+      {eventType === 'game' ? (
+        <>
+          <Field label={t('schedule.opponent')} value={opponentName} onChangeText={setOpponentName} />
+          <View className="mb-2 flex-row">
+            {(['home', 'away'] as const).map((choice) => (
+              <Pressable key={choice} className="mr-3" onPress={() => setSide(choice)}>
+                <Text className={side === choice ? 'font-bold' : ''}>{t(`schedule.${choice}`)}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </>
+      ) : null}
       <EventTimeFields
         dayKey={dayKey}
         timeZone={timeZone}

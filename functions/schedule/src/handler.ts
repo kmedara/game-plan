@@ -14,12 +14,18 @@ import {
   handleDeleteEvent,
   handleGetCarpool,
   handleGetEvent,
+  handleAcceptFixture,
+  handleDeclineFixture,
   handleGetLineup,
+  handleListFixtures,
   handleListSchedule,
+  handleProposeFixture,
   handlePutCarpool,
   handlePutLineup,
   handleSaveOccurrence,
+  handleUnlinkFixture,
   handleUpdateEvent,
+  handleUpdateFixture,
   handleUpsertRsvp,
 } from './routes/index.js';
 
@@ -63,9 +69,21 @@ const httpHandler = logHttpFailure(async (
       return handleListSchedule(event, teamId);
     }
 
+    if (parts[2] === 'fixtures' && method === 'GET' && parts.length === 3) {
+      return handleListFixtures(event, teamId);
+    }
+
     if (parts[2] === 'events') {
       if (method === 'POST' && parts.length === 3) {
         return handleCreateEvent(event, teamId);
+      }
+      if (
+        method === 'POST' &&
+        parts.length === 5 &&
+        parts[3] !== undefined &&
+        parts[4] === 'fixture'
+      ) {
+        return handleProposeFixture(event, teamId, parts[3]);
       }
       if (parts.length === 4 && parts[3] !== undefined) {
         const eventId = parts[3];
@@ -96,6 +114,18 @@ const httpHandler = logHttpFailure(async (
 
     if (parts[2] === 'carpool' && parts[3] === 'claim' && method === 'PUT' && parts.length === 4) {
       return handleClaimCarpool(event, teamId);
+    }
+  }
+
+  if (parts[0] === 'fixtures' && parts[1] !== undefined) {
+    const fixtureId = parts[1];
+    if (parts.length === 2 && method === 'PATCH') return handleUpdateFixture(event, fixtureId);
+    if (parts.length === 2 && method === 'DELETE') return handleUnlinkFixture(event, fixtureId);
+    if (parts.length === 3 && parts[2] === 'accept' && method === 'POST') {
+      return handleAcceptFixture(event, fixtureId);
+    }
+    if (parts.length === 3 && parts[2] === 'decline' && method === 'POST') {
+      return handleDeclineFixture(event, fixtureId);
     }
   }
 

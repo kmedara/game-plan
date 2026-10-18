@@ -15,6 +15,10 @@ import {
   chatMetaSk,
   chatPk,
   eventSk,
+  fixtureInviteSk,
+  fixtureLinkSk,
+  fixtureMetaSk,
+  fixturePk,
   guardianSk,
   profileSk,
   rolePermissionsSk,
@@ -130,6 +134,8 @@ const seedTeam = (input: {
   teamId?: string;
   userId: string;
   role: TeamRole;
+  name?: string;
+  sport?: string;
   permissions?: Partial<Record<TeamRole, readonly TeamPermission[]>>;
 }): string => {
   const teamId = input.teamId ?? randomUUID();
@@ -137,7 +143,8 @@ const seedTeam = (input: {
     [TABLE_PK]: teamPk(teamId),
     [TABLE_SK]: teamMetaSk(),
     teamId,
-    name: 'Hawks',
+    name: input.name ?? 'Hawks',
+    ...(input.sport !== undefined ? { sport: input.sport } : {}),
     timeZone: 'America/New_York',
     defaultChatId: randomUUID(),
     createdBy: input.userId,
@@ -162,6 +169,34 @@ const seedTeam = (input: {
   }
   return teamId;
 };
+
+/**
+ * Adds another roster member to a seeded team.
+ *
+ * @param teamId - The team id.
+ * @param userId - The member.
+ * @param role - The member's role.
+ */
+const seedMember = (teamId: string, userId: string, role: TeamRole): void => {
+  store.set(itemKey(teamPk(teamId), teamMemberSk(userId)), {
+    [TABLE_PK]: teamPk(teamId),
+    [TABLE_SK]: teamMemberSk(userId),
+    userId,
+    role,
+    joinedAt: new Date().toISOString(),
+  });
+};
+
+/** A one-off game body. */
+const gameBody = (side: 'home' | 'away', opponentName: string) => ({
+  eventType: 'game' as const,
+  title: opponentName,
+  startsAt: '2026-10-03T18:00:00.000Z',
+  endsAt: '2026-10-03T19:30:00.000Z',
+  location: 'Pitch 1',
+  opponentName,
+  side,
+});
 
 /**
  * Parses a JSON response body.
@@ -1028,6 +1063,235 @@ describe('schedule handler (in-memory)', () => {
     const chatId = String(chat?.chatId);
     expect(store.has(itemKey(chatPk(chatId), chatMemberSk(guardian.userId)))).toBe(true);
     expect(store.has(itemKey(userPk(guardian.userId), userChatSk(chatId)))).toBe(true);
+  });
+});
+
+describe('shared fixtures', () => {
+  const kickoff = '2026-10-03T18:00:00.000Z';
+
+  const createGame = async (
+    auth: { authorization: string },
+    teamId: string,
+    side: 'home' | 'away',
+    opponentName: string,
+  ) => {
+    const created = await handler(
+      httpEvent('POST', `/schedule/teams/${teamId}/events`, {
+        headers: { authorization: auth.authorization },
+        body: gameBody(side, opponentName),
+      }),
+    );
+    expect(created.statusCode).toBe(201);
+    return bodyOf(created);
+  };
+
+  it('keeps an away game as a name until the other club is on GamePlan', async () => {
+    const admin = authFor();
+    const teamId = seedTeam({ userId: admin.userId, role: 'team_admin', name: 'Pigs' });
+    const game = await createGame(admin, teamId, 'away', 'Seacoast');
+    expect(game.side).toBe('away');
+    expect(game.opponentName).toBe('Seacoast');
+    expect(game.fixtureId).toBeUndefined();
+    const listed = await handler(
+      httpEvent('GET', `/schedule/teams/${teamId}`, {
+        headers: { authorization: admin.authorization },
+        query: { from: '2026-10-01T00:00:00.000Z', to: '2026-10-31T00:00:00.000Z' },
+      }),
+    );
+    const occurrences = bodyOf(listed).occurrences as Array<{ opponentName?: string; fixtureId?: string }>;
+    expect(occurrences[0]?.opponentName).toBe('Seacoast');
+    expect(occurrences[0]?.fixtureId).toBeUndefined();
+  });
+
+  it('lets a member with manage_events share, and refuses one without it', async () => {
+    const admin = authFor();
+    const coach = authFor();
+    const player = authFor();
+    const homeId = seedTeam({ userId: admin.userId, role: 'team_admin', name: 'Pigs', sport: 'rugby' });
+    seedMember(homeId, coach.userId, 'coach');
+    seedMember(homeId, player.userId, 'player');
+    const awayId = seedTeam({ userId: authFor().userId, role: 'team_admin', name: 'Seacoast', sport: 'rugby' });
+    const game = await createGame(admin, homeId, 'away', 'Seacoast');
+    const refusedPlayer = await handler(
+      httpEvent('POST', `/schedule/teams/${homeId}/events/${game.eventId as string}/fixture`, {
+        headers: { authorization: player.authorization },
+        body: { teamId: awayId },
+      }),
+    );
+    expect(refusedPlayer.statusCode).toBe(403);
+    const refusedCoach = await handler(
+      httpEvent('POST', `/schedule/teams/${homeId}/events/${game.eventId as string}/fixture`, {
+        headers: { authorization: coach.authorization },
+        body: { teamId: awayId },
+      }),
+    );
+    expect(refusedCoach.statusCode).toBe(403);
+    store.set(itemKey(teamPk(homeId), rolePermissionsSk('coach')), {
+      [TABLE_PK]: teamPk(homeId),
+      [TABLE_SK]: rolePermissionsSk('coach'),
+      role: 'coach',
+      permissions: ['manage_events'],
+    });
+    const shared = await handler(
+      httpEvent('POST', `/schedule/teams/${homeId}/events/${game.eventId as string}/fixture`, {
+        headers: { authorization: coach.authorization },
+        body: { teamId: awayId },
+      }),
+    );
+    expect(shared.statusCode).toBe(201);
+    expect(bodyOf(shared).status).toBe('proposed');
+    expect(bodyOf(shared).awayTeamId).toBe(homeId);
+  });
+
+  it('rejects a share when the clubs play different sports', async () => {
+    const admin = authFor();
+    const homeId = seedTeam({ userId: admin.userId, role: 'team_admin', name: 'Pigs', sport: 'rugby' });
+    const awayId = seedTeam({ userId: authFor().userId, role: 'team_admin', name: 'Kickers', sport: 'soccer' });
+    const game = await createGame(admin, homeId, 'home', 'Kickers');
+    const shared = await handler(
+      httpEvent('POST', `/schedule/teams/${homeId}/events/${game.eventId as string}/fixture`, {
+        headers: { authorization: admin.authorization },
+        body: { teamId: awayId },
+      }),
+    );
+    expect(shared.statusCode).toBe(409);
+    expect(bodyOf(shared).error).toBe('sport_mismatch');
+  });
+
+  it('accepts onto a new event or an existing one, then moves both calendars', async () => {
+    const homeAdmin = authFor();
+    const awayAdmin = authFor();
+    const awayCoach = authFor();
+    const awayPlayer = authFor();
+    const homeId = seedTeam({ userId: homeAdmin.userId, role: 'team_admin', name: 'Pigs', sport: 'rugby' });
+    const awayId = seedTeam({
+      userId: awayAdmin.userId,
+      role: 'team_admin',
+      name: 'Seacoast',
+      sport: 'rugby',
+      permissions: { ...DEFAULT_ROLE_PERMISSIONS, coach: ['manage_events'] },
+    });
+    seedMember(awayId, awayCoach.userId, 'coach');
+    seedMember(awayId, awayPlayer.userId, 'player');
+    const homeGame = await createGame(homeAdmin, homeId, 'home', 'Seacoast');
+    const proposed = await handler(
+      httpEvent('POST', `/schedule/teams/${homeId}/events/${homeGame.eventId as string}/fixture`, {
+        headers: { authorization: homeAdmin.authorization },
+        body: { teamId: awayId },
+      }),
+    );
+    const fixtureId = bodyOf(proposed).fixtureId as string;
+    const accepted = await handler(
+      httpEvent('POST', `/schedule/fixtures/${fixtureId}/accept`, {
+        headers: { authorization: awayCoach.authorization },
+        body: {},
+      }),
+    );
+    expect(accepted.statusCode).toBe(200);
+    const linked = bodyOf(accepted);
+    expect(linked.status).toBe('linked');
+    expect(linked.chatId).toEqual(expect.any(String));
+    const chatId = linked.chatId as string;
+    expect(store.get(itemKey(chatPk(chatId), chatMetaSk()))?.kind).toBe('fixture');
+    expect(store.has(itemKey(chatPk(chatId), chatMemberSk(awayCoach.userId)))).toBe(true);
+    expect(store.has(itemKey(chatPk(chatId), chatMemberSk(homeAdmin.userId)))).toBe(true);
+    expect(store.has(itemKey(chatPk(chatId), chatMemberSk(awayPlayer.userId)))).toBe(false);
+
+    const moved = await handler(
+      httpEvent('PATCH', `/schedule/fixtures/${fixtureId}`, {
+        headers: { authorization: awayAdmin.authorization },
+        body: { startsAt: '2026-10-03T19:00:00.000Z' },
+      }),
+    );
+    expect(moved.statusCode).toBe(200);
+    const homeEvent = store.get(itemKey(teamPk(homeId), eventSk(homeGame.eventId as string)));
+    const awayEventId = bodyOf(moved).awayEventId as string;
+    const awayEvent = store.get(itemKey(teamPk(awayId), eventSk(awayEventId)));
+    expect(homeEvent?.startsAt).toBe('2026-10-03T19:00:00.000Z');
+    expect(awayEvent?.startsAt).toBe('2026-10-03T19:00:00.000Z');
+    expect(homeEvent?.opponentName).toBe('Seacoast');
+    expect(awayEvent?.side).toBe('away');
+  });
+
+  it('attaches an away game that was scheduled first', async () => {
+    const homeAdmin = authFor();
+    const awayAdmin = authFor();
+    const homeId = seedTeam({ userId: homeAdmin.userId, role: 'team_admin', name: 'Pigs' });
+    const awayId = seedTeam({ userId: awayAdmin.userId, role: 'team_admin', name: 'Seacoast' });
+    const awayGame = await createGame(awayAdmin, awayId, 'away', 'Pigs');
+    const proposed = await handler(
+      httpEvent('POST', `/schedule/teams/${awayId}/events/${awayGame.eventId as string}/fixture`, {
+        headers: { authorization: awayAdmin.authorization },
+        body: { teamId: homeId },
+      }),
+    );
+    expect(bodyOf(proposed).status).toBe('proposed');
+    const fixtureId = bodyOf(proposed).fixtureId as string;
+    const homeGame = await createGame(homeAdmin, homeId, 'home', 'Seacoast');
+    const accepted = await handler(
+      httpEvent('POST', `/schedule/fixtures/${fixtureId}/accept`, {
+        headers: { authorization: homeAdmin.authorization },
+        body: { eventId: homeGame.eventId },
+      }),
+    );
+    expect(accepted.statusCode).toBe(200);
+    expect(bodyOf(accepted).homeEventId).toBe(homeGame.eventId);
+    expect(bodyOf(accepted).awayEventId).toBe(awayGame.eventId);
+    const homeEvents = [...store.values()].filter(
+      (item) => item.teamId === homeId && String(item[TABLE_SK]).startsWith('EVT#'),
+    );
+    expect(homeEvents).toHaveLength(1);
+  });
+
+  it('declines a proposal and unlinks a shared game without deleting either calendar row', async () => {
+    const homeAdmin = authFor();
+    const awayAdmin = authFor();
+    const homeId = seedTeam({ userId: homeAdmin.userId, role: 'team_admin', name: 'Pigs' });
+    const awayId = seedTeam({ userId: awayAdmin.userId, role: 'team_admin', name: 'Seacoast' });
+    const homeGame = await createGame(homeAdmin, homeId, 'home', 'Seacoast');
+    const proposed = await handler(
+      httpEvent('POST', `/schedule/teams/${homeId}/events/${homeGame.eventId as string}/fixture`, {
+        headers: { authorization: homeAdmin.authorization },
+        body: { teamId: awayId },
+      }),
+    );
+    const declinedId = bodyOf(proposed).fixtureId as string;
+    const declined = await handler(
+      httpEvent('POST', `/schedule/fixtures/${declinedId}/decline`, {
+        headers: { authorization: awayAdmin.authorization },
+      }),
+    );
+    expect(declined.statusCode).toBe(204);
+    expect(store.has(itemKey(fixturePk(declinedId), fixtureMetaSk()))).toBe(false);
+    expect(store.get(itemKey(teamPk(homeId), eventSk(homeGame.eventId as string)))?.fixtureId).toBeUndefined();
+    expect(store.has(itemKey(teamPk(awayId), fixtureInviteSk(declinedId)))).toBe(false);
+
+    const again = await createGame(homeAdmin, homeId, 'home', 'Seacoast');
+    const shared = await handler(
+      httpEvent('POST', `/schedule/teams/${homeId}/events/${again.eventId as string}/fixture`, {
+        headers: { authorization: homeAdmin.authorization },
+        body: { teamId: awayId },
+      }),
+    );
+    const fixtureId = bodyOf(shared).fixtureId as string;
+    await handler(
+      httpEvent('POST', `/schedule/fixtures/${fixtureId}/accept`, {
+        headers: { authorization: awayAdmin.authorization },
+        body: {},
+      }),
+    );
+    const awayEventId = store.get(itemKey(fixturePk(fixtureId), fixtureMetaSk()))?.awayEventId as string;
+    const unlinked = await handler(
+      httpEvent('DELETE', `/schedule/fixtures/${fixtureId}`, {
+        headers: { authorization: homeAdmin.authorization },
+      }),
+    );
+    expect(unlinked.statusCode).toBe(204);
+    expect(store.has(itemKey(fixturePk(fixtureId), fixtureMetaSk()))).toBe(false);
+    expect(store.has(itemKey(teamPk(homeId), fixtureLinkSk(fixtureId)))).toBe(false);
+    expect(store.get(itemKey(teamPk(homeId), eventSk(again.eventId as string)))?.opponentName).toBe('Seacoast');
+    expect(store.get(itemKey(teamPk(awayId), eventSk(awayEventId)))?.fixtureId).toBeUndefined();
+    expect(store.get(itemKey(teamPk(homeId), eventSk(again.eventId as string)))?.startsAt).toBe(kickoff);
   });
 });
 

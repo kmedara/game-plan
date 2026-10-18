@@ -7,13 +7,14 @@ import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import Plus from 'lucide-react-native/icons/plus';
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { positionsWithinLimit } from '@gameplan/rules';
 import { config } from '@/src/config';
 import { errorMessageKey, queryError } from '@/src/errors';
 import { pickAndUploadImage, useDownloadUrl } from '@/src/media';
 import { meQuery, updateProfileMutation } from '@/src/queries/profile';
+import { RefreshableScroll } from '@/src/pull-refresh';
 import { setPositionsMutation } from '@/src/queries/teams';
 import { clearPersistedCache } from '@/src/query-client';
 import { toE164Phone } from '@/src/phone';
@@ -117,7 +118,7 @@ export default function ProfileScreen() {
 
   return (
     <View className="flex-1">
-    <ScrollView className="flex-1 px-4 pt-4">
+    <RefreshableScroll className="flex-1 px-4 pt-4">
       <ErrorText message={error} />
       <View className="mb-3 h-24 w-24">
         <ProfilePhoto name={profile?.displayName} uri={photoUrl} />
@@ -178,7 +179,7 @@ export default function ProfileScreen() {
           </View>
         );
       })}
-    </ScrollView>
+    </RefreshableScroll>
     <View className="px-4 pb-2">
       <Button label={t('profile.signOut')} onPress={() => void logout()} tone="danger" />
     </View>

@@ -1,5 +1,5 @@
 /**
- * Sends the visitor to teams when a session restores, otherwise to login.
+ * Sends the visitor to the schedule when a session restores, otherwise to login.
  *
  * A website visitor with no session hint goes straight to login without a refresh request.
  */
@@ -17,7 +17,7 @@ export default function Index() {
 
   useEffect(() => {
     void (async () => {
-      const ok = (await api.mightHaveSession()) && (await api.refreshSession());
+      const ok = (await api.mightHaveSession()) && (await api.ensureSession());
       setSignedIn(ok);
       setReady(true);
     })();
@@ -33,5 +33,5 @@ export default function Index() {
 
   if (!signedIn) return <Redirect href="/login" />;
   if (api.user?.needsProfileCompletion) return <Redirect href="/complete-profile" />;
-  return <Redirect href="/teams" />;
+  return <Redirect href="/schedule" />;
 }

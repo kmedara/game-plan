@@ -10,14 +10,22 @@ import type { UserProfileItem } from '../../lib/auth/identity-provider.js';
 import {
   TABLE_PK,
   TABLE_SK,
+  chatMemberSk,
+  chatMetaSk,
+  chatPk,
+  fixtureLinkSk,
+  fixtureMetaSk,
+  fixturePk,
   joinRequestSk,
   teamDirectoryPk,
   teamDirectorySk,
   inviteMetaSk,
   invitePk,
+  rolePermissionsSk,
   teamMemberSk,
   teamMetaSk,
   teamPk,
+  userChatSk,
   userPk,
   userTeamSk,
 } from '../../lib/dynamo/keys.js';
@@ -500,5 +508,86 @@ describe('team-store edge cases', () => {
         { role: 'coach', permissions: [...DEFAULT_ROLE_PERMISSIONS.coach, 'manage_permissions'] },
       ]),
     ).rejects.toThrow('minor_cannot_hold_manage_permissions');
+  });
+
+  it('rewrites fixture-chat membership when a role changes', async () => {
+    const adminId = randomUUID();
+    seedProfile(adminId, 'adult');
+    const home = await createTeam({ name: 'Pigs', timeZone: 'UTC', userId: adminId, sport: 'Rugby' });
+    const awayAdmin = randomUUID();
+    seedProfile(awayAdmin, 'adult');
+    const away = await createTeam({ name: 'Seacoast', timeZone: 'UTC', userId: awayAdmin, sport: 'rugby' });
+    store.set(itemKey(teamPk(home.teamId), rolePermissionsSk('coach')), {
+      [TABLE_PK]: teamPk(home.teamId),
+      [TABLE_SK]: rolePermissionsSk('coach'),
+      role: 'coach',
+      permissions: ['manage_events'],
+    });
+    const coachId = randomUUID();
+    seedProfile(coachId, 'adult');
+    store.set(itemKey(teamPk(home.teamId), teamMemberSk(coachId)), {
+      [TABLE_PK]: teamPk(home.teamId),
+      [TABLE_SK]: teamMemberSk(coachId),
+      userId: coachId,
+      role: 'player',
+      joinedAt: new Date().toISOString(),
+    });
+    store.set(itemKey(userPk(coachId), userTeamSk(home.teamId)), {
+      [TABLE_PK]: userPk(coachId),
+      [TABLE_SK]: userTeamSk(home.teamId),
+      teamId: home.teamId,
+      role: 'player',
+      joinedAt: new Date().toISOString(),
+    });
+    const fixtureId = randomUUID();
+    const chatId = randomUUID();
+    store.set(itemKey(fixturePk(fixtureId), fixtureMetaSk()), {
+      [TABLE_PK]: fixturePk(fixtureId),
+      [TABLE_SK]: fixtureMetaSk(),
+      fixtureId,
+      status: 'linked',
+      chatId,
+      homeName: 'Pigs',
+      awayName: 'Seacoast',
+      homeTeamId: home.teamId,
+      awayTeamId: away.teamId,
+      createdBy: adminId,
+    });
+    for (const teamId of [home.teamId, away.teamId]) {
+      store.set(itemKey(teamPk(teamId), fixtureLinkSk(fixtureId)), {
+        [TABLE_PK]: teamPk(teamId),
+        [TABLE_SK]: fixtureLinkSk(fixtureId),
+        fixtureId,
+        chatId,
+        status: 'linked',
+      });
+    }
+    store.set(itemKey(chatPk(chatId), chatMetaSk()), {
+      [TABLE_PK]: chatPk(chatId),
+      [TABLE_SK]: chatMetaSk(),
+      chatId,
+      kind: 'fixture',
+      name: 'Pigs vs Seacoast',
+      createdBy: adminId,
+      createdAt: new Date().toISOString(),
+    });
+    for (const userId of [adminId, awayAdmin]) {
+      store.set(itemKey(chatPk(chatId), chatMemberSk(userId)), {
+        [TABLE_PK]: chatPk(chatId),
+        [TABLE_SK]: chatMemberSk(userId),
+        userId,
+        joinedAt: new Date().toISOString(),
+      });
+    }
+
+    await assignMemberRole(home.teamId, coachId, ['coach']);
+    expect(store.has(itemKey(chatPk(chatId), chatMemberSk(coachId)))).toBe(true);
+    expect(store.has(itemKey(userPk(coachId), userChatSk(chatId)))).toBe(true);
+    expect(home.sport).toBe('rugby');
+
+    await assignMemberRole(home.teamId, coachId, ['player']);
+    expect(store.has(itemKey(chatPk(chatId), chatMemberSk(coachId)))).toBe(false);
+    expect(store.has(itemKey(chatPk(chatId), chatMemberSk(adminId)))).toBe(true);
+    expect(store.has(itemKey(chatPk(chatId), chatMemberSk(awayAdmin)))).toBe(true);
   });
 });
