@@ -125,6 +125,28 @@ describe('sendDevicePushes', () => {
     expect(sendNotification).not.toHaveBeenCalled();
   });
 
+  it('reports subscriptions and tokens the push services say are gone', async () => {
+    setVapid();
+    const expired = { ...subscription, endpoint: 'https://push.example/expired' };
+    sendNotification.mockImplementation(async (target: { endpoint: string }) => {
+      if (target.endpoint === expired.endpoint) throw Object.assign(new Error('Gone'), { statusCode: 410 });
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        Response.json({ data: [{ status: 'ok' }, { status: 'error', details: { error: 'DeviceNotRegistered' } }] }),
+      ),
+    );
+    const live = webDevice(subscription);
+    const dead = webDevice(expired);
+    const phone = { token: 'ExponentPushToken[ok]', platform: 'ios' };
+    const uninstalled = { token: 'ExponentPushToken[old]', platform: 'android' };
+
+    const gone = await sendDevicePushes({ ...message, devices: [phone, uninstalled, live, dead] });
+
+    expect(gone).toEqual([uninstalled, dead]);
+  });
+
   it('logs a failed Web Push send and keeps going', async () => {
     setVapid();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);

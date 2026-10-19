@@ -24,6 +24,7 @@ import {
   chatPk,
   connectionSk,
   deleteItem,
+  deviceSk,
   queryBySkPrefix,
   teamPk,
   userPk,
@@ -292,6 +293,30 @@ const deleteGoneConnection = async (userId: string, connectionId: string): Promi
 };
 
 /**
+ * Forgets a device the push service says no longer exists, such as a browser
+ * that revoked permission or an uninstalled app.
+ *
+ * @param userId - The device owner.
+ * @param deviceId - The stored device id.
+ */
+const deleteGoneDevice = async (userId: string, deviceId: string): Promise<void> => {
+  try {
+    await deleteItem(userPk(userId), deviceSk(deviceId));
+    console.info(JSON.stringify({ service: 'fanout', event: 'device_removed', userId, deviceId }));
+  } catch (error: unknown) {
+    console.warn(
+      JSON.stringify({
+        service: 'fanout',
+        event: 'device_delete_failed',
+        userId,
+        deviceId,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+};
+
+/**
  * Enqueues one follow-up job for recipients whose posts were throttled.
  *
  * The follow-up carries only those user ids. Past the attempt cap, or when no
@@ -385,7 +410,8 @@ const publishPush = async (
           reminder ??
           `${job.type === 'event_moved' ? job.title : 'Event'} ${moved ?? ''}`.trim());
 
-  await sendDevicePushes({ title, body, data: clientPayload(job), devices });
+  const gone = await sendDevicePushes({ title, body, data: clientPayload(job), devices });
+  for (const device of gone) await deleteGoneDevice(userId, device.deviceId);
   if (topicMissing || topicArn === undefined) return;
 
   await getSnsClient().send(

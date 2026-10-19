@@ -11,6 +11,20 @@ export type PushDevice = {
   platform: string;
 };
 
+/** One Expo push ticket; only the fields read here. */
+type ExpoTicket = { status?: string; details?: { error?: string } };
+
+/**
+ * Whether a Web Push failure means the subscription no longer exists.
+ *
+ * @param error - The `web-push` rejection.
+ * @returns `true` for `404 Not Found` and `410 Gone`.
+ */
+const subscriptionGone = (error: unknown): boolean => {
+  const status = (error as { statusCode?: unknown } | null)?.statusCode;
+  return status === 404 || status === 410;
+};
+
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
 /**
@@ -65,13 +79,15 @@ const webSubscription = (
  * throw, so one bad device does not fail the fan-out batch.
  *
  * @param input - Title, body, data payload, and the user's devices.
+ * @returns Devices the push service says no longer exist, so the caller can forget them.
  */
-export const sendDevicePushes = async (input: {
+export const sendDevicePushes = async <Device extends PushDevice>(input: {
   title: string;
   body: string;
   data: unknown;
-  devices: PushDevice[];
-}): Promise<void> => {
+  devices: Device[];
+}): Promise<Device[]> => {
+  const gone: Device[] = [];
   const native = input.devices.filter(
     (device) => device.platform === 'ios' || device.platform === 'android',
   );
@@ -96,6 +112,16 @@ export const sendDevicePushes = async (input: {
         console.warn(
           JSON.stringify({ service: 'fanout', event: 'expo_push_failed', status: response.status }),
         );
+      } else {
+        // Tickets come back in request order.
+        const tickets = await response
+          .json()
+          .then((parsed: { data?: ExpoTicket[] }) => parsed.data ?? [])
+          .catch((): ExpoTicket[] => []);
+        tickets.forEach((ticket, index) => {
+          const device = native[index];
+          if (device !== undefined && ticket.details?.error === 'DeviceNotRegistered') gone.push(device);
+        });
       }
     } catch (error) {
       console.warn(
@@ -109,9 +135,9 @@ export const sendDevicePushes = async (input: {
   }
 
   const web = input.devices.filter((device) => device.platform === 'web');
-  if (web.length === 0) return;
+  if (web.length === 0) return gone;
   const vapid = await vapidConfig();
-  if (vapid === undefined) return;
+  if (vapid === undefined) return gone;
 
   webpush.setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey);
   const payload = JSON.stringify({ title: input.title, body: input.body, data: input.data });
@@ -122,6 +148,10 @@ export const sendDevicePushes = async (input: {
       try {
         await webpush.sendNotification(subscription, payload);
       } catch (error) {
+        if (subscriptionGone(error)) {
+          gone.push(device);
+          return;
+        }
         console.warn(
           JSON.stringify({
             service: 'fanout',
@@ -132,4 +162,5 @@ export const sendDevicePushes = async (input: {
       }
     }),
   );
+  return gone;
 };

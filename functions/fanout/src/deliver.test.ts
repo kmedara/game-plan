@@ -116,7 +116,7 @@ describe('deliverFanoutJob', () => {
     managementSend.mockReset();
     snsSend.mockReset();
     sendDevicePushes.mockReset();
-    sendDevicePushes.mockResolvedValue(undefined);
+    sendDevicePushes.mockResolvedValue([]);
     ApiGatewayManagementApiClientMock.mockClear();
     vi.mocked(SNSClient).mockClear();
     delete process.env.WEBSOCKET_CALLBACK_URL;
@@ -660,6 +660,36 @@ describe('deliverFanoutJob', () => {
     );
   });
 
+  it('forgets devices the push service reports gone', async () => {
+    queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
+      if (prefix === CONNECTION_SK_PREFIX) return [];
+      if (pk === userPk('u1') && prefix === DEVICE_SK_PREFIX) {
+        return [
+          { deviceId: 'web-live', token: '{}', platform: 'web' },
+          { deviceId: 'web-dead', token: '{}', platform: 'web' },
+        ];
+      }
+      return [];
+    });
+    sendDevicePushes.mockImplementationOnce(async ({ devices }: { devices: { deviceId: string }[] }) =>
+      devices.filter((device) => device.deviceId === 'web-dead'),
+    );
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    await deliverFanoutJob({
+      type: 'event_reminder',
+      teamId: 't1',
+      eventId: 'e1',
+      title: 'Practice',
+      occurrenceStartsAt: '2026-01-02T15:00:00.000Z',
+      kind: 'hour',
+      userIds: ['u1'],
+    });
+
+    expect(deleteItem).toHaveBeenCalledTimes(1);
+    expect(deleteItem).toHaveBeenCalledWith(userPk('u1'), 'DEVICE#web-dead');
+  });
+
   it('delivers an event reminder without loading the roster', async () => {
     queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
       if (pk === userPk('u1') && prefix === CONNECTION_SK_PREFIX) return [];
@@ -840,6 +870,7 @@ describe('resetFanoutClients', () => {
     });
     snsSend.mockResolvedValue(undefined);
     managementSend.mockResolvedValue(undefined);
+    sendDevicePushes.mockResolvedValue([]);
 
     await deliverFanoutJob(chatJob);
     const snsCallsAfterFirst = vi.mocked(SNSClient).mock.calls.length;
