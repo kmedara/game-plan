@@ -1,5 +1,5 @@
 /**
- * Team admin: settings, payments link, roster, join requests, invites, and permissions.
+ * Team admin: settings, plan, payments link, roster, join requests, invites, and permissions.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -22,6 +22,7 @@ import { membersQuery, permissionsQuery, teamQuery, updateTeamMutation } from '@
 import { useApp, useBrandTeam } from '@/src/state';
 import { TeamInvites } from '@/src/team-invites';
 import { TeamPermissions } from '@/src/team-permissions';
+import { TeamPlanSection } from '@/src/team-plan';
 import { TeamRoster } from '@/src/team-roster';
 import { TeamColors } from '@/src/team-colors';
 import { TeamChatBackground } from '@/src/team-chat-background';
@@ -221,6 +222,7 @@ export default function TeamAdminScreen() {
               />
             </>
           ) : null}
+          <TeamPlanSection teamId={id} plan={teamLoaded.data?.plan} canManage={can('manage_billing')} />
           {can('manage_payments') ? (
             <Button
               label={t('payments.title')}

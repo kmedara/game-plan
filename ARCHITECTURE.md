@@ -158,6 +158,10 @@ The webhook is its own function (`billing-webhook`) with a public URL serving on
 - **Why:** web checkout keeps the stores' 15–30% off team and organization plans, and Stripe hosts the card forms, invoices, tax, and dunning. Ordering by event time makes retries and out-of-order delivery harmless.
 - **Cost:** the iOS app may only link out to web checkout where Apple allows it (`EXPO_PUBLIC_IOS_WEB_UPGRADE`); elsewhere it names the website without a price. Two webhook endpoints and secrets to configure.
 
+In the app, `teamEntitlements` (`client/expo/src/plan.ts`) reads the plan off the team summary through the same `entitlementsFor`, and `UpgradeCard` stands in for a feature the plan lacks. The plans screen and team screen open Checkout or the portal with `openStripePage`, which waits for `gameplan://billing`; `app/(main)/billing.tsx` catches that link if the app was closed meanwhile. Plan status is not persisted to device storage, like dues.
+
+- **Cost:** prices on the plans screen are translation copy, so a price change in Stripe also needs a copy change.
+
 ## HTTP edge
 
 HTTP is CloudFront → Lambda function URL. There is no API Gateway on that path. WebSocket still uses API Gateway, because function URLs cannot hold connections.

@@ -392,6 +392,62 @@
     "notNow": "Not now",
     "gotIt": "Got it"
   },
+  "plans": {
+    "title": "Plans",
+    "subtitle": "Every team can stay free. Paid plans add video, storage, waivers, and coaching tools.",
+    "monthly": "Monthly",
+    "yearly": "Yearly (2 months free)",
+    "current": "Current plan",
+    "seePlans": "See plans",
+    "manageOnWeb": "Plans are managed on the GamePlan website.",
+    "noBillingTeams": "Only a team admin, or someone with the Manage billing permission, can change a team's plan.",
+    "manageBilling": "Manage billing",
+    "upgradeTeam": "Upgrade {{team}}",
+    "organizationSoon": "Organization sign-up is coming soon.",
+    "teamPlan": "Plan",
+    "renewsOn": "renews {{date}}",
+    "endsOn": "ends {{date}}",
+    "pastDue": "The last payment failed. Update the card in Manage billing to keep paid features.",
+    "tier": {
+      "free": "Free",
+      "premium": "Premium",
+      "organization": "Organization"
+    },
+    "price": {
+      "free": {
+        "month": "$0",
+        "year": "$0"
+      },
+      "premium": {
+        "month": "$9 / month",
+        "year": "$90 / year"
+      },
+      "organization": {
+        "month": "$49 / month",
+        "year": "$490 / year"
+      }
+    },
+    "feature": {
+      "schedule": "Schedule, chat, RSVPs, carpools, and dues",
+      "calendarSync": "Calendar sync, reminders, sign-ups, and polls",
+      "photos2": "2 GB of team photos",
+      "practice5": "5 practice plans",
+      "ads": "Ads for adults",
+      "everythingFree": "Everything in Free",
+      "video": "Team videos",
+      "photos50": "50 GB of photos and video",
+      "practiceUnlimited": "Unlimited practice plans",
+      "waivers": "Digital waivers",
+      "ai200": "AI coach assistant, 200 requests a month",
+      "noAds": "No ads for the team",
+      "everythingPremium": "Everything in Premium, for every team",
+      "teams5": "Up to 5 teams, $5 a month for each extra team",
+      "orgAdmin": "Organization admins and dashboard",
+      "announcements": "Announcements to every team",
+      "shared": "Shared practice library and waiver templates",
+      "ai1000": "AI coach assistant, 1,000 requests a month"
+    }
+  },
   "errors": {
     "common": {
       "loadFailed": "Could not load this. Try again.",
@@ -478,6 +534,11 @@
       "titleRequired": "Say what the charge is for.",
       "invalidAmount": "Enter an amount such as 45 or 45.50.",
       "noMembers": "Pick at least one member."
+    },
+    "billing": {
+      "alreadySubscribed": "This team already has a paid plan. Use Manage billing to change it.",
+      "managedByOrganization": "This team's plan is managed by its organization.",
+      "notConfigured": "Plans are not available right now."
     }
   }
 }

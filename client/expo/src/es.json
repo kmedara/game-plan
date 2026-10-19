@@ -394,6 +394,62 @@
     "notNow": "Ahora no",
     "gotIt": "Entendido"
   },
+  "plans": {
+    "title": "Planes",
+    "subtitle": "Todo equipo puede seguir gratis. Los planes de pago agregan video, almacenamiento, exenciones y herramientas para entrenadores.",
+    "monthly": "Mensual",
+    "yearly": "Anual (2 meses gratis)",
+    "current": "Plan actual",
+    "seePlans": "Ver planes",
+    "manageOnWeb": "Los planes se administran en el sitio web de GamePlan.",
+    "noBillingTeams": "Solo un administrador del equipo, o alguien con el permiso Administrar la facturación, puede cambiar el plan.",
+    "manageBilling": "Administrar la facturación",
+    "upgradeTeam": "Mejorar {{team}}",
+    "organizationSoon": "El registro de organizaciones llegará pronto.",
+    "teamPlan": "Plan",
+    "renewsOn": "se renueva el {{date}}",
+    "endsOn": "termina el {{date}}",
+    "pastDue": "El último pago falló. Actualiza la tarjeta en Administrar la facturación para conservar las funciones de pago.",
+    "tier": {
+      "free": "Gratis",
+      "premium": "Premium",
+      "organization": "Organización"
+    },
+    "price": {
+      "free": {
+        "month": "$0",
+        "year": "$0"
+      },
+      "premium": {
+        "month": "$9 / mes",
+        "year": "$90 / año"
+      },
+      "organization": {
+        "month": "$49 / mes",
+        "year": "$490 / año"
+      }
+    },
+    "feature": {
+      "schedule": "Calendario, chat, asistencia, viajes compartidos y cuotas",
+      "calendarSync": "Sincronización de calendario, recordatorios, voluntarios y encuestas",
+      "photos2": "2 GB de fotos del equipo",
+      "practice5": "5 planes de práctica",
+      "ads": "Anuncios para adultos",
+      "everythingFree": "Todo lo de Gratis",
+      "video": "Videos del equipo",
+      "photos50": "50 GB de fotos y video",
+      "practiceUnlimited": "Planes de práctica ilimitados",
+      "waivers": "Exenciones digitales",
+      "ai200": "Asistente de IA para entrenadores, 200 consultas al mes",
+      "noAds": "Sin anuncios para el equipo",
+      "everythingPremium": "Todo lo de Premium, para cada equipo",
+      "teams5": "Hasta 5 equipos, $5 al mes por cada equipo adicional",
+      "orgAdmin": "Administradores y panel de la organización",
+      "announcements": "Anuncios para todos los equipos",
+      "shared": "Biblioteca de prácticas y plantillas de exención compartidas",
+      "ai1000": "Asistente de IA para entrenadores, 1,000 consultas al mes"
+    }
+  },
   "errors": {
     "common": {
       "loadFailed": "No se pudo cargar. Inténtalo de nuevo.",
@@ -480,6 +536,11 @@
       "titleRequired": "Indica para qué es el cobro.",
       "invalidAmount": "Escribe un monto como 45 o 45.50.",
       "noMembers": "Elige al menos un miembro."
+    },
+    "billing": {
+      "alreadySubscribed": "Este equipo ya tiene un plan de pago. Usa Administrar la facturación para cambiarlo.",
+      "managedByOrganization": "El plan de este equipo lo administra su organización.",
+      "notConfigured": "Los planes no están disponibles en este momento."
     }
   }
 }

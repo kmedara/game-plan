@@ -13,6 +13,8 @@ import {
 import type {
   AcceptedInvite,
   ApprovedJoinRequest,
+  BillingInterval,
+  TeamBilling,
   Charge,
   ChargeDetail,
   ChargeList,
@@ -485,6 +487,18 @@ export class ApiClient {
   /** Where Stripe should send this device back after a hosted page. */
   private get paymentReturn(): { returnTo: 'app' | 'web' } {
     return { returnTo: this.native ? 'app' : 'web' };
+  }
+
+  async getTeamBilling(teamId: string): Promise<TeamBilling> {
+    return this.request('GET', `/billing/teams/${teamId}`);
+  }
+
+  async createTeamCheckout(teamId: string, interval: BillingInterval): Promise<PaymentRedirect> {
+    return this.request('POST', `/billing/teams/${teamId}/checkout`, { interval, ...this.paymentReturn });
+  }
+
+  async createBillingPortal(teamId: string): Promise<PaymentRedirect> {
+    return this.request('POST', `/billing/teams/${teamId}/portal`, this.paymentReturn);
   }
 
   async getPaymentAccount(teamId: string): Promise<PaymentAccount> {

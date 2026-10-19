@@ -9,6 +9,8 @@ export type AppConfig = {
   googleMapsApiKey: string;
   vapidPublicKey: string;
   easProjectId: string;
+  /** Whether the iOS app may link to web checkout. Apple allows it only in some storefronts. */
+  iosWebUpgrade: boolean;
 };
 
 export const config: AppConfig = {
@@ -18,6 +20,7 @@ export const config: AppConfig = {
   googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '',
   vapidPublicKey: process.env.EXPO_PUBLIC_VAPID_PUBLIC_KEY ?? '',
   easProjectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? '',
+  iosWebUpgrade: process.env.EXPO_PUBLIC_IOS_WEB_UPGRADE === 'true',
 };
 
 /** Custom-scheme redirect identity uses after a native Hosted UI sign-in. */
