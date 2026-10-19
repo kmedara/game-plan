@@ -18,6 +18,7 @@ import { canCreateTeam } from '@gameplan/rules';
 import { useDownloadUrl } from '@/src/media';
 import { adoptCacheOwner } from '@/src/query-client';
 import { useLiveQuerySync } from '@/src/use-live-query-sync';
+import { NotificationPrompt } from '@/src/notification-prompt';
 import { PullRefreshProvider } from '@/src/pull-refresh';
 import { refreshPushRegistration } from '@/src/push';
 import { useApp } from '@/src/state';
@@ -153,6 +154,7 @@ export default function MainLayout() {
         />
       ) : null}
       </LinearGradient>
+      <NotificationPrompt />
       <View className="flex-1">
         <PullRefreshProvider>
           <Slot />

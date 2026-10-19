@@ -1,9 +1,11 @@
 /**
  * Registers the device token with the media API so fan-out can alert offline.
  *
- * Asking for permission happens only from a tap (sign-in or the profile
- * button); iPhone Safari ignores a prompt that is not. Every launch then calls
- * {@link refreshPushRegistration}, which re-saves the token without prompting.
+ * Asking for permission happens only from a tap on the notification banner or
+ * the profile button: iPhone Safari ignores a prompt that is not, and iOS
+ * shows its system dialog only once, so it is worth a sentence of context
+ * first. Every launch calls {@link refreshPushRegistration}, which re-saves the
+ * token without prompting.
  */
 
 import Constants from 'expo-constants';
@@ -14,10 +16,11 @@ import { config } from './config';
 /**
  * Where this device stands on notifications.
  *
- * `needs-install` is iPhone or iPad Safari in a normal tab: Apple only allows
- * web notifications once the site is added to the Home Screen.
+ * `prompt` means no choice is recorded yet. `needs-install` is iPhone or iPad
+ * Safari in a normal tab: Apple only allows web notifications once the site is
+ * added to the Home Screen.
  */
-export type PushStatus = 'native' | 'unsupported' | 'needs-install' | 'prompt' | 'granted' | 'denied';
+export type PushStatus = 'unsupported' | 'needs-install' | 'prompt' | 'granted' | 'denied';
 
 /**
  * Converts a base64url VAPID public key into the bytes PushManager expects.
@@ -55,18 +58,42 @@ const webPushAvailable = (): boolean =>
   'PushManager' in globalThis &&
   'Notification' in globalThis;
 
+/** The Expo project id push tokens are issued for, or an empty string. */
+const easProjectId = (): string =>
+  config.easProjectId ||
+  (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId ||
+  '';
+
 /**
- * Reports whether notifications are on, can be turned on, or need the Home Screen first.
+ * Reports whether website notifications are on, can be turned on, or need the Home Screen first.
  *
- * @returns The status for this device.
+ * @returns The status for this browser.
  */
-export const pushStatus = (): PushStatus => {
-  if (Platform.OS !== 'web') return 'native';
+const webPushStatus = (): PushStatus => {
   if (isAppleMobileBrowser() && !isInstalledWebApp()) return 'needs-install';
   if (!webPushAvailable()) return 'unsupported';
   if (Notification.permission === 'granted') return 'granted';
   if (Notification.permission === 'denied') return 'denied';
   return 'prompt';
+};
+
+/**
+ * Reports whether notifications are on, blocked, or still undecided on this device.
+ *
+ * @returns The status for this phone or browser.
+ */
+export const loadPushStatus = async (): Promise<PushStatus> => {
+  if (Platform.OS === 'web') return webPushStatus();
+  if (easProjectId().length === 0) return 'unsupported';
+  try {
+    const Notifications = await import('expo-notifications');
+    const permission = await Notifications.getPermissionsAsync();
+    if (permission.granted) return 'granted';
+    // iOS will not show its dialog again once declined; Android may.
+    return permission.canAskAgain ? 'prompt' : 'denied';
+  } catch {
+    return 'unsupported';
+  }
 };
 
 /**
@@ -97,10 +124,7 @@ const saveWebSubscription = async (api: ApiClient): Promise<void> => {
  * @param prompt - Ask for permission when it has not been decided yet.
  */
 const saveNativeToken = async (api: ApiClient, prompt: boolean): Promise<void> => {
-  const projectId =
-    config.easProjectId ||
-    (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId ||
-    '';
+  const projectId = easProjectId();
   if (projectId.length === 0) return;
   const Notifications = await import('expo-notifications');
   const permission = prompt ? await Notifications.requestPermissionsAsync() : await Notifications.getPermissionsAsync();
@@ -126,17 +150,17 @@ export const registerPush = async (api: ApiClient): Promise<PushStatus> => {
   try {
     if (Platform.OS !== 'web') {
       await saveNativeToken(api, true);
-      return 'native';
+      return await loadPushStatus();
     }
-    const status = pushStatus();
+    const status = webPushStatus();
     if (status !== 'prompt' && status !== 'granted') return status;
     const permission = await Notification.requestPermission();
-    if (permission !== 'granted') return pushStatus();
+    if (permission !== 'granted') return webPushStatus();
     await saveWebSubscription(api);
     return 'granted';
   } catch (error) {
     console.warn('device registration failed', error);
-    return pushStatus();
+    return loadPushStatus();
   }
 };
 
@@ -154,7 +178,7 @@ export const refreshPushRegistration = async (api: ApiClient): Promise<void> => 
       await saveNativeToken(api, false);
       return;
     }
-    if (pushStatus() === 'granted') await saveWebSubscription(api);
+    if (webPushStatus() === 'granted') await saveWebSubscription(api);
   } catch (error) {
     console.warn('device registration failed', error);
   }

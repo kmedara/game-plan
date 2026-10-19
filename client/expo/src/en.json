@@ -384,6 +384,12 @@
     "create_team_channels": "Create team channels",
     "manage_payments": "Manage payments"
   },
+  "notificationPrompt": {
+    "title": "Get notified",
+    "body": "Turn on notifications for new messages, schedule changes, reminders, and dues.",
+    "notNow": "Not now",
+    "gotIt": "Got it"
+  },
   "errors": {
     "common": {
       "loadFailed": "Could not load this. Try again.",

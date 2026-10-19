@@ -386,6 +386,12 @@
     "create_team_channels": "Crear canales del equipo",
     "manage_payments": "Administrar pagos"
   },
+  "notificationPrompt": {
+    "title": "Recibe notificaciones",
+    "body": "Activa las notificaciones para mensajes nuevos, cambios de horario, recordatorios y cuotas.",
+    "notNow": "Ahora no",
+    "gotIt": "Entendido"
+  },
   "errors": {
     "common": {
       "loadFailed": "No se pudo cargar. Inténtalo de nuevo.",

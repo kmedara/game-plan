@@ -8,7 +8,6 @@ import { useEffect, useState } from 'react';
 import { Platform, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { config, NATIVE_AUTH_REDIRECT } from '@/src/config';
-import { registerPush } from '@/src/push';
 import { useApp } from '@/src/state';
 import { ErrorText, SubmitButton } from '@/src/ui';
 
@@ -33,7 +32,6 @@ export default function LoginScreen() {
 
   const enter = (): void => {
     live.connect();
-    void registerPush(api);
     router.replace(api.user?.needsProfileCompletion ? '/complete-profile' : '/schedule');
   };
 
@@ -55,7 +53,6 @@ export default function LoginScreen() {
     if (code === null) throw new Error('missing_code');
     const session = await api.exchangeOAuth(code);
     live.connect();
-    void registerPush(api);
     router.replace(session.next === 'complete-profile' ? '/complete-profile' : '/schedule');
   };
 

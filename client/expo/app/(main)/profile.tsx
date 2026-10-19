@@ -13,7 +13,7 @@ import { positionsWithinLimit } from '@gameplan/rules';
 import { config } from '@/src/config';
 import { errorMessageKey, queryError } from '@/src/errors';
 import { pickAndUploadImage, useDownloadUrl } from '@/src/media';
-import { pushStatus, registerPush, type PushStatus } from '@/src/push';
+import { loadPushStatus, registerPush, type PushStatus } from '@/src/push';
 import { isOwed } from '@/src/payment-status';
 import { myDuesQuery } from '@/src/queries/payments';
 import { meQuery, updateProfileMutation } from '@/src/queries/profile';
@@ -40,13 +40,17 @@ export default function ProfileScreen() {
   const [phoneReady, setPhoneReady] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | undefined>();
-  const [notifications, setNotifications] = useState<PushStatus>(() => pushStatus());
+  const [notifications, setNotifications] = useState<PushStatus | undefined>();
 
   useEffect(() => {
     if (phoneReady || me.data === undefined) return;
     setPhone(me.data.phoneNumber ?? '');
     setPhoneReady(true);
   }, [me.data, phoneReady]);
+
+  useEffect(() => {
+    void loadPushStatus().then(setNotifications);
+  }, []);
 
   useEffect(() => {
     const failed = queryError(me.error);
@@ -203,13 +207,16 @@ export default function ProfileScreen() {
   );
 }
 
-/**
- * Website notification switch. Phones running the app are asked at sign-in, so
- * nothing shows there.
- */
-const NotificationSettings = ({ status, onEnable }: { status: PushStatus; onEnable: () => Promise<void> }) => {
+/** Notification switch for this phone or browser, and why it is off when it is. */
+const NotificationSettings = ({
+  status,
+  onEnable,
+}: {
+  status: PushStatus | undefined;
+  onEnable: () => Promise<void>;
+}) => {
   const { t } = useTranslation();
-  if (status === 'native' || status === 'unsupported') return null;
+  if (status === undefined || status === 'unsupported') return null;
   return (
     <View className="mb-2 mt-4">
       <Text className="mb-1 text-lg font-semibold text-ink">{t('profile.notifications')}</Text>
