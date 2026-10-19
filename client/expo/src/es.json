@@ -165,7 +165,12 @@
     "positionsEmpty": "Únete a un equipo para agregar las posiciones que juegas.",
     "position": "Posición",
     "removePosition": "Quitar {{position}}",
-    "signOut": "Cerrar sesión"
+    "signOut": "Cerrar sesión",
+    "notifications": "Notificaciones",
+    "turnOnNotifications": "Activar notificaciones",
+    "notificationsOn": "Las notificaciones están activadas en este navegador.",
+    "notificationsBlocked": "Las notificaciones están bloqueadas. Permítelas para este sitio en la configuración del navegador y vuelve a cargar.",
+    "notificationsNeedInstall": "Para recibir notificaciones en iPhone, toca Compartir, luego Agregar a pantalla de inicio, y abre GamePlan desde la pantalla de inicio."
   },
   "memberProfile": {
     "title": "Perfil",

@@ -1,5 +1,5 @@
 /**
- * Profile photo, phone, dues link, positions, theme note, and sign-out.
+ * Profile photo, phone, notifications, dues link, positions, theme note, and sign-out.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -13,6 +13,7 @@ import { positionsWithinLimit } from '@gameplan/rules';
 import { config } from '@/src/config';
 import { errorMessageKey, queryError } from '@/src/errors';
 import { pickAndUploadImage, useDownloadUrl } from '@/src/media';
+import { pushStatus, registerPush, type PushStatus } from '@/src/push';
 import { isOwed } from '@/src/payment-status';
 import { myDuesQuery } from '@/src/queries/payments';
 import { meQuery, updateProfileMutation } from '@/src/queries/profile';
@@ -39,6 +40,7 @@ export default function ProfileScreen() {
   const [phoneReady, setPhoneReady] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | undefined>();
+  const [notifications, setNotifications] = useState<PushStatus>(() => pushStatus());
 
   useEffect(() => {
     if (phoneReady || me.data === undefined) return;
@@ -145,6 +147,7 @@ export default function ProfileScreen() {
           t(errorMessageKey(err, 'errors.profile.savePhoneFailed', { bad_phone: 'errors.profile.badPhone' }))
         }
       />
+      <NotificationSettings status={notifications} onEnable={async () => setNotifications(await registerPush(api))} />
       {(dues.data?.length ?? 0) > 0 ? (
         <View className="mt-2">
           <Button
@@ -199,3 +202,28 @@ export default function ProfileScreen() {
     </View>
   );
 }
+
+/**
+ * Website notification switch. Phones running the app are asked at sign-in, so
+ * nothing shows there.
+ */
+const NotificationSettings = ({ status, onEnable }: { status: PushStatus; onEnable: () => Promise<void> }) => {
+  const { t } = useTranslation();
+  if (status === 'native' || status === 'unsupported') return null;
+  return (
+    <View className="mb-2 mt-4">
+      <Text className="mb-1 text-lg font-semibold text-ink">{t('profile.notifications')}</Text>
+      {status === 'prompt' ? (
+        <Button label={t('profile.turnOnNotifications')} onPress={() => void onEnable()} />
+      ) : (
+        <Text className="text-muted">
+          {status === 'granted'
+            ? t('profile.notificationsOn')
+            : status === 'denied'
+              ? t('profile.notificationsBlocked')
+              : t('profile.notificationsNeedInstall')}
+        </Text>
+      )}
+    </View>
+  );
+};

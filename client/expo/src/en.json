@@ -165,7 +165,12 @@
     "positionsEmpty": "Join a team to add the positions you play.",
     "position": "Position",
     "removePosition": "Remove {{position}}",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "notifications": "Notifications",
+    "turnOnNotifications": "Turn on notifications",
+    "notificationsOn": "Notifications are on for this browser.",
+    "notificationsBlocked": "Notifications are blocked. Allow them for this site in your browser settings, then reload.",
+    "notificationsNeedInstall": "To get notifications on iPhone, tap Share, then Add to Home Screen, and open GamePlan from the Home Screen."
   },
   "memberProfile": {
     "title": "Profile",

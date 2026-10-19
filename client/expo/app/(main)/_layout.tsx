@@ -19,6 +19,7 @@ import { useDownloadUrl } from '@/src/media';
 import { adoptCacheOwner } from '@/src/query-client';
 import { useLiveQuerySync } from '@/src/use-live-query-sync';
 import { PullRefreshProvider } from '@/src/pull-refresh';
+import { refreshPushRegistration } from '@/src/push';
 import { useApp } from '@/src/state';
 import { useTeamsWithPermission } from '@/src/team-access';
 import { colors } from '@/src/theme';
@@ -65,7 +66,10 @@ export default function MainLayout() {
     void api.ensureSession().then(async (ok) => {
       if (ok) await adoptCacheOwner(queryClient, api.user?.userId);
       setReady(true);
-      if (ok) live.connect();
+      if (ok) {
+        live.connect();
+        void refreshPushRegistration(api);
+      }
     });
   }, [api, live, queryClient]);
 
