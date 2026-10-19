@@ -34,6 +34,7 @@ export const TEAM_PERMISSIONS = [
   "assign_roles",
   "manage_events",
   "create_team_channels",
+  "manage_payments",
 ] as const;
 
 /** Schema for {@link TEAM_PERMISSIONS}. */
@@ -95,3 +96,24 @@ export const devicePlatformSchema = z.enum(DEVICE_PLATFORMS);
 
 /** Inferred type for {@link devicePlatformSchema}. */
 export type DevicePlatform = z.infer<typeof devicePlatformSchema>;
+
+/**
+ * Where one member's share of a charge stands.
+ *
+ * `pending` means a checkout is open. `paid` came through Stripe; `paid_offline`
+ * and `waived` were set by staff.
+ */
+export const DUE_STATUSES = [
+  "unpaid",
+  "pending",
+  "paid",
+  "paid_offline",
+  "waived",
+  "refunded",
+] as const;
+
+/** Schema for {@link DUE_STATUSES}. */
+export const dueStatusSchema = z.enum(DUE_STATUSES);
+
+/** Inferred type for {@link dueStatusSchema}. */
+export type DueStatus = z.infer<typeof dueStatusSchema>;

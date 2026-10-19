@@ -96,6 +96,19 @@ import {
   placesResolveQuerySchema,
   placesReverseQuerySchema,
 } from './places.js';
+import {
+  chargeDetailSchema,
+  chargeListSchema,
+  chargeSchema,
+  createChargeBodySchema,
+  dueSchema,
+  myDuesSchema,
+  paymentAccountSchema,
+  paymentRedirectSchema,
+  paymentReturnBodySchema,
+  paymentReturnQuerySchema,
+  updateDueBodySchema,
+} from './payments.js';
 import { z, type ZodType } from './zod.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
@@ -491,6 +504,57 @@ const AREAS: Record<string, AreaSpec> = {
           summary: 'Static map preview image for coordinates',
           query: placesMapQuerySchema,
         },
+      },
+    },
+  },
+  payments: {
+    description: 'Team dues: Stripe Connect onboarding, charges, member dues, and checkout.',
+    secured: true,
+    paths: {
+      '/payments/teams/{teamId}/account': {
+        get: { summary: "The team's Stripe account status", response: paymentAccountSchema },
+      },
+      '/payments/teams/{teamId}/account/link': {
+        post: {
+          summary: 'Start or resume Stripe onboarding',
+          body: paymentReturnBodySchema,
+          response: paymentRedirectSchema,
+        },
+      },
+      '/payments/teams/{teamId}/charges': {
+        get: { summary: 'Charges with paid and outstanding totals', response: chargeListSchema },
+        post: { summary: 'Charge members', body: createChargeBodySchema, response: chargeSchema },
+      },
+      '/payments/teams/{teamId}/charges/{chargeId}': {
+        get: { summary: 'One charge and every member due', response: chargeDetailSchema },
+      },
+      '/payments/teams/{teamId}/charges/{chargeId}/dues/{memberId}': {
+        patch: {
+          summary: 'Mark a due paid offline, waived, or unpaid',
+          body: updateDueBodySchema,
+          response: dueSchema,
+        },
+      },
+      '/payments/teams/{teamId}/charges/{chargeId}/dues/{memberId}/checkout': {
+        post: {
+          summary: 'Open a Stripe Checkout page for a due',
+          body: paymentReturnBodySchema,
+          response: paymentRedirectSchema,
+        },
+      },
+      '/payments/me/dues': {
+        get: { summary: 'Dues the caller owes, for themselves or their children', response: myDuesSchema },
+      },
+      '/payments/return': {
+        get: {
+          summary: 'Where Stripe sends the browser back; redirects to the app or website',
+          query: paymentReturnQuerySchema,
+          secured: false,
+          redirect: true,
+        },
+      },
+      '/payments/webhook': {
+        post: { summary: 'Stripe webhook (Stripe-Signature header, no bearer token)', secured: false },
       },
     },
   },

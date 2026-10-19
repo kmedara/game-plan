@@ -22,6 +22,7 @@ const CONST_EXPORTS = [
   'ACCOUNT_KINDS',
   'CHAT_KINDS',
   'DEVICE_PLATFORMS',
+  'DUE_STATUSES',
   'EVENT_TYPES',
   'FIXTURE_STATUSES',
   'GAME_SIDES',
@@ -30,6 +31,12 @@ const CONST_EXPORTS = [
   'TEAM_PERMISSIONS',
   'DEFAULT_ROLE_PERMISSIONS',
   'MAX_UPLOAD_BYTES',
+  'CHARGE_CURRENCIES',
+  'MANUAL_DUE_STATUSES',
+  'MIN_CHARGE_CENTS',
+  'MAX_CHARGE_CENTS',
+  'MAX_CHARGE_MEMBERS',
+  'PAYMENT_RETURN_TARGETS',
 ] as const;
 
 /** Convert `loginBodySchema` → `LoginBody`. */
@@ -44,7 +51,7 @@ const interfaceToTypeAlias = (source: string): string =>
 
 /** Serialize a const value as TypeScript with `as const` for arrays. */
 const formatConst = (name: string, value: unknown): string => {
-  if (name === 'MAX_UPLOAD_BYTES' && typeof value === 'number') {
+  if (typeof value === 'number') {
     return `export const ${name} = ${value};`;
   }
   if (Array.isArray(value)) {

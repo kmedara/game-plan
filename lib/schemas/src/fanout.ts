@@ -3,6 +3,7 @@
  */
 
 import { displayNameSchema } from './display-name.js';
+import { chargeCurrencySchema } from './payments.js';
 import { z } from './zod.js';
 
 /**
@@ -78,6 +79,34 @@ export const fanoutJobSchema = z.discriminatedUnion('type', [
       teamName: z.string().min(1).max(200),
       requesterDisplayName: displayNameSchema,
       ...retryFields,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('dues_reminder'),
+      teamId: z.string().min(1),
+      chargeId: z.string().min(1),
+      title: z.string().min(1).max(200),
+      amountCents: z.number().int().min(0),
+      currency: chargeCurrencySchema,
+      dueDate: z.string().min(1),
+      kind: z.enum(['upcoming', 'due', 'overdue']),
+      userIds: userIdsSchema,
+      attempt: retryFields.attempt,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('payment_received'),
+      teamId: z.string().min(1),
+      chargeId: z.string().min(1),
+      memberId: z.string().min(1),
+      title: z.string().min(1).max(200),
+      amountCents: z.number().int().min(0),
+      currency: chargeCurrencySchema,
+      memberDisplayName: displayNameSchema.optional(),
+      userIds: userIdsSchema,
+      attempt: retryFields.attempt,
     })
     .strict(),
 ]);

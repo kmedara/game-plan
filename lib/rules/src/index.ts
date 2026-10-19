@@ -467,3 +467,32 @@ export const assertEventEndsAfterStart = (startsAt: string, endsAt: string | und
   if (Number.isNaN(end.getTime())) throw new Error('invalid_ends_at');
   if (end.getTime() < start.getTime()) throw new Error('invalid_ends_at');
 };
+
+/** The fields {@link payerIdsForDue} reads about the member who owes a due. */
+export type DuePayerMember = {
+  userId: string;
+  accountKind: AccountKind;
+  guardianIds?: readonly string[];
+};
+
+/**
+ * Who may pay a member's due.
+ *
+ * An adult pays their own. A minor's is paid by any linked guardian; a minor
+ * with no guardian has no in-app payer, and staff mark the due by hand.
+ *
+ * @param member - The member the due belongs to.
+ * @returns User ids allowed to open a checkout, without repeats.
+ */
+export const payerIdsForDue = (member: DuePayerMember): string[] =>
+  member.accountKind === 'adult' ? [member.userId] : [...new Set(member.guardianIds ?? [])];
+
+/**
+ * Returns whether a user may pay a member's due.
+ *
+ * @param payerId - The caller.
+ * @param member - The member the due belongs to.
+ * @returns `true` when the caller is in {@link payerIdsForDue}.
+ */
+export const canPayDue = (payerId: string, member: DuePayerMember): boolean =>
+  payerIdsForDue(member).includes(payerId);

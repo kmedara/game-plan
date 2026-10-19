@@ -82,6 +82,85 @@ export type CarpoolResponse = {
   }[];
 }
 
+export type ChargeCurrency = 'usd' | 'cad' | 'eur' | 'gbp' | 'aud';
+
+export type ChargeDetail = {
+  charge: {
+    teamId: string;
+    chargeId: string;
+    title: string;
+    description?: string;
+    amountCents: number;
+    currency: 'usd' | 'cad' | 'eur' | 'gbp' | 'aud';
+    dueDate: string;
+    createdBy: string;
+    createdAt: string;
+    totals: {
+      members: number;
+      settled: number;
+      outstanding: number;
+      collectedCents: number;
+    };
+  };
+  dues: {
+    teamId: string;
+    chargeId: string;
+    memberId: string;
+    memberName?: string;
+    status: 'unpaid' | 'pending' | 'paid' | 'paid_offline' | 'waived' | 'refunded';
+    amountCents: number;
+    paidBy?: string;
+    paidAt?: string;
+    updatedAt: string;
+  }[];
+}
+
+export type ChargeList = {
+  teamId: string;
+  charges: {
+    teamId: string;
+    chargeId: string;
+    title: string;
+    description?: string;
+    amountCents: number;
+    currency: 'usd' | 'cad' | 'eur' | 'gbp' | 'aud';
+    dueDate: string;
+    createdBy: string;
+    createdAt: string;
+    totals: {
+      members: number;
+      settled: number;
+      outstanding: number;
+      collectedCents: number;
+    };
+  }[];
+}
+
+export type Charge = {
+  teamId: string;
+  chargeId: string;
+  title: string;
+  description?: string;
+  amountCents: number;
+  currency: 'usd' | 'cad' | 'eur' | 'gbp' | 'aud';
+  dueDate: string;
+  createdBy: string;
+  createdAt: string;
+  totals: {
+    members: number;
+    settled: number;
+    outstanding: number;
+    collectedCents: number;
+  };
+}
+
+export type ChargeTotals = {
+  members: number;
+  settled: number;
+  outstanding: number;
+  collectedCents: number;
+}
+
 export type ChatKind = 'default' | 'channel' | 'private' | 'fixture';
 
 export type ChatList = {
@@ -135,6 +214,19 @@ export type ConfirmationRequired = {
 export type ConfirmRegistrationBody = {
   email: string;
   code: string;
+}
+
+export type CreateChargeBody = {
+  title: string;
+  description?: string;
+  amountCents: number;
+  currency?: 'usd' | 'cad' | 'eur' | 'gbp' | 'aud';
+  dueDate: string;
+  /**
+   * @minItems 1
+   * @maxItems 200
+   */
+  memberIds: [string, ...string[]];
 }
 
 export type CreateEventBody = {
@@ -193,6 +285,20 @@ export type DeviceRegistration = {
 }
 
 export type DisplayName = string;
+
+export type Due = {
+  teamId: string;
+  chargeId: string;
+  memberId: string;
+  memberName?: string;
+  status: 'unpaid' | 'pending' | 'paid' | 'paid_offline' | 'waived' | 'refunded';
+  amountCents: number;
+  paidBy?: string;
+  paidAt?: string;
+  updatedAt: string;
+}
+
+export type DueStatus = 'unpaid' | 'pending' | 'paid' | 'paid_offline' | 'waived' | 'refunded';
 
 export type ErrorBody = {
   error: string;
@@ -314,6 +420,36 @@ export type FanoutJob =
        * @minItems 1
        */
       userIds?: [string, ...string[]];
+      attempt?: number;
+    }
+  | {
+      type: 'dues_reminder';
+      teamId: string;
+      chargeId: string;
+      title: string;
+      amountCents: number;
+      currency: 'usd' | 'cad' | 'eur' | 'gbp' | 'aud';
+      dueDate: string;
+      kind: 'upcoming' | 'due' | 'overdue';
+      /**
+       * @minItems 1
+       */
+      userIds: [string, ...string[]];
+      attempt?: number;
+    }
+  | {
+      type: 'payment_received';
+      teamId: string;
+      chargeId: string;
+      memberId: string;
+      title: string;
+      amountCents: number;
+      currency: 'usd' | 'cad' | 'eur' | 'gbp' | 'aud';
+      memberDisplayName?: string;
+      /**
+       * @minItems 1
+       */
+      userIds: [string, ...string[]];
       attempt?: number;
     };
 
@@ -467,6 +603,40 @@ export type MessagePage = {
   cursor?: string;
 }
 
+export type MyDue = {
+  teamId: string;
+  teamName?: string;
+  chargeId: string;
+  memberId: string;
+  memberName?: string;
+  title: string;
+  description?: string;
+  amountCents: number;
+  currency: 'usd' | 'cad' | 'eur' | 'gbp' | 'aud';
+  dueDate: string;
+  status: 'unpaid' | 'pending' | 'paid' | 'paid_offline' | 'waived' | 'refunded';
+  paidAt?: string;
+  canPay: boolean;
+}
+
+export type MyDues = {
+  dues: {
+    teamId: string;
+    teamName?: string;
+    chargeId: string;
+    memberId: string;
+    memberName?: string;
+    title: string;
+    description?: string;
+    amountCents: number;
+    currency: 'usd' | 'cad' | 'eur' | 'gbp' | 'aud';
+    dueDate: string;
+    status: 'unpaid' | 'pending' | 'paid' | 'paid_offline' | 'waived' | 'refunded';
+    paidAt?: string;
+    canPay: boolean;
+  }[];
+}
+
 export type OauthExchangeBody = {
   code: string;
 }
@@ -492,6 +662,28 @@ export type OauthNext = 'teams' | 'complete-profile';
 
 export type OccurrenceTarget = {
   occurrenceStartsAt: string;
+}
+
+export type PaymentAccount = {
+  teamId: string;
+  connected: boolean;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+}
+
+export type PaymentRedirect = {
+  url: string;
+}
+
+export type PaymentReturnBody = {
+  returnTo?: 'app' | 'web';
+}
+
+export type PaymentReturnQuery = {
+  to: 'app' | 'web';
+  result: 'success' | 'cancel' | 'onboarded' | 'refresh';
+  teamId?: string;
 }
 
 export type PhoneNumber = string;
@@ -601,6 +793,7 @@ export type RolePermissionsResponse = {
       | 'assign_roles'
       | 'manage_events'
       | 'create_team_channels'
+      | 'manage_payments'
     )[];
   }[];
 }
@@ -615,6 +808,7 @@ export type RolePermissions = {
     | 'assign_roles'
     | 'manage_events'
     | 'create_team_channels'
+    | 'manage_payments'
   )[];
 }
 
@@ -864,7 +1058,8 @@ export type TeamPermission =
   | 'approve_join_requests'
   | 'assign_roles'
   | 'manage_events'
-  | 'create_team_channels';
+  | 'create_team_channels'
+  | 'manage_payments';
 
 export type TeamRole = 'team_admin' | 'coach' | 'player' | 'parent';
 
@@ -902,6 +1097,10 @@ export type TeamTheme = {
 }
 
 export type TimeZone = string;
+
+export type UpdateDueBody = {
+  status: 'unpaid' | 'paid_offline' | 'waived';
+}
 
 export type UpdateEventBody = {
   eventType?: 'practice' | 'game' | 'meeting' | 'other';
@@ -955,6 +1154,7 @@ export type UpdateRolePermissionsBody = {
         | 'assign_roles'
         | 'manage_events'
         | 'create_team_channels'
+        | 'manage_payments'
       )[];
     },
     ...{
@@ -967,6 +1167,7 @@ export type UpdateRolePermissionsBody = {
         | 'assign_roles'
         | 'manage_events'
         | 'create_team_channels'
+        | 'manage_payments'
       )[];
     }[]
   ];
@@ -1019,6 +1220,8 @@ export const CHAT_KINDS = ["default", "channel", "private", "fixture"] as const;
 
 export const DEVICE_PLATFORMS = ["ios", "android", "web"] as const;
 
+export const DUE_STATUSES = ["unpaid", "pending", "paid", "paid_offline", "waived", "refunded"] as const;
+
 export const EVENT_TYPES = ["practice", "game", "meeting", "other"] as const;
 
 export const FIXTURE_STATUSES = ["proposed", "linked"] as const;
@@ -1029,13 +1232,25 @@ export const RSVP_STATUSES = ["going", "not_going", "maybe"] as const;
 
 export const TEAM_ROLES = ["team_admin", "coach", "player", "parent"] as const;
 
-export const TEAM_PERMISSIONS = ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels"] as const;
+export const TEAM_PERMISSIONS = ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels", "manage_payments"] as const;
 
 export const DEFAULT_ROLE_PERMISSIONS = {
-  team_admin: ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels"],
+  team_admin: ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels", "manage_payments"],
   coach: [],
   parent: [],
   player: [],
 } as const;
 
 export const MAX_UPLOAD_BYTES = 15728640;
+
+export const CHARGE_CURRENCIES = ["usd", "cad", "eur", "gbp", "aud"] as const;
+
+export const MANUAL_DUE_STATUSES = ["unpaid", "paid_offline", "waived"] as const;
+
+export const MIN_CHARGE_CENTS = 100;
+
+export const MAX_CHARGE_CENTS = 1000000;
+
+export const MAX_CHARGE_MEMBERS = 200;
+
+export const PAYMENT_RETURN_TARGETS = ["app", "web"] as const;
