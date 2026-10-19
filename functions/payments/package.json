@@ -7,7 +7,6 @@
     "dev": "tsx src/local.ts"
   },
   "dependencies": {
-    "@gameplan/lib": "0.0.0",
-    "stripe": "22.6.2"
+    "@gameplan/lib": "0.0.0"
   }
 }

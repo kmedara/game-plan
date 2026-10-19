@@ -7,8 +7,8 @@
  * event about those charges is sent to the Connect webhook endpoint.
  */
 
-import Stripe from 'stripe';
-import { readSecret } from '../../lib/parameters.js';
+import type Stripe from 'stripe';
+import { stripeClient, verifyStripeEvent } from '../../lib/stripe-client.js';
 
 /** Readiness flags Stripe reports for a connected account. */
 export type AccountState = {
@@ -57,23 +57,10 @@ export type PaymentGateway = {
   verifyWebhook: (rawBody: string, signature: string) => Promise<GatewayEvent>;
 };
 
-let client: Stripe | undefined;
-
 let override: PaymentGateway | undefined;
 
-/**
- * The Stripe client, built from the secret key on first use.
- *
- * @returns The client.
- * @throws `payments_not_configured` when no key is set.
- */
-const stripe = async (): Promise<Stripe> => {
-  if (client !== undefined) return client;
-  const key = await readSecret('STRIPE_SECRET_KEY_PARAMETER', 'STRIPE_SECRET_KEY');
-  if (key === undefined) throw new Error('payments_not_configured');
-  client = new Stripe(key, { maxNetworkRetries: 2, appInfo: { name: 'GamePlan' } });
-  return client;
-};
+/** The shared Stripe client, reporting a missing key as `payments_not_configured`. */
+const stripe = (): Promise<Stripe> => stripeClient('payments_not_configured');
 
 /**
  * Reads the account flags from a Stripe account object.
@@ -98,20 +85,6 @@ const sessionOf = (session: Stripe.Checkout.Session): CheckoutSession => ({
   url: session.url ?? '',
   status: session.status === 'complete' ? 'complete' : session.status === 'expired' ? 'expired' : 'open',
 });
-
-/**
- * Webhook signing secrets. More than one may be set, comma-separated, while a
- * secret is being rolled.
- *
- * @returns The configured secrets.
- */
-const webhookSecrets = async (): Promise<string[]> => {
-  const raw = await readSecret('STRIPE_WEBHOOK_SECRET_PARAMETER', 'STRIPE_WEBHOOK_SECRET');
-  return (raw ?? '')
-    .split(',')
-    .map((secret) => secret.trim())
-    .filter((secret) => secret.length > 0);
-};
 
 /** The live Stripe implementation. */
 const stripeGateway: PaymentGateway = {
@@ -175,22 +148,18 @@ const stripeGateway: PaymentGateway = {
     return intent.metadata;
   },
   verifyWebhook: async (rawBody, signature) => {
-    const secrets = await webhookSecrets();
-    if (secrets.length === 0) throw new Error('payments_not_configured');
-    const api = await stripe();
-    for (const secret of secrets) {
-      try {
-        const event = await api.webhooks.constructEventAsync(rawBody, signature, secret);
-        return {
-          type: event.type,
-          ...(event.account !== undefined ? { account: event.account } : {}),
-          object: event.data.object as unknown as Record<string, unknown>,
-        };
-      } catch {
-        // Try the next secret; a roll keeps the old one valid for a while.
-      }
-    }
-    throw new Error('invalid_signature');
+    const event = await verifyStripeEvent({
+      rawBody,
+      signature,
+      secretParameterEnv: 'STRIPE_WEBHOOK_SECRET_PARAMETER',
+      secretLocalEnv: 'STRIPE_WEBHOOK_SECRET',
+      notConfigured: 'payments_not_configured',
+    });
+    return {
+      type: event.type,
+      ...(event.account !== undefined ? { account: event.account } : {}),
+      object: event.object,
+    };
   },
 };
 
