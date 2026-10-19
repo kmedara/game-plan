@@ -4,7 +4,7 @@
 
 import { createTestQueryClient } from '../test-query';
 import { queryKeys } from './keys';
-import { applyLiveEvent } from './live';
+import { applyLiveEvent, resyncAfterReconnect } from './live';
 
 describe('applyLiveEvent', () => {
   it('prepends a chat message when that thread is already loaded', () => {
@@ -55,5 +55,25 @@ describe('applyLiveEvent', () => {
     client.setQueryData(queryKeys.messages('c1'), { messages: [message] });
     applyLiveEvent(client, { type: 'chat_message', ...message });
     expect(client.getQueryData(queryKeys.messages('c1'))).toEqual({ messages: [message] });
+  });
+});
+
+describe('resyncAfterReconnect', () => {
+  it('marks chat, schedule, and dues data stale so missed events are fetched', () => {
+    const client = createTestQueryClient();
+    client.setQueryData(queryKeys.messages('c1'), { messages: [] });
+    client.setQueryData(queryKeys.chats, []);
+    client.setQueryData(queryKeys.schedule('t1', 'a', 'b'), { teamId: 't1', from: 'a', to: 'b', occurrences: [] });
+    client.setQueryData(queryKeys.myDues, []);
+    client.setQueryData(queryKeys.members('t1'), []);
+
+    resyncAfterReconnect(client);
+
+    const stale = (key: readonly unknown[]) => client.getQueryState(key)?.isInvalidated;
+    expect(stale(queryKeys.messages('c1'))).toBe(true);
+    expect(stale(queryKeys.chats)).toBe(true);
+    expect(stale(queryKeys.schedule('t1', 'a', 'b'))).toBe(true);
+    expect(stale(queryKeys.myDues)).toBe(true);
+    expect(stale(queryKeys.members('t1'))).toBe(false);
   });
 });

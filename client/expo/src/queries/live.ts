@@ -44,3 +44,17 @@ export const applyLiveEvent = (queryClient: QueryClient, event: FanoutJob): void
     void queryClient.invalidateQueries({ queryKey: ['charge', event.teamId] });
   }
 };
+
+/**
+ * Refetches what live events would have updated, after the socket was down.
+ *
+ * Only queries on screen refetch now; the rest are marked stale and load
+ * fresh when next opened.
+ *
+ * @param queryClient - The app client.
+ */
+export const resyncAfterReconnect = (queryClient: QueryClient): void => {
+  for (const kind of ['chats', 'messages', 'schedule', 'fixtures', 'joinRequests', 'myDues', 'charges', 'charge']) {
+    void queryClient.invalidateQueries({ queryKey: [kind] });
+  }
+};
