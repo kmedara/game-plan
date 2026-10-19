@@ -27,7 +27,9 @@ import {
   DIRECTORY_KEY,
   HANDOFF_PREFIX,
   INVITE_PREFIX,
+  PAYMENT_REMINDERS_KEY,
   REMINDERS_KEY,
+  STRIPE_ACCOUNT_PREFIX,
   TEAM_PREFIX,
   TICKET_PREFIX,
   USER_PREFIX,
@@ -277,6 +279,14 @@ export class Api extends Construct {
     const mapsKeyParameter = `${props.ssmPrefix}/google-maps-api-key`;
     const vapidPrivateKeyParameter = `${props.ssmPrefix}/vapid-private-key`;
     const originSecretParameter = `${props.ssmPrefix}/socket-origin-verify`;
+    const stripeSecretKeyParameter = `${props.ssmPrefix}/stripe-secret-key`;
+    const stripeWebhookSecretParameter = `${props.ssmPrefix}/stripe-webhook-secret`;
+    const paymentsEnv = {
+      STRIPE_SECRET_KEY_PARAMETER: stripeSecretKeyParameter,
+      STRIPE_WEBHOOK_SECRET_PARAMETER: stripeWebhookSecretParameter,
+      PLATFORM_FEE_BPS: process.env.PLATFORM_FEE_BPS ?? '200',
+      PAYMENTS_RETURN_URL: `${props.corsOrigin.replace(/\/+$/u, '')}/api/payments/return`,
+    };
     this.socketOriginParameter = originSecretParameter;
     const mediaSigningKeyParameter = `${props.ssmPrefix}/media-signing-private-key`;
     const mediaSigning = props.mediaSigningPublicKey === undefined
@@ -322,6 +332,8 @@ export class Api extends Construct {
             ...tokenEnv,
             GOOGLE_MAPS_API_KEY_PARAMETER: mapsKeyParameter,
           };
+        case 'payments':
+          return { ...shared, ...tableEnv, ...tokenEnv, ...queueEnv, ...paymentsEnv };
         case 'fanout':
           return {
             ...shared,
@@ -343,6 +355,23 @@ export class Api extends Construct {
     allowParameterRead(functions.places, mapsKeyParameter);
     allowParameterRead(functions.fanout, vapidPrivateKeyParameter);
     if (mediaSigning !== undefined) allowParameterRead(functions.media, mediaSigningKeyParameter);
+    allowParameterRead(functions.payments, stripeSecretKeyParameter);
+    allowParameterRead(functions.payments, stripeWebhookSecretParameter);
+
+    // Stripe cannot sign for CloudFront's origin access control, so the webhook
+    // gets its own function with a public URL. It serves that one route and
+    // trusts nothing but the Stripe signature.
+    const paymentsWebhookFn = createFunction(
+      this,
+      'payments-webhook',
+      areaEntry('payments', 'webhook-handler.ts'),
+      { ...shared, ...tableEnv, ...queueEnv, ...paymentsEnv },
+    );
+    allowParameterRead(paymentsWebhookFn, stripeSecretKeyParameter);
+    allowParameterRead(paymentsWebhookFn, stripeWebhookSecretParameter);
+    const paymentsWebhookUrl = paymentsWebhookFn.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.NONE,
+    });
 
     const functionUrls = {} as Record<HttpArea, lambda.FunctionUrl>;
     const httpFunctions = {} as Record<HttpArea, lambda.IFunction>;
@@ -414,6 +443,8 @@ export class Api extends Construct {
     queue.grantSendMessages(functions.schedule);
     queue.grantSendMessages(functions.teams);
     queue.grantSendMessages(functions.fanout);
+    queue.grantSendMessages(functions.payments);
+    queue.grantSendMessages(paymentsWebhookFn);
     functions.fanout.addEventSource(
       new SqsEventSource(queue, { batchSize: 10, reportBatchItemFailures: true }),
     );
@@ -423,6 +454,15 @@ export class Api extends Construct {
       targets: [
         new targets.LambdaFunction(functions.schedule, {
           event: events.RuleTargetInput.fromObject({ source: 'gameplan.reminders' }),
+        }),
+      ],
+    });
+
+    new events.Rule(this, 'PaymentReminderSweep', {
+      schedule: events.Schedule.cron({ minute: '0', hour: '15' }),
+      targets: [
+        new targets.LambdaFunction(functions.payments, {
+          event: events.RuleTargetInput.fromObject({ source: 'gameplan.payment-reminders' }),
         }),
       ],
     });
@@ -460,6 +500,17 @@ export class Api extends Construct {
       write: [USER_PREFIX, TICKET_PREFIX],
       connectionIndex: true,
     });
+    grantPartitions(props.table, functions.payments, {
+      // Dues live on TEAM#, pointers and profiles on USER#.
+      read: [TEAM_PREFIX, USER_PREFIX, STRIPE_ACCOUNT_PREFIX, PAYMENT_REMINDERS_KEY],
+      write: [TEAM_PREFIX, USER_PREFIX, STRIPE_ACCOUNT_PREFIX, PAYMENT_REMINDERS_KEY],
+      transact: true,
+    });
+    grantPartitions(props.table, paymentsWebhookFn, {
+      read: [TEAM_PREFIX, USER_PREFIX, STRIPE_ACCOUNT_PREFIX],
+      write: [TEAM_PREFIX, STRIPE_ACCOUNT_PREFIX],
+      transact: true,
+    });
     grantPartitions(props.table, functions.fanout, {
       read: [CHAT_PREFIX, TEAM_PREFIX, USER_PREFIX],
       // A gone socket is deleted. LeadingKeys cannot limit DeleteItem to CONN#.
@@ -478,6 +529,11 @@ export class Api extends Construct {
     new cdk.CfnOutput(this, 'WebSocketUrl', {
       value: socketStage.url,
       exportName: 'GamePlanWebSocketUrl',
+    });
+
+    new cdk.CfnOutput(this, 'PaymentsWebhookUrl', {
+      value: `${paymentsWebhookUrl.url}payments/webhook`,
+      description: 'Register as a Stripe Connect webhook endpoint (events on connected accounts).',
     });
   }
 }

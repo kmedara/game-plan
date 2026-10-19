@@ -1,0 +1,13 @@
+{
+  "name": "@gameplan/payments",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/local.ts"
+  },
+  "dependencies": {
+    "@gameplan/lib": "0.0.0",
+    "stripe": "22.6.2"
+  }
+}

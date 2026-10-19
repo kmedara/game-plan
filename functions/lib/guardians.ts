@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { rolesFromMembership } from '@gameplan/rules';
 import { findProfileByEmail, getProfile } from './auth/index.js';
 import {
+  CHILD_SK_PREFIX,
   GUARDIAN_SK_PREFIX,
   TABLE_PK,
   TABLE_SK,
@@ -52,6 +53,19 @@ export const listGuardianIds = async (minorId: string): Promise<string[]> => {
   const rows = await queryBySkPrefix<{ adultId?: string }>(userPk(minorId), GUARDIAN_SK_PREFIX);
   return rows
     .map((row) => row.adultId)
+    .filter((id): id is string => typeof id === 'string');
+};
+
+/**
+ * Lists minor user ids an adult is the guardian of.
+ *
+ * @param adultId - The guardian's user id.
+ * @returns Linked minor user ids.
+ */
+export const listChildIds = async (adultId: string): Promise<string[]> => {
+  const rows = await queryBySkPrefix<{ minorId?: string }>(userPk(adultId), CHILD_SK_PREFIX);
+  return rows
+    .map((row) => row.minorId)
     .filter((id): id is string => typeof id === 'string');
 };
 

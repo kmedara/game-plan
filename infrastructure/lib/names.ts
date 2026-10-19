@@ -18,6 +18,7 @@ const areas = [
   'places',
   'socket',
   'fanout',
+  'payments',
 ] as const;
 
 /** One product area, and therefore one deployable Lambda. */
@@ -39,7 +40,15 @@ if (
 export const AREAS: readonly Area[] = areas;
 
 /** Areas that answer HTTP requests. Socket and fan-out are not HTTP. */
-export const HTTP_AREAS = ['identity', 'teams', 'schedule', 'chat', 'media', 'places'] as const;
+export const HTTP_AREAS = [
+  'identity',
+  'teams',
+  'schedule',
+  'chat',
+  'media',
+  'places',
+  'payments',
+] as const;
 
 /** One area with a Lambda function URL behind the website distribution. */
 export type HttpArea = (typeof HTTP_AREAS)[number];

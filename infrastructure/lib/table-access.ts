@@ -33,6 +33,12 @@ export const DIRECTORY_KEY = 'TEAM_DIR';
 /** `REMINDERS` due-time rows for schedule pushes. */
 export const REMINDERS_KEY = 'REMINDERS';
 
+/** `STRIPE_ACCOUNT#<accountId>` which team a connected Stripe account belongs to. */
+export const STRIPE_ACCOUNT_PREFIX = 'STRIPE_ACCOUNT#*';
+
+/** `PAYMENT_REMINDERS` dated rows for dues reminders. */
+export const PAYMENT_REMINDERS_KEY = 'PAYMENT_REMINDERS';
+
 /** Which rows a function may read or write. */
 export type PartitionGrant = {
   /** Partition-key patterns for `GetItem` and `Query`. */

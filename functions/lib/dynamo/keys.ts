@@ -233,6 +233,50 @@ export const reminderSk = (
 /** Sort-key prefix for every reminder row. */
 export const REMINDER_SK_PREFIX = 'REMINDER#' as const;
 
+/** Team row holding the connected Stripe account and its readiness flags. */
+export const teamStripeSk = (): string => 'STRIPE';
+
+/** One charge on a team: what staff asked members to pay. */
+export const chargeSk = (chargeId: string): string => `CHARGE#${chargeId}`;
+
+/** Sort-key prefix for every charge on a team. */
+export const CHARGE_SK_PREFIX = 'CHARGE#' as const;
+
+/** One member's share of a charge, on the team partition. */
+export const dueSk = (chargeId: string, memberId: UserId): string => `DUE#${chargeId}#${memberId}`;
+
+/** Sort-key prefix for every member due on one charge. */
+export const dueSkPrefix = (chargeId: string): string => `DUE#${chargeId}#`;
+
+/** Copy of a due on the member's partition, for the "my dues" list. */
+export const userDueSk = (teamId: TeamId, chargeId: string): string => `DUE#${teamId}#${chargeId}`;
+
+/** Sort-key prefix for every due copy on a user. */
+export const USER_DUE_SK_PREFIX = 'DUE#' as const;
+
+/** `STRIPE_ACCOUNT#<accountId>` — which team a connected account belongs to. */
+export const stripeAccountPk = (accountId: string): string => `STRIPE_ACCOUNT#${accountId}`;
+
+/** The single row under {@link stripeAccountPk}. */
+export const stripeAccountSk = (): string => 'TEAM';
+
+/** Partition that holds dated dues-reminder rows for every team. */
+export const PAYMENT_REMINDERS_PK = 'PAYMENT_REMINDERS' as const;
+
+/** Kind of dues reminder; also the push wording. */
+export type PaymentReminderKind = 'upcoming' | 'due' | 'overdue';
+
+/** One dues reminder, ordered by the calendar date it is due. */
+export const paymentReminderSk = (
+  sendOn: string,
+  teamId: TeamId,
+  chargeId: string,
+  kind: PaymentReminderKind,
+): string => `PAYREMIND#${sendOn}#${teamId}#${chargeId}#${kind}`;
+
+/** Sort-key prefix for every dues reminder row. */
+export const PAYMENT_REMINDER_SK_PREFIX = 'PAYREMIND#' as const;
+
 /**
  * Inclusive `SK BETWEEN` bounds for RSVPs whose occurrence falls in a window.
  *
