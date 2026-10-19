@@ -25,8 +25,8 @@ export default defineConfig({
     env: { AUTH_PROVIDER: 'local', LOCAL_JWT_SECRET: 'vitest-local-secret' },
     pool: 'forks',
     // Single-worker runs avoid flaky coverage.tmp ENOENT races on Windows.
-    fileParallelism: false,
-    maxWorkers: 1,
+    fileParallelism: true,
+    maxWorkers: 3,
     include: [
       'functions/**/*.test.ts',
       'local/**/*.test.ts',

@@ -3,8 +3,8 @@
 Event locations support place autocomplete when creating an event, an interactive
 map above the location field, and **Open in Maps** links on the schedule day list.
 
-**Places** and **Geocoding** calls go through the **`places` API area** with the
-server key. Map **tiles / SDKs** use separate browser and Android keys on the
+**Places**, **Geocoding**, and **Static Maps** calls go through the **`places`
+API area** with the server key. Map **tiles / SDKs** use separate browser and Android keys on the
 client. Keys are never shared across roles.
 
 ## Providers
@@ -13,6 +13,7 @@ client. Keys are never shared across roles.
 | ------- | -------- |
 | Autocomplete / resolve | Google Places API (New), proxied by `GET /places/…` |
 | Map pin reverse geocode | Google Geocoding API, proxied by `GET /places/reverse` |
+| Map preview image | Maps Static API, proxied by `GET /places/map` |
 | Interactive map (web) | Maps JavaScript API (`GOOGLE_MAPS_BROWSER_API_KEY`) |
 | Interactive map (Android) | Maps SDK for Android (`GOOGLE_MAPS_ANDROID_API_KEY`) |
 | Interactive map (iOS) | MapKit (no Google client key) |
@@ -22,16 +23,20 @@ client. Keys are never shared across roles.
 
 | Role | Env var | Restrictions |
 | ---- | ------- | ------------ |
-| Server | `GOOGLE_MAPS_API_KEY` | Places API (New), Geocoding API; IP / none for local |
-| Browser | `GOOGLE_MAPS_BROWSER_API_KEY` | Maps JavaScript API only; HTTP referrers |
+| Server | `GOOGLE_MAPS_API_KEY` | Places API (New), Geocoding API, Maps Static API; no application restriction (Lambda has no fixed IP) |
+| Browser | `GOOGLE_MAPS_BROWSER_API_KEY` | Maps JavaScript API only; HTTP referrers for every origin you open, see below |
 | Android | `GOOGLE_MAPS_ANDROID_API_KEY` | Maps SDK for Android; package `com.gameplan.app` + SHA-1 |
 
 ## Google Cloud setup
 
 1. Open the Google Cloud Console and create or select a project.
-2. Enable **Places API (New)**, **Geocoding API**, **Maps JavaScript API**, and
-   **Maps SDK for Android**.
-3. Create **three** API keys with the restrictions in the table above.
+2. Turn on billing for the project; Google refuses every Maps API without it.
+3. Enable **Places API (New)**, **Geocoding API**, **Maps Static API**,
+   **Maps JavaScript API**, and **Maps SDK for Android**.
+4. Create **three** API keys with the restrictions in the table above.
+
+Without **Maps Static API** on the server key, search still works but
+`GET /places/map` fails, so map preview images do not load.
 
 ## Server environment
 
@@ -61,8 +66,24 @@ Set `GOOGLE_MAPS_BROWSER_API_KEY` when starting or building the Expo app.
 GOOGLE_MAPS_BROWSER_API_KEY=browser-key-here npm run client:start
 ```
 
-If the browser key is missing, the web map shows an unavailable state (no OSM
-fallback).
+If the browser key is missing, or Google rejects it, the web map shows an
+unavailable state (no OSM fallback).
+
+### Browser key referrers
+
+The browser key only works on the websites its referrer list names, so list
+every origin people open the site from:
+
+- `https://<site host>/*` for each deployed stage
+- `http://localhost:4200/*` for local work
+- `http://<laptop LAN IP>:4200/*` when a phone on the same Wi-Fi opens the dev server
+
+A map that works on the laptop but not on a phone is almost always a missing
+origin. On Android, open `chrome://inspect` on the computer with the phone
+connected over USB and read the console: `RefererNotAllowedMapError` means a
+missing origin, `ApiNotActivatedMapError` means Maps JavaScript API is not
+enabled on the key, and `InvalidKeyMapError` means the website was built
+without the key or with the wrong one.
 
 ## Android environment
 
