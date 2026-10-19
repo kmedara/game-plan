@@ -383,7 +383,8 @@
     "assign_roles": "Assign roles",
     "manage_events": "Manage events",
     "create_team_channels": "Create team channels",
-    "manage_payments": "Manage payments"
+    "manage_payments": "Manage payments",
+    "manage_billing": "Manage billing"
   },
   "notificationPrompt": {
     "title": "Get notified",

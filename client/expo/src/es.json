@@ -385,7 +385,8 @@
     "assign_roles": "Asignar roles",
     "manage_events": "Administrar eventos",
     "create_team_channels": "Crear canales del equipo",
-    "manage_payments": "Administrar pagos"
+    "manage_payments": "Administrar pagos",
+    "manage_billing": "Administrar la facturación"
   },
   "notificationPrompt": {
     "title": "Recibe notificaciones",

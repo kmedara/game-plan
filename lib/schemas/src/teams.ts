@@ -2,6 +2,7 @@
  * Teams, roster, invites, and permission-matrix wire contracts.
  */
 
+import { teamPlanSchema } from "./plans.js";
 import { displayNameSchema } from "./display-name.js";
 import { accountKindSchema, teamPermissionSchema, teamRoleSchema } from "./enums.js";
 import { phoneNumberSchema } from "./phone.js";
@@ -164,6 +165,8 @@ export const teamSummarySchema = z
     positions: z.array(z.string().min(1).max(40)).optional(),
     defaultChatId: z.string().min(1).optional(),
     createdAt: z.string().min(1).optional(),
+    /** The team's paid plan. Older cached summaries may lack it; treat that as free. */
+    plan: teamPlanSchema.optional(),
   })
   .strict();
 

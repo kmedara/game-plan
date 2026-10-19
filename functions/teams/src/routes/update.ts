@@ -9,6 +9,7 @@ import {
   requirePermission,
   requireUser,
 } from "../../../lib/guards.js";
+import { loadTeamPlan } from "../../../lib/entitlements.js";
 import { badRequest, json } from "../../../lib/http.js";
 import { route, withBodyValidation } from "../../../lib/pipeline.js";
 import { toTeamSummary, updateTeamSettings } from "../team-store.js";
@@ -58,6 +59,6 @@ export const handleUpdateTeam = route(
       ...(body.theme !== undefined ? { theme: body.theme } : {}),
       ...(body.sport !== undefined ? { sport: body.sport } : {}),
     });
-    return json(200, toTeamSummary(team, member.roles));
+    return json(200, toTeamSummary(team, member.roles, [], await loadTeamPlan(teamId)));
   },
 );

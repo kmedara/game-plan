@@ -3,6 +3,7 @@
  */
 
 import { requireUser } from '../../../lib/auth/index.js';
+import { loadTeamPlan } from '../../../lib/entitlements.js';
 import { json } from '../../../lib/http.js';
 import { route } from '../../../lib/pipeline.js';
 import { listUserTeams, toTeamSummary } from '../team-store.js';
@@ -21,8 +22,9 @@ export const handleListTeams = route(
   requireUser(),
   async ({ user }) => {
     const teams = await listUserTeams(user.userId);
+    const plans = await Promise.all(teams.map(({ team }) => loadTeamPlan(team.teamId)));
     return json(200, {
-      teams: teams.map(({ team, roles, positions }) => toTeamSummary(team, roles, positions)),
+      teams: teams.map(({ team, roles, positions }, index) => toTeamSummary(team, roles, positions, plans[index])),
     });
   },
 );

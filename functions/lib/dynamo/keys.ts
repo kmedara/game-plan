@@ -233,6 +233,15 @@ export const reminderSk = (
 /** Sort-key prefix for every reminder row. */
 export const REMINDER_SK_PREFIX = 'REMINDER#' as const;
 
+/** Team row holding the paid plan (tier, status, period end). */
+export const planSk = (): string => 'PLAN';
+
+/** Row holding the Stripe Billing customer and subscription ids for a team. */
+export const billingSk = (): string => 'BILLING';
+
+/** `STRIPE_CUSTOMER#<customerId>` — which team a Billing customer pays for. */
+export const stripeCustomerPk = (customerId: string): string => `STRIPE_CUSTOMER#${customerId}`;
+
 /** Team row holding the connected Stripe account and its readiness flags. */
 export const teamStripeSk = (): string => 'STRIPE';
 

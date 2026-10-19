@@ -9,7 +9,9 @@
 import type {
   AccountKind,
   ChatParticipant,
+  PlanTier,
   TeamPermission,
+  TeamPlan,
   TeamRole,
   UserSearchPolicy,
 } from '@gameplan/types';
@@ -496,3 +498,137 @@ export const payerIdsForDue = (member: DuePayerMember): string[] =>
  */
 export const canPayDue = (payerId: string, member: DuePayerMember): boolean =>
   payerIdsForDue(member).includes(payerId);
+
+/** One gibibyte. */
+const GIB = 1024 * 1024 * 1024;
+
+/** How long a `past_due` plan keeps its features after the paid period ends. */
+export const PLAN_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** What a team's plan unlocks. `undefined` means no limit. */
+export type PlanLimits = {
+  albumBytes: number;
+  video: boolean;
+  maxVideoBytes: number;
+  maxVideoSeconds: number;
+  practicePlans: number | undefined;
+  waivers: boolean;
+  aiMonthly: number;
+  orgFeatures: boolean;
+};
+
+/** Limits by tier. Prices live in Stripe and the stores, not here. */
+export const PLAN_LIMITS: Readonly<Record<PlanTier, PlanLimits>> = {
+  free: {
+    albumBytes: 2 * GIB,
+    video: false,
+    maxVideoBytes: 0,
+    maxVideoSeconds: 0,
+    practicePlans: 5,
+    waivers: false,
+    aiMonthly: 0,
+    orgFeatures: false,
+  },
+  premium: {
+    albumBytes: 50 * GIB,
+    video: true,
+    maxVideoBytes: GIB,
+    maxVideoSeconds: 10 * 60,
+    practicePlans: undefined,
+    waivers: true,
+    aiMonthly: 200,
+    orgFeatures: false,
+  },
+  organization: {
+    albumBytes: 50 * GIB,
+    video: true,
+    maxVideoBytes: GIB,
+    maxVideoSeconds: 10 * 60,
+    practicePlans: undefined,
+    waivers: true,
+    aiMonthly: 1000,
+    orgFeatures: true,
+  },
+};
+
+/** A team on no subscription. */
+export const FREE_PLAN: TeamPlan = { tier: 'free', status: 'active' };
+
+/**
+ * The tier a plan grants right now.
+ *
+ * Active and trialing plans grant their tier. A `past_due` plan keeps it for
+ * {@link PLAN_GRACE_MS} after the paid period ends, so a failed card does not
+ * lock a team out mid-season. A canceled plan grants nothing.
+ *
+ * @param plan - The stored plan, or `undefined` for none.
+ * @param now - The clock.
+ * @returns The tier to enforce.
+ */
+export const effectivePlanTier = (plan: TeamPlan | undefined, now: Date = new Date()): PlanTier => {
+  if (plan === undefined || plan.tier === 'free') return 'free';
+  if (plan.status === 'active' || plan.status === 'trialing') return plan.tier;
+  if (plan.status === 'past_due') {
+    const end = plan.currentPeriodEnd === undefined ? Number.NaN : new Date(plan.currentPeriodEnd).getTime();
+    return Number.isFinite(end) && now.getTime() <= end + PLAN_GRACE_MS ? plan.tier : 'free';
+  }
+  return 'free';
+};
+
+/** What a person or team may use, resolved from plans. */
+export type Entitlements = PlanLimits & {
+  tier: PlanTier;
+  /** No ads for this person while looking at this team. */
+  adFree: boolean;
+  /** Original-quality album downloads. */
+  fullQualityDownloads: boolean;
+};
+
+/**
+ * Resolves what a team's plan, and optionally a person's add-on, unlock.
+ *
+ * @param input - The team's plan and whether the viewer holds the parent add-on.
+ * @param now - The clock.
+ * @returns Limits and flags to enforce.
+ */
+export const entitlementsFor = (
+  input: { teamPlan?: TeamPlan; parentAddOn?: boolean },
+  now: Date = new Date(),
+): Entitlements => {
+  const tier = effectivePlanTier(input.teamPlan, now);
+  const addOn = input.parentAddOn === true;
+  return {
+    ...PLAN_LIMITS[tier],
+    tier,
+    adFree: tier !== 'free' || addOn,
+    fullQualityDownloads: tier !== 'free' || addOn,
+  };
+};
+
+/**
+ * Whether a person sees ads anywhere.
+ *
+ * Minors never see ads. An adult sees none once any of their teams is on a
+ * paid plan, or they hold the parent add-on.
+ *
+ * @param input - Account kind, every team plan the person belongs to, and the add-on.
+ * @param now - The clock.
+ * @returns `true` when ads may show.
+ */
+export const showsAds = (
+  input: { accountKind: AccountKind; teamPlans: readonly (TeamPlan | undefined)[]; parentAddOn?: boolean },
+  now: Date = new Date(),
+): boolean =>
+  input.accountKind === 'adult' &&
+  input.parentAddOn !== true &&
+  input.teamPlans.every((plan) => effectivePlanTier(plan, now) === 'free');
+
+/**
+ * Whether one more item fits under a count limit.
+ *
+ * @param current - Items already stored.
+ * @param limit - The plan limit; `undefined` means none.
+ * @returns `true` when another may be added.
+ */
+export const underLimit = (current: number, limit: number | undefined): boolean =>
+  limit === undefined || current < limit;

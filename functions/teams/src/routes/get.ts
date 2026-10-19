@@ -6,6 +6,7 @@ import {
   requireMembership,
   requireUser,
 } from '../../../lib/guards.js';
+import { loadTeamPlan } from '../../../lib/entitlements.js';
 import { json } from '../../../lib/http.js';
 import { route } from '../../../lib/pipeline.js';
 import {
@@ -29,11 +30,11 @@ export const handleGetTeam = route(
   requireUser(),
   requireMembership(),
   async ({ teamId, member }) => {
-    const team = await loadTeam(teamId);
-    const membership = await getMembership(teamId, member.userId);
-    return json(
-      200,
-      toTeamSummary(team, member.roles, membership?.positions ?? []),
-    );
+    const [team, membership, plan] = await Promise.all([
+      loadTeam(teamId),
+      getMembership(teamId, member.userId),
+      loadTeamPlan(teamId),
+    ]);
+    return json(200, toTeamSummary(team, member.roles, membership?.positions ?? [], plan));
   },
 );

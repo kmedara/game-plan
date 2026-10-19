@@ -35,6 +35,7 @@ export const TEAM_PERMISSIONS = [
   "manage_events",
   "create_team_channels",
   "manage_payments",
+  "manage_billing",
 ] as const;
 
 /** Schema for {@link TEAM_PERMISSIONS}. */

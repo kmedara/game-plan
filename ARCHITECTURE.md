@@ -136,6 +136,17 @@ The webhook runs as its own function (`payments-webhook`) with a public function
 - **Why:** Stripe cannot sign for origin access control, and a function has one function URL. A separate function keeps every other payments route behind the IAM URL.
 - **Cost:** that URL skips CloudFront and WAF; the Stripe signature is its only gate.
 
+### Plans and entitlements
+
+Tiers are `free`, `premium` (one team), and `organization` (many teams). Each team has one `TEAM#<teamId>` / `PLAN` row with tier, status, interval, and period end; a team with no row is free. What a tier unlocks (album storage, video, practice plans, waivers, AI requests, organization tools) is one table, `PLAN_LIMITS`, read through `entitlementsFor` in `lib/rules`, so the API and the app enforce the same limits. Prices are not in code; they live in Stripe and the app stores.
+
+Routes gate a feature with `requireEntitlement(feature)` (`functions/lib/entitlements.ts`), listed after `requireMembership`. Count and size limits are checked where an item is added, with `underLimit`. Both fail with `plan_required` or `plan_limit_reached`, which `mapPlanError` turns into `402` for the app's upgrade prompt. Team summaries carry the plan, so screens gate without another request.
+
+A `past_due` plan keeps its tier for seven days after the paid period ends (`effectivePlanTier`). Minors never see ads; an adult sees none once any of their teams is paid or they hold the parent add-on (`showsAds`).
+
+- **Why:** one read per check, and one place to change a limit. An organization's subscription will be copied onto each of its teams' rows rather than looked up through the organization, so a team check stays one read. The plan is its own row, not a field on `META`, because the teams area rewrites `META` whole and a billing write there could be lost.
+- **Cost:** team summaries read one more row per team. Copying an organization's plan means its webhook writes every member team's row.
+
 ## HTTP edge
 
 HTTP is CloudFront → Lambda function URL. There is no API Gateway on that path. WebSocket still uses API Gateway, because function URLs cannot hold connections.

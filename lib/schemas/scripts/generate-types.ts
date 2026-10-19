@@ -37,6 +37,10 @@ const CONST_EXPORTS = [
   'MAX_CHARGE_CENTS',
   'MAX_CHARGE_MEMBERS',
   'PAYMENT_RETURN_TARGETS',
+  'PLAN_TIERS',
+  'PLAN_STATUSES',
+  'BILLING_INTERVALS',
+  'BILLING_RETURN_TARGETS',
 ] as const;
 
 /** Convert `loginBodySchema` → `LoginBody`. */

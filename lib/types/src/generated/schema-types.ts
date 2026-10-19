@@ -49,6 +49,18 @@ export type AuthUser = {
   email?: string;
 }
 
+export type BillingInterval = 'month' | 'year';
+
+export type BillingPortalBody = {
+  returnTo?: 'app' | 'web';
+}
+
+export type BillingReturnQuery = {
+  to: 'app' | 'web';
+  result: 'subscribed' | 'cancel' | 'portal';
+  teamId?: string;
+}
+
 export type CarpoolClaimBody = {
   eventId: string;
   occurrenceStartsAt: string;
@@ -726,6 +738,10 @@ export type PlaceSuggestion = {
   secondaryText?: string;
 }
 
+export type PlanStatus = 'active' | 'trialing' | 'past_due' | 'canceled';
+
+export type PlanTier = 'free' | 'premium' | 'organization';
+
 export type PresignDownloadQuery = {
   objectKey: string;
   chatId?: string;
@@ -794,6 +810,7 @@ export type RolePermissionsResponse = {
       | 'manage_events'
       | 'create_team_channels'
       | 'manage_payments'
+      | 'manage_billing'
     )[];
   }[];
 }
@@ -809,6 +826,7 @@ export type RolePermissions = {
     | 'manage_events'
     | 'create_team_channels'
     | 'manage_payments'
+    | 'manage_billing'
   )[];
 }
 
@@ -934,6 +952,24 @@ export type SocketTicket = {
 
 export type Sport = string;
 
+export type TeamBilling = {
+  teamId: string;
+  plan: {
+    tier: 'free' | 'premium' | 'organization';
+    status: 'active' | 'trialing' | 'past_due' | 'canceled';
+    interval?: 'month' | 'year';
+    currentPeriodEnd?: string;
+    cancelAtPeriodEnd?: boolean;
+    orgId?: string;
+  };
+  hasBillingAccount: boolean;
+}
+
+export type TeamCheckoutBody = {
+  interval: 'month' | 'year';
+  returnTo?: 'app' | 'web';
+}
+
 export type TeamDirectoryHit = {
   teamId: string;
   name: string;
@@ -994,6 +1030,14 @@ export type TeamList = {
     positions?: string[];
     defaultChatId?: string;
     createdAt?: string;
+    plan?: {
+      tier: 'free' | 'premium' | 'organization';
+      status: 'active' | 'trialing' | 'past_due' | 'canceled';
+      interval?: 'month' | 'year';
+      currentPeriodEnd?: string;
+      cancelAtPeriodEnd?: boolean;
+      orgId?: string;
+    };
   }[];
 }
 
@@ -1059,7 +1103,17 @@ export type TeamPermission =
   | 'assign_roles'
   | 'manage_events'
   | 'create_team_channels'
-  | 'manage_payments';
+  | 'manage_payments'
+  | 'manage_billing';
+
+export type TeamPlan = {
+  tier: 'free' | 'premium' | 'organization';
+  status: 'active' | 'trialing' | 'past_due' | 'canceled';
+  interval?: 'month' | 'year';
+  currentPeriodEnd?: string;
+  cancelAtPeriodEnd?: boolean;
+  orgId?: string;
+}
 
 export type TeamRole = 'team_admin' | 'coach' | 'player' | 'parent';
 
@@ -1085,6 +1139,14 @@ export type TeamSummary = {
   positions?: string[];
   defaultChatId?: string;
   createdAt?: string;
+  plan?: {
+    tier: 'free' | 'premium' | 'organization';
+    status: 'active' | 'trialing' | 'past_due' | 'canceled';
+    interval?: 'month' | 'year';
+    currentPeriodEnd?: string;
+    cancelAtPeriodEnd?: boolean;
+    orgId?: string;
+  };
 }
 
 export type TeamTheme = {
@@ -1155,6 +1217,7 @@ export type UpdateRolePermissionsBody = {
         | 'manage_events'
         | 'create_team_channels'
         | 'manage_payments'
+        | 'manage_billing'
       )[];
     },
     ...{
@@ -1168,6 +1231,7 @@ export type UpdateRolePermissionsBody = {
         | 'manage_events'
         | 'create_team_channels'
         | 'manage_payments'
+        | 'manage_billing'
       )[];
     }[]
   ];
@@ -1232,10 +1296,10 @@ export const RSVP_STATUSES = ["going", "not_going", "maybe"] as const;
 
 export const TEAM_ROLES = ["team_admin", "coach", "player", "parent"] as const;
 
-export const TEAM_PERMISSIONS = ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels", "manage_payments"] as const;
+export const TEAM_PERMISSIONS = ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels", "manage_payments", "manage_billing"] as const;
 
 export const DEFAULT_ROLE_PERMISSIONS = {
-  team_admin: ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels", "manage_payments"],
+  team_admin: ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels", "manage_payments", "manage_billing"],
   coach: [],
   parent: [],
   player: [],
@@ -1254,3 +1318,11 @@ export const MAX_CHARGE_CENTS = 1000000;
 export const MAX_CHARGE_MEMBERS = 200;
 
 export const PAYMENT_RETURN_TARGETS = ["app", "web"] as const;
+
+export const PLAN_TIERS = ["free", "premium", "organization"] as const;
+
+export const PLAN_STATUSES = ["active", "trialing", "past_due", "canceled"] as const;
+
+export const BILLING_INTERVALS = ["month", "year"] as const;
+
+export const BILLING_RETURN_TARGETS = ["app", "web"] as const;

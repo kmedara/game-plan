@@ -3,11 +3,12 @@
  */
 
 import { randomBytes, randomUUID } from "node:crypto";
-import { highestRole, normalizeMemberRoles, rolesFromMembership } from "@gameplan/rules";
+import { FREE_PLAN, highestRole, normalizeMemberRoles, rolesFromMembership } from "@gameplan/rules";
 import {
   DEFAULT_ROLE_PERMISSIONS,
   TEAM_ROLES,
   type TeamPermission,
+  type TeamPlan,
   type TeamRole,
   type TeamTheme,
 } from "@gameplan/types";
@@ -168,6 +169,8 @@ export const requireTeam = async (teamId: string): Promise<TeamMetaItem> => {
  *
  * @param team - The team metadata row.
  * @param roleOrRoles - The caller's role, or every role they hold.
+ * @param positions - Positions the caller plays.
+ * @param plan - The team's plan; a new team is free.
  * @returns The wire summary, including location when the team has one.
  */
 export const toTeamSummary = (
@@ -184,6 +187,7 @@ export const toTeamSummary = (
   >,
   roleOrRoles: TeamRole | readonly TeamRole[],
   positions: readonly string[] = [],
+  plan: TeamPlan = FREE_PLAN,
 ) => {
   const roles = normalizeMemberRoles(Array.isArray(roleOrRoles) ? roleOrRoles : [roleOrRoles]);
   return {
@@ -198,6 +202,7 @@ export const toTeamSummary = (
     role: highestRole(roles),
     roles,
     ...(positions.length > 0 ? { positions: [...positions] } : {}),
+    plan,
   };
 };
 

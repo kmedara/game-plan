@@ -7,6 +7,7 @@ import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { memoryTable } from '../../lib/dynamo/memory-table.js';
 import type { AccountKind } from '@gameplan/types';
+import { TEAM_PERMISSIONS } from '@gameplan/types';
 import type { UserProfileItem } from '../../lib/auth/identity-provider.js';
 import { issueLocalTokens } from '../../lib/auth/local-jwt.js';
 import {
@@ -233,16 +234,7 @@ describe('teams handler (in-memory)', () => {
           roles: [
             {
               role: 'team_admin',
-              permissions: [
-                'manage_permissions',
-                'manage_team_settings',
-                'invite_members',
-                'approve_join_requests',
-                'assign_roles',
-                'manage_events',
-                'create_team_channels',
-                'manage_payments',
-              ],
+              permissions: [...TEAM_PERMISSIONS],
             },
             { role: 'coach', permissions: ['approve_join_requests', 'assign_roles'] },
           ],
@@ -411,16 +403,7 @@ describe('teams handler (in-memory)', () => {
           roles: [
             {
               role: 'team_admin',
-              permissions: [
-                'manage_permissions',
-                'manage_team_settings',
-                'invite_members',
-                'approve_join_requests',
-                'assign_roles',
-                'manage_events',
-                'create_team_channels',
-                'manage_payments',
-              ],
+              permissions: [...TEAM_PERMISSIONS],
             },
             { role: 'coach', permissions: ['manage_team_settings'] },
           ],
@@ -721,16 +704,7 @@ describe('teams handler (in-memory)', () => {
           roles: [
             {
               role: 'team_admin',
-              permissions: [
-                'manage_permissions',
-                'manage_team_settings',
-                'invite_members',
-                'approve_join_requests',
-                'assign_roles',
-                'manage_events',
-                'create_team_channels',
-                'manage_payments',
-              ],
+              permissions: [...TEAM_PERMISSIONS],
             },
             { role: 'coach', permissions: ['manage_permissions'] },
           ],

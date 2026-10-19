@@ -5,6 +5,7 @@
 import { updatePositionsBodySchema } from '@gameplan/schemas';
 import { assertPositionLimit } from '@gameplan/rules';
 import { requireTeam, requireUser } from '../../../lib/guards.js';
+import { loadTeamPlan } from '../../../lib/entitlements.js';
 import { json } from '../../../lib/http.js';
 import { route, withBodyValidation } from '../../../lib/pipeline.js';
 import {
@@ -31,7 +32,7 @@ export const handleSetPositions = route(
   async ({ teamId, user, body }) => {
     assertPositionLimit(body.positions);
     const membership = await setMemberPositions(teamId, user.userId, body.positions);
-    const team = await loadTeam(teamId);
-    return json(200, toTeamSummary(team, membership.roles, membership.positions));
+    const [team, plan] = await Promise.all([loadTeam(teamId), loadTeamPlan(teamId)]);
+    return json(200, toTeamSummary(team, membership.roles, membership.positions, plan));
   },
 );
