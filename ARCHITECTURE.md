@@ -115,6 +115,13 @@ Each club keeps its own event for RSVP, lineup, carpool, title, and notes. Once 
 
 The fixture thread is a `fixture` chat. Members are whoever holds `manage_events` on either club, including after a role or matrix change. Players and parents without that grant are not members.
 
+### Recurring events
+
+A series is one row with a structured rule (`frequency`, `interval`, `byWeekDay`, `until`, `count`). `expandOccurrenceStarts` (`functions/lib/expand-occurrences.ts`) runs the rule on the team's wall clock: it converts the start to local time (`toWallClock` in `functions/lib/time-zone.ts`), expands with `rrule`, and converts each result back to UTC. Every caller passes the team's `timeZone`. One helper, `assertLiveOccurrence`, checks that an RSVP, lineup, or carpool instant is a real, uncancelled date.
+
+- **Why:** `BYDAY` codes come from the local calendar day, and "Tuesdays at 7 pm" means 7 pm on the wall. Expanding in UTC put Pacific evening practices on Mondays and moved them an hour at each daylight-saving change.
+- **Cost:** a one-date check reads the team row for its zone. Changing a team's time zone moves every future occurrence. Rows keyed by an instant the old UTC expansion produced (RSVPs, exdates, split-off dates on shifted dates) no longer match a date; this landed before launch, so nothing was migrated.
+
 ## HTTP edge
 
 HTTP is CloudFront → Lambda function URL. There is no API Gateway on that path. WebSocket still uses API Gateway, because function URLs cannot hold connections.

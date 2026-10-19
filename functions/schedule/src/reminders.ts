@@ -4,6 +4,7 @@
 
 import type { RecurrenceRule } from '@gameplan/types';
 import { expandOccurrenceStarts } from '../../lib/expand-occurrences.js';
+import { zonedDate, zonedWallToUtc } from '../../lib/time-zone.js';
 import { enqueueFanout } from '../../lib/fanout-enqueue.js';
 import {
   REMINDERS_PK,
@@ -57,83 +58,6 @@ type ReminderItem = {
 type RsvpItem = {
   userId: string;
   status: string;
-};
-
-/**
- * Offset of `timeZone` from UTC at `instant`, in milliseconds.
- *
- * @param instant - The UTC instant.
- * @param timeZone - An IANA time zone.
- * @returns Wall-clock time minus UTC time.
- */
-const zoneOffsetMs = (instant: Date, timeZone: string): number => {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(instant);
-  const value = (type: Intl.DateTimeFormatPartTypes): number =>
-    Number(parts.find((part) => part.type === type)?.value ?? '0');
-  const asUtc = Date.UTC(
-    value('year'),
-    value('month') - 1,
-    value('day'),
-    value('hour'),
-    value('minute'),
-    value('second'),
-  );
-  return asUtc - instant.getTime();
-};
-
-/**
- * Converts a wall-clock time in `timeZone` to a UTC instant.
- *
- * @param year - Calendar year.
- * @param month - Calendar month, 1-12.
- * @param day - Calendar day.
- * @param hour - Hour in 0-23.
- * @param minute - Minute.
- * @param timeZone - An IANA time zone.
- * @returns The UTC instant.
- */
-const zonedWallToUtc = (
-  year: number,
-  month: number,
-  day: number,
-  hour: number,
-  minute: number,
-  timeZone: string,
-): Date => {
-  const utcGuess = Date.UTC(year, month - 1, day, hour, minute, 0);
-  const corrected = utcGuess - zoneOffsetMs(new Date(utcGuess), timeZone);
-  return new Date(utcGuess - zoneOffsetMs(new Date(corrected), timeZone));
-};
-
-/**
- * Calendar date of an instant in a time zone.
- *
- * @param instant - The UTC instant.
- * @param timeZone - An IANA time zone.
- * @returns Year, month (1-12), and day.
- */
-const zonedDate = (
-  instant: Date,
-  timeZone: string,
-): { year: number; month: number; day: number } => {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(instant);
-  const value = (type: Intl.DateTimeFormatPartTypes): number =>
-    Number(parts.find((part) => part.type === type)?.value ?? '0');
-  return { year: value('year'), month: value('month'), day: value('day') };
 };
 
 /**
@@ -194,7 +118,7 @@ export const reminderInstants = (input: {
 }): ReminderInstant[] => {
   const from = input.after !== undefined ? new Date(new Date(input.after).getTime() + 1) : input.now;
   const horizon = new Date(from.getTime() + NEXT_OCCURRENCE_WINDOW_MS);
-  const starts = expandOccurrenceStarts(input.startsAt, input.recurrence, from, horizon);
+  const starts = expandOccurrenceStarts(input.startsAt, input.recurrence, from, horizon, input.timeZone);
   const cancelled = new Set(input.exdates ?? []);
   for (const start of starts) {
     const occurrenceStartsAt = start.toISOString();

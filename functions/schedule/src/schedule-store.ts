@@ -566,20 +566,49 @@ const requireSeries = async (teamId: string, eventId: string): Promise<EventItem
 };
 
 /**
+ * Whether the event repeats onto exactly this instant, ignoring cancellations.
+ *
+ * @param event - The series or one-off row.
+ * @param occurrenceIso - Canonical occurrence instant (UTC ISO).
+ * @param timeZone - The team's time zone, which the repeats follow.
+ * @returns `true` when the expansion lands on the instant.
+ */
+const landsOn = (event: EventItem, occurrenceIso: string, timeZone: string): boolean => {
+  const occurrence = parseInstant(occurrenceIso, 'occurrence_starts_at');
+  const dayBefore = new Date(occurrence.getTime() - 12 * 60 * 60 * 1000);
+  const dayAfter = new Date(occurrence.getTime() + 12 * 60 * 60 * 1000);
+  return expandOccurrenceStarts(event.startsAt, event.recurrence, dayBefore, dayAfter, timeZone).some(
+    (date) => date.toISOString() === occurrenceIso,
+  );
+};
+
+/**
+ * Confirms an instant is a real, uncancelled occurrence of the event.
+ *
+ * @param event - The series or one-off row.
+ * @param occurrenceStartsAt - The occurrence instant from the client.
+ * @param timeZone - The team's time zone.
+ * @returns The canonical occurrence instant.
+ * @throws `occurrence_not_found` otherwise.
+ */
+const assertLiveOccurrence = (event: EventItem, occurrenceStartsAt: string, timeZone: string): string => {
+  const occurrenceIso = parseInstant(occurrenceStartsAt, 'occurrence_starts_at').toISOString();
+  if (event.exdates?.includes(occurrenceIso) === true || !landsOn(event, occurrenceIso, timeZone)) {
+    throw new Error('occurrence_not_found');
+  }
+  return occurrenceIso;
+};
+
+/**
  * Confirms an instant belongs to a series, including dates already cancelled.
  *
  * @param series - The series row.
  * @param occurrenceIso - The original series instant.
+ * @param timeZone - The team's time zone.
  */
-const assertSeriesInstant = (series: EventItem, occurrenceIso: string): void => {
+const assertSeriesInstant = (series: EventItem, occurrenceIso: string, timeZone: string): void => {
   if (series.exdates?.includes(occurrenceIso)) return;
-  const occurrence = parseInstant(occurrenceIso, 'occurrence_starts_at');
-  const dayBefore = new Date(occurrence.getTime() - 12 * 60 * 60 * 1000);
-  const dayAfter = new Date(occurrence.getTime() + 12 * 60 * 60 * 1000);
-  const matches = expandOccurrenceStarts(series.startsAt, series.recurrence, dayBefore, dayAfter);
-  if (!matches.some((date) => date.toISOString() === occurrenceIso)) {
-    throw new Error('occurrence_not_found');
-  }
+  if (!landsOn(series, occurrenceIso, timeZone)) throw new Error('occurrence_not_found');
 };
 
 /**
@@ -617,10 +646,10 @@ export const cancelOccurrence = async (input: {
   eventId: string;
   occurrenceStartsAt: string;
 }): Promise<void> => {
-  await requireTeam(input.teamId);
+  const { timeZone } = await requireTeam(input.teamId);
   const series = await requireSeries(input.teamId, input.eventId);
   const occurrenceIso = new Date(input.occurrenceStartsAt).toISOString();
-  assertSeriesInstant(series, occurrenceIso);
+  assertSeriesInstant(series, occurrenceIso, timeZone);
 
   const events = await listEventItems(input.teamId);
   for (const event of events) {
@@ -673,10 +702,10 @@ export const saveOccurrenceException = async (input: {
   eventId: string;
   body: ExceptionEventBody;
 }): Promise<EventResponse> => {
-  await requireTeam(input.teamId);
+  const { timeZone } = await requireTeam(input.teamId);
   const series = await requireSeries(input.teamId, input.eventId);
   const occurrenceIso = new Date(input.body.occurrenceStartsAt).toISOString();
-  assertSeriesInstant(series, occurrenceIso);
+  assertSeriesInstant(series, occurrenceIso, timeZone);
 
   const { occurrenceStartsAt: _ignored, ...patch } = input.body;
   const nextStartsAt = patch.startsAt ?? occurrenceIso;
@@ -803,7 +832,7 @@ export const listOccurrences = async (
   fromIso: string,
   toIso: string,
 ): Promise<ScheduleList> => {
-  await requireTeam(teamId);
+  const { timeZone } = await requireTeam(teamId);
   const { from, to } = assertScheduleWindow(fromIso, toIso);
 
   const events = await queryBySkPrefix<EventItem>(teamPk(teamId), EVENT_SK_PREFIX);
@@ -837,7 +866,7 @@ export const listOccurrences = async (
   const occurrences: ScheduleOccurrence[] = [];
   for (const event of events) {
     const cancelled = new Set(event.exdates ?? []);
-    const starts = expandOccurrenceStarts(event.startsAt, event.recurrence, from, to);
+    const starts = expandOccurrenceStarts(event.startsAt, event.recurrence, from, to, timeZone);
     for (const start of starts) {
       const startsAt = start.toISOString();
       if (cancelled.has(startsAt)) continue;
@@ -897,19 +926,9 @@ export const upsertRsvp = async (input: {
   occurrenceStartsAt: string;
   status: RsvpStatus;
 }): Promise<RsvpResponse> => {
-  await requireTeam(input.teamId);
+  const { timeZone } = await requireTeam(input.teamId);
   const event = await requireEvent(input.teamId, input.eventId);
-  const occurrence = parseInstant(input.occurrenceStartsAt, 'occurrence_starts_at');
-  const occurrenceIso = occurrence.toISOString();
-
-  // Confirm the instant is a real occurrence of this event (one day around it).
-  const dayBefore = new Date(occurrence.getTime() - 12 * 60 * 60 * 1000);
-  const dayAfter = new Date(occurrence.getTime() + 12 * 60 * 60 * 1000);
-  const matches = expandOccurrenceStarts(event.startsAt, event.recurrence, dayBefore, dayAfter);
-  const cancelled = new Set(event.exdates ?? []);
-  const isOccurrence =
-    matches.some((date) => date.toISOString() === occurrenceIso) && !cancelled.has(occurrenceIso);
-  if (!isOccurrence) throw new Error('occurrence_not_found');
+  const occurrenceIso = assertLiveOccurrence(event, input.occurrenceStartsAt, timeZone);
 
   const now = new Date().toISOString();
   const pk = teamPk(input.teamId);
@@ -957,18 +976,9 @@ const requireGameOccurrence = async (
   eventId: string,
   occurrenceStartsAt: string,
 ): Promise<{ event: EventItem; occurrenceIso: string }> => {
-  const event = await requireEvent(teamId, eventId);
+  const [{ timeZone }, event] = await Promise.all([requireTeam(teamId), requireEvent(teamId, eventId)]);
   if (event.eventType !== 'game') throw new Error('not_a_game');
-  const occurrence = parseInstant(occurrenceStartsAt, 'occurrence_starts_at');
-  const occurrenceIso = occurrence.toISOString();
-  const dayBefore = new Date(occurrence.getTime() - 12 * 60 * 60 * 1000);
-  const dayAfter = new Date(occurrence.getTime() + 12 * 60 * 60 * 1000);
-  const matches = expandOccurrenceStarts(event.startsAt, event.recurrence, dayBefore, dayAfter);
-  const cancelled = new Set(event.exdates ?? []);
-  const isOccurrence =
-    matches.some((date) => date.toISOString() === occurrenceIso) && !cancelled.has(occurrenceIso);
-  if (!isOccurrence) throw new Error('occurrence_not_found');
-  return { event, occurrenceIso };
+  return { event, occurrenceIso: assertLiveOccurrence(event, occurrenceStartsAt, timeZone) };
 };
 
 /**
@@ -1099,17 +1109,8 @@ const requireOccurrence = async (
   eventId: string,
   occurrenceStartsAt: string,
 ): Promise<string> => {
-  const event = await requireEvent(teamId, eventId);
-  const occurrence = parseInstant(occurrenceStartsAt, 'occurrence_starts_at');
-  const occurrenceIso = occurrence.toISOString();
-  const dayBefore = new Date(occurrence.getTime() - 12 * 60 * 60 * 1000);
-  const dayAfter = new Date(occurrence.getTime() + 12 * 60 * 60 * 1000);
-  const matches = expandOccurrenceStarts(event.startsAt, event.recurrence, dayBefore, dayAfter);
-  const cancelled = new Set(event.exdates ?? []);
-  const isOccurrence =
-    matches.some((date) => date.toISOString() === occurrenceIso) && !cancelled.has(occurrenceIso);
-  if (!isOccurrence) throw new Error('occurrence_not_found');
-  return occurrenceIso;
+  const [{ timeZone }, event] = await Promise.all([requireTeam(teamId), requireEvent(teamId, eventId)]);
+  return assertLiveOccurrence(event, occurrenceStartsAt, timeZone);
 };
 
 const memberIdsOf = async (teamId: string): Promise<Set<string>> => new Set(await listTeamMemberIds(teamId));

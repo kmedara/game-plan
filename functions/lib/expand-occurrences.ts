@@ -3,11 +3,15 @@
  *
  * Occurrence rows are not stored. The schedule Lambda loads event definitions and
  * expands them in memory, same idea as Balance's expand-occurrences helper.
+ *
+ * Repeats run on the team's wall clock, not UTC: `BYDAY` codes name the local
+ * day, and a 7 pm practice stays at 7 pm after a daylight-saving change.
  */
 
 import * as rruleNamespace from 'rrule';
 import type { Frequency, RRule as RRuleClass, Weekday } from 'rrule';
 import type { RecurrenceRule } from '@gameplan/types';
+import { fromWallClock, toWallClock } from './time-zone.js';
 
 /**
  * Node loads `rrule`'s CommonJS `main` and only synthesizes a default export.
@@ -78,16 +82,23 @@ export const assertScheduleWindow = (
   return { from, to };
 };
 
+/** Padding around a window in wall-clock space, wider than any UTC offset. */
+const WALL_WINDOW_PAD_MS = 36 * 60 * 60 * 1000;
+
 /**
  * Builds an `RRule` from the stored structured recurrence and series start.
  *
- * @param startsAt - Series `DTSTART` in UTC.
+ * The rule repeats in whatever clock `startsAt` is in. Expansion passes a
+ * wall-clock date; validation alone may pass the UTC start.
+ *
+ * @param startsAt - Series `DTSTART`.
  * @param recurrence - The stored recurrence rule.
  * @returns An `RRule` ready for `between`.
  */
 export const buildRRule = (
   startsAt: Date,
   recurrence: RecurrenceRule,
+  until: Date | undefined = recurrence.until === undefined ? undefined : parseInstant(recurrence.until, 'until'),
 ): InstanceType<typeof RRule> => {
   const byweekday =
     recurrence.byWeekDay === undefined
@@ -102,9 +113,7 @@ export const buildRRule = (
     freq: FREQ_MAP[recurrence.frequency],
     interval: recurrence.interval ?? 1,
     dtstart: startsAt,
-    ...(recurrence.until !== undefined
-      ? { until: parseInstant(recurrence.until, 'until') }
-      : {}),
+    ...(until !== undefined ? { until } : {}),
     ...(recurrence.count !== undefined ? { count: recurrence.count } : {}),
     ...(byweekday !== undefined ? { byweekday } : {}),
   });
@@ -114,19 +123,22 @@ export const buildRRule = (
  * Expands an event into occurrence start instants that fall in a window.
  *
  * A one-off event yields its `startsAt` when it lands in the window. A recurring
- * event uses `RRule.between` and is capped at {@link MAX_OCCURRENCES_PER_EVENT}.
+ * event repeats on the team's wall clock and is capped at
+ * {@link MAX_OCCURRENCES_PER_EVENT}.
  *
  * @param startsAtIso - Event series start (UTC ISO).
  * @param recurrence - Optional recurrence rule on the event item.
  * @param from - Inclusive window start.
  * @param to - Inclusive window end.
- * @returns Occurrence start dates in ascending order.
+ * @param timeZone - The team's IANA time zone.
+ * @returns Occurrence start dates (UTC) in ascending order.
  */
 export const expandOccurrenceStarts = (
   startsAtIso: string,
   recurrence: RecurrenceRule | undefined,
   from: Date,
   to: Date,
+  timeZone: string,
 ): Date[] => {
   const startsAt = parseInstant(startsAtIso, 'starts_at');
 
@@ -136,8 +148,15 @@ export const expandOccurrenceStarts = (
     return [];
   }
 
-  const rule = buildRRule(startsAt, recurrence);
-  const dates = rule.between(from, to, true);
+  const until =
+    recurrence.until === undefined ? undefined : toWallClock(parseInstant(recurrence.until, 'until'), timeZone);
+  const rule = buildRRule(toWallClock(startsAt, timeZone), recurrence, until);
+  const wallFrom = new Date(toWallClock(from, timeZone).getTime() - WALL_WINDOW_PAD_MS);
+  const wallTo = new Date(toWallClock(to, timeZone).getTime() + WALL_WINDOW_PAD_MS);
+  const dates = rule
+    .between(wallFrom, wallTo, true)
+    .map((wall) => fromWallClock(wall, timeZone))
+    .filter((date) => date.getTime() >= from.getTime() && date.getTime() <= to.getTime());
   if (dates.length > MAX_OCCURRENCES_PER_EVENT) {
     return dates.slice(0, MAX_OCCURRENCES_PER_EVENT);
   }
