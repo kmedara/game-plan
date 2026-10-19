@@ -333,6 +333,54 @@
     "apple": "Apple Maps",
     "google": "Google Maps"
   },
+  "payments": {
+    "title": "Pagos",
+    "setUp": "Configurar pagos",
+    "setupHint": "Cobra cuotas y tarifas en la app. Stripe guarda el dinero y lo deposita en tu banco; GamePlan cobra una pequeña comisión por cada pago.",
+    "finishSetup": "Terminar la configuración de Stripe",
+    "finishSetupHint": "Stripe necesita algunos datos más antes de que los miembros puedan pagar.",
+    "newCharge": "Nuevo cobro",
+    "noCharges": "Todavía no hay cobros.",
+    "chargeTitle": "¿Para qué es?",
+    "chargeTitleHint": "Cuota de la temporada de primavera",
+    "amount": "Monto (USD)",
+    "dueDate": "Fecha límite",
+    "who": "Quién paga ({{count}})",
+    "sendCharge": "Enviar cobro",
+    "dueOn": "Vence el {{date}}",
+    "settledCount": "{{settled}} de {{members}} pagados",
+    "markPaid": "Marcar como pagado",
+    "waive": "Exonerar",
+    "undo": "Deshacer",
+    "status": {
+      "unpaid": "Sin pagar",
+      "pending": "Pago en curso",
+      "paid": "Pagado",
+      "paid_offline": "Pagado fuera de la app",
+      "waived": "Exonerado",
+      "refunded": "Reembolsado"
+    }
+  },
+  "dues": {
+    "title": "Cuotas",
+    "open": "Cuotas y pagos",
+    "openOwed": "Cuotas por pagar ({{count}})",
+    "pay": "Pagar",
+    "allPaid": "Estás al día con tus pagos.",
+    "history": "Pagados",
+    "guardianPays": "Un padre, madre o tutor paga esto.",
+    "paymentReceived": "Pago recibido. Puede tardar un momento en aparecer como pagado."
+  },
+  "permissions": {
+    "manage_permissions": "Administrar permisos",
+    "manage_team_settings": "Editar la configuración del equipo",
+    "invite_members": "Invitar miembros",
+    "approve_join_requests": "Aprobar solicitudes de ingreso",
+    "assign_roles": "Asignar roles",
+    "manage_events": "Administrar eventos",
+    "create_team_channels": "Crear canales del equipo",
+    "manage_payments": "Administrar pagos"
+  },
   "errors": {
     "common": {
       "loadFailed": "No se pudo cargar. Inténtalo de nuevo.",
@@ -407,6 +455,18 @@
       "badLogoType": "Elige un JPEG, PNG, WebP o GIF.",
       "logoTooLarge": "Elige un logo de menos de 5 MB.",
       "logoUploadFailed": "No se pudo subir ese logo."
+    },
+    "payments": {
+      "notEnabled": "Termina de configurar los pagos antes de cobrar a los miembros.",
+      "notConfigured": "Los pagos no están disponibles en este momento.",
+      "memberNotOnTeam": "Alguien que elegiste ya no está en el equipo.",
+      "paidInApp": "Esto se pagó en la app. Reembólsalo en Stripe.",
+      "alreadyPaid": "Esto ya fue pagado.",
+      "notPayer": "Solo el miembro o su tutor puede pagar esto.",
+      "checkoutFailed": "No se pudo abrir el pago. Inténtalo de nuevo.",
+      "titleRequired": "Indica para qué es el cobro.",
+      "invalidAmount": "Escribe un monto como 45 o 45.50.",
+      "noMembers": "Elige al menos un miembro."
     }
   }
 }

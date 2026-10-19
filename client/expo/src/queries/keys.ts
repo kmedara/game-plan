@@ -31,6 +31,10 @@ export const queryKeys = {
   download: (key: string, context: DownloadContext) => ['download', key, context] as const,
   invite: (code: string) => ['invite', code] as const,
   directory: (query: string) => ['directory', query] as const,
+  paymentAccount: (teamId: string) => ['paymentAccount', teamId] as const,
+  charges: (teamId: string) => ['charges', teamId] as const,
+  charge: (teamId: string, chargeId: string) => ['charge', teamId, chargeId] as const,
+  myDues: ['myDues'] as const,
 };
 
 /** Mutation keys for writes that may wait for the network and resume after a relaunch. */
@@ -53,7 +57,8 @@ export const PERSISTED_MUTATION_KINDS: ReadonlySet<string> = new Set([
  * Query kinds written to device storage.
  *
  * Presigned download URLs, directory pages, invite previews, and message history
- * are left out: they expire, page, or are chat content.
+ * are left out: they expire, page, or are chat content. Payment status is left
+ * out too, so nobody sees a stale "unpaid" and pays twice.
  */
 export const PERSISTED_QUERY_KINDS: ReadonlySet<string> = new Set([
   'me',

@@ -1,5 +1,5 @@
 /**
- * Profile photo, phone, positions, theme note, and sign-out.
+ * Profile photo, phone, dues link, positions, theme note, and sign-out.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -13,6 +13,8 @@ import { positionsWithinLimit } from '@gameplan/rules';
 import { config } from '@/src/config';
 import { errorMessageKey, queryError } from '@/src/errors';
 import { pickAndUploadImage, useDownloadUrl } from '@/src/media';
+import { isOwed } from '@/src/payment-status';
+import { myDuesQuery } from '@/src/queries/payments';
 import { meQuery, updateProfileMutation } from '@/src/queries/profile';
 import { RefreshableScroll } from '@/src/pull-refresh';
 import { setPositionsMutation } from '@/src/queries/teams';
@@ -27,6 +29,8 @@ export default function ProfileScreen() {
   const { api, live, teams, brand } = useApp();
   const queryClient = useQueryClient();
   const me = useQuery(meQuery(api));
+  const dues = useQuery(myDuesQuery(api));
+  const duesToPay = (dues.data ?? []).filter((due) => due.canPay && isOwed(due.status)).length;
   const saveProfile = useMutation(updateProfileMutation(api, queryClient));
   const savePositionsMutation = useMutation(setPositionsMutation(api, queryClient));
   const profile = me.data ?? api.user;
@@ -141,6 +145,15 @@ export default function ProfileScreen() {
           t(errorMessageKey(err, 'errors.profile.savePhoneFailed', { bad_phone: 'errors.profile.badPhone' }))
         }
       />
+      {(dues.data?.length ?? 0) > 0 ? (
+        <View className="mt-2">
+          <Button
+            label={duesToPay > 0 ? t('dues.openOwed', { count: duesToPay }) : t('dues.open')}
+            tone="secondary"
+            onPress={() => router.push('/dues')}
+          />
+        </View>
+      ) : null}
       <Text className="mb-2 mt-4 text-lg font-semibold text-ink">{t('profile.positions')}</Text>
       {teams.map((team) => {
         const positions = team.positions ?? [];

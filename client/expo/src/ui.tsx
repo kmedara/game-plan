@@ -56,7 +56,7 @@ export const Field = ({
   onChangeText: (value: string) => void;
   placeholder?: string;
   multiline?: boolean;
-  keyboardType?: 'default' | 'email-address' | 'phone-pad';
+  keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'decimal-pad';
   /** Shown inside the field when the caller has something to store. */
   onSave?: () => void | Promise<void>;
 }) => (

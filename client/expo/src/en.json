@@ -331,6 +331,54 @@
     "apple": "Apple Maps",
     "google": "Google Maps"
   },
+  "payments": {
+    "title": "Payments",
+    "setUp": "Set up payments",
+    "setupHint": "Collect dues and fees in the app. Stripe holds the money and pays it out to your bank; GamePlan keeps a small fee on each payment.",
+    "finishSetup": "Finish Stripe setup",
+    "finishSetupHint": "Stripe still needs a few details before members can pay.",
+    "newCharge": "New charge",
+    "noCharges": "No charges yet.",
+    "chargeTitle": "What is it for?",
+    "chargeTitleHint": "Spring season dues",
+    "amount": "Amount (USD)",
+    "dueDate": "Due date",
+    "who": "Who pays ({{count}})",
+    "sendCharge": "Send charge",
+    "dueOn": "Due {{date}}",
+    "settledCount": "{{settled}} of {{members}} paid",
+    "markPaid": "Mark paid",
+    "waive": "Waive",
+    "undo": "Undo",
+    "status": {
+      "unpaid": "Unpaid",
+      "pending": "Checkout open",
+      "paid": "Paid",
+      "paid_offline": "Paid outside the app",
+      "waived": "Waived",
+      "refunded": "Refunded"
+    }
+  },
+  "dues": {
+    "title": "Dues",
+    "open": "Dues and payments",
+    "openOwed": "Dues to pay ({{count}})",
+    "pay": "Pay",
+    "allPaid": "You're all paid up.",
+    "history": "Paid",
+    "guardianPays": "A parent or guardian pays this.",
+    "paymentReceived": "Payment received. It can take a moment to show as paid."
+  },
+  "permissions": {
+    "manage_permissions": "Manage permissions",
+    "manage_team_settings": "Edit team settings",
+    "invite_members": "Invite members",
+    "approve_join_requests": "Approve join requests",
+    "assign_roles": "Assign roles",
+    "manage_events": "Manage events",
+    "create_team_channels": "Create team channels",
+    "manage_payments": "Manage payments"
+  },
   "errors": {
     "common": {
       "loadFailed": "Could not load this. Try again.",
@@ -405,6 +453,18 @@
       "badLogoType": "Choose a JPEG, PNG, WebP, or GIF.",
       "logoTooLarge": "Choose a logo smaller than 5 MB.",
       "logoUploadFailed": "Could not upload that logo."
+    },
+    "payments": {
+      "notEnabled": "Finish setting up payments before charging members.",
+      "notConfigured": "Payments are not available right now.",
+      "memberNotOnTeam": "Someone you picked is no longer on the team.",
+      "paidInApp": "This was paid in the app. Refund it in Stripe instead.",
+      "alreadyPaid": "This has already been paid.",
+      "notPayer": "Only the member or their guardian can pay this.",
+      "checkoutFailed": "Could not open checkout. Try again.",
+      "titleRequired": "Say what the charge is for.",
+      "invalidAmount": "Enter an amount such as 45 or 45.50.",
+      "noMembers": "Pick at least one member."
     }
   }
 }

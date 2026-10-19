@@ -36,5 +36,11 @@ export const applyLiveEvent = (queryClient: QueryClient, event: FanoutJob): void
   }
   if (event.type === 'join_requested') {
     void queryClient.invalidateQueries({ queryKey: queryKeys.joinRequests(event.teamId) });
+    return;
+  }
+  if (event.type === 'dues_reminder' || event.type === 'payment_received') {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.myDues });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.charges(event.teamId) });
+    void queryClient.invalidateQueries({ queryKey: ['charge', event.teamId] });
   }
 };

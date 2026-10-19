@@ -38,10 +38,11 @@ const titles: Record<string, string> = {
   '/invite': 'title.invite',
 };
 
-/** One level up. A member returns to that team; everything else returns to its section. */
+/** One level up. A member or the payments page returns to that team; dues return to the profile. */
 const parentPath = (pathname: string): string => {
-  const member = /^\/teams\/([^/]+)\/members\/[^/]+$/.exec(pathname);
-  if (member !== null) return `/teams/${member[1]}`;
+  const teamPage = /^\/teams\/([^/]+)\/(members\/[^/]+|payments)$/.exec(pathname);
+  if (teamPage !== null) return `/teams/${teamPage[1]}`;
+  if (pathname === '/dues') return '/profile';
   return Object.keys(titles).find((path) => pathname.startsWith(`${path}/`)) ?? '/teams';
 };
 

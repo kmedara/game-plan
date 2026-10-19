@@ -13,6 +13,15 @@ import {
 import type {
   AcceptedInvite,
   ApprovedJoinRequest,
+  Charge,
+  ChargeDetail,
+  ChargeList,
+  CreateChargeBody,
+  Due,
+  MyDues,
+  PaymentAccount,
+  PaymentRedirect,
+  UpdateDueBody,
   ApproveJoinRequestBody,
   ChatList,
   ChatMessage,
@@ -84,7 +93,7 @@ type Listener = () => void;
 const apiFetch = withContentHash((input, init) => fetch(input, init));
 
 /**
- * Typed helpers for identity, teams, schedule, chat, places, and media.
+ * Typed helpers for identity, teams, schedule, chat, places, media, and payments.
  */
 export class ApiClient {
   readonly native = Platform.OS !== 'web';
@@ -471,6 +480,49 @@ export class ApiClient {
 
   async claimCarpool(teamId: string, body: CarpoolClaimBody): Promise<CarpoolResponse> {
     return this.request('PUT', `/schedule/teams/${teamId}/carpool/claim`, body);
+  }
+
+  /** Where Stripe should send this device back after a hosted page. */
+  private get paymentReturn(): { returnTo: 'app' | 'web' } {
+    return { returnTo: this.native ? 'app' : 'web' };
+  }
+
+  async getPaymentAccount(teamId: string): Promise<PaymentAccount> {
+    return this.request('GET', `/payments/teams/${teamId}/account`);
+  }
+
+  async createPaymentAccountLink(teamId: string): Promise<PaymentRedirect> {
+    return this.request('POST', `/payments/teams/${teamId}/account/link`, this.paymentReturn);
+  }
+
+  async listCharges(teamId: string): Promise<ChargeList['charges']> {
+    const data = await this.request<ChargeList>('GET', `/payments/teams/${teamId}/charges`);
+    return data.charges;
+  }
+
+  async createCharge(teamId: string, body: CreateChargeBody): Promise<Charge> {
+    return this.request('POST', `/payments/teams/${teamId}/charges`, body);
+  }
+
+  async getCharge(teamId: string, chargeId: string): Promise<ChargeDetail> {
+    return this.request('GET', `/payments/teams/${teamId}/charges/${chargeId}`);
+  }
+
+  async updateDue(teamId: string, chargeId: string, memberId: string, body: UpdateDueBody): Promise<Due> {
+    return this.request('PATCH', `/payments/teams/${teamId}/charges/${chargeId}/dues/${memberId}`, body);
+  }
+
+  async listMyDues(): Promise<MyDues['dues']> {
+    const data = await this.request<MyDues>('GET', '/payments/me/dues');
+    return data.dues;
+  }
+
+  async createCheckout(teamId: string, chargeId: string, memberId: string): Promise<PaymentRedirect> {
+    return this.request(
+      'POST',
+      `/payments/teams/${teamId}/charges/${chargeId}/dues/${memberId}/checkout`,
+      this.paymentReturn,
+    );
   }
 
   async autocompletePlaces(

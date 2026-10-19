@@ -86,7 +86,9 @@ export const TeamPermissions = ({
                   >
                     {checked ? <Check size={16} color={brand.onPrimary} strokeWidth={3} /> : null}
                   </View>
-                  <Text className={locked ? 'text-base text-muted' : 'text-base text-ink'}>{permission}</Text>
+                  <Text className={locked ? 'text-base text-muted' : 'text-base text-ink'}>
+                    {t(`permissions.${permission}`)}
+                  </Text>
                 </Pressable>
               );
             })}

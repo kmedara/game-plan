@@ -1,9 +1,9 @@
 /**
- * Team admin: settings, roster, join requests, invites, and permissions.
+ * Team admin: settings, payments link, roster, join requests, invites, and permissions.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -27,11 +27,12 @@ import { TeamColors } from '@/src/team-colors';
 import { TeamChatBackground } from '@/src/team-chat-background';
 import { TeamLogo } from '@/src/team-logo';
 import type { ChatBackgroundOverlay } from '@/src/team-media';
-import { ErrorText, Field, TimeZoneField } from '@/src/ui';
+import { Button, ErrorText, Field, TimeZoneField } from '@/src/ui';
 
 export default function TeamAdminScreen() {
   const { t } = useTranslation();
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
+  const router = useRouter();
   const { api, setPreviewTheme } = useApp();
   const queryClient = useQueryClient();
   const id = teamId ?? '';
@@ -219,6 +220,13 @@ export default function TeamAdminScreen() {
                 }
               />
             </>
+          ) : null}
+          {can('manage_payments') ? (
+            <Button
+              label={t('payments.title')}
+              tone="secondary"
+              onPress={() => router.push({ pathname: '/teams/[teamId]/payments', params: { teamId: id } })}
+            />
           ) : null}
           <TeamRoster teamId={id} members={members} />
           {can('approve_join_requests') ? (
