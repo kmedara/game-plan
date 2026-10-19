@@ -2,21 +2,23 @@
  * Message thread with a virtualized list and live updates.
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ChatMessage } from '@gameplan/types';
 import Send from 'lucide-react-native/icons/send';
 import X from 'lucide-react-native/icons/x';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Image } from 'expo-image';
 import { FlatList, Linking, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { errorMessageKey, queryError } from '@/src/errors';
 import { PullRefreshFrame, usePullRefreshList } from '@/src/pull-refresh';
-import { pickAndUploadImage, useDownloadUrl, type UploadedImage } from '@/src/media';
+import { CHAT_PHOTO_MAX_DIMENSION, pickAndUploadImage, useDownloadUrl, type UploadedImage } from '@/src/media';
 import { chatsQuery, messagesQuery, sendMessageMutation } from '@/src/queries/chat';
+import { membersQuery } from '@/src/queries/teams';
 import { useApp, useBrandTeam } from '@/src/state';
 import { chatOverlayColor } from '@/src/team-media';
-import { ErrorText } from '@/src/ui';
+import { ErrorText, ProfilePhoto } from '@/src/ui';
 
 export default function ChatThreadScreen() {
   const { t } = useTranslation();
@@ -37,6 +39,17 @@ export default function ChatThreadScreen() {
   const [draft, setDraft] = useState('');
   const [photos, setPhotos] = useState<UploadedImage[]>([]);
   const [error, setError] = useState<string | undefined>();
+  const [namedMessageId, setNamedMessageId] = useState<string | undefined>();
+  // A private chat has no team, so a sender's profile opens under the first team that lists them.
+  const rosters = useQueries({
+    queries: teams.map((item) => ({
+      ...membersQuery(api, item.teamId),
+      enabled: chat !== undefined && chat.teamId === undefined,
+    })),
+  });
+  const profileTeamId = (senderId: string): string | undefined =>
+    chat?.teamId ??
+    teams.find((_item, index) => rosters[index]?.data?.some((member) => member.userId === senderId))?.teamId;
 
   const send = async (): Promise<boolean | void> => {
     const attachmentKeys = photos.map((photo) => photo.key);
@@ -53,7 +66,7 @@ export default function ChatThreadScreen() {
   };
 
   const attach = async (): Promise<void> => {
-    const result = await pickAndUploadImage(api, { quality: 0.8 });
+    const result = await pickAndUploadImage(api, { quality: 0.85, maxDimension: CHAT_PHOTO_MAX_DIMENSION });
     if (result === undefined) return;
     if ('error' in result) {
       setError(t('chats.attachFailed'));
@@ -81,24 +94,40 @@ export default function ChatThreadScreen() {
           data={messages}
           inverted
           keyExtractor={(item) => item.messageId}
+          extraData={namedMessageId}
           style={[{ backgroundColor: 'transparent' }, pull.listProps.style]}
           contentContainerClassName="px-3 py-3"
           renderItem={({ item }) => {
             const mine = item.senderId === api.user?.userId;
-            return (
-              <View
-                className={`mb-3 max-w-[80%] rounded-2xl p-3 ${mine ? 'self-end' : 'self-start border border-line bg-paper'}`}
-                style={mine ? { backgroundColor: brand.primary } : undefined}
-              >
-                {mine ? null : (
-                  <Text className="text-xs text-muted">{item.senderDisplayName ?? item.senderId}</Text>
-                )}
+            const content = (
+              <>
                 {item.body.length > 0 ? (
                   <Text className="text-ink" style={mine ? { color: brand.onPrimary } : undefined}>{item.body}</Text>
                 ) : null}
                 {item.attachmentKeys?.map((key) => (
                   <Attachment key={key} chatId={id} objectKey={key} />
                 ))}
+              </>
+            );
+            if (mine) {
+              return (
+                <View className="mb-3 max-w-[80%] self-end rounded-2xl p-3" style={{ backgroundColor: brand.primary }}>
+                  {content}
+                </View>
+              );
+            }
+            return (
+              <View className="mb-3 max-w-[85%] flex-row items-end self-start">
+                <SenderAvatar message={item} teamId={profileTeamId(item.senderId)} />
+                <Pressable
+                  className="ml-2 shrink rounded-2xl border border-line bg-paper p-3"
+                  onPress={() => setNamedMessageId((current) => (current === item.messageId ? undefined : item.messageId))}
+                >
+                  {namedMessageId === item.messageId ? (
+                    <Text className="text-xs text-muted">{item.senderDisplayName}</Text>
+                  ) : null}
+                  {content}
+                </Pressable>
               </View>
             );
           }}
@@ -162,6 +191,24 @@ export default function ChatThreadScreen() {
     </View>
   );
 }
+
+/** Sender photo beside a message; opens their profile when a shared team is known. */
+const SenderAvatar = ({ message, teamId }: { message: ChatMessage; teamId: string | undefined }) => {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const uri = useDownloadUrl(message.senderPhotoKey, { userId: message.senderId });
+  const photo = <ProfilePhoto name={message.senderDisplayName} uri={uri} size={28} />;
+  if (teamId === undefined) return photo;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t('chats.viewProfile', { name: message.senderDisplayName })}
+      onPress={() => router.push(`/teams/${teamId}/members/${message.senderId}`)}
+    >
+      {photo}
+    </Pressable>
+  );
+};
 
 const CameraIcon = () => {
   const { brand } = useApp();

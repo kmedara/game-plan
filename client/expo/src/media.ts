@@ -29,22 +29,44 @@ const CONVERT_QUALITY = 0.85;
 const isUploadImageType = (type: string): type is UploadImageType => UPLOAD_IMAGE_TYPES.has(type);
 
 /**
- * The picked image as a type the media API accepts.
+ * The picked image as a type the media API accepts, no larger than `maxDimension`.
  *
- * @param asset - The picked file and its reported type.
+ * @param asset - The picked file, its reported type, and its size in pixels.
  * @param quality - JPEG quality for a re-encode.
- * @returns The original when its type is accepted, otherwise a JPEG copy.
+ * @param maxDimension - Longest side allowed, in pixels. Omit to keep the original size.
+ * @returns The original when its type and size are accepted, otherwise a re-encoded copy.
  */
 const uploadableImage = async (
-  asset: { uri: string; mimeType?: string | null },
+  asset: { uri: string; mimeType?: string | null; width: number; height: number },
   quality: number,
+  maxDimension: number | undefined,
 ): Promise<{ uri: string; contentType: UploadImageType }> => {
   const type = asset.mimeType ?? 'image/jpeg';
-  if (isUploadImageType(type)) return { uri: asset.uri, contentType: type };
-  const image = await ImageManipulator.manipulate(asset.uri).renderAsync();
+  const longest = Math.max(asset.width, asset.height);
+  const shrink = maxDimension !== undefined && longest > maxDimension;
+  if (isUploadImageType(type) && !shrink) return { uri: asset.uri, contentType: type };
+  const context = ImageManipulator.manipulate(asset.uri);
+  if (shrink) {
+    context.resize(asset.width >= asset.height ? { width: maxDimension } : { height: maxDimension });
+  }
+  const image = await context.renderAsync();
+  // PNG keeps transparency; everything else, including a GIF's first frame, becomes JPEG.
+  if (type === 'image/png') {
+    const saved = await image.saveAsync({ format: SaveFormat.PNG });
+    return { uri: saved.uri, contentType: 'image/png' };
+  }
   const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: quality });
   return { uri: saved.uri, contentType: 'image/jpeg' };
 };
+
+/** Longest side of a stored profile photo. Avatars show at 96px or less, so 512 stays sharp on 3x screens. */
+export const PROFILE_PHOTO_MAX_DIMENSION = 512;
+
+/**
+ * Longest side of a chat photo. Sharp full screen on phones and most laptop screens,
+ * and a typical photo stays well under 1 MB.
+ */
+export const CHAT_PHOTO_MAX_DIMENSION = 2048;
 
 export type ImageUploadFailure = 'bad_type' | 'too_large' | 'upload_failed';
 
@@ -58,6 +80,8 @@ export type ImageUploadOptions = {
   maxBytes?: number;
   /** Picker re-encode quality from 0 to 1. Omit to keep the original file. */
   quality?: number;
+  /** Longest side in pixels. Larger images are scaled down before upload. */
+  maxDimension?: number;
 };
 
 type Uploader = {
@@ -68,6 +92,7 @@ type Uploader = {
  * Opens the image library and uploads the selection through a presigned URL.
  *
  * Types the media API does not take, such as HEIC, are re-encoded as JPEG.
+ * With `maxDimension`, larger images are scaled down first.
  *
  * @param api - Anything that can presign an upload.
  * @param options - Type, size, and quality limits.
@@ -84,7 +109,7 @@ export const pickAndUploadImage = async (
   if (picked.canceled || picked.assets[0] === undefined) return undefined;
   const asset = picked.assets[0];
   try {
-    const { uri, contentType } = await uploadableImage(asset, options.quality ?? CONVERT_QUALITY);
+    const { uri, contentType } = await uploadableImage(asset, options.quality ?? CONVERT_QUALITY, options.maxDimension);
     if (options.types !== undefined && !options.types.has(contentType)) return { error: 'bad_type' };
     const blob = await (await fetch(uri)).blob();
     if (blob.size > (options.maxBytes ?? IMAGE_MAX_BYTES)) return { error: 'too_large' };

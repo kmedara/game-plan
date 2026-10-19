@@ -187,6 +187,7 @@
     "private": "Private",
     "message": "Message",
     "send": "Send",
+    "viewProfile": "View {{name}}'s profile",
     "attachPhoto": "Photo",
     "downloadPhoto": "Download",
     "removePhoto": "Remove",

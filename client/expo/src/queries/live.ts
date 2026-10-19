@@ -12,6 +12,7 @@ const messageFromEvent = (event: Extract<FanoutJob, { type: 'chat_message' }>): 
   chatId: event.chatId,
   senderId: event.senderId,
   senderDisplayName: event.senderDisplayName ?? 'Player',
+  ...(event.senderPhotoKey !== undefined ? { senderPhotoKey: event.senderPhotoKey } : {}),
   body: event.body,
   createdAt: event.createdAt,
   ...(event.attachmentKeys !== undefined ? { attachmentKeys: event.attachmentKeys } : {}),

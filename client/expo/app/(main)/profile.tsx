@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { positionsWithinLimit } from '@gameplan/rules';
 import { config } from '@/src/config';
 import { errorMessageKey, queryError } from '@/src/errors';
-import { pickAndUploadImage, useDownloadUrl } from '@/src/media';
+import { PROFILE_PHOTO_MAX_DIMENSION, pickAndUploadImage, useDownloadUrl } from '@/src/media';
 import { loadPushStatus, registerPush, type PushStatus } from '@/src/push';
 import { isOwed } from '@/src/payment-status';
 import { myDuesQuery } from '@/src/queries/payments';
@@ -58,7 +58,7 @@ export default function ProfileScreen() {
   }, [me.error, t]);
 
   const upload = async (): Promise<void> => {
-    const result = await pickAndUploadImage(api, { quality: 0.8 });
+    const result = await pickAndUploadImage(api, { quality: 0.8, maxDimension: PROFILE_PHOTO_MAX_DIMENSION });
     if (result === undefined) return;
     if ('error' in result) {
       setError(t('chats.attachFailed'));

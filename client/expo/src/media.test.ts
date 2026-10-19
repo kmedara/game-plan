@@ -15,13 +15,17 @@ jest.mock('expo-image-picker', () => ({
 
 const mockSaveAsync = jest.fn();
 const mockManipulate = jest.fn();
+const mockResize = jest.fn();
 
 jest.mock('expo-image-manipulator', () => ({
-  SaveFormat: { JPEG: 'jpeg' },
+  SaveFormat: { JPEG: 'jpeg', PNG: 'png' },
   ImageManipulator: {
     manipulate: (...args: unknown[]) => {
       mockManipulate(...args);
-      return { renderAsync: async () => ({ saveAsync: (...save: unknown[]) => mockSaveAsync(...save) }) };
+      return {
+        resize: (...size: unknown[]) => mockResize(...size),
+        renderAsync: async () => ({ saveAsync: (...save: unknown[]) => mockSaveAsync(...save) }),
+      };
     },
   },
 }));
@@ -33,9 +37,9 @@ jest.mock('./state', () => {
 
 const pick = ImagePicker.launchImageLibraryAsync as jest.Mock;
 
-const picked = (mimeType: string | undefined) => ({
+const picked = (mimeType: string | undefined, width = 400, height = 300) => ({
   canceled: false,
-  assets: [{ uri: 'file:///photo', mimeType }],
+  assets: [{ uri: 'file:///photo', mimeType, width, height }],
 });
 
 const deferred = <T,>() => {
@@ -53,6 +57,7 @@ describe('pickAndUploadImage', () => {
   beforeEach(() => {
     pick.mockReset();
     mockManipulate.mockReset();
+    mockResize.mockReset();
     mockSaveAsync.mockReset();
     presignUpload.mockReset();
     fetchMock.mockReset();
@@ -110,6 +115,39 @@ describe('pickAndUploadImage', () => {
     expect(mockSaveAsync).toHaveBeenCalledWith({ format: 'jpeg', compress: 0.7 });
     expect(fetchMock).toHaveBeenCalledWith('file:///photo.jpg');
     expect(presignUpload).toHaveBeenLastCalledWith('image/jpeg', 10);
+  });
+
+  it('scales the longest side down to maxDimension and keeps smaller images as they are', async () => {
+    pick.mockResolvedValueOnce(picked('image/jpeg', 3000, 4000));
+    mockSaveAsync.mockResolvedValueOnce({ uri: 'file:///small.jpg' });
+    stubFile(10);
+    presignUpload.mockResolvedValueOnce({ uploadUrl: 'https://upload', objectKey: 'p' });
+    await expect(pickAndUploadImage({ presignUpload }, { quality: 0.8, maxDimension: 512 })).resolves.toEqual({
+      key: 'p',
+      uri: 'file:///small.jpg',
+    });
+    expect(mockResize).toHaveBeenCalledWith({ height: 512 });
+    expect(mockSaveAsync).toHaveBeenCalledWith({ format: 'jpeg', compress: 0.8 });
+    expect(presignUpload).toHaveBeenLastCalledWith('image/jpeg', 10);
+
+    pick.mockResolvedValueOnce(picked('image/png', 2000, 1000));
+    mockSaveAsync.mockResolvedValueOnce({ uri: 'file:///small.png' });
+    stubFile(10);
+    presignUpload.mockResolvedValueOnce({ uploadUrl: 'https://upload', objectKey: 'q' });
+    await pickAndUploadImage({ presignUpload }, { maxDimension: 512 });
+    expect(mockResize).toHaveBeenLastCalledWith({ width: 512 });
+    expect(mockSaveAsync).toHaveBeenLastCalledWith({ format: 'png' });
+    expect(presignUpload).toHaveBeenLastCalledWith('image/png', 10);
+
+    mockManipulate.mockReset();
+    pick.mockResolvedValueOnce(picked('image/jpeg', 512, 300));
+    stubFile(10);
+    presignUpload.mockResolvedValueOnce({ uploadUrl: 'https://upload', objectKey: 'r' });
+    await expect(pickAndUploadImage({ presignUpload }, { maxDimension: 512 })).resolves.toEqual({
+      key: 'r',
+      uri: 'file:///photo',
+    });
+    expect(mockManipulate).not.toHaveBeenCalled();
   });
 
   it('checks the allowed set against the type that would be uploaded', async () => {

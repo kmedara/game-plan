@@ -42,6 +42,24 @@ describe('applyLiveEvent', () => {
     expect(client.getQueryData(queryKeys.messages('c1'))).toBeUndefined();
   });
 
+  it('keeps the sender photo so the avatar shows without a refresh', () => {
+    const client = createTestQueryClient();
+    client.setQueryData(queryKeys.messages('c1'), { messages: [] });
+    applyLiveEvent(client, {
+      type: 'chat_message',
+      chatId: 'c1',
+      messageId: 'm1',
+      senderId: 'u2',
+      senderDisplayName: 'B',
+      senderPhotoKey: 'profiles/u2/photo.jpg',
+      body: 'yo',
+      createdAt: '2',
+    });
+    expect(client.getQueryData(queryKeys.messages('c1'))).toEqual({
+      messages: [expect.objectContaining({ senderPhotoKey: 'profiles/u2/photo.jpg' })],
+    });
+  });
+
   it('ignores a duplicate live message', () => {
     const client = createTestQueryClient();
     const message = {
