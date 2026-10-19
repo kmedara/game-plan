@@ -30,6 +30,7 @@ import {
   PAYMENT_REMINDERS_KEY,
   REMINDERS_KEY,
   STRIPE_ACCOUNT_PREFIX,
+  STRIPE_CUSTOMER_PREFIX,
   TEAM_PREFIX,
   TICKET_PREFIX,
   USER_PREFIX,
@@ -287,6 +288,12 @@ export class Api extends Construct {
       PLATFORM_FEE_BPS: process.env.PLATFORM_FEE_BPS ?? '200',
       PAYMENTS_RETURN_URL: `${props.corsOrigin.replace(/\/+$/u, '')}/api/payments/return`,
     };
+    const stripeBillingWebhookSecretParameter = `${props.ssmPrefix}/stripe-billing-webhook-secret`;
+    const billingEnv = {
+      STRIPE_SECRET_KEY_PARAMETER: stripeSecretKeyParameter,
+      STRIPE_BILLING_WEBHOOK_SECRET_PARAMETER: stripeBillingWebhookSecretParameter,
+      BILLING_RETURN_URL: `${props.corsOrigin.replace(/\/+$/u, '')}/api/billing/return`,
+    };
     this.socketOriginParameter = originSecretParameter;
     const mediaSigningKeyParameter = `${props.ssmPrefix}/media-signing-private-key`;
     const mediaSigning = props.mediaSigningPublicKey === undefined
@@ -334,6 +341,8 @@ export class Api extends Construct {
           };
         case 'payments':
           return { ...shared, ...tableEnv, ...tokenEnv, ...queueEnv, ...paymentsEnv };
+        case 'billing':
+          return { ...shared, ...tableEnv, ...tokenEnv, ...billingEnv };
         case 'fanout':
           return {
             ...shared,
@@ -370,6 +379,20 @@ export class Api extends Construct {
     allowParameterRead(paymentsWebhookFn, stripeSecretKeyParameter);
     allowParameterRead(paymentsWebhookFn, stripeWebhookSecretParameter);
     const paymentsWebhookUrl = paymentsWebhookFn.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.NONE,
+    });
+
+    // Same reason as the payments webhook: Stripe cannot sign for origin access control.
+    allowParameterRead(functions.billing, stripeSecretKeyParameter);
+    const billingWebhookFn = createFunction(
+      this,
+      'billing-webhook',
+      areaEntry('billing', 'webhook-handler.ts'),
+      { ...shared, ...tableEnv, ...billingEnv },
+    );
+    allowParameterRead(billingWebhookFn, stripeSecretKeyParameter);
+    allowParameterRead(billingWebhookFn, stripeBillingWebhookSecretParameter);
+    const billingWebhookUrl = billingWebhookFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
     });
 
@@ -511,6 +534,17 @@ export class Api extends Construct {
       write: [TEAM_PREFIX, STRIPE_ACCOUNT_PREFIX],
       transact: true,
     });
+    grantPartitions(props.table, functions.billing, {
+      // Plan and billing rows on TEAM#, the reverse customer lookup.
+      read: [TEAM_PREFIX, STRIPE_CUSTOMER_PREFIX],
+      write: [TEAM_PREFIX, STRIPE_CUSTOMER_PREFIX],
+      transact: true,
+    });
+    grantPartitions(props.table, billingWebhookFn, {
+      read: [TEAM_PREFIX, STRIPE_CUSTOMER_PREFIX],
+      write: [TEAM_PREFIX, STRIPE_CUSTOMER_PREFIX],
+      transact: true,
+    });
     grantPartitions(props.table, functions.fanout, {
       read: [CHAT_PREFIX, TEAM_PREFIX, USER_PREFIX],
       // A gone socket is deleted. LeadingKeys cannot limit DeleteItem to CONN#.
@@ -534,6 +568,11 @@ export class Api extends Construct {
     new cdk.CfnOutput(this, 'PaymentsWebhookUrl', {
       value: `${paymentsWebhookUrl.url}payments/webhook`,
       description: 'Register as a Stripe Connect webhook endpoint (events on connected accounts).',
+    });
+
+    new cdk.CfnOutput(this, 'BillingWebhookUrl', {
+      value: `${billingWebhookUrl.url}billing/webhook`,
+      description: 'Register as a Stripe webhook endpoint on the platform account (subscriptions).',
     });
   }
 }

@@ -109,6 +109,12 @@ import {
   paymentReturnQuerySchema,
   updateDueBodySchema,
 } from './payments.js';
+import {
+  billingPortalBodySchema,
+  billingReturnQuerySchema,
+  teamBillingSchema,
+  teamCheckoutBodySchema,
+} from './plans.js';
 import { z, type ZodType } from './zod.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
@@ -555,6 +561,40 @@ const AREAS: Record<string, AreaSpec> = {
       },
       '/payments/webhook': {
         post: { summary: 'Stripe webhook (Stripe-Signature header, no bearer token)', secured: false },
+      },
+    },
+  },
+  billing: {
+    description: 'Paid plans through Stripe Billing: plan status, checkout, and the billing portal.',
+    secured: true,
+    paths: {
+      '/billing/teams/{teamId}': {
+        get: { summary: "The team's plan", response: teamBillingSchema },
+      },
+      '/billing/teams/{teamId}/checkout': {
+        post: {
+          summary: 'Open Stripe Checkout for the premium plan',
+          body: teamCheckoutBodySchema,
+          response: paymentRedirectSchema,
+        },
+      },
+      '/billing/teams/{teamId}/portal': {
+        post: {
+          summary: 'Open the Stripe billing portal',
+          body: billingPortalBodySchema,
+          response: paymentRedirectSchema,
+        },
+      },
+      '/billing/return': {
+        get: {
+          summary: 'Where Stripe sends the browser back; redirects to the app or website',
+          query: billingReturnQuerySchema,
+          secured: false,
+          redirect: true,
+        },
+      },
+      '/billing/webhook': {
+        post: { summary: 'Stripe Billing webhook (Stripe-Signature header, no bearer token)', secured: false },
       },
     },
   },

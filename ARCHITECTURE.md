@@ -147,6 +147,17 @@ A `past_due` plan keeps its tier for seven days after the paid period ends (`eff
 - **Why:** one read per check, and one place to change a limit. An organization's subscription will be copied onto each of its teams' rows rather than looked up through the organization, so a team check stays one read. The plan is its own row, not a field on `META`, because the teams area rewrites `META` whole and a billing write there could be lost.
 - **Cost:** team summaries read one more row per team. Copying an organization's plan means its webhook writes every member team's row.
 
+### Subscriptions
+
+Premium and organization plans are Stripe Billing subscriptions on the platform account, sold on the website; the parent add-on goes through Apple and Google in-app purchase. The `billing` area opens Checkout (`POST /billing/teams/:teamId/checkout`, `manage_billing`) and the billing portal for plan changes, cards, cancellation, and invoices. Prices are found by lookup key (`premium_monthly`, `premium_yearly`), so test and live mode run the same code and a price change needs no deploy. Stripe returns to a fixed `GET /billing/return` with a target from a closed list, like dues.
+
+The subscription events are the source of truth for the plan row; checkout completion only records the customer (`TEAM#id` / `BILLING`, plus `STRIPE_CUSTOMER#<id>` to find the team when a subscription has no metadata). A plan write is skipped when the stored row came from a newer Stripe event (`stripeEventCreated`), and every write is conditional on the row's `version`. A first payment still pending (`incomplete`) writes nothing. A team whose plan comes from an organization cannot start its own subscription, and its own subscription events do not overwrite the organization's plan.
+
+The webhook is its own function (`billing-webhook`) with a public URL serving only `POST /billing/webhook`, for the same reason as the dues webhook. It has its own signing secret, because it is a platform endpoint and the dues webhook is a Connect endpoint.
+
+- **Why:** web checkout keeps the stores' 15–30% off team and organization plans, and Stripe hosts the card forms, invoices, tax, and dunning. Ordering by event time makes retries and out-of-order delivery harmless.
+- **Cost:** the iOS app may only link out to web checkout where Apple allows it (`EXPO_PUBLIC_IOS_WEB_UPGRADE`); elsewhere it names the website without a price. Two webhook endpoints and secrets to configure.
+
 ## HTTP edge
 
 HTTP is CloudFront → Lambda function URL. There is no API Gateway on that path. WebSocket still uses API Gateway, because function URLs cannot hold connections.
@@ -343,7 +354,7 @@ WAF on `/api/`, four rules, each a five-minute window, `429` with `{"error":"rat
 
 ### Least-privilege IAM
 
-Each area's role is limited to the DynamoDB prefixes it uses, via `dynamodb:LeadingKeys` (`infrastructure/lib/table-access.ts`). `places` has no table access. `schedule` can touch `TEAM#`, `REMINDERS`, and the `CHAT#` / `USER#` rows for a carpool chat. `fanout` reads those prefixes and may delete a `USER#` item after a socket or push device is reported gone. `payments` writes `TEAM#`, `USER#`, `STRIPE_ACCOUNT#`, and `PAYMENT_REMINDERS`; its webhook function writes only `TEAM#` and `STRIPE_ACCOUNT#`. Identity and Access Management cannot limit that delete to the `CONN#` sort key; the function only deletes the connection id from the failed post. `ForAllValues` stops a transaction from mixing in another prefix. Identity may call `AdminGetUser` and `AdminDeleteUser` (to replace an unconfirmed signup). CI uses GitHub OIDC (`AWS_ROLE_ARN` per environment). Deploy logs are redacted.
+Each area's role is limited to the DynamoDB prefixes it uses, via `dynamodb:LeadingKeys` (`infrastructure/lib/table-access.ts`). `places` has no table access. `schedule` can touch `TEAM#`, `REMINDERS`, and the `CHAT#` / `USER#` rows for a carpool chat. `fanout` reads those prefixes and may delete a `USER#` item after a socket or push device is reported gone. `payments` writes `TEAM#`, `USER#`, `STRIPE_ACCOUNT#`, and `PAYMENT_REMINDERS`; its webhook function writes only `TEAM#` and `STRIPE_ACCOUNT#`. `billing` and its webhook write only `TEAM#` and `STRIPE_CUSTOMER#`. Identity and Access Management cannot limit that delete to the `CONN#` sort key; the function only deletes the connection id from the failed post. `ForAllValues` stops a transaction from mixing in another prefix. Identity may call `AdminGetUser` and `AdminDeleteUser` (to replace an unconfirmed signup). CI uses GitHub OIDC (`AWS_ROLE_ARN` per environment). Deploy logs are redacted.
 
 Buckets block public access, use S3-managed encryption, and require TLS. Media CORS allows only the website origin. SQS uses SQS-managed encryption.
 
@@ -360,6 +371,7 @@ A function receives the parameter name and reads the value through `readSecret` 
 | Socket origin secret | socket authorizer | `<prefix>/socket-origin-verify` |
 | Stripe secret key | payments, payments-webhook | `<prefix>/stripe-secret-key` |
 | Stripe webhook signing secret | payments, payments-webhook | `<prefix>/stripe-webhook-secret` |
+| Stripe Billing webhook signing secret | billing-webhook | `<prefix>/stripe-billing-webhook-secret` |
 
 - Each role has `ssm:GetParameter` on its own parameter. The origin secret is a random String set by hand. CloudFront needs the literal value, so it cannot be a SecureString. The site stack resolves it at deploy time for the header.
 - Values stay in memory for five minutes. A rotation is picked up without a deploy. A failed read is not cached.

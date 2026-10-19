@@ -1,5 +1,5 @@
 {
-  "areas": ["identity", "teams", "schedule", "chat", "media", "places", "socket", "fanout", "payments"],
+  "areas": ["identity", "teams", "schedule", "chat", "media", "places", "socket", "fanout", "payments", "billing"],
   "tableName": "gameplan",
   "emailIndex": "EmailIndex",
   "connectionIndex": "ConnectionIndex",

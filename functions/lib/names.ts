@@ -19,6 +19,7 @@ type Resources = {
     'socket',
     'fanout',
     'payments',
+    'billing',
   ];
   tableName: string;
   emailIndex: string;

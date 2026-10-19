@@ -36,6 +36,9 @@ export const REMINDERS_KEY = 'REMINDERS';
 /** `STRIPE_ACCOUNT#<accountId>` which team a connected Stripe account belongs to. */
 export const STRIPE_ACCOUNT_PREFIX = 'STRIPE_ACCOUNT#*';
 
+/** `STRIPE_CUSTOMER#<customerId>` which team a Stripe Billing customer pays for. */
+export const STRIPE_CUSTOMER_PREFIX = 'STRIPE_CUSTOMER#*';
+
 /** `PAYMENT_REMINDERS` dated rows for dues reminders. */
 export const PAYMENT_REMINDERS_KEY = 'PAYMENT_REMINDERS';
 

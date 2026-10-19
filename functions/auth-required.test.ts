@@ -11,6 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import { describe, expect, it } from 'vitest';
+import { handler as billing } from './billing/src/handler.js';
 import { handler as chat } from './chat/src/handler.js';
 import { handler as identity } from './identity/src/handler.js';
 import { handler as media } from './media/src/handler.js';
@@ -25,7 +26,10 @@ type HttpHandler = (event: APIGatewayProxyEventV2) => Promise<APIGatewayProxyStr
 /** One dispatched route: the handler function it reaches, and a request that reaches it. */
 type RouteCase = { route: string; method: Method; path: string; query?: string };
 
-const handlers = { identity, teams, schedule, chat, media, places, payments } as Record<string, HttpHandler>;
+const handlers = { identity, teams, schedule, chat, media, places, payments, billing } as Record<
+  string,
+  HttpHandler
+>;
 
 /** Routes that must answer `401` without a token. */
 const PROTECTED: Record<string, RouteCase[]> = {
@@ -115,6 +119,11 @@ const PROTECTED: Record<string, RouteCase[]> = {
     },
     { route: 'handleListMyDues', method: 'GET', path: '/payments/me/dues' },
   ],
+  billing: [
+    { route: 'handleGetTeamBilling', method: 'GET', path: '/billing/teams/team-1' },
+    { route: 'handleTeamCheckout', method: 'POST', path: '/billing/teams/team-1/checkout' },
+    { route: 'handleTeamPortal', method: 'POST', path: '/billing/teams/team-1/portal' },
+  ],
 };
 
 /** Routes that run before a session exists. Listed so the inventory can tell them apart. */
@@ -135,6 +144,7 @@ const PUBLIC: Record<string, string[]> = {
   media: ['handleLocalPutObject', 'handleLocalGetObject'],
   // Stripe redirects the browser here and signs webhooks; neither carries a session.
   payments: ['handlePaymentReturn', 'handleStripeWebhook'],
+  billing: ['handleBillingReturn', 'handleBillingWebhook'],
 };
 
 /**
