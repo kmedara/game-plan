@@ -7,3 +7,8 @@ notifyManager.setScheduler((callback) => callback());
 notifyManager.setNotifyFunction((callback) => {
   act(callback);
 });
+
+// Runs after Testing Library's own cleanup (registered by the require above) has unmounted the tree.
+afterEach(() => {
+  require('./src/test-query').clearTestQueryClients();
+});
