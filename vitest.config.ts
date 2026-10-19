@@ -22,7 +22,9 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    env: { AUTH_PROVIDER: 'local', LOCAL_JWT_SECRET: 'vitest-local-secret' },
+    // CDK_VALIDATION=false skips the CloudFormation validator that aws-cdk-lib runs on every synth.
+    // Its WASM engine takes about 3s to load in each test file, and it only reports warnings by default.
+    env: { AUTH_PROVIDER: 'local', LOCAL_JWT_SECRET: 'vitest-local-secret', CDK_VALIDATION: 'false' },
     pool: 'forks',
     // Single-worker runs avoid flaky coverage.tmp ENOENT races on Windows.
     fileParallelism: true,
