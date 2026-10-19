@@ -122,6 +122,20 @@ A series is one row with a structured rule (`frequency`, `interval`, `byWeekDay`
 - **Why:** `BYDAY` codes come from the local calendar day, and "Tuesdays at 7 pm" means 7 pm on the wall. Expanding in UTC put Pacific evening practices on Mondays and moved them an hour at each daylight-saving change.
 - **Cost:** a one-date check reads the team row for its zone. Changing a team's time zone moves every future occurrence. Rows keyed by an instant the old UTC expansion produced (RSVPs, exdates, split-off dates on shifted dates) no longer match a date; this landed before launch, so nothing was migrated.
 
+### Team dues
+
+Each team connects a Stripe Express account. A charge (`TEAM#id` / `CHARGE#`) asks some members to pay; each member's share is a due (`DUE#<chargeId>#<memberId>`) with a pointer on the member's partition for "my dues". Payment is a direct charge on the team's account through hosted Checkout, with GamePlan's cut as `application_fee_amount` (`PLATFORM_FEE_BPS`, default 2%). An adult pays their own due; a minor's guardians pay theirs (`payerIdsForDue` in `lib/rules`). Staff can mark a due paid outside the app or waived.
+
+- **Why:** a direct charge takes Stripe's processing fee from the team's share, so the platform fee arrives whole; a destination charge would make the platform pay processing out of 2%. Hosted Checkout needs no native SDK, gives Apple Pay and Google Pay, and works on the website. Team dues pay for real-world services, so the app stores allow outside payment.
+- **Cost:** the team's Stripe account owns refunds and disputes. Stripe returns to a fixed `GET /payments/return` with a target from a closed list (`app` or `web`), never a client URL, so the redirect cannot be abused, at the price of one extra hop.
+
+Due status changes are conditional on a `version` field, so a webhook retry or a race with staff cannot overwrite a newer write. An open checkout is reused rather than starting a second. Every webhook handler is idempotent, and an event applies only to the team whose connected account sent it. A daily sweep reminds payers three days before, on, and weekly after the due date.
+
+The webhook runs as its own function (`payments-webhook`) with a public function URL that serves only `POST /payments/webhook`.
+
+- **Why:** Stripe cannot sign for origin access control, and a function has one function URL. A separate function keeps every other payments route behind the IAM URL.
+- **Cost:** that URL skips CloudFront and WAF; the Stripe signature is its only gate.
+
 ## HTTP edge
 
 HTTP is CloudFront → Lambda function URL. There is no API Gateway on that path. WebSocket still uses API Gateway, because function URLs cannot hold connections.
@@ -139,6 +153,20 @@ Clients write messages and RSVPs over HTTP. The area stores the row, then enqueu
 
 - **Why:** writes stay validated and rate-limited. The socket has no business logic, so a dropped connection does not drop data. The queue retries (dead-letter after five attempts) without holding the write response.
 - **Cost:** other users see the change slightly later than a direct broadcast. Delivery is at-least-once, so clients must ignore duplicates.
+
+Events sent while a socket is down are not replayed. Phones drop the socket whenever the screen locks or the app goes to the background, so every reconnect after the first refetches chats, open threads, the schedule, and dues (`resyncAfterReconnect`). The client sends a keepalive frame every four minutes, which keeps API Gateway from closing an idle socket after ten and replaces a socket the phone killed without a `close`. On the website it also reconnects on `pageshow` (Safari's back-forward cache) and `online`.
+
+- **Why:** a catch-up refetch is simpler and cheaper than a replay log, and only on-screen queries refetch.
+- **Cost:** each reconnect costs a few reads, and each keepalive invokes the socket function's `$default` route.
+
+A push the service reports gone (Web Push `404`/`410`, Expo `DeviceNotRegistered`) deletes that device row.
+
+### Asking for notifications
+
+Permission is requested only from a tap on the notification banner or the profile button. The banner (`client/expo/src/notification-prompt.tsx`) shows when no choice is recorded; "Not now" hides it for seven days. Each launch re-saves an already-allowed subscription without prompting. iPhone Safari only allows web notifications from the Home Screen, so the site ships a web app manifest and icons, and the banner gives Add to Home Screen steps in a normal tab. A notification tap opens the page the event is about (`public/sw.js`).
+
+- **Why:** Safari ignores a prompt that is not from a tap, and iOS shows its system dialog once, so a sentence of context first protects the one chance.
+- **Cost:** people who skip the banner never subscribe until they come back to it.
 
 Locally, chat and schedule `POST` to `/fanout/deliver`.
 
@@ -304,7 +332,7 @@ WAF on `/api/`, four rules, each a five-minute window, `429` with `{"error":"rat
 
 ### Least-privilege IAM
 
-Each area's role is limited to the DynamoDB prefixes it uses, via `dynamodb:LeadingKeys` (`infrastructure/lib/table-access.ts`). `places` has no table access. `schedule` can touch `TEAM#`, `REMINDERS`, and the `CHAT#` / `USER#` rows for a carpool chat. `fanout` reads those prefixes and may delete a `USER#` item after a socket is reported gone. Identity and Access Management cannot limit that delete to the `CONN#` sort key; the function only deletes the connection id from the failed post. `ForAllValues` stops a transaction from mixing in another prefix. Identity may call `AdminGetUser` and `AdminDeleteUser` (to replace an unconfirmed signup). CI uses GitHub OIDC (`AWS_ROLE_ARN` per environment). Deploy logs are redacted.
+Each area's role is limited to the DynamoDB prefixes it uses, via `dynamodb:LeadingKeys` (`infrastructure/lib/table-access.ts`). `places` has no table access. `schedule` can touch `TEAM#`, `REMINDERS`, and the `CHAT#` / `USER#` rows for a carpool chat. `fanout` reads those prefixes and may delete a `USER#` item after a socket or push device is reported gone. `payments` writes `TEAM#`, `USER#`, `STRIPE_ACCOUNT#`, and `PAYMENT_REMINDERS`; its webhook function writes only `TEAM#` and `STRIPE_ACCOUNT#`. Identity and Access Management cannot limit that delete to the `CONN#` sort key; the function only deletes the connection id from the failed post. `ForAllValues` stops a transaction from mixing in another prefix. Identity may call `AdminGetUser` and `AdminDeleteUser` (to replace an unconfirmed signup). CI uses GitHub OIDC (`AWS_ROLE_ARN` per environment). Deploy logs are redacted.
 
 Buckets block public access, use S3-managed encryption, and require TLS. Media CORS allows only the website origin. SQS uses SQS-managed encryption.
 
@@ -319,6 +347,8 @@ A function receives the parameter name and reads the value through `readSecret` 
 | Google Maps server key | places | `<prefix>/google-maps-api-key` |
 | VAPID private key | fanout | `<prefix>/vapid-private-key` |
 | Socket origin secret | socket authorizer | `<prefix>/socket-origin-verify` |
+| Stripe secret key | payments, payments-webhook | `<prefix>/stripe-secret-key` |
+| Stripe webhook signing secret | payments, payments-webhook | `<prefix>/stripe-webhook-secret` |
 
 - Each role has `ssm:GetParameter` on its own parameter. The origin secret is a random String set by hand. CloudFront needs the literal value, so it cannot be a SecureString. The site stack resolves it at deploy time for the header.
 - Values stay in memory for five minutes. A rotation is picked up without a deploy. A failed read is not cached.
