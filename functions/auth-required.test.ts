@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { handler as chat } from './chat/src/handler.js';
 import { handler as identity } from './identity/src/handler.js';
 import { handler as media } from './media/src/handler.js';
+import { handler as payments } from './payments/src/handler.js';
 import { handler as places } from './places/src/handler.js';
 import { handler as schedule } from './schedule/src/handler.js';
 import { handler as teams } from './teams/src/handler.js';
@@ -24,7 +25,7 @@ type HttpHandler = (event: APIGatewayProxyEventV2) => Promise<APIGatewayProxyStr
 /** One dispatched route: the handler function it reaches, and a request that reaches it. */
 type RouteCase = { route: string; method: Method; path: string; query?: string };
 
-const handlers = { identity, teams, schedule, chat, media, places } as Record<string, HttpHandler>;
+const handlers = { identity, teams, schedule, chat, media, places, payments } as Record<string, HttpHandler>;
 
 /** Routes that must answer `401` without a token. */
 const PROTECTED: Record<string, RouteCase[]> = {
@@ -100,6 +101,20 @@ const PROTECTED: Record<string, RouteCase[]> = {
     { route: 'handleReverse', method: 'GET', path: '/places/reverse', query: 'lat=43&lng=-70' },
     { route: 'handleMapPreview', method: 'GET', path: '/places/map', query: 'lat=43&lng=-70' },
   ],
+  payments: [
+    { route: 'handleGetAccount', method: 'GET', path: '/payments/teams/team-1/account' },
+    { route: 'handleCreateAccountLink', method: 'POST', path: '/payments/teams/team-1/account/link' },
+    { route: 'handleListCharges', method: 'GET', path: '/payments/teams/team-1/charges' },
+    { route: 'handleCreateCharge', method: 'POST', path: '/payments/teams/team-1/charges' },
+    { route: 'handleGetCharge', method: 'GET', path: '/payments/teams/team-1/charges/charge-1' },
+    { route: 'handleUpdateDue', method: 'PATCH', path: '/payments/teams/team-1/charges/charge-1/dues/user-1' },
+    {
+      route: 'handleCreateCheckout',
+      method: 'POST',
+      path: '/payments/teams/team-1/charges/charge-1/dues/user-1/checkout',
+    },
+    { route: 'handleListMyDues', method: 'GET', path: '/payments/me/dues' },
+  ],
 };
 
 /** Routes that run before a session exists. Listed so the inventory can tell them apart. */
@@ -118,6 +133,8 @@ const PUBLIC: Record<string, string[]> = {
   ],
   // Answer `404` unless the local media store is on. Covered below.
   media: ['handleLocalPutObject', 'handleLocalGetObject'],
+  // Stripe redirects the browser here and signs webhooks; neither carries a session.
+  payments: ['handlePaymentReturn', 'handleStripeWebhook'],
 };
 
 /**
