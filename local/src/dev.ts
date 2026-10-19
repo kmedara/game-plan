@@ -102,7 +102,7 @@ for (const area of AREAS) {
     AUTH_CALLBACK_URL:
       process.env.AUTH_CALLBACK_URL ?? 'http://localhost:4200/api/identity/oauth/callback',
   };
-  if (area === 'chat' || area === 'schedule' || area === 'teams' || area === 'payments') {
+  if (area === 'chat' || area === 'schedule' || area === 'teams' || area === 'payments' || area === 'billing') {
     env.FANOUT_DELIVER_URL =
       process.env.FANOUT_DELIVER_URL ??
       `http://127.0.0.1:${areaPort('fanout')}/fanout/deliver`;
@@ -134,6 +134,13 @@ for (const area of AREAS) {
     }
     env.PAYMENTS_RETURN_URL =
       process.env.PAYMENTS_RETURN_URL ?? 'http://localhost:4200/api/payments/return';
+  }
+  if (area === 'billing') {
+    for (const name of ['STRIPE_SECRET_KEY', 'STRIPE_BILLING_WEBHOOK_SECRET']) {
+      const value = process.env[name]?.trim();
+      if (value !== undefined && value.length > 0) env[name] = value;
+    }
+    env.BILLING_RETURN_URL = process.env.BILLING_RETURN_URL ?? 'http://localhost:4200/api/billing/return';
   }
   if (area === 'places') {
     const mapsKey = process.env.GOOGLE_MAPS_API_KEY?.trim();

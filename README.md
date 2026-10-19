@@ -32,6 +32,7 @@ To run the API on the host instead of Compose: `npm install`, `npm run db:up`, `
 | `/socket`   | socket   | 3107 |
 | `/fanout`   | fanout   | 3108 |
 | `/payments` | payments | 3109 |
+| `/billing`  | billing  | 3110 |
 
 The local WebSocket is `ws://127.0.0.1:3000/socket?ticket=`. The cloud URL is `wss://<site host>/api/socket`. Mint the ticket with `POST /identity/socket-ticket`.
 
@@ -45,7 +46,8 @@ The local WebSocket is `ws://127.0.0.1:3000/socket?ticket=`. The cloud URL is `w
 | teams    | 9230 | places  | 9234 |
 | schedule | 9231 | socket  | 9235 |
 | chat     | 9232 | fanout  | 9236 |
-| payments | 9237 | proxy   | 9238 |
+| payments | 9237 | billing | 9238 |
+| proxy    | 9239 |         |      |
 
 ## Sign in
 
