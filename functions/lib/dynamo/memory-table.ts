@@ -13,7 +13,8 @@
  * The table lives for one test file. Clear it in `beforeEach`.
  *
  * Queries return rows in sort-key order, as DynamoDB does. Conditional puts
- * honor `attribute_not_exists`, transactions check every condition before
+ * honor `attribute_not_exists` and `#name = :value` (optimistic version
+ * checks), transactions check every condition before
  * writing anything, and a `contains(#name, :value)` filter is applied. Global
  * secondary indexes are not modeled.
  */
@@ -31,7 +32,12 @@ type QueryInput = {
 };
 
 type TransactEntry = {
-  Put?: { Item: Row; ConditionExpression?: string };
+  Put?: {
+    Item: Row;
+    ConditionExpression?: string;
+    ExpressionAttributeNames?: Record<string, string>;
+    ExpressionAttributeValues?: Record<string, unknown>;
+  };
   Delete?: { Key: Row };
 };
 
@@ -49,6 +55,23 @@ const failed = (name: string): Error => {
 
 const mustNotExist = (condition: string | undefined): boolean =>
   condition?.includes('attribute_not_exists') === true;
+
+/**
+ * Checks a `#name = :value` condition against the stored row.
+ *
+ * @returns `false` when the condition names a field whose stored value differs.
+ */
+const equalityHolds = (
+  existing: Row | undefined,
+  condition: string | undefined,
+  names: Record<string, string> = {},
+  values: Record<string, unknown> = {},
+): boolean => {
+  const match = /(#\w+)\s*=\s*(:\w+)/.exec(condition ?? '');
+  if (match === null) return true;
+  if (existing === undefined) return false;
+  return existing[names[match[1] ?? ''] ?? ''] === values[match[2] ?? ''];
+};
 
 /** Rows in one partition whose sort key passes `match`, in sort-key order. */
 const partitionRows = (pk: string, match: (sk: string) => boolean): Row[] =>
@@ -89,10 +112,24 @@ const queryRows = (input: QueryInput): Row[] => {
 export const memoryAccess = {
   getItem: async <T extends Row>(pk: string, sk: string): Promise<T | undefined> =>
     store.get(itemKey(pk, sk)) as T | undefined,
-  putItem: async (item: Row, options: { conditionExpression?: string } = {}): Promise<void> => {
+  putItem: async (
+    item: Row,
+    options: {
+      conditionExpression?: string;
+      expressionAttributeNames?: Record<string, string>;
+      expressionAttributeValues?: Record<string, unknown>;
+    } = {},
+  ): Promise<void> => {
     if (mustNotExist(options.conditionExpression) && store.has(keyOf(item))) {
       throw failed('ConditionalCheckFailedException');
     }
+    const held = equalityHolds(
+      store.get(keyOf(item)),
+      options.conditionExpression,
+      options.expressionAttributeNames,
+      options.expressionAttributeValues,
+    );
+    if (!held) throw failed('ConditionalCheckFailedException');
     store.set(keyOf(item), item);
   },
   deleteItem: async (pk: string, sk: string): Promise<void> => {
@@ -100,7 +137,12 @@ export const memoryAccess = {
   },
   transactWrite: async (items: readonly TransactEntry[]): Promise<void> => {
     for (const entry of items) {
-      if (entry.Put !== undefined && mustNotExist(entry.Put.ConditionExpression) && store.has(keyOf(entry.Put.Item))) {
+      if (entry.Put === undefined) continue;
+      const { Item, ConditionExpression, ExpressionAttributeNames, ExpressionAttributeValues } = entry.Put;
+      if (mustNotExist(ConditionExpression) && store.has(keyOf(Item))) {
+        throw failed('TransactionCanceledException');
+      }
+      if (!equalityHolds(store.get(keyOf(Item)), ConditionExpression, ExpressionAttributeNames, ExpressionAttributeValues)) {
         throw failed('TransactionCanceledException');
       }
     }
