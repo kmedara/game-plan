@@ -619,6 +619,47 @@ describe('deliverFanoutJob', () => {
     );
   });
 
+  it('pushes dues reminders and payment receipts to the listed users only', async () => {
+    process.env.WEBSOCKET_CALLBACK_URL = 'https://ws.example.com';
+    queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
+      if (prefix === CONNECTION_SK_PREFIX) return [{ connectionId: `conn-${pk}` }];
+      if (prefix === DEVICE_SK_PREFIX) return [{ deviceId: 'phone', token: 'ExponentPushToken[abc]', platform: 'ios' }];
+      return [{ userId: 'roster-should-not-load' }];
+    });
+    managementSend.mockResolvedValue(undefined);
+
+    await deliverFanoutJob({
+      type: 'dues_reminder',
+      teamId: 't1',
+      chargeId: 'c1',
+      title: 'Spring dues',
+      amountCents: 4500,
+      currency: 'usd',
+      dueDate: '2030-03-10',
+      kind: 'upcoming',
+      userIds: ['parent'],
+    });
+    await deliverFanoutJob({
+      type: 'payment_received',
+      teamId: 't1',
+      chargeId: 'c1',
+      memberId: 'kid',
+      title: 'Spring dues',
+      amountCents: 4500,
+      currency: 'usd',
+      memberDisplayName: 'Mo',
+      userIds: ['coach'],
+    });
+
+    expect(queryBySkPrefix).not.toHaveBeenCalledWith(teamPk('t1'), TEAM_MEMBER_SK_PREFIX);
+    expect(sendDevicePushes).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Payment reminder', body: 'Spring dues · $45.00 is due 2030-03-10' }),
+    );
+    expect(sendDevicePushes).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Payment received', body: 'Mo paid $45.00 for Spring dues' }),
+    );
+  });
+
   it('delivers an event reminder without loading the roster', async () => {
     queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
       if (pk === userPk('u1') && prefix === CONNECTION_SK_PREFIX) return [];

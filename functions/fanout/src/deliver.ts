@@ -197,6 +197,16 @@ const recipientUserIds = async (job: FanoutJob): Promise<string[]> => {
 };
 
 /**
+ * Formats minor units as a currency amount for push text.
+ *
+ * @param cents - Amount in minor units.
+ * @param currency - ISO currency code, any case.
+ * @returns Text such as `$45.00`.
+ */
+const money = (cents: number, currency: string): string =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.toUpperCase() }).format(cents / 100);
+
+/**
  * Event body for a socket frame or push, without queue-only retry fields.
  *
  * @param job - The delivery job.
@@ -341,7 +351,11 @@ const publishPush = async (
         ? 'Join request'
         : job.type === 'event_reminder'
           ? 'Reminder'
-          : job.title;
+          : job.type === 'dues_reminder'
+            ? 'Payment reminder'
+            : job.type === 'payment_received'
+              ? 'Payment received'
+              : job.title;
   const moved =
     job.type === 'event_moved'
       ? job.change === 'both'
@@ -354,12 +368,22 @@ const publishPush = async (
     job.type === 'event_reminder'
       ? `${job.title} ${job.kind === 'hour' ? 'starts in an hour' : 'is tomorrow'}${job.location !== undefined ? ` · ${job.location}` : ''}`
       : undefined;
+  const dues =
+    job.type === 'dues_reminder'
+      ? `${job.title} · ${money(job.amountCents, job.currency)} ${
+          job.kind === 'upcoming' ? `is due ${job.dueDate}` : job.kind === 'due' ? 'is due today' : 'is overdue'
+        }`
+      : job.type === 'payment_received'
+        ? `${job.memberDisplayName ?? 'A member'} paid ${money(job.amountCents, job.currency)} for ${job.title}`
+        : undefined;
   const body =
     job.type === 'chat_message'
       ? job.body.slice(0, 180)
       : job.type === 'join_requested'
         ? `${job.requesterDisplayName} asked to join ${job.teamName}`
-        : (reminder ?? `${job.type === 'event_moved' ? job.title : 'Event'} ${moved ?? ''}`.trim());
+        : (dues ??
+          reminder ??
+          `${job.type === 'event_moved' ? job.title : 'Event'} ${moved ?? ''}`.trim());
 
   await sendDevicePushes({ title, body, data: clientPayload(job), devices });
   if (topicMissing || topicArn === undefined) return;
@@ -396,7 +420,11 @@ export const deliverFanoutJob = async (job: FanoutJob): Promise<void> => {
   const userIds = await recipientUserIds(job);
   const payload = clientPayload(job);
   const throttled: string[] = [];
-  const pushAnyway = job.type === 'join_requested' || job.type === 'event_reminder';
+  const pushAnyway =
+    job.type === 'join_requested' ||
+    job.type === 'event_reminder' ||
+    job.type === 'dues_reminder' ||
+    job.type === 'payment_received';
 
   for (const userId of userIds) {
     const connections = await queryBySkPrefix<ConnectionItem>(
