@@ -102,7 +102,7 @@ for (const area of AREAS) {
     AUTH_CALLBACK_URL:
       process.env.AUTH_CALLBACK_URL ?? 'http://localhost:4200/api/identity/oauth/callback',
   };
-  if (area === 'chat' || area === 'schedule' || area === 'teams') {
+  if (area === 'chat' || area === 'schedule' || area === 'teams' || area === 'payments') {
     env.FANOUT_DELIVER_URL =
       process.env.FANOUT_DELIVER_URL ??
       `http://127.0.0.1:${areaPort('fanout')}/fanout/deliver`;
@@ -127,6 +127,14 @@ for (const area of AREAS) {
     env.MEDIA_PUBLIC_ORIGIN =
       process.env.MEDIA_PUBLIC_ORIGIN ?? 'http://localhost:3000';
   }
+  if (area === 'payments') {
+    for (const name of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'PLATFORM_FEE_BPS']) {
+      const value = process.env[name]?.trim();
+      if (value !== undefined && value.length > 0) env[name] = value;
+    }
+    env.PAYMENTS_RETURN_URL =
+      process.env.PAYMENTS_RETURN_URL ?? 'http://localhost:4200/api/payments/return';
+  }
   if (area === 'places') {
     const mapsKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
     if (mapsKey !== undefined && mapsKey.length > 0) {
@@ -138,8 +146,12 @@ for (const area of AREAS) {
 start('local/src/proxy.ts', {}, PROXY_INSPECT_PORT);
 
 reminderTimer = setInterval(() => {
-  void import('../../functions/schedule/src/reminders.js')
-    .then((mod) => mod.runDueReminders(new Date()))
+  void Promise.all([
+    import('../../functions/schedule/src/reminders.js').then((mod) => mod.runDueReminders(new Date())),
+    import('../../functions/payments/src/reminders.js').then((mod) =>
+      mod.runDuePaymentReminders(new Date()),
+    ),
+  ])
     .catch((error: unknown) => {
       console.warn(
         JSON.stringify({

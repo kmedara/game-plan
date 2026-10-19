@@ -21,7 +21,7 @@ services:
       - dynamodb
     ports:
       - "3000:3000"
-      - "9229-9237:9229-9237"
+      - "9229-9238:9229-9238"
     environment:
       NODE_ENV: development
       DYNAMODB_ENDPOINT: http://dynamodb:8000
@@ -43,6 +43,9 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      PLATFORM_FEE_BPS: ${PLATFORM_FEE_BPS:-200}
     volumes:
       - media-data:/var/lib/gameplan/media
     develop:

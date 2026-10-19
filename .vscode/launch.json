@@ -130,11 +130,27 @@
       "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
     },
     {
-      "name": "Attach proxy",
+      "name": "Attach payments",
       "type": "node",
       "request": "attach",
       "address": "localhost",
       "port": 9237,
+      "restart": true,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/app",
+      "sourceMaps": true,
+      "sourceMapPathOverrides": {
+        "/app/*": "${workspaceFolder}/*",
+        "file:///app/*": "${workspaceFolder}/*"
+      },
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "Attach proxy",
+      "type": "node",
+      "request": "attach",
+      "address": "localhost",
+      "port": 9238,
       "restart": true,
       "localRoot": "${workspaceFolder}",
       "remoteRoot": "/app",
@@ -158,6 +174,7 @@
         "Attach places",
         "Attach socket",
         "Attach fanout",
+        "Attach payments",
         "Attach proxy"
       ],
       "stopAll": true
