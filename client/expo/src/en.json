@@ -404,7 +404,6 @@
     "noBillingTeams": "Only a team admin, or someone with the Manage billing permission, can change a team's plan.",
     "manageBilling": "Manage billing",
     "upgradeTeam": "Upgrade {{team}}",
-    "organizationSoon": "Organization sign-up is coming soon.",
     "teamPlan": "Plan",
     "renewsOn": "renews {{date}}",
     "endsOn": "ends {{date}}",
@@ -447,7 +446,8 @@
       "announcements": "Announcements to every team",
       "shared": "Shared practice library and waiver templates",
       "ai1000": "AI coach assistant, 1,000 requests a month"
-    }
+    },
+    "setUpOrganization": "Set up an organization"
   },
   "reminders": {
     "title": "Event reminders",
@@ -521,6 +521,50 @@
     "votes_other": "{{count}} votes",
     "closed_one": "Closed · {{count}} vote",
     "closed_other": "Closed · {{count}} votes"
+  },
+  "orgs": {
+    "title": "Organizations",
+    "hint": "One club or league over many teams. Admins manage every team, send announcements, and pay one bill.",
+    "none": "You do not run any organizations yet.",
+    "teamCount_one": "{{count}} team",
+    "teamCount_other": "{{count}} teams",
+    "create": "Create an organization",
+    "name": "Name",
+    "nameHint": "Seacoast Youth Soccer",
+    "teamsIncluded": "{{count}} of {{included}} included teams",
+    "extraTeams_one": "{{count}} extra team",
+    "extraTeams_other": "{{count}} extra teams",
+    "subscribeHint": "The organization plan covers up to 5 teams, and $5 a month for each team after that. Every team gets Premium features.",
+    "subscribe": "Subscribe",
+    "teams": "Teams",
+    "noTeams": "No teams yet. Invite one below.",
+    "invited": "Invited, waiting for the team to accept",
+    "memberCount_one": "{{count}} member",
+    "memberCount_other": "{{count}} members",
+    "withdraw": "Withdraw",
+    "removeTeam": "Remove",
+    "inviteTeam": "Invite a team",
+    "inviteHint": "Search by team name",
+    "inviteThis": "Invite {{name}}",
+    "inviteNote": "Someone who manages the team’s billing accepts the invitation on the team’s page.",
+    "admins": "Admins",
+    "owner": "owner",
+    "removeAdmin": "Remove",
+    "adminEmail": "Email of an adult with a GamePlan account",
+    "addAdmin": "Add admin",
+    "announce": "Announcement",
+    "announceNeedsPlan": "Announcements to every team need the organization plan.",
+    "announceMessage": "Message",
+    "announceSend": "Send to every team",
+    "announceSent_one": "Sent to {{count}} team.",
+    "announceSent_other": "Sent to {{count}} teams.",
+    "partOf": "Part of {{name}}",
+    "leave": "Leave this organization",
+    "invitedBy": "{{name}} invited this team to join.",
+    "acceptNote": "Its admins will be able to manage this team, and the team will use the organization’s plan.",
+    "accept": "Join",
+    "decline": "Decline",
+    "askBillingManager": "Someone who manages this team’s billing can accept."
   },
   "errors": {
     "common": {
@@ -630,6 +674,15 @@
       "invalid": "Check the question and options.",
       "questionRequired": "Add a question.",
       "twoOptions": "Add at least two options."
+    },
+    "orgs": {
+      "userNotFound": "No GamePlan account uses that email.",
+      "adminMustBeAdult": "Admins must be adults.",
+      "ownerCannotLeave": "The owner cannot be removed.",
+      "otherOrg": "That team already belongs to another organization.",
+      "alreadyIn": "That team is already in this organization.",
+      "planRequired": "This needs the organization plan.",
+      "cancelTeamPlanFirst": "This team pays for its own plan. Cancel it in Manage billing first, so you do not pay twice."
     }
   }
 }

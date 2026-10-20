@@ -14,6 +14,10 @@ import type {
   AcceptedInvite,
   ApprovedJoinRequest,
   BillingInterval,
+  OrgDetail,
+  OrgList,
+  OrgSummary,
+  TeamOrgStatus,
   CalendarFeed,
   ClaimSignupBody,
   CreatePollBody,
@@ -549,6 +553,58 @@ export class ApiClient {
   /** Where Stripe should send this device back after a hosted page. */
   private get paymentReturn(): { returnTo: 'app' | 'web' } {
     return { returnTo: this.native ? 'app' : 'web' };
+  }
+
+  async listOrgs(): Promise<OrgList['orgs']> {
+    return (await this.request<OrgList>('GET', '/orgs')).orgs;
+  }
+
+  async createOrg(name: string): Promise<OrgSummary> {
+    return this.request('POST', '/orgs', { name });
+  }
+
+  async getOrg(orgId: string): Promise<OrgDetail> {
+    return this.request('GET', `/orgs/${orgId}`);
+  }
+
+  async renameOrg(orgId: string, name: string): Promise<OrgSummary> {
+    return this.request('PATCH', `/orgs/${orgId}`, { name });
+  }
+
+  async addOrgAdmin(orgId: string, email: string): Promise<OrgDetail> {
+    return this.request('POST', `/orgs/${orgId}/admins`, { email });
+  }
+
+  async removeOrgAdmin(orgId: string, adminId: string): Promise<void> {
+    await this.request('DELETE', `/orgs/${orgId}/admins/${adminId}`);
+  }
+
+  async inviteOrgTeam(orgId: string, teamId: string): Promise<OrgDetail> {
+    return this.request('POST', `/orgs/${orgId}/teams/${teamId}`);
+  }
+
+  async removeOrgTeam(orgId: string, teamId: string): Promise<void> {
+    await this.request('DELETE', `/orgs/${orgId}/teams/${teamId}`);
+  }
+
+  async getTeamOrg(teamId: string): Promise<TeamOrgStatus> {
+    return this.request('GET', `/orgs/teams/${teamId}`);
+  }
+
+  async answerOrgInvite(orgId: string, teamId: string, accept: boolean): Promise<TeamOrgStatus> {
+    return this.request('POST', `/orgs/${orgId}/teams/${teamId}/${accept ? 'accept' : 'decline'}`);
+  }
+
+  async announceToOrg(orgId: string, body: string): Promise<{ sent: number }> {
+    return this.request('POST', `/orgs/${orgId}/announcements`, { body });
+  }
+
+  async createOrgCheckout(orgId: string, interval: BillingInterval): Promise<PaymentRedirect> {
+    return this.request('POST', `/billing/orgs/${orgId}/checkout`, { interval, ...this.paymentReturn });
+  }
+
+  async createOrgPortal(orgId: string): Promise<PaymentRedirect> {
+    return this.request('POST', `/billing/orgs/${orgId}/portal`, this.paymentReturn);
   }
 
   async getTeamBilling(teamId: string): Promise<TeamBilling> {

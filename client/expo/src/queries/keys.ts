@@ -42,6 +42,9 @@ export const queryKeys = {
   charge: (teamId: string, chargeId: string) => ['charge', teamId, chargeId] as const,
   myDues: ['myDues'] as const,
   teamBilling: (teamId: string) => ['teamBilling', teamId] as const,
+  orgs: ['orgs'] as const,
+  org: (orgId: string) => ['org', orgId] as const,
+  teamOrg: (teamId: string) => ['teamOrg', teamId] as const,
 };
 
 /** Mutation keys for writes that may wait for the network and resume after a relaunch. */

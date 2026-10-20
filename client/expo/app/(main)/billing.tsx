@@ -6,7 +6,10 @@
 import { Redirect, useLocalSearchParams } from 'expo-router';
 
 export default function BillingReturn() {
-  const { teamId } = useLocalSearchParams<{ teamId?: string }>();
+  const { teamId, orgId } = useLocalSearchParams<{ teamId?: string; orgId?: string }>();
+  if (orgId !== undefined && orgId.length > 0) {
+    return <Redirect href={{ pathname: '/orgs/[orgId]', params: { orgId } }} />;
+  }
   if (teamId !== undefined && teamId.length > 0) {
     return <Redirect href={{ pathname: '/teams/[teamId]', params: { teamId } }} />;
   }

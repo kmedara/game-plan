@@ -44,7 +44,8 @@ const titles: Record<string, string> = {
 const parentPath = (pathname: string): string => {
   const teamPage = /^\/teams\/([^/]+)\/(members\/[^/]+|payments)$/.exec(pathname);
   if (teamPage !== null) return `/teams/${teamPage[1]}`;
-  if (pathname === '/dues') return '/profile';
+  if (pathname === '/dues' || pathname === '/orgs') return '/profile';
+  if (pathname.startsWith('/orgs/')) return '/orgs';
   return Object.keys(titles).find((path) => pathname.startsWith(`${path}/`)) ?? '/teams';
 };
 

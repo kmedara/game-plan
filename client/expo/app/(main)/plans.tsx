@@ -3,7 +3,7 @@
  */
 
 import { useQueryClient } from '@tanstack/react-query';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +16,7 @@ import { useApp } from '@/src/state';
 import { BILLING_RETURN_LINK, openStripePage } from '@/src/stripe-page';
 import { useTeamsWithPermission } from '@/src/team-access';
 import { colors } from '@/src/theme';
-import { SubmitButton } from '@/src/ui';
+import { Button, SubmitButton } from '@/src/ui';
 
 /** Error sentences for plan purchases. */
 const BILLING_ERRORS = {
@@ -35,6 +35,7 @@ const TIERS: { tier: PlanTier; features: string[] }[] = [
 export default function PlansScreen() {
   const { t } = useTranslation();
   const { api } = useApp();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ teamId?: string }>();
   const billable = useTeamsWithPermission('manage_billing');
@@ -100,7 +101,11 @@ export default function PlansScreen() {
               • {t(`plans.feature.${feature}`)}
             </Text>
           ))}
-          {tier === 'organization' ? <Text className="mt-1 text-muted">{t('plans.organizationSoon')}</Text> : null}
+          {tier === 'organization' && api.user?.accountKind === 'adult' ? (
+            <View className="mt-2">
+              <Button label={t('plans.setUpOrganization')} tone="secondary" onPress={() => router.push('/orgs')} />
+            </View>
+          ) : null}
         </View>
       ))}
 

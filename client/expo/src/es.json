@@ -406,7 +406,6 @@
     "noBillingTeams": "Solo un administrador del equipo, o alguien con el permiso Administrar la facturación, puede cambiar el plan.",
     "manageBilling": "Administrar la facturación",
     "upgradeTeam": "Mejorar {{team}}",
-    "organizationSoon": "El registro de organizaciones llegará pronto.",
     "teamPlan": "Plan",
     "renewsOn": "se renueva el {{date}}",
     "endsOn": "termina el {{date}}",
@@ -449,7 +448,8 @@
       "announcements": "Anuncios para todos los equipos",
       "shared": "Biblioteca de prácticas y plantillas de exención compartidas",
       "ai1000": "Asistente de IA para entrenadores, 1,000 consultas al mes"
-    }
+    },
+    "setUpOrganization": "Crear una organización"
   },
   "reminders": {
     "title": "Recordatorios de eventos",
@@ -523,6 +523,50 @@
     "votes_other": "{{count}} votos",
     "closed_one": "Cerrada · {{count}} voto",
     "closed_other": "Cerrada · {{count}} votos"
+  },
+  "orgs": {
+    "title": "Organizaciones",
+    "hint": "Un club o liga con muchos equipos. Los administradores gestionan todos los equipos, envían anuncios y pagan una sola factura.",
+    "none": "Todavía no diriges ninguna organización.",
+    "teamCount_one": "{{count}} equipo",
+    "teamCount_other": "{{count}} equipos",
+    "create": "Crear una organización",
+    "name": "Nombre",
+    "nameHint": "Fútbol Juvenil Seacoast",
+    "teamsIncluded": "{{count}} de {{included}} equipos incluidos",
+    "extraTeams_one": "{{count}} equipo adicional",
+    "extraTeams_other": "{{count}} equipos adicionales",
+    "subscribeHint": "El plan de organización cubre hasta 5 equipos, y $5 al mes por cada equipo adicional. Todos los equipos obtienen las funciones Premium.",
+    "subscribe": "Suscribirse",
+    "teams": "Equipos",
+    "noTeams": "Todavía no hay equipos. Invita uno abajo.",
+    "invited": "Invitado, esperando que el equipo acepte",
+    "memberCount_one": "{{count}} miembro",
+    "memberCount_other": "{{count}} miembros",
+    "withdraw": "Retirar",
+    "removeTeam": "Quitar",
+    "inviteTeam": "Invitar un equipo",
+    "inviteHint": "Busca por nombre de equipo",
+    "inviteThis": "Invitar a {{name}}",
+    "inviteNote": "Quien administra la facturación del equipo acepta la invitación en la página del equipo.",
+    "admins": "Administradores",
+    "owner": "dueño",
+    "removeAdmin": "Quitar",
+    "adminEmail": "Correo de un adulto con cuenta de GamePlan",
+    "addAdmin": "Agregar administrador",
+    "announce": "Anuncio",
+    "announceNeedsPlan": "Los anuncios a todos los equipos necesitan el plan de organización.",
+    "announceMessage": "Mensaje",
+    "announceSend": "Enviar a todos los equipos",
+    "announceSent_one": "Enviado a {{count}} equipo.",
+    "announceSent_other": "Enviado a {{count}} equipos.",
+    "partOf": "Parte de {{name}}",
+    "leave": "Salir de esta organización",
+    "invitedBy": "{{name}} invitó a este equipo a unirse.",
+    "acceptNote": "Sus administradores podrán gestionar este equipo, y el equipo usará el plan de la organización.",
+    "accept": "Unirse",
+    "decline": "Rechazar",
+    "askBillingManager": "Quien administra la facturación de este equipo puede aceptar."
   },
   "errors": {
     "common": {
@@ -632,6 +676,15 @@
       "invalid": "Revisa la pregunta y las opciones.",
       "questionRequired": "Agrega una pregunta.",
       "twoOptions": "Agrega al menos dos opciones."
+    },
+    "orgs": {
+      "userNotFound": "Ninguna cuenta de GamePlan usa ese correo.",
+      "adminMustBeAdult": "Los administradores deben ser adultos.",
+      "ownerCannotLeave": "No se puede quitar al dueño.",
+      "otherOrg": "Ese equipo ya pertenece a otra organización.",
+      "alreadyIn": "Ese equipo ya está en esta organización.",
+      "planRequired": "Esto necesita el plan de organización.",
+      "cancelTeamPlanFirst": "Este equipo paga su propio plan. Cancélalo primero en Administrar la facturación para no pagar dos veces."
     }
   }
 }

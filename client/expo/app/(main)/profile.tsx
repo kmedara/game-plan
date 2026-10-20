@@ -168,6 +168,11 @@ export default function ProfileScreen() {
           />
         </View>
       ) : null}
+      {profile?.accountKind === 'adult' ? (
+        <View className="mt-2">
+          <Button label={t('orgs.title')} tone="secondary" onPress={() => router.push('/orgs')} />
+        </View>
+      ) : null}
       <Text className="mb-2 mt-4 text-lg font-semibold text-ink">{t('profile.positions')}</Text>
       {teams.map((team) => {
         const positions = team.positions ?? [];

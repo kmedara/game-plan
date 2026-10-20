@@ -22,6 +22,7 @@ import { membersQuery, permissionsQuery, teamQuery, updateTeamMutation } from '@
 import { useApp, useBrandTeam } from '@/src/state';
 import { TeamInvites } from '@/src/team-invites';
 import { TeamPermissions } from '@/src/team-permissions';
+import { TeamOrgSection } from '@/src/team-org';
 import { TeamPlanSection } from '@/src/team-plan';
 import { TeamRoster } from '@/src/team-roster';
 import { TeamColors } from '@/src/team-colors';
@@ -223,6 +224,7 @@ export default function TeamAdminScreen() {
             </>
           ) : null}
           <TeamPlanSection teamId={id} plan={teamLoaded.data?.plan} canManage={can('manage_billing')} />
+          <TeamOrgSection teamId={id} canManage={can('manage_billing')} />
           {can('manage_payments') ? (
             <Button
               label={t('payments.title')}
