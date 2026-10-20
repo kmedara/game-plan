@@ -82,6 +82,8 @@ describe('site stack', () => {
       'PerAnonymousIp',
       'SocketConnectIp',
       'PerIpFlood',
+      'PerCalendarFeed',
+      'CalendarFeedIp',
     ]);
     expect(new Set(rules.map((rule) => rule.Priority)).size).toBe(rules.length);
 
@@ -91,6 +93,11 @@ describe('site stack', () => {
     const anonymousRule = JSON.stringify(rules.find((rule) => rule.Name === 'PerAnonymousIp')?.Statement);
     expect(anonymousRule).toContain('"SearchString":"/api/socket"');
     expect(anonymousRule).toContain('NotStatement');
+    expect(anonymousRule).toContain('"SearchString":"/api/schedule/feeds/"');
+    const feedRule = JSON.stringify(rules.find((rule) => rule.Name === 'PerCalendarFeed')?.Statement);
+    expect(feedRule).toContain('"UriPath"');
+    const floodRule = JSON.stringify(rules.find((rule) => rule.Name === 'PerIpFlood')?.Statement);
+    expect(floodRule).toContain('"SearchString":"/api/schedule/feeds/"');
   });
 
   it('sends a Content-Security-Policy that allows the media bucket and same-origin socket', () => {

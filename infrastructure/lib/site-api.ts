@@ -28,6 +28,9 @@ export const VIEWER_AUTHORIZATION_HEADER = 'x-viewer-authorization';
 /** Viewer path for WebSocket connects on the website host. */
 export const SITE_SOCKET_PATH = `${SITE_API_PREFIX}/socket`;
 
+/** Public calendar feed URLs (`/api/schedule/feeds/<token>.ics`), limited apart from other anonymous calls. */
+export const SITE_FEED_PREFIX = `${SITE_API_PREFIX}/schedule/feeds/`;
+
 /**
  * Header CloudFront adds to each socket connect.
  *
@@ -141,7 +144,14 @@ export const createSiteApiEdge = (scope: Construct, stageName: string): SiteApiE
   });
 
   return {
-    webAcl: rateLimitedWebAcl(scope, 'SiteApiWebAcl', 'gameplan-site-api', `${SITE_API_PREFIX}/`, SITE_SOCKET_PATH),
+    webAcl: rateLimitedWebAcl(
+      scope,
+      'SiteApiWebAcl',
+      'gameplan-site-api',
+      `${SITE_API_PREFIX}/`,
+      SITE_SOCKET_PATH,
+      SITE_FEED_PREFIX,
+    ),
     spaRewrite,
     apiRewrite,
     socketRewrite,

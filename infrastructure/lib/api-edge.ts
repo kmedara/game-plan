@@ -33,6 +33,23 @@ const SOCKET_CONNECT_IP_LIMIT = 1000;
  */
 const IP_FLOOD_LIMIT = 4000;
 
+/**
+ * Fetches of one calendar feed URL allowed in {@link WINDOW}.
+ *
+ * Calendar apps poll a subscribed feed every few hours, so this is far above
+ * normal use and only stops one leaked link from being hammered.
+ */
+const FEED_URL_LIMIT = 30;
+
+/**
+ * Calendar feed fetches one IP address may make in {@link WINDOW}.
+ *
+ * Google Calendar and Outlook fetch every subscriber's feed from a few shared
+ * addresses, so feeds are kept out of the anonymous and flood limits and get
+ * this much higher one instead.
+ */
+const FEED_IP_LIMIT = 20000;
+
 /** Rate-rule window. WAF counts requests inside this span. */
 const WINDOW = cdk.Duration.minutes(5);
 
@@ -136,16 +153,43 @@ const allOf = (
  *   distribution uses `/api/` so static files stay outside the limits.
  * @param socketPath - When set, WebSocket connects on this exact path get their
  *   own per-IP limit instead of the anonymous one.
+ * @param feedPrefix - When set, calendar feed fetches under this prefix get a
+ *   per-URL limit and a high per-IP limit instead of the anonymous and flood ones.
  * @returns WebACL rules in priority order.
  */
 export const apiRateLimitRules = (
   pathPrefix?: string,
   socketPath?: string,
+  feedPrefix?: string,
 ): wafv2.CfnWebACL.RuleProperty[] => {
   const prefix = pathPrefix === undefined ? undefined : uriStartsWith(pathPrefix);
   const socket = socketPath === undefined ? undefined : uriIs(socketPath);
+  const feed = feedPrefix === undefined ? undefined : uriStartsWith(feedPrefix);
   const anonymous = { notStatement: { statement: hasAuthorization() } };
   const notSocket = socket === undefined ? undefined : { notStatement: { statement: socket } };
+  const notFeed = feed === undefined ? undefined : { notStatement: { statement: feed } };
+  const feedRules =
+    feed === undefined
+      ? []
+      : [
+          rateRule('PerCalendarFeed', 4, {
+            rateBasedStatement: {
+              limit: FEED_URL_LIMIT,
+              evaluationWindowSec: WINDOW.toSeconds(),
+              aggregateKeyType: 'CUSTOM_KEYS',
+              customKeys: [{ uriPath: { textTransformations: [{ priority: 0, type: 'NONE' }] } }],
+              scopeDownStatement: feed,
+            },
+          }),
+          rateRule('CalendarFeedIp', 5, {
+            rateBasedStatement: {
+              limit: FEED_IP_LIMIT,
+              evaluationWindowSec: WINDOW.toSeconds(),
+              aggregateKeyType: 'IP',
+              scopeDownStatement: feed,
+            },
+          }),
+        ];
   const socketRules =
     socket === undefined
       ? []
@@ -181,7 +225,7 @@ export const apiRateLimitRules = (
         limit: ANONYMOUS_IP_LIMIT,
         evaluationWindowSec: WINDOW.toSeconds(),
         aggregateKeyType: 'IP',
-        scopeDownStatement: allOf([anonymous, prefix, notSocket]),
+        scopeDownStatement: allOf([anonymous, prefix, notSocket, notFeed]),
       },
     }),
     ...socketRules,
@@ -190,9 +234,10 @@ export const apiRateLimitRules = (
         limit: IP_FLOOD_LIMIT,
         evaluationWindowSec: WINDOW.toSeconds(),
         aggregateKeyType: 'IP',
-        ...(prefix === undefined ? {} : { scopeDownStatement: prefix }),
+        ...(allOf([prefix, notFeed]) === undefined ? {} : { scopeDownStatement: allOf([prefix, notFeed]) }),
       },
     }),
+    ...feedRules,
   ];
 };
 
@@ -204,6 +249,7 @@ export const apiRateLimitRules = (
  * @param name - The WebACL name and the top-level metric name.
  * @param pathPrefix - Optional viewer path prefix. See {@link apiRateLimitRules}.
  * @param socketPath - Optional WebSocket connect path. See {@link apiRateLimitRules}.
+ * @param feedPrefix - Optional calendar feed path prefix. See {@link apiRateLimitRules}.
  * @returns The WebACL.
  */
 export const rateLimitedWebAcl = (
@@ -212,6 +258,7 @@ export const rateLimitedWebAcl = (
   name: string,
   pathPrefix?: string,
   socketPath?: string,
+  feedPrefix?: string,
 ): wafv2.CfnWebACL =>
   new wafv2.CfnWebACL(scope, id, {
     name,
@@ -228,5 +275,5 @@ export const rateLimitedWebAcl = (
       metricName: name,
       sampledRequestsEnabled: true,
     },
-    rules: apiRateLimitRules(pathPrefix, socketPath),
+    rules: apiRateLimitRules(pathPrefix, socketPath, feedPrefix),
   });
