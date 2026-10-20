@@ -4,7 +4,7 @@
 
 import type { APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import { mapPlanError } from '../../../lib/entitlements.js';
-import { badRequest, conflict, type ErrorMappingFn, forbidden, notFound, unauthorized } from '../../../lib/http.js';
+import { badRequest, conflict, type ErrorMappingFn, forbidden, json, notFound, unauthorized } from '../../../lib/http.js';
 import { withMappedErrors } from '../../../lib/pipeline.js';
 
 /**
@@ -39,8 +39,9 @@ export const mapOrgsError: ErrorMappingFn = (error: unknown): APIGatewayProxyStr
       return badRequest(error.message);
     case 'already_in_organization':
     case 'team_in_another_organization':
-    case 'cancel_team_plan_first':
       return conflict(error.message);
+    case 'billing_not_configured':
+      return json(503, { error: 'billing_not_configured' });
     default:
       if (error.name === 'ConditionalCheckFailedException' || error.name === 'TransactionCanceledException') {
         return conflict('condition_failed');

@@ -45,8 +45,8 @@ export const handleAcceptOrgInvite = route(
   requireMembership(),
   requirePermission('manage_billing'),
   async ({ orgId, teamId }) => {
-    await acceptOrgInvite({ orgId, teamId });
-    return json(200, await teamOrgStatus(teamId));
+    const { refundedCents } = await acceptOrgInvite({ orgId, teamId });
+    return json(200, { ...(await teamOrgStatus(teamId)), refundedCents });
   },
 );
 

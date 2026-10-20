@@ -78,6 +78,8 @@ export const teamOrgStatusSchema = z
   .object({
     org: z.object({ orgId: z.string().min(1), name: z.string().min(1) }).strict().optional(),
     invites: z.array(z.object({ orgId: z.string().min(1), name: z.string().min(1) }).strict()),
+    /** On accepting: what was refunded from the team's own cancelled plan, in minor units. */
+    refundedCents: z.number().int().min(0).optional(),
   })
   .strict();
 

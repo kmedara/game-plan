@@ -1490,6 +1490,7 @@ export type TeamOrgStatus = {
     orgId: string;
     name: string;
   }[];
+  refundedCents?: number;
 }
 
 export type TeamPermission =

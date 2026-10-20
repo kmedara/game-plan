@@ -1,6 +1,7 @@
 /**
- * Organizations: ownership, admins, teams joining and leaving, admin access to
- * member teams, plan copying, extra-team billing, and announcements.
+ * Organizations: ownership, admins, teams joining and leaving (a paying team's
+ * own plan is cancelled with a refund), admin access to member teams, plan
+ * copying, extra-team billing, and announcements.
  */
 
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
@@ -23,9 +24,10 @@ import {
   billingSk,
 } from '../../lib/dynamo/keys.js';
 
-const { fanoutJobs, seatCalls } = vi.hoisted(() => ({
+const { fanoutJobs, seatCalls, cancelled } = vi.hoisted(() => ({
   fanoutJobs: [] as Array<Record<string, unknown>>,
   seatCalls: [] as Array<[string, number]>,
+  cancelled: [] as Array<{ customerId: string; subscriptionId: string }>,
 }));
 
 vi.mock('../../lib/dynamo/access.js', async () => (await import('../../lib/dynamo/memory-table.js')).memoryAccess);
@@ -49,6 +51,7 @@ vi.mock('../../lib/auth/index.js', async (importOriginal) => {
 const { handler: orgs } = await import('./handler.js');
 const { handler: teams } = await import('../../teams/src/handler.js');
 const { setSeatUpdater } = await import('../../lib/org-seats.js');
+const { setSubscriptionCanceller } = await import('../../lib/team-subscription.js');
 const { loadTeamEntitlements } = await import('../../lib/entitlements.js');
 const { applyBillingEvent } = await import('../../billing/src/webhook.js');
 
@@ -119,11 +122,19 @@ describe('organizations', () => {
     setSeatUpdater(async (subscriptionId, extra) => {
       seatCalls.push([subscriptionId, extra]);
     });
+    cancelled.length = 0;
+    setSubscriptionCanceller(async (input) => {
+      cancelled.push(input);
+      return { refundedCents: 412 };
+    });
     profile('owner', 'adult');
     profile('helper', 'adult');
     profile('teen', 'minor');
   });
-  afterEach(() => setSeatUpdater(undefined));
+  afterEach(() => {
+    setSeatUpdater(undefined);
+    setSubscriptionCanceller(undefined);
+  });
 
   it('lets adults create one, the owner add adult admins, and nobody remove the owner', async () => {
     expect((await call(orgs, 'POST', '/orgs', 'teen', { name: 'Kids Club' })).body).toEqual({ error: 'minor_cannot_own_organization' });
@@ -180,14 +191,44 @@ describe('organizations', () => {
     expect((await loadTeamEntitlements('hawks')).tier).toBe('free');
   });
 
-  it('refuses a team still paying for its own plan', async () => {
+  it('cancels a paying team’s own plan with a refund on joining, and leaves it on free after leaving', async () => {
     seedTeam('hawks');
     memoryTable.put({ [TABLE_PK]: teamPk('hawks'), [TABLE_SK]: planSk(), teamId: 'hawks', tier: 'premium', status: 'active' });
+    memoryTable.put({ [TABLE_PK]: teamPk('hawks'), [TABLE_SK]: billingSk(), teamId: 'hawks', customerId: 'cus_h', subscriptionId: 'sub_h' });
+    const orgId = await createOrg();
+    subscribe(orgId);
+    await call(orgs, 'POST', `/orgs/${orgId}/teams/hawks`, 'owner');
+
+    const accepted = await call(orgs, 'POST', `/orgs/${orgId}/teams/hawks/accept`, 'hawks-admin');
+    expect(accepted.body).toMatchObject({ org: { orgId }, refundedCents: 412 });
+    expect(cancelled).toEqual([{ customerId: 'cus_h', subscriptionId: 'sub_h' }]);
+    expect((await loadTeamEntitlements('hawks')).tier).toBe('organization');
+
+    await call(orgs, 'DELETE', `/orgs/${orgId}/teams/hawks`, 'hawks-admin');
+    expect((await loadTeamEntitlements('hawks')).tier).toBe('free');
+  });
+
+  it('keeps the team out when cancelling its plan fails, and does not cancel a free team', async () => {
+    seedTeam('hawks');
+    seedTeam('owls');
+    memoryTable.put({ [TABLE_PK]: teamPk('hawks'), [TABLE_SK]: planSk(), teamId: 'hawks', tier: 'premium', status: 'active' });
+    memoryTable.put({ [TABLE_PK]: teamPk('hawks'), [TABLE_SK]: billingSk(), teamId: 'hawks', customerId: 'cus_h', subscriptionId: 'sub_h' });
     const orgId = await createOrg();
     await call(orgs, 'POST', `/orgs/${orgId}/teams/hawks`, 'owner');
-    expect((await call(orgs, 'POST', `/orgs/${orgId}/teams/hawks/accept`, 'hawks-admin')).body).toEqual({
-      error: 'cancel_team_plan_first',
+    setSubscriptionCanceller(async () => {
+      throw new Error('billing_not_configured');
     });
+    expect((await call(orgs, 'POST', `/orgs/${orgId}/teams/hawks/accept`, 'hawks-admin')).status).toBe(503);
+    expect((await call(orgs, 'GET', '/orgs/teams/hawks', 'hawks-admin')).body).toMatchObject({ invites: [{ orgId }] });
+    expect((await loadTeamEntitlements('hawks')).tier).toBe('premium');
+
+    cancelled.length = 0;
+    setSubscriptionCanceller(async (input) => {
+      cancelled.push(input);
+      return { refundedCents: 0 };
+    });
+    await join(orgId, 'owls');
+    expect(cancelled).toEqual([]);
   });
 
   it('bills each team past five as an extra team', async () => {

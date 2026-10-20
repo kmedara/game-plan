@@ -561,12 +561,13 @@
     "announceSent_one": "Enviado a {{count}} equipo.",
     "announceSent_other": "Enviado a {{count}} equipos.",
     "partOf": "Parte de {{name}}",
-    "leave": "Salir de esta organización",
+    "leave": "Salir de esta organización (el equipo vuelve al plan gratuito)",
     "invitedBy": "{{name}} invitó a este equipo a unirse.",
-    "acceptNote": "Sus administradores podrán gestionar este equipo, y el equipo usará el plan de la organización.",
+    "acceptNote": "Sus administradores podrán gestionar este equipo, y el equipo usará el plan de la organización. Si el equipo paga su propio plan, se cancela y el tiempo no usado se reembolsa a la tarjeta.",
     "accept": "Unirse",
     "decline": "Rechazar",
-    "askBillingManager": "Quien administra la facturación de este equipo puede aceptar."
+    "askBillingManager": "Quien administra la facturación de este equipo puede aceptar.",
+    "refunded": "El plan propio del equipo se canceló y se reembolsaron {{amount}} a la tarjeta."
   },
   "errors": {
     "common": {
@@ -683,8 +684,7 @@
       "ownerCannotLeave": "No se puede quitar al dueño.",
       "otherOrg": "Ese equipo ya pertenece a otra organización.",
       "alreadyIn": "Ese equipo ya está en esta organización.",
-      "planRequired": "Esto necesita el plan de organización.",
-      "cancelTeamPlanFirst": "Este equipo paga su propio plan. Cancélalo primero en Administrar la facturación para no pagar dos veces."
+      "planRequired": "Esto necesita el plan de organización."
     }
   }
 }

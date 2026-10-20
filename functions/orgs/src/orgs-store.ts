@@ -10,7 +10,9 @@
  * - `USER#<userId>` / `ORG#<orgId>` — organizations a user administers.
  *
  * A team joins only when someone who manages its billing accepts, because it
- * hands the organization's admins `team_admin` rights over the team.
+ * hands the organization's admins `team_admin` rights over the team. A team
+ * paying for its own plan has it cancelled on joining, with the unused time
+ * refunded; leaving puts it on the free plan.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -45,6 +47,7 @@ import {
 import { loadTeamPlan } from '../../lib/entitlements.js';
 import { TABLE_NAME } from '../../lib/names.js';
 import { extraTeamsFor, syncOrgSeats } from '../../lib/org-seats.js';
+import { cancelTeamSubscription } from '../../lib/team-subscription.js';
 import {
   clearOrgPlanFromTeam,
   copyOrgPlanToTeam,
@@ -296,17 +299,23 @@ export const teamOrgStatus = async (teamId: string): Promise<TeamOrgStatus> => {
  * Joins a team to the organization that invited it. The route checks the
  * caller manages the team's billing.
  *
- * A team paying for its own plan must cancel it first, so nobody pays twice.
+ * A team paying for its own plan has that subscription cancelled first, with
+ * the unused time refunded to the card, so nobody pays twice. If Stripe fails
+ * the team does not join, and accepting again retries.
  *
  * @param input - The organization and team.
- * @throws `invite_not_found`, `team_in_another_organization`, or `cancel_team_plan_first`.
+ * @returns What was refunded, in minor units.
+ * @throws `invite_not_found` or `team_in_another_organization`.
  */
-export const acceptOrgInvite = async (input: { orgId: string; teamId: string }): Promise<void> => {
+export const acceptOrgInvite = async (input: { orgId: string; teamId: string }): Promise<{ refundedCents: number }> => {
   const invite = await getItem(teamPk(input.teamId), teamOrgInviteSk(input.orgId));
   if (invite === undefined) throw new Error('invite_not_found');
   if ((await orgIdOfTeam(input.teamId)) !== undefined) throw new Error('team_in_another_organization');
   const plan = await loadTeamPlan(input.teamId);
-  if (plan.orgId === undefined && effectivePlanTier(plan) !== 'free') throw new Error('cancel_team_plan_first');
+  const { refundedCents } =
+    plan.orgId === undefined && plan.tier !== 'free' && plan.status !== 'canceled'
+      ? await cancelTeamSubscription(input.teamId)
+      : { refundedCents: 0 };
   const addedAt = new Date().toISOString();
   await transactWrite([
     put({ [TABLE_PK]: orgPk(input.orgId), [TABLE_SK]: orgTeamSk(input.teamId), orgId: input.orgId, teamId: input.teamId, pending: false, addedAt }),
@@ -315,6 +324,7 @@ export const acceptOrgInvite = async (input: { orgId: string; teamId: string }):
   ]);
   await copyOrgPlanToTeam(input.orgId, input.teamId);
   await syncOrgSeats(input.orgId);
+  return { refundedCents };
 };
 
 /**

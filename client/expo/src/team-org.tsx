@@ -8,6 +8,8 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { errorMessageKey } from './errors';
+import { appLocale } from './i18n';
+import { formatMoney } from './money';
 import { queryKeys } from './queries/keys';
 import { teamOrgQuery } from './queries/orgs';
 import { useApp } from './state';
@@ -19,6 +21,7 @@ export const TeamOrgSection = ({ teamId, canManage }: { teamId: string; canManag
   const queryClient = useQueryClient();
   const status = useQuery(teamOrgQuery(api, teamId));
   const [error, setError] = useState<string | undefined>();
+  const [refunded, setRefunded] = useState<number | undefined>();
   const refresh = (): Promise<unknown> =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.teamOrg(teamId) }),
@@ -27,15 +30,18 @@ export const TeamOrgSection = ({ teamId, canManage }: { teamId: string; canManag
     ]);
   const answer = useMutation({
     mutationFn: ({ orgId, accept }: { orgId: string; accept: boolean }) => api.answerOrgInvite(orgId, teamId, accept),
-    onSuccess: refresh,
+    onSuccess: (status) => {
+      if (status.refundedCents !== undefined && status.refundedCents > 0) setRefunded(status.refundedCents);
+      return refresh();
+    },
   });
   const leave = useMutation({ mutationFn: (orgId: string) => api.removeOrgTeam(orgId, teamId), onSuccess: refresh });
   const report = (err: unknown): void =>
     setError(
       t(
         errorMessageKey(err, 'errors.common.requestFailed', {
-          cancel_team_plan_first: 'errors.orgs.cancelTeamPlanFirst',
           team_in_another_organization: 'errors.orgs.otherOrg',
+          billing_not_configured: 'errors.billing.notConfigured',
         }),
       ),
     );
@@ -49,6 +55,11 @@ export const TeamOrgSection = ({ teamId, canManage }: { teamId: string; canManag
       {data.org !== undefined ? (
         <>
           <Text className="text-ink">{t('orgs.partOf', { name: data.org.name })}</Text>
+          {refunded !== undefined ? (
+            <Text className="mt-1 text-muted">
+              {t('orgs.refunded', { amount: formatMoney(refunded, 'usd', appLocale) })}
+            </Text>
+          ) : null}
           {canManage ? (
             <View className="mt-2">
               <Button

@@ -167,7 +167,7 @@ A poll is a chat message with a `poll` field, and its body is the question, so i
 
 An organization is one club or league over many teams (`functions/orgs`). Its rows live under `ORG#<orgId>`: `META` (name, owner), `ADMIN#<userId>`, `TEAM#<teamId>` (`pending` until accepted), `PLAN`, and `BILLING`. A team points back with `TEAM#<teamId>` / `ORG`, and `USER#<userId>` / `ORG#<orgId>` lists what someone administers. Only adults own or administer one; only the owner adds admins and manages billing.
 
-An admin invites a team; it joins when someone with the team's `manage_billing` accepts, and either side can end it. A team paying for its own plan must cancel first, so nobody pays twice.
+An admin invites a team; it joins when someone with the team's `manage_billing` accepts, and either side can end it. A team paying for its own plan has that subscription cancelled on joining, with the unused time refunded to the card (`cancelTeamSubscription`): Stripe credits a prorated cancellation to the customer balance, so the credit is refunded against the latest paid invoice and the balance zeroed. The cancel runs before the join is written; if Stripe fails, the team stays out and accepting again retries. Leaving puts the team on the free plan; its old subscription stays cancelled.
 
 `requireMembership` treats an admin of the team's organization as `team_admin` on that team, without a roster row. The check runs only when the caller has no roster row, so members pay nothing extra, and every existing team route works for organization admins unchanged. They are not added to chats.
 

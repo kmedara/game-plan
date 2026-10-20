@@ -559,12 +559,13 @@
     "announceSent_one": "Sent to {{count}} team.",
     "announceSent_other": "Sent to {{count}} teams.",
     "partOf": "Part of {{name}}",
-    "leave": "Leave this organization",
+    "leave": "Leave this organization (the team goes back to the free plan)",
     "invitedBy": "{{name}} invited this team to join.",
-    "acceptNote": "Its admins will be able to manage this team, and the team will use the organization’s plan.",
+    "acceptNote": "Its admins will be able to manage this team, and the team will use the organization’s plan. If the team pays for its own plan, it is cancelled and the unused time refunded to the card.",
     "accept": "Join",
     "decline": "Decline",
-    "askBillingManager": "Someone who manages this team’s billing can accept."
+    "askBillingManager": "Someone who manages this team’s billing can accept.",
+    "refunded": "The team’s own plan was cancelled and {{amount}} refunded to the card."
   },
   "errors": {
     "common": {
@@ -681,8 +682,7 @@
       "ownerCannotLeave": "The owner cannot be removed.",
       "otherOrg": "That team already belongs to another organization.",
       "alreadyIn": "That team is already in this organization.",
-      "planRequired": "This needs the organization plan.",
-      "cancelTeamPlanFirst": "This team pays for its own plan. Cancel it in Manage billing first, so you do not pay twice."
+      "planRequired": "This needs the organization plan."
     }
   }
 }
