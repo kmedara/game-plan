@@ -1,5 +1,6 @@
 /**
- * Month calendar and the day list. Sheets open the event, add, and edit views.
+ * Month calendar, team and event-type filter, and the day list. Sheets open the
+ * event, add, and edit views.
  */
 
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
@@ -9,7 +10,7 @@ import { useCalendars } from 'expo-localization';
 import { useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { deviceTimeZone, mergeSchedules, type TeamOccurrence } from '@/src/athlete-schedule';
+import { deviceTimeZone, filterOccurrences, mergeSchedules, type TeamOccurrence } from '@/src/athlete-schedule';
 import { type EventResponse, type ScheduleList, type UpdateEventBody } from '@gameplan/types';
 import { IncomingFixtures } from '@/src/fixture-panel';
 import { queryError } from '@/src/errors';
@@ -44,6 +45,7 @@ import { useTeamsWithPermission } from '@/src/team-access';
 import { brandColors, colors } from '@/src/theme';
 import { Button, ErrorText } from '@/src/ui';
 import { AddEvent } from '@/src/schedule/add-event';
+import { CalendarFilterChips, useCalendarFilter } from '@/src/schedule/calendar-filter';
 import { EventDetail } from '@/src/schedule/event-detail';
 import { EventRow } from '@/src/schedule/event-row';
 import { ScopeChoice } from '@/src/schedule/scope-choice';
@@ -99,13 +101,15 @@ export default function ScheduleScreen() {
     queries: teams.map((team) => fixturesQuery(api, team.teamId)),
   });
   const fixtures = fixtureQueries.flatMap((query) => query.data?.fixtures ?? []);
-  const events = mergeSchedules(
+  const [filter, setFilter] = useCalendarFilter();
+  const allEvents = mergeSchedules(
     scheduleQueries.flatMap((query, index) => {
       const team = teams[index];
       if (team === undefined || query.data === undefined) return [];
       return [{ teamId: team.teamId, occurrences: query.data.occurrences }];
     }),
   );
+  const events = filterOccurrences(allEvents, filter);
   const createEvent = useMutation(createEventMutation(api, queryClient));
   const updateEvent = useMutation(updateEventMutation(api, queryClient));
   const updateFixture = useMutation(updateFixtureMutation(api, queryClient));
@@ -118,7 +122,7 @@ export default function ScheduleScreen() {
   const [addingTeamId, setAddingTeamId] = useState<string | undefined>();
   const [choosingTeam, setChoosingTeam] = useState(false);
   const [viewingKey, setViewingKey] = useState<{ teamId: string; eventId: string; startsAt: string } | undefined>();
-  const viewing = events.find(
+  const viewing = allEvents.find(
     (item) => item.teamId === viewingKey?.teamId && item.eventId === viewingKey?.eventId && item.startsAt === viewingKey?.startsAt,
   );
   const [editing, setEditing] = useState<{ item: TeamOccurrence; series: EventResponse } | undefined>();
@@ -149,7 +153,7 @@ export default function ScheduleScreen() {
   return (
     <RefreshableScroll className="flex-1 px-3 pt-3">
       <ErrorText message={error ?? loadError} />
-      <IncomingFixtures fixtures={fixtures} teamIds={manageable.map((team) => team.teamId)} games={events} />
+      <IncomingFixtures fixtures={fixtures} teamIds={manageable.map((team) => team.teamId)} games={allEvents} />
       <View className="mb-2 flex-row items-center justify-between">
         <Pressable
           accessibilityRole="button"
@@ -169,6 +173,7 @@ export default function ScheduleScreen() {
           <ChevronRight color={colors.ink} size={24} strokeWidth={2} />
         </Pressable>
       </View>
+      <CalendarFilterChips teams={teams} filter={filter} onChange={setFilter} />
       <View className="mb-2 flex-row">
         {weekdayLabelsForLocale(appLocale).map((label) => (
           <Text key={label} className="flex-1 text-center text-xs text-muted">
