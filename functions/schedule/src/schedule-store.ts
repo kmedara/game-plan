@@ -49,9 +49,10 @@ import {
   teamPk,
 } from '../../lib/dynamo/index.js';
 
-/** Team metadata subset needed to confirm the team exists. */
+/** Team metadata subset the schedule area reads. */
 type TeamMetaItem = {
   teamId: string;
+  name: string;
   timeZone: string;
 };
 

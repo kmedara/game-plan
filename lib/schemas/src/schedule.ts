@@ -363,6 +363,19 @@ export const rsvpResponseSchema = z
   })
   .strict();
 
+/** `GET /schedule/feed` and `POST /schedule/feed/rotate`: the caller's private calendar link. */
+export const calendarFeedSchema = z
+  .object({
+    /** `https://` link for Google Calendar and Outlook. */
+    url: z.string().url(),
+    /** `webcal://` link that Apple Calendar subscribes to. */
+    webcalUrl: z.string().min(1),
+  })
+  .strict();
+
+/** Inferred type for {@link calendarFeedSchema}. */
+export type CalendarFeed = z.infer<typeof calendarFeedSchema>;
+
 /** Inferred type for {@link recurrenceRuleSchema}. */
 export type RecurrenceRule = z.infer<typeof recurrenceRuleSchema>;
 

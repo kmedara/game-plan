@@ -12,6 +12,7 @@ export type DownloadContext = Pick<PresignDownloadQuery, 'chatId' | 'userId' | '
 export const queryKeys = {
   me: ['me'] as const,
   preferences: ['preferences'] as const,
+  calendarFeed: ['calendarFeed'] as const,
   teams: ['teams'] as const,
   team: (teamId: string) => ['teams', teamId] as const,
   members: (teamId: string) => ['members', teamId] as const,

@@ -143,6 +143,7 @@ export {
 
 export {
   acceptFixtureBodySchema,
+  calendarFeedSchema,
   createEventBodySchema,
   eventResponseSchema,
   fixtureListSchema,
@@ -168,6 +169,7 @@ export {
   updateEventBodySchema,
   updateFixtureBodySchema,
   type AcceptFixtureBody,
+  type CalendarFeed,
   type CreateEventBody,
   type EventResponse,
   type Fixture,

@@ -25,6 +25,7 @@ import { HTTP_AREAS, type Area, type HttpArea } from './names';
 import {
   CHAT_PREFIX,
   DIRECTORY_KEY,
+  FEED_PREFIX,
   HANDOFF_PREFIX,
   INVITE_PREFIX,
   PAYMENT_REMINDERS_KEY,
@@ -502,8 +503,9 @@ export class Api extends Construct {
     });
     grantPartitions(props.table, functions.schedule, {
       // Carpool claims write the driver-and-riders chat under CHAT# and USER#.
-      read: [TEAM_PREFIX, REMINDERS_KEY, CHAT_PREFIX, USER_PREFIX],
-      write: [TEAM_PREFIX, REMINDERS_KEY, CHAT_PREFIX, USER_PREFIX],
+      // FEED# maps a calendar feed token to its owner.
+      read: [TEAM_PREFIX, REMINDERS_KEY, CHAT_PREFIX, USER_PREFIX, FEED_PREFIX],
+      write: [TEAM_PREFIX, REMINDERS_KEY, CHAT_PREFIX, USER_PREFIX, FEED_PREFIX],
     });
     grantPartitions(props.table, functions.chat, {
       read: [CHAT_PREFIX, USER_PREFIX, TEAM_PREFIX],

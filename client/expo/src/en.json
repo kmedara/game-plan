@@ -459,6 +459,16 @@
     "hours_one": "{{count}} hour",
     "hours_other": "{{count}} hours"
   },
+  "calendarSync": {
+    "title": "Calendar sync",
+    "hint": "Show your teams’ practices and games in the calendar you already use. Includes your children’s teams.",
+    "show": "Sync with my calendar",
+    "addTo": "Add to {{app}}",
+    "openFailed": "Could not open that calendar app. Copy the link and add it by URL instead.",
+    "refreshNote": "Calendar apps check for changes every few hours, so edits can take a while to show. Anyone with this link can see your schedule.",
+    "reset": "Reset link",
+    "resetDone": "Link reset. Subscribe again with the new one."
+  },
   "errors": {
     "common": {
       "loadFailed": "Could not load this. Try again.",

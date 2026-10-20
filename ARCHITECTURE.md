@@ -129,6 +129,15 @@ Each person picks an evening-before hour (5–9 pm, team time) and a lead time (
 - **Why:** rows scale with events, not people, and a choice change needs no rewrite of any row. A fixed menu keeps that row count small.
 - **Cost:** nine rows per upcoming occurrence instead of two, and one preferences read per recipient at send time. `deleteRemindersForEvent` scans the whole `REMINDERS` partition, which is now larger; a per-event pointer would fix that when it matters. Nobody can pick a time off the menu.
 
+### Calendar sync
+
+Each person gets a private iCalendar link (`GET /schedule/feed`), created on first request. `USER#<id>` / `FEED` holds a 192-bit random token and `FEED#<token>` maps it back. Calendar apps fetch `GET /schedule/feeds/<token>.ics` with no sign-in; the token is the only check, like a share link, and **Reset link** (`POST /schedule/feed/rotate`) replaces it. The feed covers the person's teams and their children's teams (`listChildIds`), 30 days back to 180 days ahead, up to 20 teams, through the same `listOccurrences` as the app. The app offers Google, Apple, and Outlook subscribe links (`client/expo/src/calendar-links.ts`) and asks for the link only after a tap, so viewing the profile creates no token.
+
+Each date is its own `VEVENT` with a UTC start and a stable UID (`<team>-<event>-<start>@gameplan`), not a repeat rule (`functions/schedule/src/ical.ts`). The body says to refresh hourly; responses may be cached for 15 minutes.
+
+- **Why:** calendar apps cannot sign in. Single events avoid differences in how apps read repeat rules, exceptions, and time zones; a cancelled or moved date just changes on the next fetch. A UID per date keeps an edited date the same event in the calendar.
+- **Cost:** anyone holding the link sees that schedule, including children's; the app says so next to the link. Google refreshes on its own schedule, often every 8 to 24 hours, so changes are slow to appear there. Each fetch reads every team's events and RSVPs for about seven months.
+
 ### Team dues
 
 Each team connects a Stripe Express account. A charge (`TEAM#id` / `CHARGE#`) asks some members to pay; each member's share is a due (`DUE#<chargeId>#<memberId>`) with a pointer on the member's partition for "my dues". Payment is a direct charge on the team's account through hosted Checkout, with GamePlan's cut as `application_fee_amount` (`PLATFORM_FEE_BPS`, default 2%). An adult pays their own due; a minor's guardians pay theirs (`payerIdsForDue` in `lib/rules`). Staff can mark a due paid outside the app or waived.
@@ -334,7 +343,7 @@ HTTP/2 and HTTP/3, compression on. Static files use `CACHING_OPTIMIZED`. `/api` 
 
 ### Rate limits
 
-WAF on `/api/`, four rules, each a five-minute window, `429` with `{"error":"rate_limited"}`. Static files are outside the rules. WAF is pay-as-you-go, because a CloudFront flat-rate plan cannot key a rate rule on a header.
+WAF on `/api/`, six rules, each a five-minute window, `429` with `{"error":"rate_limited"}`. Static files are outside the rules. WAF is pay-as-you-go, because a CloudFront flat-rate plan cannot key a rate rule on a header.
 
 | Rule | Key | Limit | Purpose |
 | --- | --- | --- | --- |
@@ -342,6 +351,8 @@ WAF on `/api/`, four rules, each a five-minute window, `429` with `{"error":"rat
 | `PerAnonymousIp` | IP, no token | 100 | Slows stuffing and signup abuse on open identity routes. |
 | `SocketConnectIp` | IP, `/api/socket` | 1000 | Caps connect floods. Reconnects would burn the anonymous limit. |
 | `PerIpFlood` | IP | 4000 | Stops a client that invents a new `Authorization` per request, without blocking a club behind one NAT. |
+| `PerCalendarFeed` | URI path, `/api/schedule/feeds/` | 30 | Stops one leaked feed link from being hammered. |
+| `CalendarFeedIp` | IP, `/api/schedule/feeds/` | 20000 | Google and Outlook fetch every subscriber's feed from a few shared addresses, so feeds sit outside the anonymous and flood rules. |
 
 - **Cost:** the token rule keys on the raw header, including tokens that are not verified yet. The flood rule bounds that. A verified-user limit would have to run inside the function.
 

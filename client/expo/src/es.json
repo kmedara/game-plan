@@ -461,6 +461,16 @@
     "hours_one": "{{count}} hora",
     "hours_other": "{{count}} horas"
   },
+  "calendarSync": {
+    "title": "Sincronizar calendario",
+    "hint": "Muestra las prácticas y partidos de tus equipos en el calendario que ya usas. Incluye los equipos de tus hijos.",
+    "show": "Sincronizar con mi calendario",
+    "addTo": "Agregar a {{app}}",
+    "openFailed": "No se pudo abrir esa aplicación de calendario. Copia el enlace y agrégalo por URL.",
+    "refreshNote": "Las aplicaciones de calendario buscan cambios cada pocas horas, así que los cambios pueden tardar en aparecer. Cualquiera con este enlace puede ver tu calendario.",
+    "reset": "Restablecer enlace",
+    "resetDone": "Enlace restablecido. Suscríbete de nuevo con el nuevo enlace."
+  },
   "errors": {
     "common": {
       "loadFailed": "No se pudo cargar. Inténtalo de nuevo.",

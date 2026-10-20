@@ -36,6 +36,9 @@ export const REMINDERS_KEY = 'REMINDERS';
 /** `STRIPE_ACCOUNT#<accountId>` which team a connected Stripe account belongs to. */
 export const STRIPE_ACCOUNT_PREFIX = 'STRIPE_ACCOUNT#*';
 
+/** `FEED#<token>` which person a calendar feed link belongs to. */
+export const FEED_PREFIX = 'FEED#*';
+
 /** `STRIPE_CUSTOMER#<customerId>` which team a Stripe Billing customer pays for. */
 export const STRIPE_CUSTOMER_PREFIX = 'STRIPE_CUSTOMER#*';
 

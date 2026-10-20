@@ -61,6 +61,11 @@ export type BillingReturnQuery = {
   teamId?: string;
 }
 
+export type CalendarFeed = {
+  url: string;
+  webcalUrl: string;
+}
+
 export type CarpoolClaimBody = {
   eventId: string;
   occurrenceStartsAt: string;

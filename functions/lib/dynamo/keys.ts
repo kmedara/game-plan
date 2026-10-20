@@ -237,6 +237,15 @@ export const reminderSk = (
 /** `USER#<userId>` / `PREFS` — settings that follow the account. */
 export const prefsSk = (): string => 'PREFS';
 
+/** `USER#<userId>` / `FEED` — the person's calendar feed token. */
+export const userFeedSk = (): string => 'FEED';
+
+/** `FEED#<token>` — which person a calendar feed URL belongs to. */
+export const feedPk = (token: string): string => `FEED#${token}`;
+
+/** The single row under {@link feedPk}. */
+export const feedMetaSk = (): string => 'META';
+
 /** Sort-key prefix for every reminder row. */
 export const REMINDER_SK_PREFIX = 'REMINDER#' as const;
 

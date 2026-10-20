@@ -48,6 +48,7 @@ import {
 } from './auth.js';
 import {
   acceptFixtureBodySchema,
+  calendarFeedSchema,
   createEventBodySchema,
   eventResponseSchema,
   fixtureListSchema,
@@ -355,6 +356,18 @@ const AREAS: Record<string, AreaSpec> = {
     description: 'Events, recurrence, and RSVPs.',
     secured: true,
     paths: {
+      '/schedule/feed': {
+        get: { summary: "The caller's private calendar link, created on first use", response: calendarFeedSchema },
+      },
+      '/schedule/feed/rotate': {
+        post: { summary: 'Replace the calendar link; the old one stops working', response: calendarFeedSchema },
+      },
+      '/schedule/feeds/{file}': {
+        get: {
+          summary: 'iCalendar feed for `<token>.ics` (text/calendar, no bearer token; optional ?teams=a,b)',
+          secured: false,
+        },
+      },
       '/schedule/teams/{teamId}': {
         get: {
           summary: 'Expanded event occurrences in a time window',

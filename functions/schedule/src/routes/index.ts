@@ -21,11 +21,15 @@ import {
   handleUpdateFixture,
 } from './fixtures.js';
 import { handleGetLineup, handlePutLineup } from './lineup.js';
+import { handleCalendarFeed, handleGetFeed, handleRotateFeed } from './feeds.js';
 import { handleListSchedule } from './list.js';
 import { handleUpsertRsvp } from './rsvp.js';
 
 export {
   handleAcceptFixture,
+  handleCalendarFeed,
+  handleGetFeed,
+  handleRotateFeed,
   handleCancelOccurrence,
   handleClaimCarpool,
   handleCreateEvent,
@@ -67,4 +71,7 @@ export const httpRoutes: readonly HttpRoute[] = [
   handleUnlinkFixture,
   handleAcceptFixture,
   handleDeclineFixture,
+  handleGetFeed,
+  handleRotateFeed,
+  handleCalendarFeed,
 ];

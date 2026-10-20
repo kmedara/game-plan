@@ -14,6 +14,7 @@ import type {
   AcceptedInvite,
   ApprovedJoinRequest,
   BillingInterval,
+  CalendarFeed,
   Preferences,
   UpdatePreferencesBody,
   TeamBilling,
@@ -169,6 +170,14 @@ export class ApiClient {
     this.session.setUser(profile);
     this.emit();
     return profile;
+  }
+
+  async getCalendarFeed(): Promise<CalendarFeed> {
+    return this.request('GET', '/schedule/feed');
+  }
+
+  async rotateCalendarFeed(): Promise<CalendarFeed> {
+    return this.request('POST', '/schedule/feed/rotate');
   }
 
   async getPreferences(): Promise<Preferences> {

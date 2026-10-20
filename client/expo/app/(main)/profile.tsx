@@ -1,5 +1,5 @@
 /**
- * Profile photo, phone, notifications, reminder times, dues link, positions, theme note, and sign-out.
+ * Profile photo, phone, notifications, reminder times, calendar sync, dues link, positions, theme note, and sign-out.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -14,6 +14,7 @@ import { config } from '@/src/config';
 import { errorMessageKey, queryError } from '@/src/errors';
 import { PROFILE_PHOTO_MAX_DIMENSION, pickAndUploadImage, useDownloadUrl } from '@/src/media';
 import { ReminderSettings } from '@/src/reminder-settings';
+import { CalendarSync } from '@/src/calendar-sync';
 import { loadPushStatus, registerPush, type PushStatus } from '@/src/push';
 import { isOwed } from '@/src/payment-status';
 import { myDuesQuery } from '@/src/queries/payments';
@@ -154,6 +155,7 @@ export default function ProfileScreen() {
       />
       <NotificationSettings status={notifications} onEnable={async () => setNotifications(await registerPush(api))} />
       <ReminderSettings />
+      <CalendarSync />
       {(dues.data?.length ?? 0) > 0 ? (
         <View className="mt-2">
           <Button

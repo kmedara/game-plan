@@ -67,6 +67,8 @@ const PROTECTED: Record<string, RouteCase[]> = {
     { route: 'handleRejectJoinRequest', method: 'POST', path: '/teams/team-1/join-requests/req-1/reject' },
   ],
   schedule: [
+    { route: 'handleGetFeed', method: 'GET', path: '/schedule/feed' },
+    { route: 'handleRotateFeed', method: 'POST', path: '/schedule/feed/rotate' },
     { route: 'handleListSchedule', method: 'GET', path: '/schedule/teams/team-1' },
     { route: 'handleCreateEvent', method: 'POST', path: '/schedule/teams/team-1/events' },
     { route: 'handleGetEvent', method: 'GET', path: '/schedule/teams/team-1/events/event-1' },
@@ -145,6 +147,8 @@ const PUBLIC: Record<string, string[]> = {
   // Answer `404` unless the local media store is on. Covered below.
   media: ['handleLocalPutObject', 'handleLocalGetObject'],
   // Stripe redirects the browser here and signs webhooks; neither carries a session.
+  // Calendar apps fetch the feed with only the token in its URL.
+  schedule: ['handleCalendarFeed'],
   payments: ['handlePaymentReturn', 'handleStripeWebhook'],
   billing: ['handleBillingReturn', 'handleBillingWebhook'],
 };
