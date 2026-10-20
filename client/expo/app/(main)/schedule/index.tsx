@@ -10,7 +10,7 @@ import { useCalendars } from 'expo-localization';
 import { useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { deviceTimeZone, mergeSchedules, type TeamOccurrence } from '@/src/athlete-schedule';
+import { deviceTimeZone, eventTypesOnDay, mergeSchedules, type TeamOccurrence } from '@/src/athlete-schedule';
 import { type EventResponse, type ScheduleList, type UpdateEventBody } from '@gameplan/types';
 import { IncomingFixtures } from '@/src/fixture-panel';
 import { queryError } from '@/src/errors';
@@ -42,7 +42,7 @@ import {
 } from '@/src/queries/schedule';
 import { useApp, useBrandTeam } from '@/src/state';
 import { useTeamsWithPermission } from '@/src/team-access';
-import { brandColors, colors } from '@/src/theme';
+import { colors, EVENT_TYPE_COLORS } from '@/src/theme';
 import { Button, ErrorText } from '@/src/ui';
 import { AddEvent } from '@/src/schedule/add-event';
 import { EventDetail } from '@/src/schedule/event-detail';
@@ -56,24 +56,6 @@ const monthRange = (month: CalendarMonth, timeZone: string): { from: string; to:
   return { from: wallTimeToIso(timeZone, first, '00:00'), to: wallTimeToIso(timeZone, last, '23:59') };
 };
 
-const dayDotColors = (
-  events: readonly TeamOccurrence[],
-  teams: readonly { teamId: string; theme?: { primary?: string; secondary?: string; accent?: string } }[],
-  dayKey: string,
-  zone: string,
-  singleAccent: string | undefined,
-): { teamId: string; color: string }[] => {
-  const seen = new Set<string>();
-  const colorsForDay: { teamId: string; color: string }[] = [];
-  for (const item of events) {
-    if (dayKeyInZone(new Date(item.startsAt), zone) !== dayKey || seen.has(item.teamId)) continue;
-    seen.add(item.teamId);
-    if (singleAccent !== undefined) return [{ teamId: item.teamId, color: singleAccent }];
-    const team = teams.find((candidate) => candidate.teamId === item.teamId);
-    colorsForDay.push({ teamId: item.teamId, color: brandColors(team?.theme).accent });
-  }
-  return colorsForDay;
-};
 
 export default function ScheduleScreen() {
   const { t } = useTranslation();
@@ -179,7 +161,7 @@ export default function ScheduleScreen() {
       </View>
       <View className="mb-4 flex-row flex-wrap">
         {cells.map((cell) => {
-          const dotColors = dayDotColors(events, teams, cell.key, zone, singleTeam ? brand.accent : undefined);
+          const dayTypes = eventTypesOnDay(events, cell.key, zone);
           return (
             <Pressable key={cell.key} className="w-[14.28%] items-center py-2" onPress={() => setSelected(cell.key)}>
               <Text
@@ -189,8 +171,8 @@ export default function ScheduleScreen() {
                 {cell.day}
               </Text>
               <View className="mt-1 h-1.5 flex-row">
-                {dotColors.map((dot) => (
-                  <View key={dot.teamId} className="mx-px h-1.5 w-1.5 rounded-full" style={{ backgroundColor: dot.color }} />
+                {dayTypes.map((type) => (
+                  <View key={type} className="mx-px h-1.5 w-1.5 rounded-full" style={{ backgroundColor: EVENT_TYPE_COLORS[type] }} />
                 ))}
               </View>
             </Pressable>
@@ -206,7 +188,6 @@ export default function ScheduleScreen() {
             key={`${item.teamId}-${item.eventId}-${item.startsAt}`}
             item={item}
             zone={zone}
-            color={singleTeam ? undefined : brandColors(eventTeam?.theme).accent}
             teamName={singleTeam ? undefined : eventTeam?.name}
             logoKey={singleTeam ? undefined : eventTeam?.theme?.logoKey}
             logoName={eventTeam?.name}

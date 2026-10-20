@@ -1,6 +1,8 @@
 /**
- * Brand tokens and team color tones used by the shell.
+ * Brand tokens, event type colors, and team color tones used by the shell.
  */
+
+import type { EventType } from "@gameplan/types";
 
 export const colors = {
   canvas: "#eef2ef",
@@ -33,6 +35,32 @@ export const parseHex = (hex: string | undefined): Rgb | undefined => {
   if (hex === undefined || !/^#[0-9a-fA-F]{6}$/.test(hex)) return undefined;
   const value = Number.parseInt(hex.slice(1), 16);
   return { r: (value >> 16) & 255, g: (value >> 8) & 255, b: value & 255 };
+};
+
+/**
+ * One color per event type, the same on every team: the stripe on an event
+ * row, the dot beside its type, and the calendar's day dots. Fixed rather than
+ * team colors, so a type reads the same across teams; each keeps at least 3:1
+ * contrast on `inset` and `paper`, and none is the brand green or error red.
+ */
+export const EVENT_TYPE_COLORS: Readonly<Record<EventType, string>> = {
+  practice: "#2563eb",
+  game: "#d9480f",
+  meeting: "#7c3aed",
+  other: "#607080",
+};
+
+/**
+ * WCAG contrast ratio between two `#RRGGBB` colors.
+ *
+ * @returns The ratio, 1 to 21; `1` when either is not a hex color.
+ */
+export const contrastRatio = (left: string, right: string): number => {
+  const a = parseHex(left);
+  const b = parseHex(right);
+  if (a === undefined || b === undefined) return 1;
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (hi + 0.05) / (lo + 0.05);
 };
 
 const luminance = ({ r, g, b }: Rgb): number => {

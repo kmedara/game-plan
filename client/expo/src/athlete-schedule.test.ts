@@ -3,7 +3,7 @@
  */
 
 import type { ScheduleOccurrence } from '@gameplan/types';
-import { mergeSchedules } from './athlete-schedule';
+import { eventTypesOnDay, mergeSchedules, type TeamOccurrence } from './athlete-schedule';
 import { dayKeyInZone } from './schedule-calendar';
 
 const occurrence = (eventId: string, startsAt: string): ScheduleOccurrence => ({
@@ -42,5 +42,21 @@ describe('mergeSchedules', () => {
     expect(item).toBeDefined();
     expect(dayKeyInZone(new Date(item!.startsAt), 'America/Los_Angeles')).toBe('2026-01-14');
     expect(dayKeyInZone(new Date(item!.startsAt), 'Asia/Tokyo')).toBe('2026-01-15');
+  });
+});
+
+describe('eventTypesOnDay', () => {
+  const at = (eventType: TeamOccurrence['eventType'], startsAt: string) =>
+    ({ teamId: 't', eventId: `${eventType}-${startsAt}`, eventType, startsAt }) as TeamOccurrence;
+
+  it('lists each type on the day once, in a fixed order, and ignores other days', () => {
+    const events = [
+      at('game', '2026-10-20T18:00:00.000Z'),
+      at('practice', '2026-10-20T15:00:00.000Z'),
+      at('game', '2026-10-20T20:00:00.000Z'),
+      at('meeting', '2026-10-21T15:00:00.000Z'),
+    ];
+    expect(eventTypesOnDay(events, '2026-10-20', 'UTC')).toEqual(['practice', 'game']);
+    expect(eventTypesOnDay(events, '2026-10-22', 'UTC')).toEqual([]);
   });
 });

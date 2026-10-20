@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { EVENT_TYPE_COLORS } from '@/src/theme';
 import { useTranslation } from 'react-i18next';
 import { rolesFromMembership } from '@gameplan/rules';
 import { RSVP_STATUSES, type Fixture, type RsvpStatus, type ScheduleOccurrence } from '@gameplan/types';
@@ -71,9 +72,13 @@ export const EventDetail = ({
   return (
     <View>
       {teamName !== undefined ? <Text className="mb-1 font-semibold text-ink">{teamName}</Text> : null}
-      <Text className="text-muted">
-        {t(`eventType.${item.eventType}`)} · {clockLabel(item.startsAt, zone, appLocale, hour12)}
-      </Text>
+      <View className="flex-row items-center">
+        <View className="mr-1.5 h-2 w-2 rounded-full" style={{ backgroundColor: EVENT_TYPE_COLORS[item.eventType] }} />
+        <Text className="font-semibold" style={{ color: EVENT_TYPE_COLORS[item.eventType] }}>
+          {t(`eventType.${item.eventType}`)}
+        </Text>
+        <Text className="text-muted"> · {clockLabel(item.startsAt, zone, appLocale, hour12)}</Text>
+      </View>
       <Text className="text-muted">{timeZoneLabel(zone, new Date(item.startsAt))}</Text>
       {item.location !== undefined ? (
         <Pressable className="mt-2" onPress={openMaps}>

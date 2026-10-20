@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { colors, EVENT_TYPE_COLORS } from '@/src/theme';
 import { useTranslation } from 'react-i18next';
 import {
   EVENT_TYPES,
@@ -141,8 +142,21 @@ export const AddEvent = ({
     <View className="mb-8">
       <View className="mb-2 flex-row flex-wrap">
         {EVENT_TYPES.map((type) => (
-          <Pressable key={type} className="mr-3" onPress={() => setEventType(type)}>
-            <Text className={eventType === type ? 'font-bold' : ''}>{t(`eventType.${type}`)}</Text>
+          <Pressable
+            key={type}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: eventType === type }}
+            className="mb-2 mr-2 flex-row items-center rounded-full border px-3 py-1"
+            style={{ borderColor: eventType === type ? EVENT_TYPE_COLORS[type] : colors.line }}
+            onPress={() => setEventType(type)}
+          >
+            <View className="mr-1.5 h-2 w-2 rounded-full" style={{ backgroundColor: EVENT_TYPE_COLORS[type] }} />
+            <Text
+              className={eventType === type ? 'font-bold' : 'text-ink'}
+              style={eventType === type ? { color: EVENT_TYPE_COLORS[type] } : undefined}
+            >
+              {t(`eventType.${type}`)}
+            </Text>
           </Pressable>
         ))}
       </View>

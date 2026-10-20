@@ -1,5 +1,5 @@
 /**
- * One occurrence on the selected day.
+ * One occurrence on the selected day, striped in its event type's color.
  */
 
 import Pencil from 'lucide-react-native/icons/pencil';
@@ -12,12 +12,12 @@ import { appLocale } from '@/src/i18n';
 import { useDownloadUrl } from '@/src/media';
 import { clockLabel } from '@/src/schedule-calendar';
 import { TrashIcon } from '@/src/team-media';
+import { EVENT_TYPE_COLORS } from '@/src/theme';
 import { ICON, RsvpChoices, useHour12 } from './rsvp';
 
 export const EventRow = ({
   item,
   zone,
-  color,
   teamName,
   logoKey,
   logoName,
@@ -31,7 +31,6 @@ export const EventRow = ({
 }: {
   item: TeamOccurrence;
   zone: string;
-  color: string | undefined;
   teamName: string | undefined;
   logoKey: string | undefined;
   logoName: string | undefined;
@@ -51,15 +50,19 @@ export const EventRow = ({
   return (
     <View
       className="mb-3 rounded-xl bg-inset p-3"
-      style={color === undefined ? undefined : { borderLeftWidth: 4, borderLeftColor: color }}
+      style={{ borderLeftWidth: 4, borderLeftColor: EVENT_TYPE_COLORS[item.eventType] }}
     >
       <Pressable accessibilityRole="button" onPress={onView}>
         <View className={showLogo ? 'pr-24' : canManage ? 'pr-16' : ''}>
           <Text className="font-semibold text-ink">{item.title}</Text>
           {teamName !== undefined ? <Text className="text-muted">{teamName}</Text> : null}
-          <Text className="text-muted">
-            {t(`eventType.${item.eventType}`)} · {clockLabel(item.startsAt, zone, appLocale, hour12)}
-          </Text>
+          <View className="flex-row items-center">
+            <View className="mr-1.5 h-2 w-2 rounded-full" style={{ backgroundColor: EVENT_TYPE_COLORS[item.eventType] }} />
+            <Text className="font-semibold" style={{ color: EVENT_TYPE_COLORS[item.eventType] }}>
+              {t(`eventType.${item.eventType}`)}
+            </Text>
+            <Text className="text-muted"> · {clockLabel(item.startsAt, zone, appLocale, hour12)}</Text>
+          </View>
         </View>
         {item.location !== undefined || showLogo ? (
           <View style={{ overflow: 'visible' }}>
