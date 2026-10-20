@@ -32,7 +32,8 @@ export class Database extends Construct {
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      // All product data; a stack delete or replacement leaves the table in place.
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
       timeToLiveAttribute: 'ttl',
     });
 

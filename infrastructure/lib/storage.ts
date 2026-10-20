@@ -47,8 +47,9 @@ export class Storage extends Construct {
           maxAge: 3000,
         },
       ],
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
+      // Uploaded photos cannot be recreated, so a stack delete or replacement
+      // leaves the bucket and its objects in place.
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     if (props.cdnReads === true) {

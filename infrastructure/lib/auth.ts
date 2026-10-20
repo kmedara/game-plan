@@ -82,7 +82,9 @@ export class Auth extends Construct {
         requireDigits: true,
       },
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      // Accounts cannot be recreated (password hashes do not export), so a stack
+      // delete or replacement leaves the pool in place.
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     const providers: cognito.UserPoolClientIdentityProvider[] = [
