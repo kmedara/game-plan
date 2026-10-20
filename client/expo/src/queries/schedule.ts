@@ -8,6 +8,8 @@ import { mutationOptions, queryOptions, type QueryClient } from '@tanstack/react
 import type {
   AcceptFixtureBody,
   CarpoolClaimBody,
+  ClaimSignupBody,
+  PutSignupsBody,
   CarpoolOfferBody,
   CreateEventBody,
   ExceptionEventBody,
@@ -74,6 +76,47 @@ export const carpoolQuery = (
     queryKey: queryKeys.carpool(teamId, eventId, occurrenceStartsAt),
     queryFn: async () =>
       (await api.getCarpool(teamId, { eventId, occurrenceStartsAt })).offers,
+  });
+
+export const signupsQuery = (
+  api: Pick<ApiClient, 'getSignups'>,
+  teamId: string,
+  eventId: string,
+  occurrenceStartsAt: string,
+) =>
+  queryOptions({
+    queryKey: queryKeys.signups(teamId, eventId, occurrenceStartsAt),
+    queryFn: async () => (await api.getSignups(teamId, eventId, occurrenceStartsAt)).slots,
+  });
+
+/**
+ * Stores a sign-up response in the cache.
+ *
+ * Claims are not queued offline like carpool seats: a claim replayed hours
+ * later could take a place someone else already has.
+ *
+ * @param queryClient - The app client.
+ * @param teamId - The team.
+ * @param saved - The response.
+ */
+const rememberSignups = (
+  queryClient: QueryClient,
+  teamId: string,
+  saved: { eventId: string; occurrenceStartsAt: string; slots: unknown },
+): void => {
+  queryClient.setQueryData(queryKeys.signups(teamId, saved.eventId, saved.occurrenceStartsAt), saved.slots);
+};
+
+export const putSignupsMutation = (api: Pick<ApiClient, 'putSignups'>, queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ teamId, body }: { teamId: string; body: PutSignupsBody }) => api.putSignups(teamId, body),
+    onSuccess: (saved, { teamId }) => rememberSignups(queryClient, teamId, saved),
+  });
+
+export const claimSignupMutation = (api: Pick<ApiClient, 'claimSignup'>, queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ teamId, body }: { teamId: string; body: ClaimSignupBody }) => api.claimSignup(teamId, body),
+    onSuccess: (saved, { teamId }) => rememberSignups(queryClient, teamId, saved),
   });
 
 /** Marks every loaded month for a team stale so the calendar refetches. */

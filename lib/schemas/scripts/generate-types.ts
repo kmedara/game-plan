@@ -46,6 +46,8 @@ const CONST_EXPORTS = [
   'DEFAULT_EVENING_HOUR',
   'DEFAULT_LEAD_MINUTES',
   'MAX_EMERGENCY_CONTACTS',
+  'MAX_SIGNUP_SLOTS',
+  'MAX_SIGNUP_CAPACITY',
 ] as const;
 
 /** Convert `loginBodySchema` → `LoginBody`. */
@@ -104,6 +106,9 @@ for (const [exportName, schema] of schemaEntries) {
   const compiled = await compile(jsonSchema, typeName, {
     bannerComment: '',
     additionalProperties: false,
+    // Keep bounded arrays as `T[]` (a non-empty one as `[T, ...T[]]`). A union
+    // of every allowed length makes callers cast; the API still enforces the limit.
+    maxItems: -1,
     unreachableDefinitions: true,
     style: {
       singleQuote: true,

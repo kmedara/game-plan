@@ -117,6 +117,7 @@ import {
   teamCheckoutBodySchema,
 } from './plans.js';
 import { preferencesSchema, updatePreferencesBodySchema } from './preferences.js';
+import { claimSignupBodySchema, putSignupsBodySchema, signupsQuerySchema, signupsResponseSchema } from './signups.js';
 import { medicalInfoBodySchema, medicalInfoSchema, medicalPeopleSchema, memberMedicalSchema } from './medical.js';
 import { z, type ZodType } from './zod.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
@@ -378,6 +379,21 @@ const AREAS: Record<string, AreaSpec> = {
     description: 'Events, recurrence, and RSVPs.',
     secured: true,
     paths: {
+      '/schedule/teams/{teamId}/signups': {
+        get: { summary: 'Volunteer sign-ups for one occurrence', query: signupsQuerySchema, response: signupsResponseSchema },
+        put: {
+          summary: 'Replace the sign-up slots (manage_events)',
+          body: putSignupsBodySchema,
+          response: signupsResponseSchema,
+        },
+      },
+      '/schedule/teams/{teamId}/signups/claim': {
+        put: {
+          summary: 'Take a place on a slot, or give it up; a guardian may act for a child',
+          body: claimSignupBodySchema,
+          response: signupsResponseSchema,
+        },
+      },
       '/schedule/feed': {
         get: { summary: "The caller's private calendar link, created on first use", response: calendarFeedSchema },
       },

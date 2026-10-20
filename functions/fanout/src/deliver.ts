@@ -376,7 +376,7 @@ const publishPush = async (
   }
   if (devices.length === 0) return;
 
-  if (job.type === 'schedule_changed') return;
+  if (job.type === 'schedule_changed' || job.type === 'signups_changed') return;
 
   const title =
     job.type === 'chat_message'

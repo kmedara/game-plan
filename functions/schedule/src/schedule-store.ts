@@ -1105,7 +1105,7 @@ type CarpoolItem = {
  * @param occurrenceStartsAt - The occurrence instant from the client.
  * @returns The canonical occurrence instant.
  */
-const requireOccurrence = async (
+export const requireOccurrence = async (
   teamId: string,
   eventId: string,
   occurrenceStartsAt: string,

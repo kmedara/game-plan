@@ -64,6 +64,6 @@ export const bodyFromDraft = (draft: MedicalDraft): MedicalInfoBody => {
       name: contact.name,
       phone: contact.phone,
       ...(contact.relation.length > 0 ? { relation: contact.relation } : {}),
-    })) as MedicalInfoBody['emergencyContacts'],
+    })),
   };
 };

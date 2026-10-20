@@ -492,6 +492,20 @@
       "notes": "Other notes"
     }
   },
+  "signups": {
+    "title": "Sign-ups",
+    "label": "What",
+    "labelHint": "Snacks",
+    "capacity": "People",
+    "addSlot": "Add a slot",
+    "removeHint": "Clear a name to remove that slot.",
+    "filled": "{{taken}} of {{capacity}}",
+    "take": "Sign up",
+    "leave": "Cancel my sign-up",
+    "remove": "Remove",
+    "addFirst": "Add sign-ups (snacks, scorekeeper, drivers)",
+    "edit": "Edit sign-ups"
+  },
   "errors": {
     "common": {
       "loadFailed": "Could not load this. Try again.",
@@ -587,6 +601,12 @@
     "emergency": {
       "contactIncomplete": "Each emergency contact needs a name and a phone number.",
       "invalid": "Check the phone numbers and try again."
+    },
+    "signups": {
+      "full": "That slot just filled up.",
+      "capacityBelowClaims": "A slot cannot hold fewer people than have already signed up.",
+      "changed": "Someone else just changed the sign-ups. Try again.",
+      "badCapacity": "Each slot needs between 1 and {{max}} people."
     }
   }
 }

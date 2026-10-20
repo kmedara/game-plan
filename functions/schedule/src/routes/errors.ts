@@ -64,7 +64,12 @@ export const mapScheduleError: ErrorMappingFn = (
     case "sport_mismatch":
       return conflict("sport_mismatch");
     case "carpool_offer_not_found":
+    case "signup_slot_not_found":
       return notFound();
+    case "signup_full":
+    case "signup_member_not_found":
+    case "signup_capacity_below_claims":
+      return badRequest(error.message);
     default:
       if (error.name === "ConditionalCheckFailedException") {
         return conflict("condition_failed");

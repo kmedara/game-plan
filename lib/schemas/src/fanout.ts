@@ -32,6 +32,15 @@ export const fanoutJobSchema = z.discriminatedUnion('type', [
     .strict(),
   z
     .object({
+      type: z.literal('signups_changed'),
+      teamId: z.string().min(1),
+      eventId: z.string().min(1),
+      occurrenceStartsAt: z.string().datetime(),
+      ...retryFields,
+    })
+    .strict(),
+  z
+    .object({
       type: z.literal('event_moved'),
       teamId: z.string().min(1),
       eventId: z.string().min(1),

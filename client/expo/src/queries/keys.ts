@@ -30,6 +30,8 @@ export const queryKeys = {
     ['lineup', teamId, eventId, occurrenceStartsAt] as const,
   carpool: (teamId: string, eventId: string, occurrenceStartsAt: string) =>
     ['carpool', teamId, eventId, occurrenceStartsAt] as const,
+  signups: (teamId: string, eventId: string, occurrenceStartsAt: string) =>
+    ['signups', teamId, eventId, occurrenceStartsAt] as const,
   chats: ['chats'] as const,
   messages: (chatId: string) => ['messages', chatId] as const,
   download: (key: string, context: DownloadContext) => ['download', key, context] as const,

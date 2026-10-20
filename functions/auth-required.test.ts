@@ -71,6 +71,9 @@ const PROTECTED: Record<string, RouteCase[]> = {
   ],
   schedule: [
     { route: 'handleGetFeed', method: 'GET', path: '/schedule/feed' },
+    { route: 'handleGetSignups', method: 'GET', path: '/schedule/teams/team-1/signups' },
+    { route: 'handlePutSignups', method: 'PUT', path: '/schedule/teams/team-1/signups' },
+    { route: 'handleClaimSignup', method: 'PUT', path: '/schedule/teams/team-1/signups/claim' },
     { route: 'handleRotateFeed', method: 'POST', path: '/schedule/feed/rotate' },
     { route: 'handleListSchedule', method: 'GET', path: '/schedule/teams/team-1' },
     { route: 'handleCreateEvent', method: 'POST', path: '/schedule/teams/team-1/events' },

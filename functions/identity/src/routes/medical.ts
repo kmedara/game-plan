@@ -5,7 +5,7 @@
 
 import { canEditMedicalInfo, canReadOwnMedicalInfo } from '@gameplan/rules';
 import { medicalInfoBodySchema } from '@gameplan/schemas';
-import type { MedicalPerson } from '@gameplan/schemas';
+import type { MedicalPerson } from '@gameplan/types';
 import { getProfile, requireUser } from '../../../lib/auth/index.js';
 import { listChildIds } from '../../../lib/guardians.js';
 import { json } from '../../../lib/http.js';

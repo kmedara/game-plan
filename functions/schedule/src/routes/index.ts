@@ -23,10 +23,14 @@ import {
 import { handleGetLineup, handlePutLineup } from './lineup.js';
 import { handleCalendarFeed, handleGetFeed, handleRotateFeed } from './feeds.js';
 import { handleListSchedule } from './list.js';
+import { handleClaimSignup, handleGetSignups, handlePutSignups } from './signups.js';
 import { handleUpsertRsvp } from './rsvp.js';
 
 export {
   handleAcceptFixture,
+  handleClaimSignup,
+  handleGetSignups,
+  handlePutSignups,
   handleCalendarFeed,
   handleGetFeed,
   handleRotateFeed,
@@ -74,4 +78,7 @@ export const httpRoutes: readonly HttpRoute[] = [
   handleGetFeed,
   handleRotateFeed,
   handleCalendarFeed,
+  handleGetSignups,
+  handlePutSignups,
+  handleClaimSignup,
 ];

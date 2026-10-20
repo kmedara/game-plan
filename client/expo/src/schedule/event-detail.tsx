@@ -1,5 +1,5 @@
 /**
- * Occurrence sheet: time, place, RSVP, attendance, carpool, and lineup.
+ * Occurrence sheet: time, place, RSVP, attendance, sign-ups, carpool, and lineup.
  */
 
 import { useQuery } from '@tanstack/react-query';
@@ -20,6 +20,7 @@ import { timeZoneLabel } from '@/src/time-zones';
 import { ErrorText } from '@/src/ui';
 import { AttendanceRow } from './attendance-row';
 import { CarpoolSection } from './carpool-section';
+import { SignupsSection } from './signups-section';
 import { LineupEditor } from './lineup-editor';
 import { RsvpChoices, rsvpLabelKey, useHour12 } from './rsvp';
 
@@ -131,6 +132,7 @@ export const EventDetail = ({
           />
         ))}
       </View>
+      <SignupsSection item={item} teamId={teamId} userId={userId} canManage={canManage} />
       <CarpoolSection
         item={item}
         teamId={teamId}

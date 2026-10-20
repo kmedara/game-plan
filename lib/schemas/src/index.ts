@@ -347,3 +347,20 @@ export {
   type MedicalPerson,
   type MemberMedical,
 } from './medical.js';
+
+export {
+  MAX_SIGNUP_CAPACITY,
+  MAX_SIGNUP_SLOTS,
+  claimSignupBodySchema,
+  putSignupsBodySchema,
+  signupClaimSchema,
+  signupSlotInputSchema,
+  signupSlotSchema,
+  signupsQuerySchema,
+  signupsResponseSchema,
+  type ClaimSignupBody,
+  type PutSignupsBody,
+  type SignupSlot,
+  type SignupsQuery,
+  type SignupsResponse,
+} from './signups.js';

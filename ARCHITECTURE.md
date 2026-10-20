@@ -89,6 +89,8 @@ Contracts are written once in Zod, validated on the server, and emitted as plain
 - **Why:** one language, so a contract change breaks both sides in the same build.
 - **Cost:** the generated file is committed. A schema edit is not done until regeneration is committed too.
 
+A bounded array (`.max(n)`) becomes `T[]` in the generated types (`maxItems: -1`), and a non-empty one `[T, ...T[]]`. Writing out every allowed length as a tuple made callers cast; the server still enforces the limit.
+
 ### One Expo app
 
 One Expo Router app is the website (static export) and the store apps. Maps, the day field, and the time clock use `.native.tsx` files.
@@ -146,6 +148,13 @@ Staff read through a team: `GET /teams/:teamId/members/:userId/medical` needs `v
 
 - **Why:** a parent fills it in once for every team. Guardians are the first people to call, so they come from the existing links rather than being typed again. Staff opening it on purpose, and the log, make access deliberate and reviewable.
 - **Cost:** it is free on every plan, by design. Teams created before this keep their stored permission matrix, so their admins grant `view_medical_info` to coaches by hand. There is no screen for the read log yet; it is in the table. A minor in a coach role cannot read it even with the permission.
+
+### Volunteer sign-ups
+
+Staff with `manage_events` add slots to one occurrence ("Snacks, 1", "Drivers, 3"); any member takes or gives up a place. All slots of an occurrence share one row, `SIGNUPS#<occurrence>#<eventId>`, like carpools. Replacing the list keeps the people on slots that stay and refuses to shrink a slot below them. A guardian may sign up a child; staff may remove anyone. People on a slot, and whoever signed them up, get the event's reminders without an RSVP. Each change sends `signups_changed` over the socket (no push).
+
+- **Why:** one read shows the whole occurrence, and every write is conditional on the row's `version`, so two parents taking the last place at once cannot both get it; the loser sees `condition_failed` and retries. Unlike carpool seats, claims are not queued offline, since a claim replayed hours later could take a place that is gone.
+- **Cost:** concurrent edits to different slots of one occurrence also collide and one retries. The app signs up the caller only; the guardian-for-child path is in the API, not yet a screen.
 
 ### Team dues
 

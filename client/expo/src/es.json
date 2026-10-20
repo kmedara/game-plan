@@ -494,6 +494,20 @@
       "notes": "Otras notas"
     }
   },
+  "signups": {
+    "title": "Voluntarios",
+    "label": "Qué",
+    "labelHint": "Refrigerios",
+    "capacity": "Personas",
+    "addSlot": "Agregar un puesto",
+    "removeHint": "Borra un nombre para quitar ese puesto.",
+    "filled": "{{taken}} de {{capacity}}",
+    "take": "Apuntarme",
+    "leave": "Cancelar mi lugar",
+    "remove": "Quitar",
+    "addFirst": "Agregar voluntarios (refrigerios, anotador, conductores)",
+    "edit": "Editar voluntarios"
+  },
   "errors": {
     "common": {
       "loadFailed": "No se pudo cargar. Inténtalo de nuevo.",
@@ -589,6 +603,12 @@
     "emergency": {
       "contactIncomplete": "Cada contacto de emergencia necesita un nombre y un teléfono.",
       "invalid": "Revisa los números de teléfono e inténtalo de nuevo."
+    },
+    "signups": {
+      "full": "Ese puesto acaba de llenarse.",
+      "capacityBelowClaims": "Un puesto no puede tener menos lugares que personas ya apuntadas.",
+      "changed": "Alguien acaba de cambiar los voluntarios. Inténtalo de nuevo.",
+      "badCapacity": "Cada puesto necesita entre 1 y {{max}} personas."
     }
   }
 }

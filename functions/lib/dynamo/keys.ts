@@ -198,7 +198,11 @@ export const LINEUP_SK_PREFIX = 'LINEUP#' as const;
 export const carpoolSk = (occurrenceStartsAt: string, eventId: string): string =>
   `CARPOOL#${occurrenceStartsAt}#${eventId}`;
 
-/** Sort-key prefix shared by every carpool on a team. */
+/** Volunteer sign-up slots for one occurrence. */
+export const signupsSk = (occurrenceStartsAt: string, eventId: string): string =>
+  `SIGNUPS#${occurrenceStartsAt}#${eventId}`;
+
+/** Sort-key prefix for every carpool row. */
 export const CARPOOL_SK_PREFIX = 'CARPOOL#' as const;
 
 /** `FIXTURE#<fixtureId>` — one shared game. */

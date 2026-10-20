@@ -218,6 +218,13 @@ export type ChatSummary = {
   createdAt: string;
 }
 
+export type ClaimSignupBody = {
+  eventId: string;
+  occurrenceStartsAt: string;
+  slotId: string;
+  forUserId?: string;
+}
+
 export type CompleteProfileBody = {
   birthday: string;
   displayName?: string;
@@ -384,6 +391,17 @@ export type FanoutJob =
       type: 'schedule_changed';
       teamId: string;
       eventId: string;
+      /**
+       * @minItems 1
+       */
+      userIds?: [string, ...string[]];
+      attempt?: number;
+    }
+  | {
+      type: 'signups_changed';
+      teamId: string;
+      eventId: string;
+      occurrenceStartsAt: string;
       /**
        * @minItems 1
        */
@@ -618,66 +636,11 @@ export type MedicalInfoBody = {
   /**
    * @maxItems 4
    */
-  emergencyContacts:
-    | []
-    | [
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        }
-      ]
-    | [
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        },
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        }
-      ]
-    | [
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        },
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        },
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        }
-      ]
-    | [
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        },
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        },
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        },
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        }
-      ];
+  emergencyContacts: {
+    name: string;
+    phone: string;
+    relation?: string;
+  }[];
 }
 
 export type MedicalInfo = {
@@ -689,66 +652,11 @@ export type MedicalInfo = {
   /**
    * @maxItems 4
    */
-  emergencyContacts:
-    | []
-    | [
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        }
-      ]
-    | [
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        },
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        }
-      ]
-    | [
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        },
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        },
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        }
-      ]
-    | [
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        },
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        },
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        },
-        {
-          name: string;
-          phone: string;
-          relation?: string;
-        }
-      ];
+  emergencyContacts: {
+    name: string;
+    phone: string;
+    relation?: string;
+  }[];
   userId: string;
   updatedAt?: string;
 }
@@ -768,66 +676,11 @@ export type MedicalPeople = {
       /**
        * @maxItems 4
        */
-      emergencyContacts:
-        | []
-        | [
-            {
-              name: string;
-              phone: string;
-              relation?: string;
-            }
-          ]
-        | [
-            {
-              name: string;
-              phone: string;
-              relation?: string;
-            },
-            {
-              name: string;
-              phone: string;
-              relation?: string;
-            }
-          ]
-        | [
-            {
-              name: string;
-              phone: string;
-              relation?: string;
-            },
-            {
-              name: string;
-              phone: string;
-              relation?: string;
-            },
-            {
-              name: string;
-              phone: string;
-              relation?: string;
-            }
-          ]
-        | [
-            {
-              name: string;
-              phone: string;
-              relation?: string;
-            },
-            {
-              name: string;
-              phone: string;
-              relation?: string;
-            },
-            {
-              name: string;
-              phone: string;
-              relation?: string;
-            },
-            {
-              name: string;
-              phone: string;
-              relation?: string;
-            }
-          ];
+      emergencyContacts: {
+        name: string;
+        phone: string;
+        relation?: string;
+      }[];
       userId: string;
       updatedAt?: string;
     };
@@ -848,66 +701,11 @@ export type MedicalPerson = {
     /**
      * @maxItems 4
      */
-    emergencyContacts:
-      | []
-      | [
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          }
-        ]
-      | [
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          },
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          }
-        ]
-      | [
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          },
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          },
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          }
-        ]
-      | [
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          },
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          },
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          },
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          }
-        ];
+    emergencyContacts: {
+      name: string;
+      phone: string;
+      relation?: string;
+    }[];
     userId: string;
     updatedAt?: string;
   };
@@ -923,66 +721,11 @@ export type MemberMedical = {
     /**
      * @maxItems 4
      */
-    emergencyContacts:
-      | []
-      | [
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          }
-        ]
-      | [
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          },
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          }
-        ]
-      | [
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          },
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          },
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          }
-        ]
-      | [
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          },
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          },
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          },
-          {
-            name: string;
-            phone: string;
-            relation?: string;
-          }
-        ];
+    emergencyContacts: {
+      name: string;
+      phone: string;
+      relation?: string;
+    }[];
     userId: string;
     updatedAt?: string;
   };
@@ -1172,6 +915,19 @@ export type ProposeFixtureBody = {
   teamId: string;
 }
 
+export type PutSignupsBody = {
+  eventId: string;
+  occurrenceStartsAt: string;
+  /**
+   * @maxItems 12
+   */
+  slots: {
+    slotId?: string;
+    label: string;
+    capacity: number;
+  }[];
+}
+
 export type RecurrenceRule = {
   frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
   interval?: number;
@@ -1319,18 +1075,7 @@ export type SendMessageBody = {
   /**
    * @maxItems 10
    */
-  attachmentKeys?:
-    | []
-    | [string]
-    | [string, string]
-    | [string, string, string]
-    | [string, string, string, string]
-    | [string, string, string, string, string]
-    | [string, string, string, string, string, string]
-    | [string, string, string, string, string, string, string]
-    | [string, string, string, string, string, string, string, string]
-    | [string, string, string, string, string, string, string, string, string]
-    | [string, string, string, string, string, string, string, string, string, string];
+  attachmentKeys?: string[];
 }
 
 export type SessionTokens = {
@@ -1347,6 +1092,49 @@ export type SessionTokens = {
     needsProfileCompletion?: boolean;
   };
   refreshToken?: string;
+}
+
+export type SignupClaim = {
+  userId: string;
+  displayName?: string;
+  claimedBy: string;
+}
+
+export type SignupSlotInput = {
+  slotId?: string;
+  label: string;
+  capacity: number;
+}
+
+export type SignupSlot = {
+  slotId: string;
+  label: string;
+  capacity: number;
+  claims: {
+    userId: string;
+    displayName?: string;
+    claimedBy: string;
+  }[];
+}
+
+export type SignupsQuery = {
+  eventId: string;
+  occurrenceStartsAt: string;
+}
+
+export type SignupsResponse = {
+  eventId: string;
+  occurrenceStartsAt: string;
+  slots: {
+    slotId: string;
+    label: string;
+    capacity: number;
+    claims: {
+      userId: string;
+      displayName?: string;
+      claimedBy: string;
+    }[];
+  }[];
 }
 
 export type SocketTicket = {
@@ -1748,3 +1536,7 @@ export const DEFAULT_EVENING_HOUR = 18;
 export const DEFAULT_LEAD_MINUTES = 60;
 
 export const MAX_EMERGENCY_CONTACTS = 4;
+
+export const MAX_SIGNUP_SLOTS = 12;
+
+export const MAX_SIGNUP_CAPACITY = 20;

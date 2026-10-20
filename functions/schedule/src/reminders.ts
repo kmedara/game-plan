@@ -12,6 +12,7 @@ import { REMINDER_EVENING_HOURS, REMINDER_LEAD_MINUTES } from '@gameplan/schemas
 import type { Preferences, RecurrenceRule } from '@gameplan/types';
 import { expandOccurrenceStarts } from '../../lib/expand-occurrences.js';
 import { loadPreferences } from '../../lib/preferences.js';
+import { signedUpUserIds } from './signups.js';
 import { zonedDate, zonedWallToUtc } from '../../lib/time-zone.js';
 import { enqueueFanout } from '../../lib/fanout-enqueue.js';
 import {
@@ -304,7 +305,8 @@ export const syncReminders = async (input: {
 };
 
 /**
- * Who should get one reminder: RSVPs going or maybe whose chosen time matches.
+ * Who should get one reminder: RSVPs going or maybe, and anyone who signed up
+ * to help, whose chosen time matches.
  *
  * @param row - The due reminder.
  * @param slot - Its reminder time.
@@ -315,10 +317,12 @@ const recipientsFor = async (row: ReminderItem, slot: ReminderSlot): Promise<str
     teamPk(row.teamId),
     `RSVP#${row.occurrenceStartsAt}#${row.eventId}#`,
   );
+  const helping = await signedUpUserIds(row.teamId, row.eventId, row.occurrenceStartsAt);
   const coming = [
-    ...new Set(
-      rsvps.filter((rsvp) => rsvp.status === 'going' || rsvp.status === 'maybe').map((rsvp) => rsvp.userId),
-    ),
+    ...new Set([
+      ...rsvps.filter((rsvp) => rsvp.status === 'going' || rsvp.status === 'maybe').map((rsvp) => rsvp.userId),
+      ...helping,
+    ]),
   ];
   const preferences = await Promise.all(coming.map((userId) => loadPreferences(userId)));
   return coming.filter((_userId, index) => {

@@ -15,6 +15,9 @@ import type {
   ApprovedJoinRequest,
   BillingInterval,
   CalendarFeed,
+  ClaimSignupBody,
+  PutSignupsBody,
+  SignupsResponse,
   MedicalInfo,
   MedicalInfoBody,
   MedicalPeople,
@@ -502,6 +505,19 @@ export class ApiClient {
 
   async putLineup(teamId: string, body: LineupBody): Promise<LineupResponse> {
     return this.request('PUT', `/schedule/teams/${teamId}/lineup`, body);
+  }
+
+  async getSignups(teamId: string, eventId: string, occurrenceStartsAt: string): Promise<SignupsResponse> {
+    const params = new URLSearchParams({ eventId, occurrenceStartsAt });
+    return this.request('GET', `/schedule/teams/${teamId}/signups?${params}`);
+  }
+
+  async putSignups(teamId: string, body: PutSignupsBody): Promise<SignupsResponse> {
+    return this.request('PUT', `/schedule/teams/${teamId}/signups`, body);
+  }
+
+  async claimSignup(teamId: string, body: ClaimSignupBody): Promise<SignupsResponse> {
+    return this.request('PUT', `/schedule/teams/${teamId}/signups/claim`, body);
   }
 
   async getCarpool(teamId: string, query: CarpoolQuery): Promise<CarpoolResponse> {

@@ -73,6 +73,7 @@ export {
   guardianInviteSk,
   guardianSk,
   carpoolSk,
+  signupsSk,
   lineupSk,
   inviteMetaSk,
   invitePk,
