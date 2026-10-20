@@ -41,8 +41,14 @@ export const mapChatError = (
     case 'minor_chat_rule_violated':
     case 'guardian_required':
       return forbidden(error.message);
+    case 'poll_not_found':
+      return notFound();
     case 'invalid_body':
     case 'invalid_attachment_key':
+    case 'poll_closed':
+    case 'poll_option_not_found':
+    case 'poll_single_choice':
+    case 'poll_duplicate_option':
       return badRequest(error.message);
     default:
       if (error.name === 'ConditionalCheckFailedException') {

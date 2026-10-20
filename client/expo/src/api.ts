@@ -16,6 +16,8 @@ import type {
   BillingInterval,
   CalendarFeed,
   ClaimSignupBody,
+  CreatePollBody,
+  PollTally,
   PutSignupsBody,
   SignupsResponse,
   MedicalInfo,
@@ -505,6 +507,14 @@ export class ApiClient {
 
   async putLineup(teamId: string, body: LineupBody): Promise<LineupResponse> {
     return this.request('PUT', `/schedule/teams/${teamId}/lineup`, body);
+  }
+
+  async createPoll(chatId: string, body: CreatePollBody): Promise<ChatMessage> {
+    return this.request('POST', `/chat/${chatId}/polls`, body);
+  }
+
+  async votePoll(chatId: string, messageId: string, optionIds: string[]): Promise<PollTally> {
+    return this.request('PUT', `/chat/${chatId}/polls/${messageId}/vote`, { optionIds });
   }
 
   async getSignups(teamId: string, eventId: string, occurrenceStartsAt: string): Promise<SignupsResponse> {

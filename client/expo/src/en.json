@@ -506,6 +506,22 @@
     "addFirst": "Add sign-ups (snacks, scorekeeper, drivers)",
     "edit": "Edit sign-ups"
   },
+  "polls": {
+    "button": "Poll",
+    "new": "New poll",
+    "question": "Question",
+    "questionHint": "Pizza after the game?",
+    "option": "Option {{number}}",
+    "addOption": "Add an option",
+    "allowMultiple": "Allow more than one answer",
+    "post": "Post poll",
+    "pickOne": "Pick one",
+    "pickAny": "Pick any",
+    "votes_one": "{{count}} vote",
+    "votes_other": "{{count}} votes",
+    "closed_one": "Closed · {{count}} vote",
+    "closed_other": "Closed · {{count}} votes"
+  },
   "errors": {
     "common": {
       "loadFailed": "Could not load this. Try again.",
@@ -607,6 +623,13 @@
       "capacityBelowClaims": "A slot cannot hold fewer people than have already signed up.",
       "changed": "Someone else just changed the sign-ups. Try again.",
       "badCapacity": "Each slot needs between 1 and {{max}} people."
+    },
+    "polls": {
+      "closed": "This poll is closed.",
+      "duplicate": "Each option must be different.",
+      "invalid": "Check the question and options.",
+      "questionRequired": "Add a question.",
+      "twoOptions": "Add at least two options."
     }
   }
 }

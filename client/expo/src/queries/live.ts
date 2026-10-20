@@ -4,7 +4,7 @@
 
 import type { QueryClient } from '@tanstack/react-query';
 import type { ChatMessage, FanoutJob } from '@gameplan/types';
-import { rememberChatMessage } from './chat';
+import { rememberChatMessage, rememberPollTally } from './chat';
 import { queryKeys } from './keys';
 
 const messageFromEvent = (event: Extract<FanoutJob, { type: 'chat_message' }>): ChatMessage => ({
@@ -16,6 +16,7 @@ const messageFromEvent = (event: Extract<FanoutJob, { type: 'chat_message' }>): 
   body: event.body,
   createdAt: event.createdAt,
   ...(event.attachmentKeys !== undefined ? { attachmentKeys: event.attachmentKeys } : {}),
+  ...(event.poll !== undefined ? { poll: event.poll, pollTally: { counts: {}, voters: 0, mine: [] } } : {}),
 });
 
 /**
@@ -37,6 +38,10 @@ export const applyLiveEvent = (queryClient: QueryClient, event: FanoutJob): void
   }
   if (event.type === 'join_requested') {
     void queryClient.invalidateQueries({ queryKey: queryKeys.joinRequests(event.teamId) });
+    return;
+  }
+  if (event.type === 'poll_updated') {
+    rememberPollTally(queryClient, event.chatId, event.messageId, { counts: event.counts, voters: event.voters });
     return;
   }
   if (event.type === 'signups_changed') {

@@ -1,5 +1,5 @@
 /**
- * Message thread with a virtualized list and live updates.
+ * Message thread with a virtualized list, live updates, and polls.
  */
 
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { errorMessageKey, queryError } from '@/src/errors';
 import { PullRefreshFrame, usePullRefreshList } from '@/src/pull-refresh';
 import { CHAT_PHOTO_MAX_DIMENSION, pickAndUploadImage, useDownloadUrl, type UploadedImage } from '@/src/media';
+import { PollBubble, PollComposer } from '@/src/poll';
 import { chatsQuery, messagesQuery, sendMessageMutation } from '@/src/queries/chat';
 import { membersQuery } from '@/src/queries/teams';
 import { useApp, useBrandTeam } from '@/src/state';
@@ -39,6 +40,7 @@ export default function ChatThreadScreen() {
   const [draft, setDraft] = useState('');
   const [photos, setPhotos] = useState<UploadedImage[]>([]);
   const [error, setError] = useState<string | undefined>();
+  const [pollOpen, setPollOpen] = useState(false);
   const [namedMessageId, setNamedMessageId] = useState<string | undefined>();
   // A private chat has no team, so a sender's profile opens under the first team that lists them.
   const rosters = useQueries({
@@ -101,7 +103,9 @@ export default function ChatThreadScreen() {
             const mine = item.senderId === api.user?.userId;
             const content = (
               <>
-                {item.body.length > 0 ? (
+                {item.poll !== undefined ? (
+                  <PollBubble message={item} onDark={mine} />
+                ) : item.body.length > 0 ? (
                   <Text className="text-ink" style={mine ? { color: brand.onPrimary } : undefined}>{item.body}</Text>
                 ) : null}
                 {item.attachmentKeys?.map((key) => (
@@ -170,6 +174,16 @@ export default function ChatThreadScreen() {
           >
             <CameraIcon />
           </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('polls.new')}
+            className="mr-1 h-10 items-center justify-center px-1"
+            onPress={() => setPollOpen(true)}
+          >
+            <Text className="text-sm font-semibold" style={{ color: brand.accent }}>
+              {t('polls.button')}
+            </Text>
+          </Pressable>
           <TextInput
             className="flex-1 py-2 text-ink"
             value={draft}
@@ -188,6 +202,7 @@ export default function ChatThreadScreen() {
           ) : null}
         </View>
       </View>
+      <PollComposer chatId={id} visible={pollOpen} onClose={() => setPollOpen(false)} />
     </View>
   );
 }

@@ -200,6 +200,25 @@ export type ChatMessage = {
   body: string;
   attachmentKeys?: string[];
   createdAt: string;
+  poll?: {
+    question: string;
+    /**
+     * @maxItems 10
+     */
+    options: {
+      id: string;
+      text: string;
+    }[];
+    multiple: boolean;
+    closesAt?: string;
+  };
+  pollTally?: {
+    counts: {
+      [k: string]: number;
+    };
+    voters: number;
+    mine: string[];
+  };
 }
 
 export type ChatParticipant = {
@@ -279,6 +298,16 @@ export type CreateGuardianInviteBody = {
 
 export type CreateInviteBody = {
   role?: 'team_admin' | 'coach' | 'player' | 'parent';
+}
+
+export type CreatePollBody = {
+  question: string;
+  /**
+   * @maxItems 10
+   */
+  options: string[];
+  multiple?: boolean;
+  closesAt?: string;
 }
 
 export type CreatePrivateChatBody = {
@@ -447,6 +476,32 @@ export type FanoutJob =
       body: string;
       createdAt: string;
       attachmentKeys?: string[];
+      poll?: {
+        question: string;
+        /**
+         * @maxItems 10
+         */
+        options: {
+          id: string;
+          text: string;
+        }[];
+        multiple: boolean;
+        closesAt?: string;
+      };
+      /**
+       * @minItems 1
+       */
+      userIds?: [string, ...string[]];
+      attempt?: number;
+    }
+  | {
+      type: 'poll_updated';
+      chatId: string;
+      messageId: string;
+      counts: {
+        [k: string]: number;
+      };
+      voters: number;
       /**
        * @minItems 1
        */
@@ -751,6 +806,25 @@ export type MessagePage = {
     body: string;
     attachmentKeys?: string[];
     createdAt: string;
+    poll?: {
+      question: string;
+      /**
+       * @maxItems 10
+       */
+      options: {
+        id: string;
+        text: string;
+      }[];
+      multiple: boolean;
+      closesAt?: string;
+    };
+    pollTally?: {
+      counts: {
+        [k: string]: number;
+      };
+      voters: number;
+      mine: string[];
+    };
   }[];
   cursor?: string;
 }
@@ -881,6 +955,34 @@ export type PlaceSuggestion = {
 export type PlanStatus = 'active' | 'trialing' | 'past_due' | 'canceled';
 
 export type PlanTier = 'free' | 'premium' | 'organization';
+
+export type Poll = {
+  question: string;
+  /**
+   * @maxItems 10
+   */
+  options: {
+    id: string;
+    text: string;
+  }[];
+  multiple: boolean;
+  closesAt?: string;
+}
+
+export type PollTally = {
+  counts: {
+    [k: string]: number;
+  };
+  voters: number;
+  mine: string[];
+}
+
+export type PollVoteBody = {
+  /**
+   * @maxItems 10
+   */
+  optionIds: string[];
+}
 
 export type Preferences = {
   reminderEveningHour: (17 | 18 | 19 | 20 | 21) | null;
@@ -1540,3 +1642,5 @@ export const MAX_EMERGENCY_CONTACTS = 4;
 export const MAX_SIGNUP_SLOTS = 12;
 
 export const MAX_SIGNUP_CAPACITY = 20;
+
+export const MAX_POLL_OPTIONS = 10;

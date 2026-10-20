@@ -3,7 +3,14 @@
  */
 
 import { mutationOptions, queryOptions, type QueryClient } from '@tanstack/react-query';
-import type { ChatMessage, CreatePrivateChatBody, CreateTeamChannelBody, MessagePage } from '@gameplan/types';
+import type {
+  ChatMessage,
+  CreatePollBody,
+  CreatePrivateChatBody,
+  CreateTeamChannelBody,
+  MessagePage,
+  PollTally,
+} from '@gameplan/types';
 import type { ApiClient } from '../api';
 import { queryKeys } from './keys';
 
@@ -38,6 +45,49 @@ export const rememberChatMessage = (
     return { ...current, messages: [message, ...current.messages] };
   });
 };
+
+/**
+ * Updates the tally on a cached poll message.
+ *
+ * @param queryClient - The app client.
+ * @param chatId - The chat.
+ * @param messageId - The poll message.
+ * @param update - Fields to replace. A live update has no `mine`, so the reader's own choices stay.
+ */
+export const rememberPollTally = (
+  queryClient: QueryClient,
+  chatId: string,
+  messageId: string,
+  update: Partial<PollTally>,
+): void => {
+  queryClient.setQueryData(queryKeys.messages(chatId), (current: MessagePage | undefined) => {
+    if (current === undefined) return current;
+    return {
+      ...current,
+      messages: current.messages.map((message) =>
+        message.messageId !== messageId || message.poll === undefined
+          ? message
+          : { ...message, pollTally: { counts: {}, voters: 0, mine: [], ...message.pollTally, ...update } },
+      ),
+    };
+  });
+};
+
+export const createPollMutation = (api: Pick<ApiClient, 'createPoll'>, queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ chatId, body }: { chatId: string; body: CreatePollBody }) => api.createPoll(chatId, body),
+    onSuccess: (message) => {
+      rememberChatMessage(queryClient, message, true);
+      return queryClient.invalidateQueries({ queryKey: queryKeys.chats });
+    },
+  });
+
+export const votePollMutation = (api: Pick<ApiClient, 'votePoll'>, queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ chatId, messageId, optionIds }: { chatId: string; messageId: string; optionIds: string[] }) =>
+      api.votePoll(chatId, messageId, optionIds),
+    onSuccess: (tally, { chatId, messageId }) => rememberPollTally(queryClient, chatId, messageId, tally),
+  });
 
 export const sendMessageMutation = (api: Pick<ApiClient, 'sendMessage'>, queryClient: QueryClient) =>
   mutationOptions({

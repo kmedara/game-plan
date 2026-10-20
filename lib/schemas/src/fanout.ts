@@ -3,6 +3,7 @@
  */
 
 import { displayNameSchema } from './display-name.js';
+import { pollSchema } from './chat.js';
 import { chargeCurrencySchema } from './payments.js';
 import { z } from './zod.js';
 
@@ -84,6 +85,17 @@ export const fanoutJobSchema = z.discriminatedUnion('type', [
       body: z.string().max(8_000),
       createdAt: z.string().min(1),
       attachmentKeys: z.array(z.string().min(1).max(512)).optional(),
+      poll: pollSchema.optional(),
+      ...retryFields,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('poll_updated'),
+      chatId: z.string().min(1),
+      messageId: z.string().min(1),
+      counts: z.record(z.string(), z.number().int().min(0)),
+      voters: z.number().int().min(0),
       ...retryFields,
     })
     .strict(),

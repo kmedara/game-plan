@@ -15,6 +15,7 @@ import type {
   ChatSummary,
   MessageHistoryQuery,
   MessagePage,
+  Poll,
 } from '@gameplan/types';
 import {
   MESSAGE_SK_PREFIX,
@@ -27,6 +28,7 @@ import {
   chatPk,
   getItem,
   messageSk,
+  pollSk,
   putItem,
   queryBySkPrefix,
   queryPage,
@@ -116,6 +118,7 @@ export type MessageItem = {
   body: string;
   attachmentKeys?: string[];
   createdAt: string;
+  poll?: Poll;
 };
 
 /**
@@ -150,6 +153,7 @@ const toStoredMessage = (
   body: item.body,
   ...(item.attachmentKeys !== undefined ? { attachmentKeys: item.attachmentKeys } : {}),
   createdAt: item.createdAt,
+  ...(item.poll !== undefined ? { poll: item.poll } : {}),
 });
 
 /** Name shown when the sender's profile row is gone. */
@@ -448,13 +452,17 @@ export const listMessages = async (
 /**
  * Persists a message and enqueues fan-out delivery.
  *
- * @param input - Chat, sender, and message body.
+ * A poll message carries the poll; its body is the question, so chat
+ * previews and push text work unchanged.
+ *
+ * @param input - Chat, sender, message body, and an optional poll.
  * @returns The stored message.
  */
 export const sendMessage = async (input: {
   chatId: string;
   userId: string;
   body: SendMessageBody;
+  poll?: Poll;
 }): Promise<ChatMessage> => {
   await requireChat(input.chatId);
   await requireChatMembership(input.chatId, input.userId);
@@ -481,9 +489,19 @@ export const sendMessage = async (input: {
     body: bodyText,
     ...(attachmentKeys.length > 0 ? { attachmentKeys } : {}),
     createdAt,
+    ...(input.poll !== undefined ? { poll: input.poll } : {}),
   };
 
   await putItem(item);
+  if (input.poll !== undefined) {
+    await putItem({
+      [TABLE_PK]: chatPk(input.chatId),
+      [TABLE_SK]: pollSk(messageId),
+      chatId: input.chatId,
+      messageId,
+      poll: input.poll,
+    });
+  }
   const identity = await senderIdentity(input.userId);
   await enqueueFanout({
     type: 'chat_message',
@@ -497,7 +515,12 @@ export const sendMessage = async (input: {
     body: bodyText,
     createdAt,
     ...(attachmentKeys.length > 0 ? { attachmentKeys } : {}),
+    ...(input.poll !== undefined ? { poll: input.poll } : {}),
   });
-  return { ...toStoredMessage(item), ...identity };
+  return {
+    ...toStoredMessage(item),
+    ...identity,
+    ...(input.poll !== undefined ? { pollTally: { counts: {}, voters: 0, mine: [] } } : {}),
+  };
 };
 

@@ -508,6 +508,22 @@
     "addFirst": "Agregar voluntarios (refrigerios, anotador, conductores)",
     "edit": "Editar voluntarios"
   },
+  "polls": {
+    "button": "Encuesta",
+    "new": "Nueva encuesta",
+    "question": "Pregunta",
+    "questionHint": "¿Pizza después del partido?",
+    "option": "Opción {{number}}",
+    "addOption": "Agregar una opción",
+    "allowMultiple": "Permitir más de una respuesta",
+    "post": "Publicar encuesta",
+    "pickOne": "Elige una",
+    "pickAny": "Elige las que quieras",
+    "votes_one": "{{count}} voto",
+    "votes_other": "{{count}} votos",
+    "closed_one": "Cerrada · {{count}} voto",
+    "closed_other": "Cerrada · {{count}} votos"
+  },
   "errors": {
     "common": {
       "loadFailed": "No se pudo cargar. Inténtalo de nuevo.",
@@ -609,6 +625,13 @@
       "capacityBelowClaims": "Un puesto no puede tener menos lugares que personas ya apuntadas.",
       "changed": "Alguien acaba de cambiar los voluntarios. Inténtalo de nuevo.",
       "badCapacity": "Cada puesto necesita entre 1 y {{max}} personas."
+    },
+    "polls": {
+      "closed": "Esta encuesta está cerrada.",
+      "duplicate": "Cada opción debe ser diferente.",
+      "invalid": "Revisa la pregunta y las opciones.",
+      "questionRequired": "Agrega una pregunta.",
+      "twoOptions": "Agrega al menos dos opciones."
     }
   }
 }

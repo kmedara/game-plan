@@ -48,6 +48,7 @@ const CONST_EXPORTS = [
   'MAX_EMERGENCY_CONTACTS',
   'MAX_SIGNUP_SLOTS',
   'MAX_SIGNUP_CAPACITY',
+  'MAX_POLL_OPTIONS',
 ] as const;
 
 /** Convert `loginBodySchema` → `LoginBody`. */

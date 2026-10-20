@@ -174,7 +174,7 @@ const isThrottled = (error: unknown): boolean => {
  */
 const recipientUserIds = async (job: FanoutJob): Promise<string[]> => {
   if (job.userIds !== undefined) return distinctUserIds(job.userIds);
-  if (job.type === 'chat_message') {
+  if (job.type === 'chat_message' || job.type === 'poll_updated') {
     const members = await queryBySkPrefix<ChatMemberItem>(
       chatPk(job.chatId),
       CHAT_MEMBER_SK_PREFIX,
@@ -376,7 +376,7 @@ const publishPush = async (
   }
   if (devices.length === 0) return;
 
-  if (job.type === 'schedule_changed' || job.type === 'signups_changed') return;
+  if (job.type === 'schedule_changed' || job.type === 'signups_changed' || job.type === 'poll_updated') return;
 
   const title =
     job.type === 'chat_message'

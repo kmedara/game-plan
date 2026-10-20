@@ -198,7 +198,12 @@ export {
 
 export {
   chatListSchema,
+  MAX_POLL_OPTIONS,
   chatMessageSchema,
+  createPollBodySchema,
+  pollSchema,
+  pollTallySchema,
+  pollVoteBodySchema,
   chatParticipantSchema,
   chatSummarySchema,
   createPrivateChatBodySchema,
@@ -210,6 +215,10 @@ export {
   userSearchPolicySchema,
   type ChatList,
   type ChatMessage,
+  type CreatePollBody,
+  type Poll,
+  type PollTally,
+  type PollVoteBody,
   type ChatParticipant,
   type ChatSummary,
   type CreatePrivateChatBody,

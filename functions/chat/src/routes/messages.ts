@@ -7,6 +7,7 @@ import { requireUser } from '../../../lib/auth/index.js';
 import { json } from '../../../lib/http.js';
 import { route, withBodyValidation, withQueryValidation } from '../../../lib/pipeline.js';
 import { listMessages, requireChatMembership, sendMessage } from '../chat-store.js';
+import { withPollTallies } from '../polls.js';
 import { withChatErrors } from './errors.js';
 
 /**
@@ -25,7 +26,7 @@ export const handleListMessages = route(
   async ({ chatId, user, query }) => {
     await requireChatMembership(chatId, user.userId);
     const page = await listMessages(chatId, query);
-    return json(200, page);
+    return json(200, { ...page, messages: await withPollTallies(chatId, page.messages, user.userId) });
   },
 );
 

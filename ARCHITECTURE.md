@@ -156,6 +156,13 @@ Staff with `manage_events` add slots to one occurrence ("Snacks, 1", "Drivers, 3
 - **Why:** one read shows the whole occurrence, and every write is conditional on the row's `version`, so two parents taking the last place at once cannot both get it; the loser sees `condition_failed` and retries. Unlike carpool seats, claims are not queued offline, since a claim replayed hours later could take a place that is gone.
 - **Cost:** concurrent edits to different slots of one occurrence also collide and one retries. The app signs up the caller only; the guardian-for-child path is in the API, not yet a screen.
 
+### Polls in chat
+
+A poll is a chat message with a `poll` field, and its body is the question, so it pages, previews, and pushes like any message. Creating one also writes `CHAT#<chatId>` / `POLL#<messageId>` so a vote can find the poll by id (message rows are keyed by time). Each person's choice is its own row, `VOTE#<messageId>#<userId>`; an empty choice deletes it. History adds a `pollTally` (counts, voters, the reader's own choices) to poll messages, and each vote sends `poll_updated` with the new counts to the chat's open sockets (no push). Options get short ids (`o1`, `o2`, ...), a poll may allow several answers, and a close time stops votes.
+
+- **Why:** a vote row per person means voters never collide and never rewrite the message, and changing a vote is one put. Counting on read keeps one source of truth.
+- **Cost:** each poll message on a page costs a query for its votes. A live update carries counts only, so the reader's own choices come from their vote response or the next history load. Votes are visible as counts, not names.
+
 ### Team dues
 
 Each team connects a Stripe Express account. A charge (`TEAM#id` / `CHARGE#`) asks some members to pay; each member's share is a due (`DUE#<chargeId>#<memberId>`) with a pointer on the member's partition for "my dues". Payment is a direct charge on the team's account through hosted Checkout, with GamePlan's cut as `application_fee_amount` (`PLATFORM_FEE_BPS`, default 2%). An adult pays their own due; a minor's guardians pay theirs (`payerIdsForDue` in `lib/rules`). Staff can mark a due paid outside the app or waived.

@@ -72,6 +72,57 @@ export const messageHistoryQuerySchema = z.object({
   cursor: z.string().min(1).optional(),
 });
 
+/** Most choices one poll may offer. */
+export const MAX_POLL_OPTIONS = 10;
+
+/** A poll attached to a chat message. The message body repeats the question. */
+export const pollSchema = z
+  .object({
+    question: z.string().min(1).max(300),
+    // At least two on creation (`createPollBodySchema`); not repeated here, so
+    // the generated type stays a plain array.
+    options: z
+      .array(z.object({ id: z.string().min(1).max(12), text: z.string().min(1).max(100) }).strict())
+      .max(MAX_POLL_OPTIONS),
+    /** Voters may pick more than one option. */
+    multiple: z.boolean(),
+    /** After this instant votes are refused (ISO). */
+    closesAt: z.string().datetime().optional(),
+  })
+  .strict();
+
+/** Vote counts on a poll, and the viewer's own choices. */
+export const pollTallySchema = z
+  .object({
+    /** Votes per option id. */
+    counts: z.record(z.string(), z.number().int().min(0)),
+    /** People who have voted. */
+    voters: z.number().int().min(0),
+    /** Option ids the viewer picked. */
+    mine: z.array(z.string()),
+  })
+  .strict();
+
+/** Body for `POST /chat/:chatId/polls`. */
+export const createPollBodySchema = z
+  .object({
+    question: z.string().trim().min(1).max(300),
+    options: z
+      .array(z.string().trim().min(1).max(100))
+      .max(MAX_POLL_OPTIONS)
+      .refine((options) => options.length >= 2, { message: 'Add at least two options' }),
+    multiple: z.boolean().default(false),
+    closesAt: z.string().datetime().optional(),
+  })
+  .strict();
+
+/** Body for `PUT /chat/:chatId/polls/:messageId/vote`. An empty list takes the vote back. */
+export const pollVoteBodySchema = z
+  .object({
+    optionIds: z.array(z.string().min(1).max(12)).max(MAX_POLL_OPTIONS),
+  })
+  .strict();
+
 /** Body for persisting a chat message. */
 export const sendMessageBodySchema = z
   .object({
@@ -114,6 +165,9 @@ export const chatMessageSchema = z
     body: z.string().max(8_000),
     attachmentKeys: z.array(z.string().min(1).max(512)).optional(),
     createdAt: z.string().min(1),
+    poll: pollSchema.optional(),
+    /** Present on a poll message. */
+    pollTally: pollTallySchema.optional(),
   })
   .strict();
 
@@ -151,3 +205,15 @@ export type ChatList = z.infer<typeof chatListSchema>;
 
 /** Inferred type for {@link messagePageSchema}. */
 export type MessagePage = z.infer<typeof messagePageSchema>;
+
+/** Inferred type for {@link pollSchema}. */
+export type Poll = z.infer<typeof pollSchema>;
+
+/** Inferred type for {@link pollTallySchema}. */
+export type PollTally = z.infer<typeof pollTallySchema>;
+
+/** Inferred type for {@link createPollBodySchema}. */
+export type CreatePollBody = z.infer<typeof createPollBodySchema>;
+
+/** Inferred type for {@link pollVoteBodySchema}. */
+export type PollVoteBody = z.infer<typeof pollVoteBodySchema>;

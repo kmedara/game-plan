@@ -102,6 +102,8 @@ const PROTECTED: Record<string, RouteCase[]> = {
     { route: 'handleSearchUsers', method: 'GET', path: '/chat/users/search', query: 'q=al' },
     { route: 'handleListMessages', method: 'GET', path: '/chat/chat-1/messages' },
     { route: 'handleSendMessage', method: 'POST', path: '/chat/chat-1/messages' },
+    { route: 'handleCreatePoll', method: 'POST', path: '/chat/chat-1/polls' },
+    { route: 'handleVotePoll', method: 'PUT', path: '/chat/chat-1/polls/message-1/vote' },
   ],
   media: [
     { route: 'handlePresignUpload', method: 'POST', path: '/media/presign-upload' },

@@ -350,6 +350,15 @@ export const CHAT_MEMBER_SK_PREFIX = 'MEMBER#' as const;
 export const messageSk = (createdAtIso: string, messageId: string): string =>
   `MSG#${createdAtIso}#${messageId}`;
 
+/** A poll's definition, found by message id when someone votes. */
+export const pollSk = (messageId: string): string => `POLL#${messageId}`;
+
+/** One person's vote on a poll message. */
+export const pollVoteSk = (messageId: string, userId: UserId): string => `VOTE#${messageId}#${userId}`;
+
+/** Sort-key prefix for every vote on one poll. */
+export const pollVoteSkPrefix = (messageId: string): string => `VOTE#${messageId}#`;
+
 /** Sort-key prefix shared by every message in a chat. */
 export const MESSAGE_SK_PREFIX = 'MSG#' as const;
 

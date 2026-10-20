@@ -95,3 +95,26 @@ describe('resyncAfterReconnect', () => {
     expect(stale(queryKeys.members('t1'))).toBe(false);
   });
 });
+
+describe('poll updates', () => {
+  it('replaces counts on a cached poll and keeps the reader’s own choices', () => {
+    const client = createTestQueryClient();
+    client.setQueryData(queryKeys.messages('c1'), {
+      messages: [
+        {
+          messageId: 'p1',
+          chatId: 'c1',
+          senderId: 'u1',
+          senderDisplayName: 'A',
+          body: 'Pizza?',
+          createdAt: '1',
+          poll: { question: 'Pizza?', options: [{ id: 'o1', text: 'Yes' }, { id: 'o2', text: 'No' }], multiple: false },
+          pollTally: { counts: { o1: 1 }, voters: 1, mine: ['o1'] },
+        },
+      ],
+    });
+    applyLiveEvent(client, { type: 'poll_updated', chatId: 'c1', messageId: 'p1', counts: { o1: 1, o2: 2 }, voters: 3 });
+    const page = client.getQueryData<{ messages: { pollTally?: unknown }[] }>(queryKeys.messages('c1'));
+    expect(page?.messages[0]?.pollTally).toEqual({ counts: { o1: 1, o2: 2 }, voters: 3, mine: ['o1'] });
+  });
+});

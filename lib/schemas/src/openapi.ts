@@ -74,7 +74,10 @@ import {
   chatListSchema,
   chatMessageSchema,
   chatSummarySchema,
+  createPollBodySchema,
   createPrivateChatBodySchema,
+  pollTallySchema,
+  pollVoteBodySchema,
   createTeamChannelBodySchema,
   messageHistoryQuerySchema,
   messagePageSchema,
@@ -510,6 +513,16 @@ const AREAS: Record<string, AreaSpec> = {
           response: messagePageSchema,
         },
         post: { summary: 'Send a message', body: sendMessageBodySchema, response: chatMessageSchema },
+      },
+      '/chat/{chatId}/polls': {
+        post: { summary: 'Post a poll as a message', body: createPollBodySchema, response: chatMessageSchema },
+      },
+      '/chat/{chatId}/polls/{messageId}/vote': {
+        put: {
+          summary: "Set the caller's choices; an empty list takes the vote back",
+          body: pollVoteBodySchema,
+          response: pollTallySchema,
+        },
       },
     },
   },
