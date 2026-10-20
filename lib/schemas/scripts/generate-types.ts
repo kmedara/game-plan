@@ -45,6 +45,7 @@ const CONST_EXPORTS = [
   'REMINDER_LEAD_MINUTES',
   'DEFAULT_EVENING_HOUR',
   'DEFAULT_LEAD_MINUTES',
+  'MAX_EMERGENCY_CONTACTS',
 ] as const;
 
 /** Convert `loginBodySchema` → `LoginBody`. */

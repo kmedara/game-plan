@@ -317,6 +317,12 @@ export type Due = {
 
 export type DueStatus = 'unpaid' | 'pending' | 'paid' | 'paid_offline' | 'waived' | 'refunded';
 
+export type EmergencyContact = {
+  name: string;
+  phone: string;
+  relation?: string;
+}
+
 export type ErrorBody = {
   error: string;
 }
@@ -603,6 +609,390 @@ export type LoginBody = {
   password: string;
 }
 
+export type MedicalInfoBody = {
+  allergies?: string;
+  conditions?: string;
+  medications?: string;
+  notes?: string;
+  insurance?: string;
+  /**
+   * @maxItems 4
+   */
+  emergencyContacts:
+    | []
+    | [
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        }
+      ]
+    | [
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        },
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        }
+      ]
+    | [
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        },
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        },
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        }
+      ]
+    | [
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        },
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        },
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        },
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        }
+      ];
+}
+
+export type MedicalInfo = {
+  allergies?: string;
+  conditions?: string;
+  medications?: string;
+  notes?: string;
+  insurance?: string;
+  /**
+   * @maxItems 4
+   */
+  emergencyContacts:
+    | []
+    | [
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        }
+      ]
+    | [
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        },
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        }
+      ]
+    | [
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        },
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        },
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        }
+      ]
+    | [
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        },
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        },
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        },
+        {
+          name: string;
+          phone: string;
+          relation?: string;
+        }
+      ];
+  userId: string;
+  updatedAt?: string;
+}
+
+export type MedicalPeople = {
+  people: {
+    userId: string;
+    displayName: string;
+    accountKind: 'adult' | 'minor';
+    canEdit: boolean;
+    info: {
+      allergies?: string;
+      conditions?: string;
+      medications?: string;
+      notes?: string;
+      insurance?: string;
+      /**
+       * @maxItems 4
+       */
+      emergencyContacts:
+        | []
+        | [
+            {
+              name: string;
+              phone: string;
+              relation?: string;
+            }
+          ]
+        | [
+            {
+              name: string;
+              phone: string;
+              relation?: string;
+            },
+            {
+              name: string;
+              phone: string;
+              relation?: string;
+            }
+          ]
+        | [
+            {
+              name: string;
+              phone: string;
+              relation?: string;
+            },
+            {
+              name: string;
+              phone: string;
+              relation?: string;
+            },
+            {
+              name: string;
+              phone: string;
+              relation?: string;
+            }
+          ]
+        | [
+            {
+              name: string;
+              phone: string;
+              relation?: string;
+            },
+            {
+              name: string;
+              phone: string;
+              relation?: string;
+            },
+            {
+              name: string;
+              phone: string;
+              relation?: string;
+            },
+            {
+              name: string;
+              phone: string;
+              relation?: string;
+            }
+          ];
+      userId: string;
+      updatedAt?: string;
+    };
+  }[];
+}
+
+export type MedicalPerson = {
+  userId: string;
+  displayName: string;
+  accountKind: 'adult' | 'minor';
+  canEdit: boolean;
+  info: {
+    allergies?: string;
+    conditions?: string;
+    medications?: string;
+    notes?: string;
+    insurance?: string;
+    /**
+     * @maxItems 4
+     */
+    emergencyContacts:
+      | []
+      | [
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          }
+        ]
+      | [
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          },
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          }
+        ]
+      | [
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          },
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          },
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          }
+        ]
+      | [
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          },
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          },
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          },
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          }
+        ];
+    userId: string;
+    updatedAt?: string;
+  };
+}
+
+export type MemberMedical = {
+  info: {
+    allergies?: string;
+    conditions?: string;
+    medications?: string;
+    notes?: string;
+    insurance?: string;
+    /**
+     * @maxItems 4
+     */
+    emergencyContacts:
+      | []
+      | [
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          }
+        ]
+      | [
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          },
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          }
+        ]
+      | [
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          },
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          },
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          }
+        ]
+      | [
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          },
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          },
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          },
+          {
+            name: string;
+            phone: string;
+            relation?: string;
+          }
+        ];
+    userId: string;
+    updatedAt?: string;
+  };
+  guardians: {
+    userId: string;
+    displayName: string;
+    phoneNumber?: string;
+  }[];
+}
+
 export type MessageHistoryQuery = {
   limit?: number;
   cursor?: string;
@@ -823,6 +1213,7 @@ export type RolePermissionsResponse = {
       | 'create_team_channels'
       | 'manage_payments'
       | 'manage_billing'
+      | 'view_medical_info'
     )[];
   }[];
 }
@@ -839,6 +1230,7 @@ export type RolePermissions = {
     | 'create_team_channels'
     | 'manage_payments'
     | 'manage_billing'
+    | 'view_medical_info'
   )[];
 }
 
@@ -1116,7 +1508,8 @@ export type TeamPermission =
   | 'manage_events'
   | 'create_team_channels'
   | 'manage_payments'
-  | 'manage_billing';
+  | 'manage_billing'
+  | 'view_medical_info';
 
 export type TeamPlan = {
   tier: 'free' | 'premium' | 'organization';
@@ -1235,6 +1628,7 @@ export type UpdateRolePermissionsBody = {
         | 'create_team_channels'
         | 'manage_payments'
         | 'manage_billing'
+        | 'view_medical_info'
       )[];
     },
     ...{
@@ -1249,6 +1643,7 @@ export type UpdateRolePermissionsBody = {
         | 'create_team_channels'
         | 'manage_payments'
         | 'manage_billing'
+        | 'view_medical_info'
       )[];
     }[]
   ];
@@ -1313,11 +1708,11 @@ export const RSVP_STATUSES = ["going", "not_going", "maybe"] as const;
 
 export const TEAM_ROLES = ["team_admin", "coach", "player", "parent"] as const;
 
-export const TEAM_PERMISSIONS = ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels", "manage_payments", "manage_billing"] as const;
+export const TEAM_PERMISSIONS = ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels", "manage_payments", "manage_billing", "view_medical_info"] as const;
 
 export const DEFAULT_ROLE_PERMISSIONS = {
-  team_admin: ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels", "manage_payments", "manage_billing"],
-  coach: [],
+  team_admin: ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels", "manage_payments", "manage_billing", "view_medical_info"],
+  coach: ["view_medical_info"],
   parent: [],
   player: [],
 } as const;
@@ -1351,3 +1746,5 @@ export const REMINDER_LEAD_MINUTES = [15, 30, 60, 120] as const;
 export const DEFAULT_EVENING_HOUR = 18;
 
 export const DEFAULT_LEAD_MINUTES = 60;
+
+export const MAX_EMERGENCY_CONTACTS = 4;

@@ -13,6 +13,7 @@ import {
 import { handleLogin } from './login.js';
 import { handleLogout } from './logout.js';
 import { handleMe } from './me.js';
+import { handleListMedical, handlePutMedical } from './medical.js';
 import { handleOAuthCallback, handleOAuthLogin, handleOAuthLogout } from './oauth.js';
 import { handleOAuthExchange } from './oauth-exchange.js';
 import { handleGetPreferences, handleUpdatePreferences } from './preferences.js';
@@ -28,12 +29,14 @@ export {
   handleCreateGuardianInvite,
   handleGetPreferences,
   handleLogin,
+  handleListMedical,
   handleLogout,
   handleMe,
   handleOAuthCallback,
   handleOAuthExchange,
   handleOAuthLogin,
   handleOAuthLogout,
+  handlePutMedical,
   handleRefresh,
   handleRegister,
   handleRemoveGuardianLink,
@@ -64,4 +67,6 @@ export const httpRoutes: readonly HttpRoute[] = [
   handleUpdateProfile,
   handleGetPreferences,
   handleUpdatePreferences,
+  handleListMedical,
+  handlePutMedical,
 ];

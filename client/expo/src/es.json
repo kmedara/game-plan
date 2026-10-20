@@ -386,7 +386,8 @@
     "manage_events": "Administrar eventos",
     "create_team_channels": "Crear canales del equipo",
     "manage_payments": "Administrar pagos",
-    "manage_billing": "Administrar la facturación"
+    "manage_billing": "Administrar la facturación",
+    "view_medical_info": "Ver información de emergencia"
   },
   "notificationPrompt": {
     "title": "Recibe notificaciones",
@@ -470,6 +471,28 @@
     "refreshNote": "Las aplicaciones de calendario buscan cambios cada pocas horas, así que los cambios pueden tardar en aparecer. Cualquiera con este enlace puede ver tu calendario.",
     "reset": "Restablecer enlace",
     "resetDone": "Enlace restablecido. Suscríbete de nuevo con el nuevo enlace."
+  },
+  "emergency": {
+    "title": "Información de emergencia",
+    "hint": "Alergias, condiciones y a quién llamar. Los entrenadores pueden verla en los equipos donde tengan permiso, y cada consulta queda registrada.",
+    "empty": "Todavía no hay nada.",
+    "edit": "Editar",
+    "editTitle": "Información de emergencia de {{name}}",
+    "guardianKeeps": "Un padre, madre o tutor la mantiene al día.",
+    "contacts": "Contactos de emergencia",
+    "contactName": "Nombre",
+    "contactPhone": "Teléfono",
+    "contactRelation": "Relación",
+    "guardian": "tutor",
+    "show": "Mostrar información de emergencia",
+    "staffNote": "Ábrela solo cuando la necesites. Cada consulta queda registrada para el equipo.",
+    "field": {
+      "allergies": "Alergias",
+      "conditions": "Condiciones médicas",
+      "medications": "Medicamentos",
+      "insurance": "Seguro",
+      "notes": "Otras notas"
+    }
   },
   "errors": {
     "common": {
@@ -562,6 +585,10 @@
       "alreadySubscribed": "Este equipo ya tiene un plan de pago. Usa Administrar la facturación para cambiarlo.",
       "managedByOrganization": "El plan de este equipo lo administra su organización.",
       "notConfigured": "Los planes no están disponibles en este momento."
+    },
+    "emergency": {
+      "contactIncomplete": "Cada contacto de emergencia necesita un nombre y un teléfono.",
+      "invalid": "Revisa los números de teléfono e inténtalo de nuevo."
     }
   }
 }

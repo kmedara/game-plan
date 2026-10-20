@@ -331,3 +331,19 @@ export {
   type Preferences,
   type UpdatePreferencesBody,
 } from './preferences.js';
+
+export {
+  MAX_EMERGENCY_CONTACTS,
+  emergencyContactSchema,
+  medicalInfoBodySchema,
+  medicalInfoSchema,
+  medicalPeopleSchema,
+  medicalPersonSchema,
+  memberMedicalSchema,
+  type EmergencyContact,
+  type MedicalInfo,
+  type MedicalInfoBody,
+  type MedicalPeople,
+  type MedicalPerson,
+  type MemberMedical,
+} from './medical.js';

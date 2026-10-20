@@ -20,7 +20,7 @@ import {
   handleRejectJoinRequest,
 } from './join-requests.js';
 import { handleListTeams } from './list.js';
-import { handleAssignRole, handleGetMember, handleListMembers } from './members.js';
+import { handleAssignRole, handleGetMember, handleGetMemberMedical, handleListMembers } from './members.js';
 import { handleGetPermissions, handleUpdatePermissions } from './permissions.js';
 import { handleSetPositions } from './positions.js';
 import { handleUpdateTeam } from './update.js';
@@ -35,6 +35,7 @@ export {
   handleDeleteInvite,
   handleGetInvite,
   handleGetMember,
+  handleGetMemberMedical,
   handleGetPermissions,
   handleGetTeam,
   handleListInvites,
@@ -60,6 +61,7 @@ export const httpRoutes: readonly HttpRoute[] = [
   handleSetPositions,
   handleListMembers,
   handleGetMember,
+  handleGetMemberMedical,
   handleAssignRole,
   handleGetPermissions,
   handleUpdatePermissions,

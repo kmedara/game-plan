@@ -117,6 +117,7 @@ import {
   teamCheckoutBodySchema,
 } from './plans.js';
 import { preferencesSchema, updatePreferencesBodySchema } from './preferences.js';
+import { medicalInfoBodySchema, medicalInfoSchema, medicalPeopleSchema, memberMedicalSchema } from './medical.js';
 import { z, type ZodType } from './zod.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
@@ -199,6 +200,21 @@ const AREAS: Record<string, AreaSpec> = {
           summary: 'Update the profile photo and/or phone number',
           body: updateProfileBodySchema,
           response: userProfileSchema,
+          secured: true,
+        },
+      },
+      '/identity/medical': {
+        get: {
+          summary: "Emergency and medical info for the caller and each child they are a guardian of",
+          response: medicalPeopleSchema,
+          secured: true,
+        },
+      },
+      '/identity/medical/{userId}': {
+        put: {
+          summary: "Replace an adult's own, or a child's, emergency and medical info",
+          body: medicalInfoBodySchema,
+          response: medicalInfoSchema,
           secured: true,
         },
       },
@@ -312,6 +328,12 @@ const AREAS: Record<string, AreaSpec> = {
       },
       '/teams/{teamId}/members': {
         get: { summary: 'List the roster', response: teamMemberListSchema },
+      },
+      '/teams/{teamId}/members/{userId}/medical': {
+        get: {
+          summary: "A member's emergency info for staff with view_medical_info (logged)",
+          response: memberMedicalSchema,
+        },
       },
       '/teams/{teamId}/members/{userId}': {
         get: { summary: 'Get one roster member profile', response: teamMemberProfileSchema },

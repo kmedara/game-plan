@@ -1,5 +1,6 @@
 /**
- * Teammate profile. Someone who can assign roles edits the role set here.
+ * Teammate profile. Someone who can assign roles edits the role set here;
+ * staff who may view emergency info open it here.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,6 +10,7 @@ import { Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { callerCanGrant, highestRole, rolesFromMembership } from '@gameplan/rules';
 import { TEAM_ROLES, type TeamRole } from '@gameplan/types';
+import { MemberEmergencyInfo } from '@/src/emergency-info';
 import { errorMessageKey, queryError } from '@/src/errors';
 import { RefreshableScroll } from '@/src/pull-refresh';
 import { RoleSetPicker } from '@/src/role-picker';
@@ -83,6 +85,9 @@ export default function MemberProfileScreen() {
       {member?.phoneNumber !== undefined ? <Text className="mt-2 text-ink">{member.phoneNumber}</Text> : null}
       {member?.positions !== undefined && member.positions.length > 0 ? (
         <Text className="mt-2 text-ink">{member.positions.join(', ')}</Text>
+      ) : null}
+      {member !== undefined && access.can('view_medical_info') && api.user?.accountKind === 'adult' ? (
+        <MemberEmergencyInfo teamId={id} userId={memberId} />
       ) : null}
     </RefreshableScroll>
   );

@@ -15,6 +15,10 @@ import type {
   ApprovedJoinRequest,
   BillingInterval,
   CalendarFeed,
+  MedicalInfo,
+  MedicalInfoBody,
+  MedicalPeople,
+  MemberMedical,
   Preferences,
   UpdatePreferencesBody,
   TeamBilling,
@@ -170,6 +174,19 @@ export class ApiClient {
     this.session.setUser(profile);
     this.emit();
     return profile;
+  }
+
+  async listMedical(): Promise<MedicalPeople['people']> {
+    const data = await this.request<MedicalPeople>('GET', '/identity/medical');
+    return data.people;
+  }
+
+  async putMedical(userId: string, body: MedicalInfoBody): Promise<MedicalInfo> {
+    return this.request('PUT', `/identity/medical/${userId}`, body);
+  }
+
+  async getMemberMedical(teamId: string, userId: string): Promise<MemberMedical> {
+    return this.request('GET', `/teams/${teamId}/members/${userId}/medical`);
   }
 
   async getCalendarFeed(): Promise<CalendarFeed> {

@@ -13,6 +13,8 @@ export const queryKeys = {
   me: ['me'] as const,
   preferences: ['preferences'] as const,
   calendarFeed: ['calendarFeed'] as const,
+  medical: ['medical'] as const,
+  memberMedical: (teamId: string, userId: string) => ['memberMedical', teamId, userId] as const,
   teams: ['teams'] as const,
   team: (teamId: string) => ['teams', teamId] as const,
   members: (teamId: string) => ['members', teamId] as const,
@@ -61,7 +63,8 @@ export const PERSISTED_MUTATION_KINDS: ReadonlySet<string> = new Set([
  *
  * Presigned download URLs, directory pages, invite previews, and message history
  * are left out: they expire, page, or are chat content. Payment status is left
- * out too, so nobody sees a stale "unpaid" and pays twice.
+ * out too, so nobody sees a stale "unpaid" and pays twice. Medical info is
+ * never written to the device.
  */
 export const PERSISTED_QUERY_KINDS: ReadonlySet<string> = new Set([
   'me',

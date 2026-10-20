@@ -237,6 +237,16 @@ export const reminderSk = (
 /** `USER#<userId>` / `PREFS` — settings that follow the account. */
 export const prefsSk = (): string => 'PREFS';
 
+/** `USER#<userId>` / `MEDICAL` — emergency and medical info. */
+export const medicalSk = (): string => 'MEDICAL';
+
+/** One staff read of a member's emergency info, on the team partition. */
+export const medicalReadSk = (at: string, viewerId: UserId, memberId: UserId): string =>
+  `MEDREAD#${at}#${viewerId}#${memberId}`;
+
+/** Sort-key prefix for the team's emergency-info read log. */
+export const MEDICAL_READ_SK_PREFIX = 'MEDREAD#' as const;
+
 /** `USER#<userId>` / `FEED` — the person's calendar feed token. */
 export const userFeedSk = (): string => 'FEED';
 

@@ -43,6 +43,8 @@ const PROTECTED: Record<string, RouteCase[]> = {
     { route: 'handleUpdateProfile', method: 'PATCH', path: '/identity/profile' },
     { route: 'handleGetPreferences', method: 'GET', path: '/identity/me/preferences' },
     { route: 'handleUpdatePreferences', method: 'PATCH', path: '/identity/me/preferences' },
+    { route: 'handleListMedical', method: 'GET', path: '/identity/medical' },
+    { route: 'handlePutMedical', method: 'PUT', path: '/identity/medical/user-2' },
   ],
   teams: [
     { route: 'handleCreateTeam', method: 'POST', path: '/teams' },
@@ -55,6 +57,7 @@ const PROTECTED: Record<string, RouteCase[]> = {
     { route: 'handleSetPositions', method: 'PUT', path: '/teams/team-1/positions' },
     { route: 'handleListMembers', method: 'GET', path: '/teams/team-1/members' },
     { route: 'handleGetMember', method: 'GET', path: '/teams/team-1/members/user-2' },
+    { route: 'handleGetMemberMedical', method: 'GET', path: '/teams/team-1/members/user-2/medical' },
     { route: 'handleAssignRole', method: 'PATCH', path: '/teams/team-1/members/user-2' },
     { route: 'handleGetPermissions', method: 'GET', path: '/teams/team-1/permissions' },
     { route: 'handleUpdatePermissions', method: 'PUT', path: '/teams/team-1/permissions' },

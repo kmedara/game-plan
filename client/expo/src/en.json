@@ -384,7 +384,8 @@
     "manage_events": "Manage events",
     "create_team_channels": "Create team channels",
     "manage_payments": "Manage payments",
-    "manage_billing": "Manage billing"
+    "manage_billing": "Manage billing",
+    "view_medical_info": "View emergency info"
   },
   "notificationPrompt": {
     "title": "Get notified",
@@ -468,6 +469,28 @@
     "refreshNote": "Calendar apps check for changes every few hours, so edits can take a while to show. Anyone with this link can see your schedule.",
     "reset": "Reset link",
     "resetDone": "Link reset. Subscribe again with the new one."
+  },
+  "emergency": {
+    "title": "Emergency info",
+    "hint": "Allergies, conditions, and who to call. Coaches can see it on teams where they are allowed to, and each look is recorded.",
+    "empty": "Nothing added yet.",
+    "edit": "Edit",
+    "editTitle": "Emergency info for {{name}}",
+    "guardianKeeps": "A parent or guardian keeps this up to date.",
+    "contacts": "Emergency contacts",
+    "contactName": "Name",
+    "contactPhone": "Phone",
+    "contactRelation": "Relationship",
+    "guardian": "guardian",
+    "show": "Show emergency info",
+    "staffNote": "Only open this when you need it. Each look is recorded for the team.",
+    "field": {
+      "allergies": "Allergies",
+      "conditions": "Medical conditions",
+      "medications": "Medications",
+      "insurance": "Insurance",
+      "notes": "Other notes"
+    }
   },
   "errors": {
     "common": {
@@ -560,6 +583,10 @@
       "alreadySubscribed": "This team already has a paid plan. Use Manage billing to change it.",
       "managedByOrganization": "This team's plan is managed by its organization.",
       "notConfigured": "Plans are not available right now."
+    },
+    "emergency": {
+      "contactIncomplete": "Each emergency contact needs a name and a phone number.",
+      "invalid": "Check the phone numbers and try again."
     }
   }
 }

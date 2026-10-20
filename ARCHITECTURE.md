@@ -138,6 +138,15 @@ Each date is its own `VEVENT` with a UTC start and a stable UID (`<team>-<event>
 - **Why:** calendar apps cannot sign in. Single events avoid differences in how apps read repeat rules, exceptions, and time zones; a cancelled or moved date just changes on the next fetch. A UID per date keeps an edited date the same event in the calendar.
 - **Cost:** anyone holding the link sees that schedule, including children's; the app says so next to the link. Google refreshes on its own schedule, often every 8 to 24 hours, so changes are slow to appear there. Each fetch reads every team's events and RSVPs for about seven months.
 
+### Emergency and medical info
+
+One record per person at `USER#<id>` / `MEDICAL` (`functions/lib/medical.ts`): allergies, conditions, medications, insurance, notes, and up to four contacts, phones stored in E.164. It follows the person, not a team. An adult keeps their own; a minor's guardians keep theirs, and the minor can read it (`canEditMedicalInfo`, `canReadOwnMedicalInfo` in `lib/rules`). `GET /identity/medical` returns the caller and each linked child, which is also how the app learns who a guardian's children are.
+
+Staff read through a team: `GET /teams/:teamId/members/:userId/medical` needs `view_medical_info` and an adult caller, and returns the record plus the member's guardians' names and phones. New teams give coaches that permission. Every read writes `MEDREAD#<at>#<viewer>#<member>` on the team, expiring after a year. The app loads it only on a tap, and neither query is persisted to the device.
+
+- **Why:** a parent fills it in once for every team. Guardians are the first people to call, so they come from the existing links rather than being typed again. Staff opening it on purpose, and the log, make access deliberate and reviewable.
+- **Cost:** it is free on every plan, by design. Teams created before this keep their stored permission matrix, so their admins grant `view_medical_info` to coaches by hand. There is no screen for the read log yet; it is in the table. A minor in a coach role cannot read it even with the permission.
+
 ### Team dues
 
 Each team connects a Stripe Express account. A charge (`TEAM#id` / `CHARGE#`) asks some members to pay; each member's share is a due (`DUE#<chargeId>#<memberId>`) with a pointer on the member's partition for "my dues". Payment is a direct charge on the team's account through hosted Checkout, with GamePlan's cut as `application_fee_amount` (`PLATFORM_FEE_BPS`, default 2%). An adult pays their own due; a minor's guardians pay theirs (`payerIdsForDue` in `lib/rules`). Staff can mark a due paid outside the app or waived.

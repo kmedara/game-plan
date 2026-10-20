@@ -6,6 +6,7 @@ import { assignRoleBodySchema } from "@gameplan/schemas";
 import { assertCallerCanGrantRoles, highestRole, rolesFromMembership } from "@gameplan/rules";
 import { getProfile, toUserProfile } from "../../../lib/auth/index.js";
 import { listGuardianIds } from "../../../lib/guardians.js";
+import { getMedicalInfo, logMedicalRead } from "../../../lib/medical.js";
 import {
   requireMembership,
   requirePermission,
@@ -146,6 +147,49 @@ export const handleGetMember = route(
     return json(200, {
       ...fields,
       ...(profile !== undefined && showGuardians && guardianIds.length > 0 ? { guardianIds } : {}),
+    });
+  },
+);
+
+/**
+ * Handles `GET /teams/:teamId/members/:memberUserId/medical`.
+ *
+ * Staff with `view_medical_info` read a member's emergency info and their
+ * guardians' phone numbers. A minor never reads another member's info, even
+ * with the permission. Every read is logged on the team.
+ *
+ * @returns The record and the guardians to call.
+ */
+export const handleGetMemberMedical = route(
+  "GET",
+  "/teams/:teamId/members/:memberUserId/medical",
+  withTeamsErrors(),
+  requireUser(),
+  requireMembership(),
+  requirePermission("view_medical_info"),
+  async ({ teamId, memberUserId, user }) => {
+    const caller = await getProfile(user.userId);
+    if (caller?.accountKind !== "adult") throw new Error("forbidden");
+    if ((await getMembership(teamId, memberUserId)) === undefined) throw new Error("member_not_found");
+    const guardianIds = await listGuardianIds(memberUserId);
+    const [info, guardians] = await Promise.all([
+      getMedicalInfo(memberUserId),
+      Promise.all(guardianIds.map((id) => getProfile(id))),
+    ]);
+    await logMedicalRead({ teamId, viewerId: user.userId, memberId: memberUserId });
+    return json(200, {
+      info,
+      guardians: guardians.flatMap((guardian) =>
+        guardian === undefined
+          ? []
+          : [
+              {
+                userId: guardian.userId,
+                displayName: guardian.displayName,
+                ...(guardian.phoneNumber !== undefined ? { phoneNumber: guardian.phoneNumber } : {}),
+              },
+            ],
+      ),
     });
   },
 );

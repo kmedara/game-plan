@@ -632,3 +632,36 @@ export const showsAds = (
  */
 export const underLimit = (current: number, limit: number | undefined): boolean =>
   limit === undefined || current < limit;
+
+/** The fields the emergency-info rules read about the person the record is for. */
+export type MedicalSubject = {
+  userId: string;
+  accountKind: AccountKind;
+  guardianIds?: readonly string[];
+};
+
+/**
+ * Whether a caller may change someone's emergency and medical info.
+ *
+ * An adult keeps their own. A minor's is kept by their linked guardians.
+ *
+ * @param callerId - The caller.
+ * @param subject - The person the record is for.
+ * @returns `true` when the caller may write it.
+ */
+export const canEditMedicalInfo = (callerId: string, subject: MedicalSubject): boolean =>
+  subject.accountKind === 'adult'
+    ? callerId === subject.userId
+    : (subject.guardianIds ?? []).includes(callerId);
+
+/**
+ * Whether a caller may read someone's emergency info outside a team: the
+ * person themselves (a minor included) or a linked guardian. Team staff read
+ * through their team with `view_medical_info`.
+ *
+ * @param callerId - The caller.
+ * @param subject - The person the record is for.
+ * @returns `true` when the caller may read it.
+ */
+export const canReadOwnMedicalInfo = (callerId: string, subject: MedicalSubject): boolean =>
+  callerId === subject.userId || (subject.guardianIds ?? []).includes(callerId);
