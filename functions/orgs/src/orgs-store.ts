@@ -11,8 +11,9 @@
  *
  * A team joins only when someone who manages its billing accepts, because it
  * hands the organization's admins `team_admin` rights over the team. A team
- * paying for its own plan has it cancelled on joining, with the unused time
- * refunded; leaving puts it on the free plan.
+ * paying for its own plan keeps it until the organization's plan is active,
+ * then it is cancelled with the unused time refunded. Leaving a paid
+ * organization puts the team on the free plan.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -44,16 +45,17 @@ import {
   userOrgSk,
   userPk,
 } from '../../lib/dynamo/index.js';
-import { loadTeamPlan } from '../../lib/entitlements.js';
 import { TABLE_NAME } from '../../lib/names.js';
 import { extraTeamsFor, syncOrgSeats } from '../../lib/org-seats.js';
-import { cancelTeamSubscription } from '../../lib/team-subscription.js';
 import {
+  cancelOwnTeamPlan,
   clearOrgPlanFromTeam,
   copyOrgPlanToTeam,
   isOrgAdmin,
+  loadOrgPlan,
   orgIdOfTeam,
   orgPlan,
+  orgPlanIsPaid,
   type OrgTeamItem,
 } from '../../lib/orgs.js';
 import { sendMessage } from '../../chat/src/chat-store.js';
@@ -299,9 +301,10 @@ export const teamOrgStatus = async (teamId: string): Promise<TeamOrgStatus> => {
  * Joins a team to the organization that invited it. The route checks the
  * caller manages the team's billing.
  *
- * A team paying for its own plan has that subscription cancelled first, with
- * the unused time refunded to the card, so nobody pays twice. If Stripe fails
- * the team does not join, and accepting again retries.
+ * If the organization is paid, a team paying for its own plan has that
+ * subscription cancelled first, with the unused time refunded, so nobody pays
+ * twice; if Stripe fails the team does not join, and accepting again retries.
+ * If the organization is unpaid, the team keeps its own plan until it pays.
  *
  * @param input - The organization and team.
  * @returns What was refunded, in minor units.
@@ -311,18 +314,16 @@ export const acceptOrgInvite = async (input: { orgId: string; teamId: string }):
   const invite = await getItem(teamPk(input.teamId), teamOrgInviteSk(input.orgId));
   if (invite === undefined) throw new Error('invite_not_found');
   if ((await orgIdOfTeam(input.teamId)) !== undefined) throw new Error('team_in_another_organization');
-  const plan = await loadTeamPlan(input.teamId);
-  const { refundedCents } =
-    plan.orgId === undefined && plan.tier !== 'free' && plan.status !== 'canceled'
-      ? await cancelTeamSubscription(input.teamId)
-      : { refundedCents: 0 };
+  // Cancel before joining, so a Stripe failure leaves the team out and accepting again retries.
+  const orgPlanRow = await loadOrgPlan(input.orgId);
+  const refundedCents = orgPlanIsPaid(orgPlanRow) ? await cancelOwnTeamPlan(input.teamId) : 0;
   const addedAt = new Date().toISOString();
   await transactWrite([
     put({ [TABLE_PK]: orgPk(input.orgId), [TABLE_SK]: orgTeamSk(input.teamId), orgId: input.orgId, teamId: input.teamId, pending: false, addedAt }),
     put({ [TABLE_PK]: teamPk(input.teamId), [TABLE_SK]: teamOrgSk(), orgId: input.orgId, teamId: input.teamId, joinedAt: addedAt }),
     del(teamPk(input.teamId), teamOrgInviteSk(input.orgId)),
   ]);
-  await copyOrgPlanToTeam(input.orgId, input.teamId);
+  await copyOrgPlanToTeam(input.orgId, input.teamId, orgPlanRow);
   await syncOrgSeats(input.orgId);
   return { refundedCents };
 };

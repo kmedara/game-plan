@@ -563,7 +563,7 @@
     "partOf": "Parte de {{name}}",
     "leave": "Salir de esta organización (el equipo vuelve al plan gratuito)",
     "invitedBy": "{{name}} invitó a este equipo a unirse.",
-    "acceptNote": "Sus administradores podrán gestionar este equipo, y el equipo usará el plan de la organización. Si el equipo paga su propio plan, se cancela y el tiempo no usado se reembolsa a la tarjeta.",
+    "acceptNote": "Sus administradores podrán gestionar este equipo. Si el equipo paga su propio plan, lo conserva hasta que la organización se suscriba; entonces el plan del equipo se cancela, el tiempo no usado se reembolsa a la tarjeta y el plan de la organización lo reemplaza.",
     "accept": "Unirse",
     "decline": "Rechazar",
     "askBillingManager": "Quien administra la facturación de este equipo puede aceptar.",

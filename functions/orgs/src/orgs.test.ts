@@ -214,6 +214,7 @@ describe('organizations', () => {
     memoryTable.put({ [TABLE_PK]: teamPk('hawks'), [TABLE_SK]: planSk(), teamId: 'hawks', tier: 'premium', status: 'active' });
     memoryTable.put({ [TABLE_PK]: teamPk('hawks'), [TABLE_SK]: billingSk(), teamId: 'hawks', customerId: 'cus_h', subscriptionId: 'sub_h' });
     const orgId = await createOrg();
+    subscribe(orgId);
     await call(orgs, 'POST', `/orgs/${orgId}/teams/hawks`, 'owner');
     setSubscriptionCanceller(async () => {
       throw new Error('billing_not_configured');
@@ -229,6 +230,40 @@ describe('organizations', () => {
     });
     await join(orgId, 'owls');
     expect(cancelled).toEqual([]);
+  });
+
+  it('lets a paying team keep its own plan in an unpaid organization until the organization subscribes', async () => {
+    seedTeam('hawks');
+    memoryTable.put({ [TABLE_PK]: teamPk('hawks'), [TABLE_SK]: planSk(), teamId: 'hawks', tier: 'premium', status: 'active' });
+    memoryTable.put({ [TABLE_PK]: teamPk('hawks'), [TABLE_SK]: billingSk(), teamId: 'hawks', customerId: 'cus_h', subscriptionId: 'sub_h' });
+    const orgId = await createOrg();
+    await call(orgs, 'POST', `/orgs/${orgId}/teams/hawks`, 'owner');
+
+    const accepted = await call(orgs, 'POST', `/orgs/${orgId}/teams/hawks/accept`, 'hawks-admin');
+    expect(accepted.body).toMatchObject({ org: { orgId }, refundedCents: 0 });
+    expect(cancelled).toEqual([]);
+    expect((await loadTeamEntitlements('hawks')).tier).toBe('premium');
+
+    const subscription = (created: number) => ({
+      id: `evt_${created}`,
+      type: 'customer.subscription.updated',
+      created,
+      object: {
+        id: 'sub_org',
+        status: 'active',
+        customer: 'cus_org',
+        metadata: { orgId, scope: 'organization' },
+        cancel_at_period_end: false,
+        items: { data: [{ price: { lookup_key: 'org_monthly', recurring: { interval: 'month' } }, current_period_end: 2000000000 }] },
+      },
+    });
+    await applyBillingEvent(subscription(200));
+    expect(cancelled).toEqual([{ customerId: 'cus_h', subscriptionId: 'sub_h' }]);
+    expect((await loadTeamEntitlements('hawks')).tier).toBe('organization');
+
+    // A repeated delivery does not cancel the team's plan again.
+    await applyBillingEvent(subscription(201));
+    expect(cancelled).toHaveLength(1);
   });
 
   it('bills each team past five as an extra team', async () => {

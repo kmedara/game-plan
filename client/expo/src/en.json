@@ -561,7 +561,7 @@
     "partOf": "Part of {{name}}",
     "leave": "Leave this organization (the team goes back to the free plan)",
     "invitedBy": "{{name}} invited this team to join.",
-    "acceptNote": "Its admins will be able to manage this team, and the team will use the organization’s plan. If the team pays for its own plan, it is cancelled and the unused time refunded to the card.",
+    "acceptNote": "Its admins will be able to manage this team. If the team pays for its own plan, it keeps it until the organization subscribes; then the team’s plan is cancelled, the unused time is refunded to the card, and the organization’s plan takes over.",
     "accept": "Join",
     "decline": "Decline",
     "askBillingManager": "Someone who manages this team’s billing can accept.",
