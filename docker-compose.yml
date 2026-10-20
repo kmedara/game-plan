@@ -21,7 +21,7 @@ services:
       - dynamodb
     ports:
       - "3000:3000"
-      - "9229-9239:9229-9239"
+      - "9229-9240:9229-9240"
     environment:
       NODE_ENV: development
       DYNAMODB_ENDPOINT: http://dynamodb:8000
