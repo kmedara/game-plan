@@ -25,6 +25,10 @@ export type AcceptFixtureBody = {
 
 export type AccountKind = 'adult' | 'minor';
 
+export type AddOrgAdminBody = {
+  email: string;
+}
+
 export type ApprovedJoinRequest = {
   teamId: string;
   userId: string;
@@ -59,6 +63,7 @@ export type BillingReturnQuery = {
   to: 'app' | 'web';
   result: 'subscribed' | 'cancel' | 'portal';
   teamId?: string;
+  orgId?: string;
 }
 
 export type CalendarFeed = {
@@ -298,6 +303,10 @@ export type CreateGuardianInviteBody = {
 
 export type CreateInviteBody = {
   role?: 'team_admin' | 'coach' | 'player' | 'parent';
+}
+
+export type CreateOrgBody = {
+  name: string;
 }
 
 export type CreatePollBody = {
@@ -890,6 +899,89 @@ export type OccurrenceTarget = {
   occurrenceStartsAt: string;
 }
 
+export type OrgAnnouncementBody = {
+  body: string;
+  /**
+   * @maxItems 200
+   */
+  teamIds?: string[];
+}
+
+export type OrgCheckoutBody = {
+  interval: 'month' | 'year';
+  returnTo?: 'app' | 'web';
+}
+
+export type OrgDetail = {
+  orgId: string;
+  name: string;
+  ownerId: string;
+  isOwner: boolean;
+  teamCount: number;
+  plan: {
+    tier: 'free' | 'premium' | 'organization';
+    status: 'active' | 'trialing' | 'past_due' | 'canceled';
+    interval?: 'month' | 'year';
+    currentPeriodEnd?: string;
+    cancelAtPeriodEnd?: boolean;
+    orgId?: string;
+  };
+  admins: {
+    userId: string;
+    displayName: string;
+  }[];
+  teams: {
+    teamId: string;
+    name: string;
+    sport?: string;
+    memberCount: number;
+    pending: boolean;
+  }[];
+  extraTeams: number;
+}
+
+export type OrgList = {
+  orgs: {
+    orgId: string;
+    name: string;
+    ownerId: string;
+    isOwner: boolean;
+    teamCount: number;
+    plan: {
+      tier: 'free' | 'premium' | 'organization';
+      status: 'active' | 'trialing' | 'past_due' | 'canceled';
+      interval?: 'month' | 'year';
+      currentPeriodEnd?: string;
+      cancelAtPeriodEnd?: boolean;
+      orgId?: string;
+    };
+  }[];
+}
+
+export type OrgSummary = {
+  orgId: string;
+  name: string;
+  ownerId: string;
+  isOwner: boolean;
+  teamCount: number;
+  plan: {
+    tier: 'free' | 'premium' | 'organization';
+    status: 'active' | 'trialing' | 'past_due' | 'canceled';
+    interval?: 'month' | 'year';
+    currentPeriodEnd?: string;
+    cancelAtPeriodEnd?: boolean;
+    orgId?: string;
+  };
+}
+
+export type OrgTeam = {
+  teamId: string;
+  name: string;
+  sport?: string;
+  memberCount: number;
+  pending: boolean;
+}
+
 export type PaymentAccount = {
   teamId: string;
   connected: boolean;
@@ -1389,6 +1481,17 @@ export type TeamMember = {
   hasGuardian?: boolean;
 }
 
+export type TeamOrgStatus = {
+  org?: {
+    orgId: string;
+    name: string;
+  };
+  invites: {
+    orgId: string;
+    name: string;
+  }[];
+}
+
 export type TeamPermission =
   | 'manage_permissions'
   | 'manage_team_settings'
@@ -1485,6 +1588,10 @@ export type UpdateFixtureBody = {
   location?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+}
+
+export type UpdateOrgBody = {
+  name: string;
 }
 
 export type UpdatePositionsBody = {
@@ -1644,3 +1751,9 @@ export const MAX_SIGNUP_SLOTS = 12;
 export const MAX_SIGNUP_CAPACITY = 20;
 
 export const MAX_POLL_OPTIONS = 10;
+
+export const ORG_INCLUDED_TEAMS = 5;
+
+export const MAX_ORG_TEAMS = 200;
+
+export const MAX_ORG_ADMINS = 20;

@@ -120,6 +120,17 @@ import {
   teamCheckoutBodySchema,
 } from './plans.js';
 import { preferencesSchema, updatePreferencesBodySchema } from './preferences.js';
+import {
+  addOrgAdminBodySchema,
+  createOrgBodySchema,
+  orgAnnouncementBodySchema,
+  orgCheckoutBodySchema,
+  orgDetailSchema,
+  orgListSchema,
+  orgSummarySchema,
+  teamOrgStatusSchema,
+  updateOrgBodySchema,
+} from './orgs.js';
 import { claimSignupBodySchema, putSignupsBodySchema, signupsQuerySchema, signupsResponseSchema } from './signups.js';
 import { medicalInfoBodySchema, medicalInfoSchema, medicalPeopleSchema, memberMedicalSchema } from './medical.js';
 import { z, type ZodType } from './zod.js';
@@ -659,6 +670,20 @@ const AREAS: Record<string, AreaSpec> = {
           response: paymentRedirectSchema,
         },
       },
+      '/billing/orgs/{orgId}/checkout': {
+        post: {
+          summary: 'Open Stripe Checkout for the organization plan (owner only)',
+          body: orgCheckoutBodySchema,
+          response: paymentRedirectSchema,
+        },
+      },
+      '/billing/orgs/{orgId}/portal': {
+        post: {
+          summary: "Open the Stripe billing portal for the organization (owner only)",
+          body: billingPortalBodySchema,
+          response: paymentRedirectSchema,
+        },
+      },
       '/billing/return': {
         get: {
           summary: 'Where Stripe sends the browser back; redirects to the app or website',
@@ -669,6 +694,42 @@ const AREAS: Record<string, AreaSpec> = {
       },
       '/billing/webhook': {
         post: { summary: 'Stripe Billing webhook (Stripe-Signature header, no bearer token)', secured: false },
+      },
+    },
+  },
+  orgs: {
+    description: 'Organizations: one club or league over many teams, with shared admins and announcements.',
+    secured: true,
+    paths: {
+      '/orgs': {
+        get: { summary: 'Organizations the caller administers', response: orgListSchema },
+        post: { summary: 'Create an organization (adults)', body: createOrgBodySchema, response: orgSummarySchema },
+      },
+      '/orgs/{orgId}': {
+        get: { summary: 'Teams, admins, and plan', response: orgDetailSchema },
+        patch: { summary: 'Rename', body: updateOrgBodySchema, response: orgSummarySchema },
+      },
+      '/orgs/{orgId}/admins': {
+        post: { summary: 'Add an adult admin by email (owner only)', body: addOrgAdminBodySchema, response: orgDetailSchema },
+      },
+      '/orgs/{orgId}/admins/{adminId}': {
+        delete: { summary: 'Remove an admin, or leave' },
+      },
+      '/orgs/{orgId}/teams/{teamId}': {
+        post: { summary: 'Invite a team', response: orgDetailSchema },
+        delete: { summary: 'Remove a team or withdraw its invitation (org admin or team billing manager)' },
+      },
+      '/orgs/{orgId}/teams/{teamId}/accept': {
+        post: { summary: "Join the organization (team's manage_billing)", response: teamOrgStatusSchema },
+      },
+      '/orgs/{orgId}/teams/{teamId}/decline': {
+        post: { summary: 'Turn down an invitation', response: teamOrgStatusSchema },
+      },
+      '/orgs/teams/{teamId}': {
+        get: { summary: "The team's organization and invitations", response: teamOrgStatusSchema },
+      },
+      '/orgs/{orgId}/announcements': {
+        post: { summary: "Post to every team's main chat (organization plan)", body: orgAnnouncementBodySchema },
       },
     },
   },

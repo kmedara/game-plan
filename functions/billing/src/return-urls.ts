@@ -27,6 +27,7 @@ const clientOrigin = (): string => (process.env.CLIENT_ORIGIN ?? 'http://localho
 export const billingReturnUrl = (query: BillingReturnQuery): string => {
   const params = new URLSearchParams({ to: query.to, result: query.result });
   if (query.teamId !== undefined) params.set('teamId', query.teamId);
+  if (query.orgId !== undefined) params.set('orgId', query.orgId);
   return `${returnRouteUrl()}?${params.toString()}`;
 };
 
@@ -39,7 +40,13 @@ export const billingReturnUrl = (query: BillingReturnQuery): string => {
 export const billingLandingUrl = (query: BillingReturnQuery): string => {
   const params = new URLSearchParams({ result: query.result });
   if (query.teamId !== undefined) params.set('teamId', query.teamId);
+  if (query.orgId !== undefined) params.set('orgId', query.orgId);
   if (query.to === 'app') return `${NATIVE_BILLING_REDIRECT}?${params.toString()}`;
-  const path = query.teamId !== undefined ? `/teams/${encodeURIComponent(query.teamId)}` : '/plans';
+  const path =
+    query.teamId !== undefined
+      ? `/teams/${encodeURIComponent(query.teamId)}`
+      : query.orgId !== undefined
+        ? `/orgs/${encodeURIComponent(query.orgId)}`
+        : '/plans';
   return `${clientOrigin()}${path}?${params.toString()}`;
 };

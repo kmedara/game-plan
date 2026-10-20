@@ -455,7 +455,9 @@ export const listMessages = async (
  * A poll message carries the poll; its body is the question, so chat
  * previews and push text work unchanged.
  *
- * @param input - Chat, sender, message body, and an optional poll.
+ * @param input - Chat, sender, message body, an optional poll, and whether the
+ *   caller already authorized a sender who is not in the chat (an organization
+ *   admin posting an announcement).
  * @returns The stored message.
  */
 export const sendMessage = async (input: {
@@ -463,9 +465,10 @@ export const sendMessage = async (input: {
   userId: string;
   body: SendMessageBody;
   poll?: Poll;
+  authorizedOutsideChat?: boolean;
 }): Promise<ChatMessage> => {
   await requireChat(input.chatId);
-  await requireChatMembership(input.chatId, input.userId);
+  if (input.authorizedOutsideChat !== true) await requireChatMembership(input.chatId, input.userId);
 
   const bodyText = input.body.body.trim();
   const attachmentKeys = (input.body.attachmentKeys ?? []).filter((key) => key.length > 0);

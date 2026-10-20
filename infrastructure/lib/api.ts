@@ -28,6 +28,7 @@ import {
   FEED_PREFIX,
   HANDOFF_PREFIX,
   INVITE_PREFIX,
+  ORG_PREFIX,
   PAYMENT_REMINDERS_KEY,
   REMINDERS_KEY,
   STRIPE_ACCOUNT_PREFIX,
@@ -344,6 +345,9 @@ export class Api extends Construct {
           return { ...shared, ...tableEnv, ...tokenEnv, ...queueEnv, ...paymentsEnv };
         case 'billing':
           return { ...shared, ...tableEnv, ...tokenEnv, ...billingEnv };
+        case 'orgs':
+          // The Stripe key keeps the extra-team quantity in step as teams join and leave.
+          return { ...shared, ...tableEnv, ...tokenEnv, ...queueEnv, STRIPE_SECRET_KEY_PARAMETER: stripeSecretKeyParameter };
         case 'fanout':
           return {
             ...shared,
@@ -385,6 +389,7 @@ export class Api extends Construct {
 
     // Same reason as the payments webhook: Stripe cannot sign for origin access control.
     allowParameterRead(functions.billing, stripeSecretKeyParameter);
+    allowParameterRead(functions.orgs, stripeSecretKeyParameter);
     const billingWebhookFn = createFunction(
       this,
       'billing-webhook',
@@ -468,6 +473,7 @@ export class Api extends Construct {
     queue.grantSendMessages(functions.teams);
     queue.grantSendMessages(functions.fanout);
     queue.grantSendMessages(functions.payments);
+    queue.grantSendMessages(functions.orgs);
     queue.grantSendMessages(paymentsWebhookFn);
     functions.fanout.addEventSource(
       new SqsEventSource(queue, { batchSize: 10, reportBatchItemFailures: true }),
@@ -497,18 +503,19 @@ export class Api extends Construct {
       emailIndex: true,
     });
     grantPartitions(props.table, functions.teams, {
-      read: [TEAM_PREFIX, USER_PREFIX, CHAT_PREFIX, INVITE_PREFIX, DIRECTORY_KEY],
+      // ORG# lets the membership guard recognize organization admins, here and below.
+      read: [TEAM_PREFIX, USER_PREFIX, CHAT_PREFIX, INVITE_PREFIX, DIRECTORY_KEY, ORG_PREFIX],
       write: [TEAM_PREFIX, USER_PREFIX, CHAT_PREFIX, INVITE_PREFIX, DIRECTORY_KEY],
       transact: true,
     });
     grantPartitions(props.table, functions.schedule, {
       // Carpool claims write the driver-and-riders chat under CHAT# and USER#.
       // FEED# maps a calendar feed token to its owner.
-      read: [TEAM_PREFIX, REMINDERS_KEY, CHAT_PREFIX, USER_PREFIX, FEED_PREFIX],
+      read: [TEAM_PREFIX, REMINDERS_KEY, CHAT_PREFIX, USER_PREFIX, FEED_PREFIX, ORG_PREFIX],
       write: [TEAM_PREFIX, REMINDERS_KEY, CHAT_PREFIX, USER_PREFIX, FEED_PREFIX],
     });
     grantPartitions(props.table, functions.chat, {
-      read: [CHAT_PREFIX, USER_PREFIX, TEAM_PREFIX],
+      read: [CHAT_PREFIX, USER_PREFIX, TEAM_PREFIX, ORG_PREFIX],
       write: [CHAT_PREFIX, USER_PREFIX],
       transact: true,
       emailIndex: true,
@@ -527,7 +534,7 @@ export class Api extends Construct {
     });
     grantPartitions(props.table, functions.payments, {
       // Dues live on TEAM#, pointers and profiles on USER#.
-      read: [TEAM_PREFIX, USER_PREFIX, STRIPE_ACCOUNT_PREFIX, PAYMENT_REMINDERS_KEY],
+      read: [TEAM_PREFIX, USER_PREFIX, STRIPE_ACCOUNT_PREFIX, PAYMENT_REMINDERS_KEY, ORG_PREFIX],
       write: [TEAM_PREFIX, USER_PREFIX, STRIPE_ACCOUNT_PREFIX, PAYMENT_REMINDERS_KEY],
       transact: true,
     });
@@ -537,15 +544,22 @@ export class Api extends Construct {
       transact: true,
     });
     grantPartitions(props.table, functions.billing, {
-      // Plan and billing rows on TEAM#, the reverse customer lookup.
-      read: [TEAM_PREFIX, STRIPE_CUSTOMER_PREFIX],
-      write: [TEAM_PREFIX, STRIPE_CUSTOMER_PREFIX],
+      // Plan and billing rows on TEAM# and ORG#, the reverse customer lookup.
+      read: [TEAM_PREFIX, STRIPE_CUSTOMER_PREFIX, ORG_PREFIX],
+      write: [TEAM_PREFIX, STRIPE_CUSTOMER_PREFIX, ORG_PREFIX],
       transact: true,
     });
     grantPartitions(props.table, billingWebhookFn, {
-      read: [TEAM_PREFIX, STRIPE_CUSTOMER_PREFIX],
-      write: [TEAM_PREFIX, STRIPE_CUSTOMER_PREFIX],
+      read: [TEAM_PREFIX, STRIPE_CUSTOMER_PREFIX, ORG_PREFIX],
+      write: [TEAM_PREFIX, STRIPE_CUSTOMER_PREFIX, ORG_PREFIX],
       transact: true,
+    });
+    grantPartitions(props.table, functions.orgs, {
+      // Announcements write messages under CHAT#; joining writes the team's ORG and PLAN rows.
+      read: [ORG_PREFIX, TEAM_PREFIX, USER_PREFIX, CHAT_PREFIX],
+      write: [ORG_PREFIX, TEAM_PREFIX, USER_PREFIX, CHAT_PREFIX],
+      transact: true,
+      emailIndex: true,
     });
     grantPartitions(props.table, functions.fanout, {
       read: [CHAT_PREFIX, TEAM_PREFIX, USER_PREFIX],

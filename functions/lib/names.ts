@@ -20,6 +20,7 @@ type Resources = {
     'fanout',
     'payments',
     'billing',
+    'orgs',
   ];
   tableName: string;
   emailIndex: string;

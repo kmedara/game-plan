@@ -15,6 +15,7 @@ import { handler as billing } from './billing/src/handler.js';
 import { handler as chat } from './chat/src/handler.js';
 import { handler as identity } from './identity/src/handler.js';
 import { handler as media } from './media/src/handler.js';
+import { handler as orgs } from './orgs/src/handler.js';
 import { handler as payments } from './payments/src/handler.js';
 import { handler as places } from './places/src/handler.js';
 import { handler as schedule } from './schedule/src/handler.js';
@@ -26,7 +27,7 @@ type HttpHandler = (event: APIGatewayProxyEventV2) => Promise<APIGatewayProxyStr
 /** One dispatched route: the handler function it reaches, and a request that reaches it. */
 type RouteCase = { route: string; method: Method; path: string; query?: string };
 
-const handlers = { identity, teams, schedule, chat, media, places, payments, billing } as Record<
+const handlers = { identity, teams, schedule, chat, media, places, payments, billing, orgs } as Record<
   string,
   HttpHandler
 >;
@@ -135,6 +136,22 @@ const PROTECTED: Record<string, RouteCase[]> = {
     { route: 'handleGetTeamBilling', method: 'GET', path: '/billing/teams/team-1' },
     { route: 'handleTeamCheckout', method: 'POST', path: '/billing/teams/team-1/checkout' },
     { route: 'handleTeamPortal', method: 'POST', path: '/billing/teams/team-1/portal' },
+    { route: 'handleOrgCheckout', method: 'POST', path: '/billing/orgs/org-1/checkout' },
+    { route: 'handleOrgPortal', method: 'POST', path: '/billing/orgs/org-1/portal' },
+  ],
+  orgs: [
+    { route: 'handleListOrgs', method: 'GET', path: '/orgs' },
+    { route: 'handleCreateOrg', method: 'POST', path: '/orgs' },
+    { route: 'handleGetOrg', method: 'GET', path: '/orgs/org-1' },
+    { route: 'handleUpdateOrg', method: 'PATCH', path: '/orgs/org-1' },
+    { route: 'handleAddOrgAdmin', method: 'POST', path: '/orgs/org-1/admins' },
+    { route: 'handleRemoveOrgAdmin', method: 'DELETE', path: '/orgs/org-1/admins/user-2' },
+    { route: 'handleInviteTeam', method: 'POST', path: '/orgs/org-1/teams/team-1' },
+    { route: 'handleRemoveOrgTeam', method: 'DELETE', path: '/orgs/org-1/teams/team-1' },
+    { route: 'handleAcceptOrgInvite', method: 'POST', path: '/orgs/org-1/teams/team-1/accept' },
+    { route: 'handleDeclineOrgInvite', method: 'POST', path: '/orgs/org-1/teams/team-1/decline' },
+    { route: 'handleTeamOrgStatus', method: 'GET', path: '/orgs/teams/team-1' },
+    { route: 'handleAnnounce', method: 'POST', path: '/orgs/org-1/announcements' },
   ],
 };
 

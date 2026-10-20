@@ -16,9 +16,27 @@ export const PREMIUM_LOOKUP_KEYS: Readonly<Record<BillingInterval, string>> = {
   year: 'premium_yearly',
 };
 
+/** Stripe price lookup keys for the organization plan. */
+export const ORG_LOOKUP_KEYS: Readonly<Record<BillingInterval, string>> = {
+  month: 'org_monthly',
+  year: 'org_yearly',
+};
+
+/**
+ * Price for each organization team past the included ones, as a second
+ * subscription item. Stripe requires every item on a subscription to renew on
+ * the same interval, so a yearly organization pays the yearly price ($5 x 12).
+ */
+export const ORG_EXTRA_TEAM_LOOKUP_KEYS: Readonly<Record<BillingInterval, string>> = {
+  month: 'org_extra_team_monthly',
+  year: 'org_extra_team_yearly',
+};
+
 /** Input for {@link BillingGateway.createCheckoutSession}. */
 export type SubscriptionCheckoutInput = {
   priceId: string;
+  /** More priced items, such as extra organization teams. */
+  extraItems?: { priceId: string; quantity: number }[];
   customerId?: string;
   email?: string;
   metadata: Record<string, string>;
@@ -54,13 +72,16 @@ const stripeGateway: BillingGateway = {
   createCheckoutSession: async (input) => {
     const session = await (await stripe()).checkout.sessions.create({
       mode: 'subscription',
-      line_items: [{ price: input.priceId, quantity: 1 }],
+      line_items: [
+        { price: input.priceId, quantity: 1 },
+        ...(input.extraItems ?? []).map((item) => ({ price: item.priceId, quantity: item.quantity })),
+      ],
       ...(input.customerId !== undefined
         ? { customer: input.customerId }
         : input.email !== undefined
           ? { customer_email: input.email }
           : {}),
-      client_reference_id: input.metadata.teamId,
+      client_reference_id: input.metadata.teamId ?? input.metadata.orgId,
       metadata: input.metadata,
       subscription_data: { metadata: input.metadata },
       allow_promotion_codes: true,

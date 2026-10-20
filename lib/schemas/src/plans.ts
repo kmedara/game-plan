@@ -87,6 +87,10 @@ export const billingReturnQuerySchema = z.object({
     .string()
     .regex(/^[A-Za-z0-9_-]{1,64}$/u)
     .optional(),
+  orgId: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{1,64}$/u)
+    .optional(),
 });
 
 /** Inferred type for {@link billingReturnQuerySchema}. */

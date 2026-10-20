@@ -8,6 +8,7 @@ import { authenticateRequest } from './auth/cognito.js';
 import { getItem } from './dynamo/access.js';
 import { teamMemberSk, teamMetaSk, teamPk } from './dynamo/keys.js';
 import { canWithRoles } from '@gameplan/rules';
+import { administersTeamOrg } from './orgs.js';
 import { loadRolePermissionMatrix } from './permissions.js';
 import { asStep, type Step } from './pipeline.js';
 
@@ -84,6 +85,10 @@ export const requireTeam = (): Step<{ teamId: string }, { team: GuardTeam }> =>
 /**
  * Loads the caller's roster row and attaches `member`.
  *
+ * An admin of the organization the team belongs to counts as `team_admin`
+ * there without being on the roster. That check runs only when the caller has
+ * no roster row, so members pay nothing extra.
+ *
  * @returns A step that throws `not_a_member` when the caller is not on the team.
  */
 export const requireMembership = (): Step<
@@ -96,7 +101,10 @@ export const requireMembership = (): Step<
       teamMemberSk(ctx.user.userId),
     );
     const roles = member === undefined ? [] : rolesFromMembership(member);
-    if (roles.length === 0) throw new Error('not_a_member');
+    if (roles.length === 0) {
+      if (!(await administersTeamOrg(ctx.teamId, ctx.user.userId))) throw new Error('not_a_member');
+      return next({ ...ctx, member: { userId: ctx.user.userId, role: 'team_admin', roles: ['team_admin'] } });
+    }
     return next({
       ...ctx,
       member: {

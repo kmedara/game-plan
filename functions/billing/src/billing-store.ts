@@ -16,6 +16,7 @@ import {
   TABLE_SK,
   billingSk,
   getItem,
+  orgPk,
   planSk,
   putItem,
   stripeCustomerPk,
@@ -24,6 +25,8 @@ import {
 } from '../../lib/dynamo/index.js';
 import type { PlanItem } from '../../lib/entitlements.js';
 import { TABLE_NAME } from '../../lib/names.js';
+import type { OrgBillingItem } from '../../lib/org-seats.js';
+import { loadOrgPlan, syncOrgPlanToTeams, type OrgPlanItem } from '../../lib/orgs.js';
 
 /** `TEAM#<teamId>` / `BILLING`. */
 export type BillingItem = {
@@ -129,5 +132,86 @@ export const applySubscription = async (
           expressionAttributeValues: { ':version': version },
         },
   );
+  return true;
+};
+
+/**
+ * Finds the organization a Stripe customer pays for.
+ *
+ * @param customerId - The Stripe customer id.
+ * @returns The organization id, or `undefined`.
+ */
+export const orgIdForCustomer = async (customerId: string): Promise<string | undefined> =>
+  (await getItem<{ orgId?: string }>(stripeCustomerPk(customerId), 'ORG'))?.orgId;
+
+/**
+ * An organization's Stripe customer, if it has one.
+ *
+ * @param orgId - The organization.
+ * @returns The billing row.
+ */
+export const getOrgBilling = async (orgId: string): Promise<OrgBillingItem | undefined> =>
+  getItem<OrgBillingItem>(orgPk(orgId), billingSk());
+
+/**
+ * Stores an organization's Stripe customer and subscription, and the reverse lookup.
+ *
+ * @param orgId - The organization.
+ * @param customerId - The Stripe customer id.
+ * @param subscriptionId - The subscription id, when known.
+ */
+export const saveOrgBilling = async (orgId: string, customerId: string, subscriptionId?: string): Promise<void> => {
+  const item: OrgBillingItem = {
+    orgId,
+    customerId,
+    ...(subscriptionId !== undefined ? { subscriptionId } : {}),
+    updatedAt: new Date().toISOString(),
+  };
+  await transactWrite([
+    { Put: { TableName: TABLE_NAME, Item: { [TABLE_PK]: orgPk(orgId), [TABLE_SK]: billingSk(), ...item } } },
+    { Put: { TableName: TABLE_NAME, Item: { [TABLE_PK]: stripeCustomerPk(customerId), [TABLE_SK]: 'ORG', customerId, orgId } } },
+  ]);
+};
+
+/**
+ * Writes an organization's plan from a subscription event, unless a newer
+ * event already did, then copies it onto every member team.
+ *
+ * @param orgId - The organization.
+ * @param facts - The subscription's tier, status, and period.
+ * @param eventCreated - Unix seconds when Stripe created the event.
+ * @returns `true` when the plan was written.
+ * @throws `ConditionalCheckFailedException` when another delivery wrote first; Stripe retries.
+ */
+export const applyOrgSubscription = async (
+  orgId: string,
+  facts: SubscriptionFacts,
+  eventCreated: number,
+): Promise<boolean> => {
+  const stored = await loadOrgPlan(orgId);
+  if (stored?.stripeEventCreated !== undefined && stored.stripeEventCreated > eventCreated) return false;
+  const version = stored?.version ?? 0;
+  const item: OrgPlanItem = {
+    orgId,
+    tier: facts.tier,
+    status: facts.status,
+    ...(facts.interval !== undefined ? { interval: facts.interval } : {}),
+    ...(facts.currentPeriodEnd !== undefined ? { currentPeriodEnd: facts.currentPeriodEnd } : {}),
+    cancelAtPeriodEnd: facts.cancelAtPeriodEnd,
+    stripeEventCreated: eventCreated,
+    updatedAt: new Date().toISOString(),
+    version: version + 1,
+  };
+  await putItem(
+    { [TABLE_PK]: orgPk(orgId), [TABLE_SK]: planSk(), ...item },
+    stored === undefined
+      ? { conditionExpression: 'attribute_not_exists(PK)' }
+      : {
+          conditionExpression: '#version = :version',
+          expressionAttributeNames: { '#version': 'version' },
+          expressionAttributeValues: { ':version': version },
+        },
+  );
+  await syncOrgPlanToTeams(orgId);
   return true;
 };

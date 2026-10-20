@@ -20,6 +20,7 @@ const areas = [
   'fanout',
   'payments',
   'billing',
+  'orgs',
 ] as const;
 
 /** One product area, and therefore one deployable Lambda. */
@@ -50,6 +51,7 @@ export const HTTP_AREAS = [
   'places',
   'payments',
   'billing',
+  'orgs',
 ] as const;
 
 /** One area with a Lambda function URL behind the website distribution. */

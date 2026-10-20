@@ -36,6 +36,9 @@ export const REMINDERS_KEY = 'REMINDERS';
 /** `STRIPE_ACCOUNT#<accountId>` which team a connected Stripe account belongs to. */
 export const STRIPE_ACCOUNT_PREFIX = 'STRIPE_ACCOUNT#*';
 
+/** `ORG#<orgId>` an organization: admins, teams, invitations, plan, billing. */
+export const ORG_PREFIX = 'ORG#*';
+
 /** `FEED#<token>` which person a calendar feed link belongs to. */
 export const FEED_PREFIX = 'FEED#*';
 

@@ -92,6 +92,7 @@ describe('area function urls', () => {
       'gameplan-payments': ['STRIPE_SECRET_KEY_PARAMETER', '/gameplan/stripe-secret-key'],
       'gameplan-payments-webhook': ['STRIPE_WEBHOOK_SECRET_PARAMETER', '/gameplan/stripe-webhook-secret'],
       'gameplan-billing': ['STRIPE_SECRET_KEY_PARAMETER', '/gameplan/stripe-secret-key'],
+      'gameplan-orgs': ['STRIPE_SECRET_KEY_PARAMETER', '/gameplan/stripe-secret-key'],
       'gameplan-billing-webhook': [
         'STRIPE_BILLING_WEBHOOK_SECRET_PARAMETER',
         '/gameplan/stripe-billing-webhook-secret',
@@ -109,7 +110,8 @@ describe('area function urls', () => {
       .map((statement) => JSON.stringify(statement.Resource));
     // Payments and its webhook read the Stripe key and the Connect webhook secret.
     // Billing reads the key; its webhook reads the key and the billing webhook secret.
-    expect(parameterReads).toHaveLength(10);
+    // Orgs reads the key to keep the extra-team quantity in step.
+    expect(parameterReads).toHaveLength(11);
     expect(parameterReads.join('\n')).toContain('parameter/gameplan/stripe-billing-webhook-secret');
     expect(parameterReads.join('\n')).toContain('parameter/gameplan/stripe-secret-key');
     expect(parameterReads.join('\n')).toContain('parameter/gameplan/stripe-webhook-secret');

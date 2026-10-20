@@ -33,6 +33,7 @@ export const mapBillingError: ErrorMappingFn = (
     case "token_expired":
       return unauthorized();
     case "team_not_found":
+    case "org_not_found":
     case "no_billing_account":
       return notFound();
     case "not_a_member":

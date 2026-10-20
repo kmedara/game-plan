@@ -241,6 +241,39 @@ export const reminderSk = (
 /** `USER#<userId>` / `PREFS` — settings that follow the account. */
 export const prefsSk = (): string => 'PREFS';
 
+/** `ORG#<orgId>` — an organization: `META`, admins, teams, invites, plan, billing. */
+export const orgPk = (orgId: string): string => `ORG#${orgId}`;
+
+/** The organization's own row. */
+export const orgMetaSk = (): string => 'META';
+
+/** One organization admin. */
+export const orgAdminSk = (userId: UserId): string => `ADMIN#${userId}`;
+
+/** Sort-key prefix for every organization admin. */
+export const ORG_ADMIN_SK_PREFIX = 'ADMIN#' as const;
+
+/** One team in the organization; `pending` until the team's admin accepts. */
+export const orgTeamSk = (teamId: TeamId): string => `TEAM#${teamId}`;
+
+/** Sort-key prefix for every team in an organization. */
+export const ORG_TEAM_SK_PREFIX = 'TEAM#' as const;
+
+/** `TEAM#<teamId>` / `ORG` — the organization a team belongs to. */
+export const teamOrgSk = (): string => 'ORG';
+
+/** `TEAM#<teamId>` / `ORGINVITE#<orgId>` — an organization asked this team to join. */
+export const teamOrgInviteSk = (orgId: string): string => `ORGINVITE#${orgId}`;
+
+/** Sort-key prefix for every organization invitation on a team. */
+export const TEAM_ORG_INVITE_SK_PREFIX = 'ORGINVITE#' as const;
+
+/** `USER#<userId>` / `ORG#<orgId>` — an organization the user administers. */
+export const userOrgSk = (orgId: string): string => `ORG#${orgId}`;
+
+/** Sort-key prefix for every organization a user administers. */
+export const USER_ORG_SK_PREFIX = 'ORG#' as const;
+
 /** `USER#<userId>` / `MEDICAL` — emergency and medical info. */
 export const medicalSk = (): string => 'MEDICAL';
 

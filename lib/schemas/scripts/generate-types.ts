@@ -49,6 +49,9 @@ const CONST_EXPORTS = [
   'MAX_SIGNUP_SLOTS',
   'MAX_SIGNUP_CAPACITY',
   'MAX_POLL_OPTIONS',
+  'ORG_INCLUDED_TEAMS',
+  'MAX_ORG_TEAMS',
+  'MAX_ORG_ADMINS',
 ] as const;
 
 /** Convert `loginBodySchema` → `LoginBody`. */

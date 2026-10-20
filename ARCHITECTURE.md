@@ -163,6 +163,19 @@ A poll is a chat message with a `poll` field, and its body is the question, so i
 - **Why:** a vote row per person means voters never collide and never rewrite the message, and changing a vote is one put. Counting on read keeps one source of truth.
 - **Cost:** each poll message on a page costs a query for its votes. A live update carries counts only, so the reader's own choices come from their vote response or the next history load. Votes are visible as counts, not names.
 
+### Organizations
+
+An organization is one club or league over many teams (`functions/orgs`). Its rows live under `ORG#<orgId>`: `META` (name, owner), `ADMIN#<userId>`, `TEAM#<teamId>` (`pending` until accepted), `PLAN`, and `BILLING`. A team points back with `TEAM#<teamId>` / `ORG`, and `USER#<userId>` / `ORG#<orgId>` lists what someone administers. Only adults own or administer one; only the owner adds admins and manages billing.
+
+An admin invites a team; it joins when someone with the team's `manage_billing` accepts, and either side can end it. A team paying for its own plan must cancel first, so nobody pays twice.
+
+`requireMembership` treats an admin of the team's organization as `team_admin` on that team, without a roster row. The check runs only when the caller has no roster row, so members pay nothing extra, and every existing team route works for organization admins unchanged. They are not added to chats.
+
+The organization plan is a Stripe subscription with two items: the base price (`org_monthly` / `org_yearly`, five teams included) and an extra-team item (`org_extra_team_monthly` / `_yearly`) whose quantity is teams past five. `syncOrgSeats` sets that quantity whenever a team joins or leaves and after checkout. The plan is written to `ORG#` / `PLAN` and copied onto each member team's `PLAN` row with `orgId`; a team's own subscription never overwrites a copy, and leaving deletes it. Announcements (`POST /orgs/:orgId/announcements`) post one message, prefixed with the organization's name, to each team's main chat, and need the organization plan; creating an organization and adding teams are free.
+
+- **Why:** the team pointer is its own row because the teams area rewrites `META` whole. Joining gives the organization's admins `team_admin`, so the team's billing manager must agree. Copying the plan keeps a team's entitlement check one read. The guard fallback means no route had to learn about organizations.
+- **Cost:** Stripe requires every item on a subscription to renew on the same interval, so a yearly organization pays extra teams yearly ($60 each) rather than monthly as first planned. A plan change writes every member team's row. Every area that uses `requireMembership` can read `ORG#`. Announcements go out one team at a time from one request, which is fine for dozens of teams and not for thousands.
+
 ### Team dues
 
 Each team connects a Stripe Express account. A charge (`TEAM#id` / `CHARGE#`) asks some members to pay; each member's share is a due (`DUE#<chargeId>#<memberId>`) with a pointer on the member's partition for "my dues". Payment is a direct charge on the team's account through hosted Checkout, with GamePlan's cut as `application_fee_amount` (`PLATFORM_FEE_BPS`, default 2%). An adult pays their own due; a minor's guardians pay theirs (`payerIdsForDue` in `lib/rules`). Staff can mark a due paid outside the app or waived.
@@ -401,7 +414,7 @@ WAF on `/api/`, six rules, each a five-minute window, `429` with `{"error":"rate
 
 ### Least-privilege IAM
 
-Each area's role is limited to the DynamoDB prefixes it uses, via `dynamodb:LeadingKeys` (`infrastructure/lib/table-access.ts`). `places` has no table access. `schedule` can touch `TEAM#`, `REMINDERS`, and the `CHAT#` / `USER#` rows for a carpool chat. `fanout` reads those prefixes and may delete a `USER#` item after a socket or push device is reported gone. `payments` writes `TEAM#`, `USER#`, `STRIPE_ACCOUNT#`, and `PAYMENT_REMINDERS`; its webhook function writes only `TEAM#` and `STRIPE_ACCOUNT#`. `billing` and its webhook write only `TEAM#` and `STRIPE_CUSTOMER#`. Identity and Access Management cannot limit that delete to the `CONN#` sort key; the function only deletes the connection id from the failed post. `ForAllValues` stops a transaction from mixing in another prefix. Identity may call `AdminGetUser` and `AdminDeleteUser` (to replace an unconfirmed signup). CI uses GitHub OIDC (`AWS_ROLE_ARN` per environment). Deploy logs are redacted.
+Each area's role is limited to the DynamoDB prefixes it uses, via `dynamodb:LeadingKeys` (`infrastructure/lib/table-access.ts`). `places` has no table access. `schedule` can touch `TEAM#`, `REMINDERS`, and the `CHAT#` / `USER#` rows for a carpool chat. `fanout` reads those prefixes and may delete a `USER#` item after a socket or push device is reported gone. `payments` writes `TEAM#`, `USER#`, `STRIPE_ACCOUNT#`, and `PAYMENT_REMINDERS`; its webhook function writes only `TEAM#` and `STRIPE_ACCOUNT#`. `billing` and its webhook write only `TEAM#`, `ORG#`, and `STRIPE_CUSTOMER#`. `orgs` writes `ORG#`, `TEAM#`, `USER#`, and `CHAT#` (announcements); every area with the membership guard reads `ORG#`. Identity and Access Management cannot limit that delete to the `CONN#` sort key; the function only deletes the connection id from the failed post. `ForAllValues` stops a transaction from mixing in another prefix. Identity may call `AdminGetUser` and `AdminDeleteUser` (to replace an unconfirmed signup). CI uses GitHub OIDC (`AWS_ROLE_ARN` per environment). Deploy logs are redacted.
 
 Buckets block public access, use S3-managed encryption, and require TLS. Media CORS allows only the website origin. SQS uses SQS-managed encryption.
 
