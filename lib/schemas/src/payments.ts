@@ -6,6 +6,7 @@
  */
 
 import { dueStatusSchema } from './enums.js';
+import { httpsUrlSchema } from './links.js';
 import { z } from './zod.js';
 
 /** Currencies a team can charge in. Each has a Stripe minimum below {@link MIN_CHARGE_CENTS}. */
@@ -92,7 +93,7 @@ export const paymentAccountSchema = z
 /** A hosted Stripe page to open in the browser (onboarding or checkout). */
 export const paymentRedirectSchema = z
   .object({
-    url: z.string().url(),
+    url: httpsUrlSchema,
   })
   .strict();
 

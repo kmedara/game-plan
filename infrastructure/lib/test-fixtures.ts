@@ -36,6 +36,12 @@ export const siteStackForTest = (
     functions[area] = fn;
     functionUrls[area] = fn.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.AWS_IAM });
   }
+  const cspReportFn = new lambda.Function(api, 'cspReportFn', {
+    runtime: lambda.Runtime.NODEJS_22_X,
+    handler: 'index.handler',
+    code: lambda.Code.fromInline('exports.handler = async () => ({ statusCode: 204 });'),
+  });
+  const cspReportUrl = cspReportFn.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
   const socket = {
     webSocketApi: new apigwv2.WebSocketApi(api, 'WebSocketApi'),
     stageName: 'prod',
@@ -45,6 +51,7 @@ export const siteStackForTest = (
     env,
     functions,
     functionUrls,
+    cspReportUrl,
     socket,
     mediaBucket,
     ...props,

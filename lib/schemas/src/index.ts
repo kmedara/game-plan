@@ -81,6 +81,7 @@ export {
 } from './auth.js';
 
 export { phoneNumberSchema, toE164Phone } from './phone.js';
+export { httpsUrlSchema, linkSchema, webcalUrlSchema } from './links.js';
 
 export {
   acceptedInviteSchema,

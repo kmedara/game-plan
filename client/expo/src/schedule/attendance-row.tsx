@@ -7,11 +7,12 @@ import MessageSquareText from 'lucide-react-native/icons/message-square-text';
 import Phone from 'lucide-react-native/icons/phone';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Linking, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { TeamMember } from '@gameplan/types';
 import { errorMessageKey } from '@/src/errors';
 import { useDownloadUrl } from '@/src/media';
+import { openLink } from '@/src/open-link';
 import { createPrivateChatMutation } from '@/src/queries/chat';
 import { useApp } from '@/src/state';
 import { ProfilePhoto } from '@/src/ui';
@@ -47,7 +48,7 @@ export const AttendanceRow = ({
             accessibilityRole="button"
             accessibilityLabel={t('schedule.call')}
             className="p-1.5"
-            onPress={() => void Linking.openURL(`tel:${phone}`)}
+            onPress={() => void openLink(`tel:${phone}`)}
           >
             <Phone {...ICON} />
           </Pressable>
@@ -55,7 +56,7 @@ export const AttendanceRow = ({
             accessibilityRole="button"
             accessibilityLabel={t('schedule.text')}
             className="p-1.5"
-            onPress={() => void Linking.openURL(`sms:${phone}`)}
+            onPress={() => void openLink(`sms:${phone}`)}
           >
             <MessageSquareText {...ICON} />
           </Pressable>

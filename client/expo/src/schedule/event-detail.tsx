@@ -3,7 +3,6 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { EVENT_TYPE_COLORS } from '@/src/theme';
@@ -14,6 +13,7 @@ import { GameFixture } from '@/src/fixture-panel';
 import { appLocale } from '@/src/i18n';
 import { MapPicker } from '@/src/map-picker';
 import { mapsUrl, type MapsProvider } from '@/src/maps';
+import { openInBrowser } from '@/src/open-link';
 import { membersQuery } from '@/src/queries/teams';
 import { clockLabel } from '@/src/schedule-calendar';
 import { useApp } from '@/src/state';
@@ -67,7 +67,7 @@ export const EventDetail = ({
       { label: item.location ?? 'Event', latitude: item.latitude, longitude: item.longitude },
       maps,
     );
-    void WebBrowser.openBrowserAsync(url);
+    void openInBrowser(url);
   };
   return (
     <View>

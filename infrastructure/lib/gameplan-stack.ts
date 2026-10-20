@@ -161,6 +161,9 @@ export class GamePlanApi extends cdk.Stack {
   /** Function behind each URL. */
   public readonly httpFunctions: Record<HttpArea, lambda.IFunction>;
 
+  /** Public function URL the site stack forwards `/api/csp-report` to. */
+  public readonly cspReportUrl: lambda.FunctionUrl;
+
   /** WebSocket API the site stack forwards `/api/socket` to. */
   public readonly socket: SiteSocketProps;
 
@@ -191,6 +194,7 @@ export class GamePlanApi extends cdk.Stack {
     this.mediaKeyGroup = api.mediaKeyGroup;
     this.functionUrls = api.functionUrls;
     this.httpFunctions = api.httpFunctions;
+    this.cspReportUrl = api.cspReportUrl;
     this.socket = {
       webSocketApi: api.webSocketApi,
       stageName: api.webSocketStage.stageName,
@@ -238,6 +242,7 @@ export class GamePlanSite extends cdk.Stack {
       certificateArn: props.certificateArn,
       functionUrls: props.functionUrls,
       functions: props.functions,
+      cspReportUrl: props.cspReportUrl,
       socket: props.socket,
       mediaBucket: props.mediaBucket,
       mediaKeyGroup: props.mediaKeyGroup,

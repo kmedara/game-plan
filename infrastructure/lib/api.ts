@@ -226,6 +226,9 @@ export class Api extends Construct {
   /** Function behind each URL. */
   public readonly httpFunctions: Record<HttpArea, lambda.IFunction>;
 
+  /** Public function URL that logs Content-Security-Policy reports. */
+  public readonly cspReportUrl: lambda.FunctionUrl;
+
   /**
    * Key group the website trusts for `/uploads/*`, when media signing is configured.
    *
@@ -399,6 +402,13 @@ export class Api extends Construct {
     allowParameterRead(billingWebhookFn, stripeSecretKeyParameter);
     allowParameterRead(billingWebhookFn, stripeBillingWebhookSecretParameter);
     const billingWebhookUrl = billingWebhookFn.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.NONE,
+    });
+
+    // Browsers send policy reports without the body hash origin access control
+    // needs, so the reporter is public too. It only writes log lines.
+    const cspReportFn = createFunction(this, 'csp-report', areaEntry('identity', 'csp-report.ts'), {}, 5);
+    this.cspReportUrl = cspReportFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
     });
 

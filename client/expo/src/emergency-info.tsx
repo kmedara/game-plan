@@ -8,11 +8,12 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Linking, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { EmergencyContact, MedicalInfo, MedicalPerson } from '@gameplan/types';
 import { errorMessageKey, queryError } from './errors';
 import { bodyFromDraft, draftFromInfo, MEDICAL_TEXT_FIELDS, type MedicalDraft } from './medical-form';
+import { openLink } from './open-link';
 import { queryKeys } from './queries/keys';
 import { Sheet } from './sheet';
 import { useApp } from './state';
@@ -47,7 +48,7 @@ const InfoSummary = ({ info, guardians }: { info: MedicalInfo; guardians?: { dis
           key={`${contact.name}-${index}`}
           accessibilityRole="button"
           disabled={contact.phone === undefined}
-          onPress={() => (contact.phone === undefined ? undefined : void Linking.openURL(`tel:${contact.phone}`))}
+          onPress={() => (contact.phone === undefined ? undefined : void openLink(`tel:${contact.phone}`))}
           className="mb-1"
         >
           <Text className="text-ink">

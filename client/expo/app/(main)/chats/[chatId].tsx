@@ -9,11 +9,12 @@ import X from 'lucide-react-native/icons/x';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Image } from 'expo-image';
-import { FlatList, Linking, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { errorMessageKey, queryError } from '@/src/errors';
 import { PullRefreshFrame, usePullRefreshList } from '@/src/pull-refresh';
 import { CHAT_PHOTO_MAX_DIMENSION, pickAndUploadImage, useDownloadUrl, type UploadedImage } from '@/src/media';
+import { openLink } from '@/src/open-link';
 import { PollBubble, PollComposer } from '@/src/poll';
 import { chatsQuery, messagesQuery, sendMessageMutation } from '@/src/queries/chat';
 import { membersQuery } from '@/src/queries/teams';
@@ -249,7 +250,7 @@ const savePhoto = async (uri: string): Promise<void> => {
     URL.revokeObjectURL(objectUrl);
     return;
   }
-  await Linking.openURL(uri);
+  await openLink(uri);
 };
 
 const Attachment = ({ chatId, objectKey }: { chatId: string; objectKey: string }) => {

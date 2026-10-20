@@ -665,3 +665,27 @@ export const canEditMedicalInfo = (callerId: string, subject: MedicalSubject): b
  */
 export const canReadOwnMedicalInfo = (callerId: string, subject: MedicalSubject): boolean =>
   callerId === subject.userId || (subject.guardianIds ?? []).includes(callerId);
+
+/**
+ * Schemes the app may open. Anything else, such as `javascript:` or `data:`,
+ * would run in the page or hand a crafted payload to another app.
+ */
+export const SAFE_LINK_SCHEMES = ['https:', 'mailto:', 'tel:', 'sms:', 'webcal:'] as const;
+
+/**
+ * Checks that a link is absolute and uses an allowed scheme.
+ *
+ * Parsing with `URL` rather than matching a prefix catches tricks such as
+ * leading spaces, mixed case, and control characters (`java\tscript:`).
+ *
+ * @param url - The link to open.
+ * @param schemes - Schemes allowed here. Defaults to {@link SAFE_LINK_SCHEMES}.
+ * @returns `true` when the link may be opened.
+ */
+export const isSafeLink = (url: string, schemes: readonly string[] = SAFE_LINK_SCHEMES): boolean => {
+  try {
+    return schemes.includes(new URL(url).protocol);
+  } catch {
+    return false;
+  }
+};

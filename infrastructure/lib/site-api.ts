@@ -28,6 +28,9 @@ export const VIEWER_AUTHORIZATION_HEADER = 'x-viewer-authorization';
 /** Viewer path for WebSocket connects on the website host. */
 export const SITE_SOCKET_PATH = `${SITE_API_PREFIX}/socket`;
 
+/** Viewer path browsers post Content-Security-Policy reports to. */
+export const SITE_CSP_REPORT_PATH = `${SITE_API_PREFIX}/csp-report`;
+
 /** Public calendar feed URLs (`/api/schedule/feeds/<token>.ics`), limited apart from other anonymous calls. */
 export const SITE_FEED_PREFIX = `${SITE_API_PREFIX}/schedule/feeds/`;
 
@@ -58,6 +61,8 @@ export type SiteApiProps = {
   functionUrls: Record<HttpArea, lambda.IFunctionUrl>;
   /** Function behind each URL. The distribution gets permission to invoke it. */
   functions: Record<HttpArea, lambda.IFunction>;
+  /** Public (`NONE` auth) function URL that logs policy reports. */
+  cspReportUrl: lambda.IFunctionUrl;
   /** WebSocket API for live delivery. */
   socket: SiteSocketProps;
 };
@@ -236,6 +241,27 @@ export const addSiteApiBehaviors = (
       },
     );
   }
+
+  // Browsers cannot hash a report body for origin access control, so this
+  // origin is unsigned. It still sits under `/api/`, so WAF limits it.
+  distribution.addBehavior(
+    SITE_CSP_REPORT_PATH,
+    new origins.HttpOrigin(cdk.Fn.select(2, cdk.Fn.split('/', props.cspReportUrl.url)), {
+      protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+    }),
+    {
+      viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+      allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+      cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+      originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+      functionAssociations: [
+        {
+          function: edge.apiRewrite,
+          eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+        },
+      ],
+    },
+  );
 
   // The viewer Host must not reach API Gateway, which routes on its own hostname.
   // Every other header and the `ticket` query string pass through for the upgrade.

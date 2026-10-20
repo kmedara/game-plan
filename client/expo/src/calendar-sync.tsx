@@ -6,10 +6,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
-import { Linking, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { subscribeUrl, type CalendarApp } from './calendar-links';
 import { errorMessageKey, queryError } from './errors';
+import { openLink } from './open-link';
 import { queryKeys } from './queries/keys';
 import { useApp } from './state';
 import { Button, ErrorText, SubmitButton } from './ui';
@@ -52,7 +53,7 @@ export const CalendarSync = () => {
               tone="secondary"
               onPress={() => {
                 setError(undefined);
-                void Linking.openURL(subscribeUrl(app, feed.data)).catch(() => setError(t('calendarSync.openFailed')));
+                void openLink(subscribeUrl(app, feed.data)).catch(() => setError(t('calendarSync.openFailed')));
               }}
             />
           ))}

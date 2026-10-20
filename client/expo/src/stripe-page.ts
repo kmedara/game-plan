@@ -6,8 +6,8 @@
  * Stripe and comes back to `/dues` or the team's payments page.
  */
 
-import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
+import { navigateTab, openAuthSession } from './open-link';
 
 /** Deep link the API sends the in-app browser to when a dues page is done. */
 export const PAYMENTS_RETURN_LINK = 'gameplan://payments';
@@ -24,10 +24,10 @@ export const BILLING_RETURN_LINK = 'gameplan://billing';
  */
 export const openStripePage = async (url: string, returnLink = PAYMENTS_RETURN_LINK): Promise<string | undefined> => {
   if (Platform.OS === 'web') {
-    window.location.assign(url);
+    navigateTab(url);
     return undefined;
   }
-  const result = await WebBrowser.openAuthSessionAsync(url, returnLink);
+  const result = await openAuthSession(url, returnLink);
   if (result.type !== 'success') return undefined;
   return new URL(result.url).searchParams.get('result') ?? undefined;
 };

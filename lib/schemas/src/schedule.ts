@@ -3,6 +3,7 @@
  */
 
 import { eventTypeSchema, fixtureStatusSchema, gameSideSchema, rsvpStatusSchema } from './enums.js';
+import { httpsUrlSchema, webcalUrlSchema } from './links.js';
 import { teamPositionSchema } from './teams.js';
 import { z } from './zod.js';
 
@@ -367,9 +368,9 @@ export const rsvpResponseSchema = z
 export const calendarFeedSchema = z
   .object({
     /** `https://` link for Google Calendar and Outlook. */
-    url: z.string().url(),
+    url: httpsUrlSchema,
     /** `webcal://` link that Apple Calendar subscribes to. */
-    webcalUrl: z.string().min(1),
+    webcalUrl: webcalUrlSchema,
   })
   .strict();
 

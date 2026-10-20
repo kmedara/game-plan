@@ -14,6 +14,49 @@ How GamePlan is put together, and the costs of those choices. Setup and deploy s
 | [Certificates](#certificates) | Custom-resource Lambda | More code to own; a failure can stall a deploy for 15 minutes |
 | [Security](#security) | Only CloudFront can invoke the API; BFF OAuth | IdP secrets in the template, no MFA, `DESTROY` on stateful resources |
 
+## Contents
+
+- [System overview](#system-overview)
+  - [Repository layout](#repository-layout)
+- [Stack](#stack)
+  - [TypeScript everywhere](#typescript-everywhere)
+  - [One Expo app](#one-expo-app)
+  - [Lambda, DynamoDB, Cognito](#lambda-dynamodb-cognito)
+  - [Shared games](#shared-games)
+  - [Recurring events](#recurring-events)
+  - [Reminder times](#reminder-times)
+  - [Calendar sync](#calendar-sync)
+  - [Emergency and medical info](#emergency-and-medical-info)
+  - [Volunteer sign-ups](#volunteer-sign-ups)
+  - [Polls in chat](#polls-in-chat)
+  - [Organizations](#organizations)
+  - [Team dues](#team-dues)
+  - [Plans and entitlements](#plans-and-entitlements)
+  - [Subscriptions](#subscriptions)
+- [HTTP edge](#http-edge)
+- [Realtime](#realtime)
+  - [Asking for notifications](#asking-for-notifications)
+- [Stacks and accounts](#stacks-and-accounts)
+- [Routes](#routes)
+  - [Warm state](#warm-state)
+- [Client cache](#client-cache)
+- [Hostnames](#hostnames)
+- [Certificates](#certificates)
+- [Configuration](#configuration)
+- [Bundle size and latency](#bundle-size-and-latency)
+  - [API](#api)
+  - [Client](#client)
+  - [Edge](#edge)
+- [Security](#security)
+  - [Only CloudFront can reach the API](#only-cloudfront-can-reach-the-api)
+  - [Rate limits](#rate-limits)
+  - [Sessions](#sessions)
+  - [Authorization](#authorization)
+  - [Least-privilege IAM](#least-privilege-iam)
+  - [Secrets at run time](#secrets-at-run-time)
+  - [Gaps](#gaps)
+- [Local development](#local-development)
+
 ## System overview
 
 The same picture is in [Lucidchart](https://lucid.app/lucidchart/5dd975a6-4a54-4ddd-893c-fae6ea78e583/edit).
@@ -378,6 +421,8 @@ HTTP/2 and HTTP/3, compression on. Static files use `CACHING_OPTIMIZED`. `/api` 
 - TLS 1.2 minimum (`TLS_V1_2_2021`). HTTP redirects to HTTPS.
 - Website responses: HSTS (one year, subdomains, preload), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`.
 - **Content-Security-Policy** (`infrastructure/lib/website.ts`). Scripts may come only from this origin and Google Maps, with no `'unsafe-inline'` or `'unsafe-eval'`. Network calls may go only to this origin (including `wss:`), the media bucket, and Google Maps. `object-src 'none'`, `base-uri 'self'`, and `frame-ancestors 'none'`. Styles do allow `'unsafe-inline'`, because react-native-web injects style tags and the Expo export inlines a reset. The access token lives in page memory, so an injected script could read it. Inline styles are a smaller hole than inline scripts. Moving styles to nonces needs control of how react-native-web injects them.
+- **User text renders as text.** React escapes every string it renders, and the client never sets HTML directly (no `dangerouslySetInnerHTML`, `innerHTML`, or `eval`), so chat messages, names, and notes cannot become markup.
+- **Uploads are sandboxed.** Media served under `/<MEDIA_CDN_KEY_PREFIX>/*` gets its own response policy: `Content-Security-Policy: default-src 'none'; sandbox`, `nosniff`, and `no-referrer`. An uploaded HTML or SVG file opened directly cannot run script or reach the site's origin.
 - The viewer function overwrites or deletes `x-viewer-authorization`, so a client cannot forge it.
 - CloudFront adds `x-origin-verify` (the `socket-origin-verify` parameter) to every socket connect. The `$connect` authorizer requires it and compares in constant time before spending the ticket. API Gateway returns `401` for a direct `execute-api` connect. Authorizer caching is off so a cached allow cannot replay a ticket.
 

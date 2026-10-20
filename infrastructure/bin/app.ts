@@ -113,6 +113,7 @@ new GamePlanSite(app, 'GamePlanSite', {
   dns,
   functionUrls: api.functionUrls,
   functions: api.httpFunctions,
+  cspReportUrl: api.cspReportUrl,
   socket: api.socket,
   mediaBucket: platform.mediaBucket,
   mediaKeyGroup: api.mediaKeyGroup,

@@ -5,7 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
-import { Linking, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { callerCanGrant } from '@gameplan/rules';
 import { TEAM_ROLES, type TeamInvite, type TeamRole } from '@gameplan/types';
@@ -19,6 +19,7 @@ import {
   smsInviteUrl,
 } from '@/src/invite-share';
 import { errorMessageKey } from '@/src/errors';
+import { openLink } from '@/src/open-link';
 import { toE164Phone } from '@/src/phone';
 import { roleLabel } from '@/src/roles';
 import { RolePicker } from '@/src/role-picker';
@@ -96,7 +97,7 @@ export const TeamInvites = ({
           ? mailtoInviteUrl(email, message.subject, message.body)
           : smsInviteUrl(recipient ?? '', message.body, smsBodySeparator(userAgent));
       try {
-        await Linking.openURL(url);
+        await openLink(url);
       } catch {
         onError(t('errors.teamAdmin.sendInviteFailed'));
         return;
