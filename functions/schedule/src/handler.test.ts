@@ -373,6 +373,44 @@ describe('schedule handler (in-memory)', () => {
     expect(bodyOf(cleared).longitude).toBeUndefined();
   });
 
+  it('edits a practice when the app clears game fields, and turns a game into a practice', async () => {
+    const admin = authFor();
+    const teamId = seedTeam({ userId: admin.userId, role: 'team_admin' });
+    const create = async (body: Record<string, unknown>) =>
+      bodyOf(
+        await handler(
+          httpEvent('POST', `/schedule/teams/${teamId}/events`, {
+            headers: { authorization: admin.authorization },
+            body: { startsAt: '2026-09-20T15:00:00.000Z', ...body },
+          }),
+        ),
+      ).eventId as string;
+    const patch = (eventId: string, body: Record<string, unknown>) =>
+      handler(
+        httpEvent('PATCH', `/schedule/teams/${teamId}/events/${eventId}`, {
+          headers: { authorization: admin.authorization },
+          body,
+        }),
+      );
+
+    // The edit form sends null opponent and side for anything that is not a game.
+    const practiceId = await create({ eventType: 'practice', title: 'Practice' });
+    const edited = await patch(practiceId, { title: 'Evening practice', opponentName: null, side: null });
+    expect(edited.statusCode).toBe(200);
+    expect(bodyOf(edited).title).toBe('Evening practice');
+
+    const gameId = await create({ eventType: 'game', title: 'Game', opponentName: 'Owls', side: 'home' });
+    const switched = await patch(gameId, { eventType: 'practice', opponentName: null, side: null });
+    expect(switched.statusCode).toBe(200);
+    expect(bodyOf(switched)).toMatchObject({ eventType: 'practice' });
+    expect(bodyOf(switched).opponentName).toBeUndefined();
+    expect(bodyOf(switched).side).toBeUndefined();
+
+    const refused = await patch(practiceId, { opponentName: 'Owls' });
+    expect(refused.statusCode).toBe(400);
+    expect(JSON.stringify(bodyOf(refused))).toContain('not_a_game');
+  });
+
   it('creates a game, updates it, and rejects manage_events for a coach without the grant', async () => {
     const admin = authFor();
     const coach = authFor();

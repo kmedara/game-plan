@@ -321,9 +321,12 @@ export const updateEvent = async (input: {
     throw new Error('fixture_locked');
   }
   const nextType = input.body.eventType ?? existing.eventType;
+  // `null` clears a game field, which is fine on any type (the app sends it
+  // for every non-game); only a real value is refused off a game.
   if (
     nextType !== 'game' &&
-    (input.body.opponentName !== undefined || input.body.side !== undefined)
+    ((input.body.opponentName !== undefined && input.body.opponentName !== null) ||
+      (input.body.side !== undefined && input.body.side !== null))
   ) {
     throw new Error('not_a_game');
   }
