@@ -3,7 +3,7 @@
  */
 
 import type { ScheduleOccurrence } from '@gameplan/types';
-import { filterOccurrences, mergeSchedules, parseCalendarFilter, SHOW_ALL, type TeamOccurrence } from './athlete-schedule';
+import { mergeSchedules } from './athlete-schedule';
 import { dayKeyInZone } from './schedule-calendar';
 
 const occurrence = (eventId: string, startsAt: string): ScheduleOccurrence => ({
@@ -42,31 +42,5 @@ describe('mergeSchedules', () => {
     expect(item).toBeDefined();
     expect(dayKeyInZone(new Date(item!.startsAt), 'America/Los_Angeles')).toBe('2026-01-14');
     expect(dayKeyInZone(new Date(item!.startsAt), 'Asia/Tokyo')).toBe('2026-01-15');
-  });
-});
-
-describe('filterOccurrences', () => {
-  const teamOccurrence = (teamId: string, eventType: 'practice' | 'game') =>
-    ({ teamId, eventType, eventId: `${teamId}-${eventType}`, startsAt: '2026-10-20T00:00:00.000Z' }) as TeamOccurrence;
-  const events = [teamOccurrence('a', 'practice'), teamOccurrence('a', 'game'), teamOccurrence('b', 'game')];
-
-  it('shows everything when nothing is hidden', () => {
-    expect(filterOccurrences(events, SHOW_ALL)).toHaveLength(3);
-  });
-
-  it('hides teams and event types together', () => {
-    const shown = filterOccurrences(events, { hiddenTeamIds: ['b'], hiddenEventTypes: ['practice'] });
-    expect(shown.map((item) => item.eventId)).toEqual(['a-game']);
-  });
-});
-
-describe('parseCalendarFilter', () => {
-  it('reads a stored filter and ignores junk', () => {
-    expect(parseCalendarFilter('{"hiddenTeamIds":["t1",2],"hiddenEventTypes":["game","party"]}')).toEqual({
-      hiddenTeamIds: ['t1'],
-      hiddenEventTypes: ['game'],
-    });
-    expect(parseCalendarFilter('not json')).toEqual(SHOW_ALL);
-    expect(parseCalendarFilter(undefined)).toEqual(SHOW_ALL);
   });
 });

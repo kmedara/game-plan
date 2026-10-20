@@ -2,7 +2,7 @@
  * The athlete's calendar: every team's occurrences on one month.
  */
 
-import type { EventType, ScheduleList, ScheduleOccurrence } from '@gameplan/types';
+import type { ScheduleList, ScheduleOccurrence } from '@gameplan/types';
 
 /** One occurrence tagged with the team it belongs to. */
 export type TeamOccurrence = ScheduleOccurrence & { teamId: string };
@@ -34,48 +34,3 @@ export const mergeSchedules = (
       if (byTeam !== 0) return byTeam;
       return left.eventId.localeCompare(right.eventId);
     });
-
-/** Teams and event types hidden on the calendar. Empty lists show everything. */
-export type CalendarFilter = {
-  hiddenTeamIds: readonly string[];
-  hiddenEventTypes: readonly EventType[];
-};
-
-/** Nothing hidden. */
-export const SHOW_ALL: CalendarFilter = { hiddenTeamIds: [], hiddenEventTypes: [] };
-
-/**
- * Drops occurrences from hidden teams or of hidden event types.
- *
- * @param events - Merged occurrences.
- * @param filter - What to hide.
- * @returns The occurrences still shown, in the same order.
- */
-export const filterOccurrences = (events: readonly TeamOccurrence[], filter: CalendarFilter): TeamOccurrence[] => {
-  const teams = new Set(filter.hiddenTeamIds);
-  const types = new Set<string>(filter.hiddenEventTypes);
-  return events.filter((item) => !teams.has(item.teamId) && !types.has(item.eventType));
-};
-
-/**
- * Reads a stored filter, dropping anything that no longer parses.
- *
- * @param raw - The stored JSON, if any.
- * @returns The filter, or {@link SHOW_ALL}.
- */
-export const parseCalendarFilter = (raw: string | undefined): CalendarFilter => {
-  if (raw === undefined) return SHOW_ALL;
-  try {
-    const value = JSON.parse(raw) as { hiddenTeamIds?: unknown; hiddenEventTypes?: unknown };
-    const strings = (list: unknown): string[] =>
-      Array.isArray(list) ? list.filter((item): item is string => typeof item === 'string') : [];
-    return {
-      hiddenTeamIds: strings(value.hiddenTeamIds),
-      hiddenEventTypes: strings(value.hiddenEventTypes).filter((type): type is EventType =>
-        ['practice', 'game', 'meeting', 'other'].includes(type),
-      ),
-    };
-  } catch {
-    return SHOW_ALL;
-  }
-};
