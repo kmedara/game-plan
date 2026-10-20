@@ -450,6 +450,17 @@
       "ai1000": "Asistente de IA para entrenadores, 1,000 consultas al mes"
     }
   },
+  "reminders": {
+    "title": "Recordatorios de eventos",
+    "hint": "Para los eventos a los que dijiste que irás, o que quizás vayas.",
+    "eveningBefore": "La noche anterior",
+    "beforeStart": "Antes de empezar",
+    "off": "Apagado",
+    "minutes_one": "{{count}} minuto",
+    "minutes_other": "{{count}} minutos",
+    "hours_one": "{{count}} hora",
+    "hours_other": "{{count}} horas"
+  },
   "errors": {
     "common": {
       "loadFailed": "No se pudo cargar. Inténtalo de nuevo.",

@@ -222,13 +222,20 @@ export const FIXTURE_INVITE_SK_PREFIX = 'FIXTURE_INVITE#' as const;
 /** Partition that holds due reminder rows for every team. */
 export const REMINDERS_PK = 'REMINDERS' as const;
 
-/** Evening-before or hour-before reminder, ordered by the instant it is due. */
+/**
+ * One reminder for one occurrence, ordered by the instant it is due.
+ *
+ * `slot` names the reminder time, such as `evening18` or `before60`.
+ */
 export const reminderSk = (
   dueAt: string,
   eventId: string,
   occurrenceStartsAt: string,
-  kind: 'evening' | 'hour',
-): string => `REMINDER#${dueAt}#${eventId}#${occurrenceStartsAt}#${kind}`;
+  slot: string,
+): string => `REMINDER#${dueAt}#${eventId}#${occurrenceStartsAt}#${slot}`;
+
+/** `USER#<userId>` / `PREFS` — settings that follow the account. */
+export const prefsSk = (): string => 'PREFS';
 
 /** Sort-key prefix for every reminder row. */
 export const REMINDER_SK_PREFIX = 'REMINDER#' as const;

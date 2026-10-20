@@ -318,3 +318,14 @@ export {
   type TeamCheckoutBody,
   type TeamPlan,
 } from './plans.js';
+
+export {
+  DEFAULT_EVENING_HOUR,
+  DEFAULT_LEAD_MINUTES,
+  REMINDER_EVENING_HOURS,
+  REMINDER_LEAD_MINUTES,
+  preferencesSchema,
+  updatePreferencesBodySchema,
+  type Preferences,
+  type UpdatePreferencesBody,
+} from './preferences.js';

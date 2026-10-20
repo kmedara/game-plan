@@ -198,6 +198,15 @@ const recipientUserIds = async (job: FanoutJob): Promise<string[]> => {
 };
 
 /**
+ * Lead time for reminder text, such as `15 minutes` or `2 hours`.
+ *
+ * @param minutes - Minutes before the start.
+ * @returns The phrase after "starts in".
+ */
+const leadText = (minutes: number): string =>
+  minutes % 60 === 0 ? (minutes === 60 ? 'an hour' : `${minutes / 60} hours`) : `${minutes} minutes`;
+
+/**
  * Formats minor units as a currency amount for push text.
  *
  * @param cents - Amount in minor units.
@@ -391,7 +400,7 @@ const publishPush = async (
       : undefined;
   const reminder =
     job.type === 'event_reminder'
-      ? `${job.title} ${job.kind === 'hour' ? 'starts in an hour' : 'is tomorrow'}${job.location !== undefined ? ` · ${job.location}` : ''}`
+      ? `${job.title} ${job.kind === 'evening' ? 'is tomorrow' : `starts in ${leadText(job.kind === 'hour' ? 60 : (job.minutes ?? 60))}`}${job.location !== undefined ? ` · ${job.location}` : ''}`
       : undefined;
   const dues =
     job.type === 'dues_reminder'

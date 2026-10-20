@@ -122,6 +122,13 @@ A series is one row with a structured rule (`frequency`, `interval`, `byWeekDay`
 - **Why:** `BYDAY` codes come from the local calendar day, and "Tuesdays at 7 pm" means 7 pm on the wall. Expanding in UTC put Pacific evening practices on Mondays and moved them an hour at each daylight-saving change.
 - **Cost:** a one-date check reads the team row for its zone. Changing a team's time zone moves every future occurrence. Rows keyed by an instant the old UTC expansion produced (RSVPs, exdates, split-off dates on shifted dates) no longer match a date; this landed before launch, so nothing was migrated.
 
+### Reminder times
+
+Each person picks an evening-before hour (5–9 pm, team time) and a lead time (15 minutes to 2 hours), or turns either off. Settings live at `USER#<id>` / `PREFS` (`functions/lib/preferences.ts`); a missing row means 6 pm and one hour. Reminder rows stay shared per occurrence: every allowed time gets a row (`evening18`, `before60`, ...), and when one comes due the sweep sends it to RSVPs going or maybe whose choice matches (`wantsSlot`). The last time of a date (`before15`) writes the next date's rows. Rows and jobs from before the change (`kind: 'hour'`) still send and chain.
+
+- **Why:** rows scale with events, not people, and a choice change needs no rewrite of any row. A fixed menu keeps that row count small.
+- **Cost:** nine rows per upcoming occurrence instead of two, and one preferences read per recipient at send time. `deleteRemindersForEvent` scans the whole `REMINDERS` partition, which is now larger; a per-event pointer would fix that when it matters. Nobody can pick a time off the menu.
+
 ### Team dues
 
 Each team connects a Stripe Express account. A charge (`TEAM#id` / `CHARGE#`) asks some members to pay; each member's share is a due (`DUE#<chargeId>#<memberId>`) with a pointer on the member's partition for "my dues". Payment is a direct charge on the team's account through hosted Checkout, with GamePlan's cut as `application_fee_amount` (`PLATFORM_FEE_BPS`, default 2%). An adult pays their own due; a minor's guardians pay theirs (`payerIdsForDue` in `lib/rules`). Staff can mark a due paid outside the app or waived.

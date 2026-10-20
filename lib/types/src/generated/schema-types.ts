@@ -399,7 +399,9 @@ export type FanoutJob =
       title: string;
       occurrenceStartsAt: string;
       location?: string;
-      kind: 'evening' | 'hour';
+      kind: 'evening' | 'before' | 'hour';
+      hour?: number;
+      minutes?: number;
       /**
        * @minItems 1
        */
@@ -741,6 +743,11 @@ export type PlaceSuggestion = {
 export type PlanStatus = 'active' | 'trialing' | 'past_due' | 'canceled';
 
 export type PlanTier = 'free' | 'premium' | 'organization';
+
+export type Preferences = {
+  reminderEveningHour: (17 | 18 | 19 | 20 | 21) | null;
+  reminderLeadMinutes: (15 | 30 | 60 | 120) | null;
+}
 
 export type PresignDownloadQuery = {
   objectKey: string;
@@ -1196,6 +1203,11 @@ export type UpdatePositionsBody = {
   positions: string[];
 }
 
+export type UpdatePreferencesBody = {
+  reminderEveningHour?: (17 | 18 | 19 | 20 | 21) | null;
+  reminderLeadMinutes?: (15 | 30 | 60 | 120) | null;
+}
+
 export type UpdateProfileBody = {
   photoKey?: string | null;
   phoneNumber?: string | null;
@@ -1326,3 +1338,11 @@ export const PLAN_STATUSES = ["active", "trialing", "past_due", "canceled"] as c
 export const BILLING_INTERVALS = ["month", "year"] as const;
 
 export const BILLING_RETURN_TARGETS = ["app", "web"] as const;
+
+export const REMINDER_EVENING_HOURS = [17, 18, 19, 20, 21] as const;
+
+export const REMINDER_LEAD_MINUTES = [15, 30, 60, 120] as const;
+
+export const DEFAULT_EVENING_HOUR = 18;
+
+export const DEFAULT_LEAD_MINUTES = 60;

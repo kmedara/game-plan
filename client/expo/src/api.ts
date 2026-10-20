@@ -14,6 +14,8 @@ import type {
   AcceptedInvite,
   ApprovedJoinRequest,
   BillingInterval,
+  Preferences,
+  UpdatePreferencesBody,
   TeamBilling,
   Charge,
   ChargeDetail,
@@ -167,6 +169,14 @@ export class ApiClient {
     this.session.setUser(profile);
     this.emit();
     return profile;
+  }
+
+  async getPreferences(): Promise<Preferences> {
+    return this.request('GET', '/identity/me/preferences');
+  }
+
+  async updatePreferences(body: UpdatePreferencesBody): Promise<Preferences> {
+    return this.request('PATCH', '/identity/me/preferences', body);
   }
 
   async updateProfile(input: UpdateProfileBody): Promise<UserProfile> {

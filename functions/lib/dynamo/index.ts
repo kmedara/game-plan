@@ -78,6 +78,7 @@ export {
   invitePk,
   joinRequestSk,
   messageSk,
+  prefsSk,
   profileSk,
   rolePermissionsSk,
   reminderSk,

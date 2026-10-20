@@ -115,6 +115,7 @@ import {
   teamBillingSchema,
   teamCheckoutBodySchema,
 } from './plans.js';
+import { preferencesSchema, updatePreferencesBodySchema } from './preferences.js';
 import { z, type ZodType } from './zod.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
@@ -197,6 +198,15 @@ const AREAS: Record<string, AreaSpec> = {
           summary: 'Update the profile photo and/or phone number',
           body: updateProfileBodySchema,
           response: userProfileSchema,
+          secured: true,
+        },
+      },
+      '/identity/me/preferences': {
+        get: { summary: "The caller's settings, such as reminder times", response: preferencesSchema, secured: true },
+        patch: {
+          summary: 'Change some settings',
+          body: updatePreferencesBodySchema,
+          response: preferencesSchema,
           secured: true,
         },
       },

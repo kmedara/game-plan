@@ -3,7 +3,7 @@
  */
 
 import { mutationOptions, queryOptions, type QueryClient } from '@tanstack/react-query';
-import type { UpdateProfileBody } from '@gameplan/types';
+import type { UpdatePreferencesBody, UpdateProfileBody } from '@gameplan/types';
 import type { ApiClient } from '../api';
 import { queryKeys } from './keys';
 
@@ -14,4 +14,13 @@ export const updateProfileMutation = (api: Pick<ApiClient, 'updateProfile'>, que
   mutationOptions({
     mutationFn: (body: UpdateProfileBody) => api.updateProfile(body),
     onSuccess: (profile) => queryClient.setQueryData(queryKeys.me, profile),
+  });
+
+export const preferencesQuery = (api: Pick<ApiClient, 'getPreferences'>) =>
+  queryOptions({ queryKey: queryKeys.preferences, queryFn: () => api.getPreferences() });
+
+export const updatePreferencesMutation = (api: Pick<ApiClient, 'updatePreferences'>, queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: UpdatePreferencesBody) => api.updatePreferences(body),
+    onSuccess: (preferences) => queryClient.setQueryData(queryKeys.preferences, preferences),
   });

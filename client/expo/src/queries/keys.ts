@@ -11,6 +11,7 @@ export type DownloadContext = Pick<PresignDownloadQuery, 'chatId' | 'userId' | '
 
 export const queryKeys = {
   me: ['me'] as const,
+  preferences: ['preferences'] as const,
   teams: ['teams'] as const,
   team: (teamId: string) => ['teams', teamId] as const,
   members: (teamId: string) => ['members', teamId] as const,
@@ -63,6 +64,7 @@ export const PERSISTED_MUTATION_KINDS: ReadonlySet<string> = new Set([
  */
 export const PERSISTED_QUERY_KINDS: ReadonlySet<string> = new Set([
   'me',
+  'preferences',
   'teams',
   'members',
   'member',

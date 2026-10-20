@@ -448,6 +448,17 @@
       "ai1000": "AI coach assistant, 1,000 requests a month"
     }
   },
+  "reminders": {
+    "title": "Event reminders",
+    "hint": "For events you said you are going to, or might go to.",
+    "eveningBefore": "The evening before",
+    "beforeStart": "Before it starts",
+    "off": "Off",
+    "minutes_one": "{{count}} minute",
+    "minutes_other": "{{count}} minutes",
+    "hours_one": "{{count}} hour",
+    "hours_other": "{{count}} hours"
+  },
   "errors": {
     "common": {
       "loadFailed": "Could not load this. Try again.",

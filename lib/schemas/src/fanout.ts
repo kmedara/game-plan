@@ -49,7 +49,14 @@ export const fanoutJobSchema = z.discriminatedUnion('type', [
       title: z.string().min(1).max(200),
       occurrenceStartsAt: z.string().datetime(),
       location: z.string().max(500).optional(),
-      kind: z.enum(['evening', 'hour']),
+      /**
+       * `evening` is the day before at `hour` (local); `before` is `minutes`
+       * ahead of the start. `hour` is the old one-hour-before job, still
+       * accepted so queued jobs from before the change deliver.
+       */
+      kind: z.enum(['evening', 'before', 'hour']),
+      hour: z.number().int().min(0).max(23).optional(),
+      minutes: z.number().int().min(1).max(24 * 60).optional(),
       userIds: userIdsSchema,
       attempt: retryFields.attempt,
     })

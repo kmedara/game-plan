@@ -41,6 +41,8 @@ const PROTECTED: Record<string, RouteCase[]> = {
     { route: 'handleAcceptGuardianInvite', method: 'POST', path: '/identity/guardians/code-1/accept' },
     { route: 'handleRemoveGuardianLink', method: 'DELETE', path: '/identity/guardians/user-2' },
     { route: 'handleUpdateProfile', method: 'PATCH', path: '/identity/profile' },
+    { route: 'handleGetPreferences', method: 'GET', path: '/identity/me/preferences' },
+    { route: 'handleUpdatePreferences', method: 'PATCH', path: '/identity/me/preferences' },
   ],
   teams: [
     { route: 'handleCreateTeam', method: 'POST', path: '/teams' },

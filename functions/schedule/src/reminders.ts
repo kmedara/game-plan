@@ -1,9 +1,17 @@
 /**
- * Due times and storage for evening-before and hour-before event reminders.
+ * Due times and storage for event reminders.
+ *
+ * Each person picks an evening-before hour and a lead time (or turns either
+ * off). Rows are shared per occurrence, not per person: every allowed time
+ * gets a row, and when one comes due it goes only to RSVPs whose choice
+ * matches. Only the next occurrence of a series has rows; the last reminder
+ * of a date writes the next date's rows.
  */
 
-import type { RecurrenceRule } from '@gameplan/types';
+import { REMINDER_EVENING_HOURS, REMINDER_LEAD_MINUTES } from '@gameplan/schemas';
+import type { Preferences, RecurrenceRule } from '@gameplan/types';
 import { expandOccurrenceStarts } from '../../lib/expand-occurrences.js';
+import { loadPreferences } from '../../lib/preferences.js';
 import { zonedDate, zonedWallToUtc } from '../../lib/time-zone.js';
 import { enqueueFanout } from '../../lib/fanout-enqueue.js';
 import {
@@ -25,23 +33,40 @@ import {
 /** How far to look for the next occurrence. Rows are still written for only one date. */
 const NEXT_OCCURRENCE_WINDOW_MS = 366 * 24 * 60 * 60 * 1000;
 
-/** Local hour for the evening-before reminder. */
-const EVENING_HOUR = 18;
+/** One reminder time: the day before at a local hour, or some minutes before the start. */
+export type ReminderSlot = { kind: 'evening'; hour: number } | { kind: 'before'; minutes: number };
 
-/** One hour before the start. */
-const HOUR_BEFORE_MS = 60 * 60 * 1000;
+/** Every time a person may choose. Each gets a row per occurrence. */
+export const REMINDER_SLOTS: readonly ReminderSlot[] = [
+  ...REMINDER_EVENING_HOURS.map((hour) => ({ kind: 'evening' as const, hour })),
+  ...REMINDER_LEAD_MINUTES.map((minutes) => ({ kind: 'before' as const, minutes })),
+];
 
-/** Which reminder this row is. */
-export type ReminderKind = 'evening' | 'hour';
+/**
+ * The sort-key name of a slot, such as `evening18` or `before60`.
+ *
+ * @param slot - The reminder time.
+ * @returns A stable name.
+ */
+export const slotName = (slot: ReminderSlot): string =>
+  slot.kind === 'evening' ? `evening${slot.hour}` : `before${slot.minutes}`;
+
+/** The latest reminder of a date. Sending it writes the next date's rows. */
+const LAST_SLOT_NAME = slotName({ kind: 'before', minutes: Math.min(...REMINDER_LEAD_MINUTES) });
 
 /** One instant a reminder should fire for one occurrence. */
 export type ReminderInstant = {
   occurrenceStartsAt: string;
-  kind: ReminderKind;
+  slot: ReminderSlot;
   dueAt: string;
 };
 
-/** Stored reminder under `REMINDERS` / `REMINDER#…`. */
+/**
+ * Stored reminder under `REMINDERS` / `REMINDER#…`.
+ *
+ * Rows written before slots existed have `kind: 'evening'` with no `hour`
+ * (6 pm) or `kind: 'hour'` (one hour before).
+ */
 type ReminderItem = {
   PK: string;
   SK: string;
@@ -50,7 +75,9 @@ type ReminderItem = {
   title: string;
   occurrenceStartsAt: string;
   location?: string;
-  kind: ReminderKind;
+  kind: 'evening' | 'before' | 'hour';
+  hour?: number;
+  minutes?: number;
   dueAt: string;
 };
 
@@ -61,18 +88,43 @@ type RsvpItem = {
 };
 
 /**
- * 18:00 on the local day before `occurrenceStartsAt`.
+ * The slot a stored row is for, reading rows from before slots existed.
+ *
+ * @param row - The stored reminder.
+ * @returns Its slot.
+ */
+const slotOfRow = (row: Pick<ReminderItem, 'kind' | 'hour' | 'minutes'>): ReminderSlot => {
+  if (row.kind === 'evening') return { kind: 'evening', hour: row.hour ?? 18 };
+  if (row.kind === 'hour') return { kind: 'before', minutes: 60 };
+  return { kind: 'before', minutes: row.minutes ?? 60 };
+};
+
+/**
+ * Whether a person wants the reminder at this slot.
+ *
+ * @param preferences - Their settings.
+ * @param slot - The reminder time.
+ * @returns `true` when the slot matches their choice.
+ */
+export const wantsSlot = (preferences: Preferences, slot: ReminderSlot): boolean =>
+  slot.kind === 'evening'
+    ? preferences.reminderEveningHour === slot.hour
+    : preferences.reminderLeadMinutes === slot.minutes;
+
+/**
+ * A local hour on the day before `occurrenceStartsAt`.
  *
  * @param occurrenceStartsAt - Occurrence instant ISO string.
  * @param timeZone - The team time zone.
+ * @param hour - Local hour, 0-23.
  * @returns The evening reminder instant.
  */
-const eveningBefore = (occurrenceStartsAt: string, timeZone: string): Date => {
+const eveningBefore = (occurrenceStartsAt: string, timeZone: string, hour: number): Date => {
   const { year, month, day } = zonedDate(new Date(occurrenceStartsAt), timeZone);
   const occurrenceDay = zonedWallToUtc(year, month, day, 12, 0, timeZone);
   const previous = new Date(occurrenceDay.getTime() - 24 * 60 * 60 * 1000);
   const prior = zonedDate(previous, timeZone);
-  return zonedWallToUtc(prior.year, prior.month, prior.day, EVENING_HOUR, 0, timeZone);
+  return zonedWallToUtc(prior.year, prior.month, prior.day, hour, 0, timeZone);
 };
 
 /**
@@ -81,25 +133,23 @@ const eveningBefore = (occurrenceStartsAt: string, timeZone: string): Date => {
  * @param occurrenceStartsAt - The occurrence instant.
  * @param timeZone - The team time zone.
  * @param now - The clock.
- * @returns The evening row, the hour row, or both.
+ * @returns One instant per slot still in the future.
  */
 const instantsForOccurrence = (
   occurrenceStartsAt: string,
   timeZone: string,
   now: Date,
 ): ReminderInstant[] => {
-  const start = new Date(occurrenceStartsAt);
-  const due: Array<{ kind: ReminderKind; at: Date }> = [
-    { kind: 'evening', at: eveningBefore(occurrenceStartsAt, timeZone) },
-    { kind: 'hour', at: new Date(start.getTime() - HOUR_BEFORE_MS) },
-  ];
-  return due
+  const start = new Date(occurrenceStartsAt).getTime();
+  return REMINDER_SLOTS.map((slot) => ({
+    slot,
+    at:
+      slot.kind === 'evening'
+        ? eveningBefore(occurrenceStartsAt, timeZone, slot.hour)
+        : new Date(start - slot.minutes * 60 * 1000),
+  }))
     .filter((entry) => entry.at.getTime() > now.getTime())
-    .map((entry) => ({
-      occurrenceStartsAt,
-      kind: entry.kind,
-      dueAt: entry.at.toISOString(),
-    }));
+    .map((entry) => ({ occurrenceStartsAt, slot: entry.slot, dueAt: entry.at.toISOString() }));
 };
 
 /**
@@ -139,9 +189,38 @@ type EventReminderSource = {
 };
 
 /**
+ * Builds one stored reminder row.
+ *
+ * @param input - Team, event, and the instant.
+ * @returns The DynamoDB item.
+ */
+const reminderItem = (input: {
+  teamId: string;
+  eventId: string;
+  title: string;
+  location?: string;
+  instant: ReminderInstant;
+}): ReminderItem => ({
+  [TABLE_PK]: REMINDERS_PK,
+  [TABLE_SK]: reminderSk(
+    input.instant.dueAt,
+    input.eventId,
+    input.instant.occurrenceStartsAt,
+    slotName(input.instant.slot),
+  ),
+  teamId: input.teamId,
+  eventId: input.eventId,
+  title: input.title,
+  occurrenceStartsAt: input.instant.occurrenceStartsAt,
+  ...(input.location !== undefined ? { location: input.location } : {}),
+  ...input.instant.slot,
+  dueAt: input.instant.dueAt,
+});
+
+/**
  * Writes reminder rows for the occurrence that follows `after`.
  *
- * @param input - Team, event, and the occurrence that just had its hour reminder.
+ * @param input - Team, event, and the occurrence that just had its last reminder.
  * @param now - The clock.
  */
 const chainNextReminder = async (
@@ -174,35 +253,6 @@ const chainNextReminder = async (
     }));
   }
 };
-
-/**
- * Builds one stored reminder row.
- *
- * @param input - Team, event, and the instant.
- * @returns The DynamoDB item.
- */
-const reminderItem = (input: {
-  teamId: string;
-  eventId: string;
-  title: string;
-  location?: string;
-  instant: ReminderInstant;
-}): ReminderItem => ({
-  [TABLE_PK]: REMINDERS_PK,
-  [TABLE_SK]: reminderSk(
-    input.instant.dueAt,
-    input.eventId,
-    input.instant.occurrenceStartsAt,
-    input.instant.kind,
-  ),
-  teamId: input.teamId,
-  eventId: input.eventId,
-  title: input.title,
-  occurrenceStartsAt: input.instant.occurrenceStartsAt,
-  ...(input.location !== undefined ? { location: input.location } : {}),
-  kind: input.instant.kind,
-  dueAt: input.instant.dueAt,
-});
 
 /**
  * Deletes every reminder row for one event.
@@ -254,26 +304,41 @@ export const syncReminders = async (input: {
 };
 
 /**
- * Sends due reminders to people who RSVP'd going or maybe, then deletes the rows.
+ * Who should get one reminder: RSVPs going or maybe whose chosen time matches.
+ *
+ * @param row - The due reminder.
+ * @param slot - Its reminder time.
+ * @returns Distinct user ids.
+ */
+const recipientsFor = async (row: ReminderItem, slot: ReminderSlot): Promise<string[]> => {
+  const rsvps = await queryBySkPrefix<RsvpItem>(
+    teamPk(row.teamId),
+    `RSVP#${row.occurrenceStartsAt}#${row.eventId}#`,
+  );
+  const coming = [
+    ...new Set(
+      rsvps.filter((rsvp) => rsvp.status === 'going' || rsvp.status === 'maybe').map((rsvp) => rsvp.userId),
+    ),
+  ];
+  const preferences = await Promise.all(coming.map((userId) => loadPreferences(userId)));
+  return coming.filter((_userId, index) => {
+    const chosen = preferences[index];
+    return chosen !== undefined && wantsSlot(chosen, slot);
+  });
+};
+
+/**
+ * Sends due reminders to people who RSVP'd going or maybe and chose that
+ * reminder time, then deletes the rows.
  *
  * @param now - The clock.
  */
 export const runDueReminders = async (now: Date): Promise<void> => {
-  const hi = `${REMINDER_SK_PREFIX}${now.toISOString()}#\uffff`;
+  const hi = `${REMINDER_SK_PREFIX}${now.toISOString()}#￿`;
   const due = await queryBySkBetween<ReminderItem>(REMINDERS_PK, REMINDER_SK_PREFIX, hi);
   for (const row of due) {
-    const rsvps = await queryBySkPrefix<RsvpItem>(
-      teamPk(row.teamId),
-      `RSVP#${row.occurrenceStartsAt}#${row.eventId}#`,
-    );
-    const userIds = [
-      ...new Set(
-        rsvps
-          .filter((rsvp) => rsvp.status === 'going' || rsvp.status === 'maybe')
-          .map((rsvp) => rsvp.userId),
-      ),
-    ];
-    const [first, ...rest] = userIds;
+    const slot = slotOfRow(row);
+    const [first, ...rest] = await recipientsFor(row, slot);
     if (first !== undefined) {
       await enqueueFanout({
         type: 'event_reminder',
@@ -282,12 +347,12 @@ export const runDueReminders = async (now: Date): Promise<void> => {
         title: row.title,
         occurrenceStartsAt: row.occurrenceStartsAt,
         ...(row.location !== undefined ? { location: row.location } : {}),
-        kind: row.kind,
+        ...slot,
         userIds: [first, ...rest],
       });
     }
     await deleteItem(REMINDERS_PK, row.SK);
-    if (row.kind === 'hour') {
+    if (row.kind === 'hour' || slotName(slot) === LAST_SLOT_NAME) {
       await chainNextReminder(
         { teamId: row.teamId, eventId: row.eventId, after: row.occurrenceStartsAt },
         now,

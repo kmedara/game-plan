@@ -15,6 +15,7 @@ import { handleLogout } from './logout.js';
 import { handleMe } from './me.js';
 import { handleOAuthCallback, handleOAuthLogin, handleOAuthLogout } from './oauth.js';
 import { handleOAuthExchange } from './oauth-exchange.js';
+import { handleGetPreferences, handleUpdatePreferences } from './preferences.js';
 import { handleRefresh } from './refresh.js';
 import { handleRegister } from './register.js';
 import { handleSocketTicket } from './socket-ticket.js';
@@ -25,6 +26,7 @@ export {
   handleCompleteProfile,
   handleConfirmRegistration,
   handleCreateGuardianInvite,
+  handleGetPreferences,
   handleLogin,
   handleLogout,
   handleMe,
@@ -37,6 +39,7 @@ export {
   handleRemoveGuardianLink,
   handleResendConfirmation,
   handleSocketTicket,
+  handleUpdatePreferences,
   handleUpdateProfile,
 };
 
@@ -59,4 +62,6 @@ export const httpRoutes: readonly HttpRoute[] = [
   handleAcceptGuardianInvite,
   handleRemoveGuardianLink,
   handleUpdateProfile,
+  handleGetPreferences,
+  handleUpdatePreferences,
 ];
