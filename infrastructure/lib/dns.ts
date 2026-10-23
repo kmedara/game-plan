@@ -138,6 +138,31 @@ export class ZoneDns extends Construct {
   }
 
   /**
+   * Keeps MX, TXT, and CNAME record sets in the zone, such as a mail provider's.
+   *
+   * Each set replaces whatever the zone has for that name and type, and is
+   * deleted when it leaves the list or the stack goes.
+   *
+   * @param id - Construct id for the record sets.
+   * @param records - Names, types, and values. TXT values are plain text.
+   */
+  addRecords(
+    id: string,
+    records: readonly { name: string; type: 'MX' | 'TXT' | 'CNAME'; values: readonly string[] }[],
+  ): void {
+    if (records.length === 0) return;
+    new cdk.CustomResource(this, id, {
+      serviceToken: this.provider.serviceToken,
+      properties: {
+        Mode: 'records',
+        HostedZoneId: this.zone.hostedZoneId,
+        RoleArn: this.zone.roleArn ?? '',
+        Records: records.map((record) => ({ Name: record.name, Type: record.type, Values: [...record.values] })),
+      },
+    });
+  }
+
+  /**
    * Points the website hostname at its CloudFront distribution.
    *
    * @param targets - Website distribution.

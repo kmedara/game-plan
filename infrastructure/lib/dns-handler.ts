@@ -242,22 +242,6 @@ const deleteAlias = async (
 };
 
 /**
- * Deletes a CNAME. A missing record is already gone.
- *
- * @param client - The Route 53 client.
- * @param hostedZoneId - The zone that owns the name.
- * @param record - The record as it was written.
- */
-const deleteCname = async (client: Route53Client, hostedZoneId: string, record: CnameRecord): Promise<void> => {
-  try {
-    await changeCname(client, hostedZoneId, 'DELETE', record.Name, record.Value);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!message.includes('not found')) throw error;
-  }
-};
-
-/**
  * Formats one TXT value for Route 53: quoted, with quotes and backslashes
  * escaped, and split into 255-character strings (SPF and DKIM can run longer).
  *
@@ -265,8 +249,8 @@ const deleteCname = async (client: Route53Client, hostedZoneId: string, record: 
  * @returns The value as Route 53 stores it.
  */
 export const txtRecordValue = (text: string): string => {
-  const chunks = text.match(/[sS]{1,255}/gu) ?? [''];
-  return chunks.map((chunk) => `"${chunk.replace(/["\]/gu, (char) => `\${char}`)}"`).join(' ');
+  const chunks = text.match(/[\s\S]{1,255}/gu) ?? [''];
+  return chunks.map((chunk) => `"${chunk.replace(/["\\]/gu, (char) => `\\${char}`)}"`).join(' ');
 };
 
 /**
@@ -288,7 +272,7 @@ export const recordsOf = (props: Pick<DnsProperties, 'Cnames' | 'Records'> | und
  * @returns The ones to delete. A name and type kept with new values is upserted instead.
  */
 export const staleRecords = (previous: readonly DnsRecord[] | undefined, current: readonly DnsRecord[]): DnsRecord[] => {
-  const key = (record: DnsRecord): string => `${record.Type} ${record.Name.toLowerCase().replace(/.$/u, '')}`;
+  const key = (record: DnsRecord): string => `${record.Type} ${record.Name.toLowerCase().replace(/\.$/u, '')}`;
   const kept = new Set(current.map(key));
   return (previous ?? []).filter((record) => !kept.has(key(record)));
 };

@@ -3,23 +3,42 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { exportedCertificateDomain, staleCnames } from './dns-handler';
+import { exportedCertificateDomain, recordsOf, staleRecords, txtRecordValue } from './dns-handler';
 
-describe('stale CNAMEs', () => {
+describe('stale records', () => {
   it('deletes names the new deploy dropped and keeps names it rewrites', () => {
-    expect(
-      staleCnames(
-        [
-          { Name: 'a._domainkey.staging.example.com', Value: 'a.dkim.amazonses.com' },
-          { Name: 'b._domainkey.staging.example.com', Value: 'b.dkim.amazonses.com' },
-        ],
-        [{ Name: 'a._domainkey.staging.example.com', Value: 'a2.dkim.amazonses.com' }],
-      ),
-    ).toEqual([{ Name: 'b._domainkey.staging.example.com', Value: 'b.dkim.amazonses.com' }]);
+    const previous = recordsOf({
+      Cnames: [
+        { Name: 'a._domainkey.staging.example.com', Value: 'a.dkim.amazonses.com' },
+        { Name: 'b._domainkey.staging.example.com', Value: 'b.dkim.amazonses.com' },
+      ],
+    });
+    const current = recordsOf({ Cnames: [{ Name: 'a._domainkey.staging.example.com', Value: 'a2.dkim.amazonses.com' }] });
+    expect(staleRecords(previous, current)).toEqual([
+      { Name: 'b._domainkey.staging.example.com', Type: 'CNAME', Values: ['b.dkim.amazonses.com'] },
+    ]);
+  });
+
+  it('tells record types apart on the same name', () => {
+    const mx = { Name: 'example.com', Type: 'MX' as const, Values: ['1 smtp.google.com'] };
+    const txt = { Name: 'example.com.', Type: 'TXT' as const, Values: ['v=spf1 include:_spf.google.com ~all'] };
+    expect(staleRecords([mx, txt], [{ ...txt, Name: 'Example.com' }])).toEqual([mx]);
   });
 
   it('has nothing to delete on the first deploy', () => {
-    expect(staleCnames(undefined, [{ Name: 'a', Value: 'b' }])).toEqual([]);
+    expect(staleRecords(undefined, recordsOf({ Cnames: [{ Name: 'a', Value: 'b' }] }))).toEqual([]);
+  });
+});
+
+describe('TXT values', () => {
+  it('quotes a value and escapes quotes and backslashes', () => {
+    expect(txtRecordValue('v=DMARC1; p=none')).toBe('"v=DMARC1; p=none"');
+    expect(txtRecordValue('say "hi" \\o/')).toBe('"say \\"hi\\" \\\\o/"');
+  });
+
+  it('splits a long value into 255-character strings', () => {
+    const value = txtRecordValue('x'.repeat(300));
+    expect(value).toBe(`"${'x'.repeat(255)}" "${'x'.repeat(45)}"`);
   });
 });
 
