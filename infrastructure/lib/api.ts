@@ -650,14 +650,16 @@ export class Api extends Construct {
       exportName: 'GamePlanWebSocketUrl',
     });
 
+    // Terraform reads these two by name (stripe.tf), so keep their IDs free of
+    // the construct path prefix and hash CDK would otherwise add.
     new cdk.CfnOutput(this, 'PaymentsWebhookUrl', {
       value: `${paymentsWebhookUrl.url}payments/webhook`,
       description: 'Register as a Stripe Connect webhook endpoint (events on connected accounts).',
-    });
+    }).overrideLogicalId('PaymentsWebhookUrl');
 
     new cdk.CfnOutput(this, 'BillingWebhookUrl', {
       value: `${billingWebhookUrl.url}billing/webhook`,
       description: 'Register as a Stripe webhook endpoint on the platform account (subscriptions).',
-    });
+    }).overrideLogicalId('BillingWebhookUrl');
   }
 }

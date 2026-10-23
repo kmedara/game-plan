@@ -295,6 +295,11 @@ Events sent while a socket is down are not replayed. Phones drop the socket when
 
 A push the service reports gone (Web Push `404`/`410`, Expo `DeviceNotRegistered`) deletes that device row.
 
+Offline delivery does not use Amazon SNS. Fan-out reads each recipient's `DEVICE#` rows and sends iOS and Android tokens through Expo's HTTP API and web subscriptions with VAPID (`functions/fanout/src/push-send.ts`). That matches how the app registers: one token or subscription per device in DynamoDB, not an SNS platform endpoint per phone.
+
+- **Why:** SNS mobile push is built around APNS and FCM platform applications and a separate endpoint ARN for every device token. Web Push does not fit that model at all. Expo already fronts APNS and FCM for native builds, and `web-push` speaks to browsers directly, so a topic in the middle would not deliver anything unless another worker subscribed and duplicated the same sends.
+- **Cost:** you own token lifecycle in the table (refresh, delete on `404`/`410` or `DeviceNotRegistered`) instead of calling `CreatePlatformEndpoint` in AWS. The trade-off is trusting Expo for native delivery rather than wiring APNS and FCM certificates into SNS yourself.
+
 ### Asking for notifications
 
 Permission is requested only from a tap on the notification banner or the profile button. The banner (`client/expo/src/notification-prompt.tsx`) shows when no choice is recorded; "Not now" hides it for seven days. Each launch re-saves an already-allowed subscription without prompting. iPhone Safari only allows web notifications from the Home Screen, so the site ships a web app manifest and icons, and the banner gives Add to Home Screen steps in a normal tab. A notification tap opens the page the event is about (`public/sw.js`).
