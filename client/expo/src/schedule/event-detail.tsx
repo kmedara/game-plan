@@ -71,26 +71,26 @@ export const EventDetail = ({
   };
   return (
     <View>
-      {teamName !== undefined ? <Text className="mb-1 font-semibold text-ink">{teamName}</Text> : null}
+      {teamName !== undefined ? <Text className="mb-1 text-lg font-semibold text-ink">{teamName}</Text> : null}
       <View className="flex-row items-center">
         <View className="mr-1.5 h-2 w-2 rounded-full" style={{ backgroundColor: EVENT_TYPE_COLORS[item.eventType] }} />
-        <Text className="font-semibold" style={{ color: EVENT_TYPE_COLORS[item.eventType] }}>
+        <Text className="text-base font-semibold" style={{ color: EVENT_TYPE_COLORS[item.eventType] }}>
           {t(`eventType.${item.eventType}`)}
         </Text>
-        <Text className="text-muted"> · {clockLabel(item.startsAt, zone, appLocale, hour12)}</Text>
+        <Text className="text-base text-muted"> · {clockLabel(item.startsAt, zone, appLocale, hour12)}</Text>
       </View>
-      <Text className="text-muted">{timeZoneLabel(zone, new Date(item.startsAt))}</Text>
+      <Text className="text-base text-muted">{timeZoneLabel(zone, new Date(item.startsAt))}</Text>
       {item.location !== undefined ? (
         <Pressable className="mt-2" onPress={openMaps}>
-          <Text className="text-link">{item.location}</Text>
+          <Text className="text-base text-link">{item.location}</Text>
         </Pressable>
       ) : (
-        <Text className="mt-2 text-muted">{t('schedule.noLocation')}</Text>
+        <Text className="mt-2 text-base text-muted">{t('schedule.noLocation')}</Text>
       )}
       {item.notes !== undefined && item.notes.length > 0 ? (
         <View className="mt-3">
-          <Text className="mb-1 font-semibold text-ink">{t('schedule.notes')}</Text>
-          <Text className="text-ink">{item.notes}</Text>
+          <Text className="mb-1 text-base font-semibold text-ink">{t('schedule.notes')}</Text>
+          <Text className="text-base text-ink">{item.notes}</Text>
         </View>
       ) : null}
       <GameFixture item={item} teamId={teamId} canShare={canShare} fixture={fixture} />
@@ -99,16 +99,16 @@ export const EventDetail = ({
           <MapPicker latitude={item.latitude} longitude={item.longitude} readOnly />
         </View>
       ) : null}
-      <Text className="mt-4 font-semibold text-ink">{t('schedule.yourRsvp')}</Text>
+      <Text className="mt-4 text-base font-semibold text-ink">{t('schedule.yourRsvp')}</Text>
       <RsvpChoices mine={mine} onRsvp={onRsvp} />
-      <Text className="mb-1 mt-4 font-semibold text-ink">{t('schedule.attendance')}</Text>
-      <Text className="mb-2 text-muted">{t('schedule.short', { count: short })}</Text>
+      <Text className="mb-1 mt-4 text-base font-semibold text-ink">{t('schedule.attendance')}</Text>
+      <Text className="mb-2 text-base text-muted">{t('schedule.short', { count: short })}</Text>
       <ErrorText message={error} />
       {RSVP_STATUSES.map((status) => {
         const rows = item.rsvps.filter((rsvp) => rsvp.status === status);
         return (
           <View key={status} className="mb-3">
-            <Text className="mb-1 text-muted">
+            <Text className="mb-1 text-base text-muted">
               {t(rsvpLabelKey(status))} · {rows.length}
             </Text>
             {rows.map((rsvp) => (
@@ -125,7 +125,7 @@ export const EventDetail = ({
         );
       })}
       <View className="mb-3">
-        <Text className="mb-1 text-muted">{t('schedule.noReply')} · {noReply.length}</Text>
+        <Text className="mb-1 text-base text-muted">{t('schedule.noReply')} · {noReply.length}</Text>
         {noReply.map((member) => (
           <AttendanceRow
             key={member.userId}

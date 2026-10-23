@@ -47,7 +47,7 @@ export const RsvpChoices = ({
             void onRsvp(status);
           }}
         >
-          <Text className="text-ink">{t(rsvpLabelKey(status))}</Text>
+          <Text className="text-base text-ink">{t(rsvpLabelKey(status))}</Text>
         </Pressable>
       ))}
     </View>

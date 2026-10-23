@@ -37,7 +37,7 @@ export const EventTimeFields = ({
 
   return (
     <View className="mb-3">
-      <Text className="mb-1 text-sm text-muted">{t('addEvent.start')}</Text>
+      <Text className="mb-1 text-base text-muted">{t('addEvent.start')}</Text>
       {Platform.OS === 'web' ? (
         <TimeClock minutes={startMinutes} onChange={onChangeStart} />
       ) : (
@@ -55,7 +55,7 @@ export const EventTimeFields = ({
           onDismiss={() => setOpen(undefined)}
         />
       ) : null}
-      <Text className="mb-1 mt-3 text-sm text-muted">{t('addEvent.end')}</Text>
+      <Text className="mb-1 mt-3 text-base text-muted">{t('addEvent.end')}</Text>
       <View className="flex-row flex-wrap">
         <Chip label={t('addEvent.noEnd')} selected={end.kind === 'none'} onPress={() => onChangeEnd({ kind: 'none' })} />
         {DURATION_PRESETS.map((minutes) => (
@@ -85,7 +85,7 @@ export const EventTimeFields = ({
         </View>
       ) : null}
       {window.endsAt !== undefined && window.durationMinutes !== undefined ? (
-        <Text className="mt-2 text-muted">
+        <Text className="mt-2 text-base text-muted">
           {t('addEvent.span', {
             start: startLabel,
             end: clockLabel(window.endsAt, timeZone, appLocale, hour12),

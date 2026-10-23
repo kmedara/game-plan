@@ -54,20 +54,20 @@ export const EventRow = ({
     >
       <Pressable accessibilityRole="button" onPress={onView}>
         <View className={showLogo ? 'pr-24' : canManage ? 'pr-16' : ''}>
-          <Text className="font-semibold text-ink">{item.title}</Text>
-          {teamName !== undefined ? <Text className="text-muted">{teamName}</Text> : null}
+          <Text className="text-lg font-semibold text-ink">{item.title}</Text>
+          {teamName !== undefined ? <Text className="text-base text-muted">{teamName}</Text> : null}
           <View className="flex-row items-center">
             <View className="mr-1.5 h-2 w-2 rounded-full" style={{ backgroundColor: EVENT_TYPE_COLORS[item.eventType] }} />
-            <Text className="font-semibold" style={{ color: EVENT_TYPE_COLORS[item.eventType] }}>
+            <Text className="text-base font-semibold" style={{ color: EVENT_TYPE_COLORS[item.eventType] }}>
               {t(`eventType.${item.eventType}`)}
             </Text>
-            <Text className="text-muted"> · {clockLabel(item.startsAt, zone, appLocale, hour12)}</Text>
+            <Text className="text-base text-muted"> · {clockLabel(item.startsAt, zone, appLocale, hour12)}</Text>
           </View>
         </View>
         {item.location !== undefined || showLogo ? (
           <View style={{ overflow: 'visible' }}>
             {item.location !== undefined ? (
-              <Text className={`text-link${showLogo ? ' pr-24' : ''}`}>{item.location}</Text>
+              <Text className={`text-base text-link${showLogo ? ' pr-24' : ''}`}>{item.location}</Text>
             ) : (
               <View className="h-5" />
             )}

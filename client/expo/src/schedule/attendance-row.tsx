@@ -41,7 +41,7 @@ export const AttendanceRow = ({
   return (
     <View className="mb-2 flex-row items-center">
       <ProfilePhoto name={name} uri={photo} size={36} />
-      <Text className="ml-3 flex-1 text-ink">{name}</Text>
+      <Text className="ml-3 flex-1 text-base text-ink">{name}</Text>
       {!self && phone !== undefined && phone.length > 0 ? (
         <View className="flex-row">
           <Pressable

@@ -90,11 +90,11 @@ export default function ChatsScreen() {
   return (
     <RefreshableScroll className="flex-1 px-4 pt-4">
       <ErrorText message={error} />
-      <Text className="mb-3 text-muted">{t('chats.hint')}</Text>
+      <Text className="mb-3 text-base text-muted">{t('chats.hint')}</Text>
       {mode === 'private' ? (
         <View className="mb-4">
           {teammateGroups.every((group) => group.members.length === 0) ? (
-            <Text className="mb-2 text-muted">{t('chats.noTeammates')}</Text>
+            <Text className="mb-2 text-base text-muted">{t('chats.noTeammates')}</Text>
           ) : (
             <AutocompleteField
               label={t('chats.teammates')}
@@ -135,7 +135,7 @@ export default function ChatsScreen() {
             </View>
           ) : null}
           {pickedMinorNames.length > 0 ? (
-            <Text className="mb-3 text-sm text-muted">
+            <Text className="mb-3 text-base text-muted">
               {t('chats.guardiansAdded', { names: pickedMinorNames.join(', ') })}
             </Text>
           ) : null}
@@ -150,7 +150,7 @@ export default function ChatsScreen() {
       ) : null}
       {mode === 'channel' && channelTeams.length > 1 && channelTeamId === undefined ? (
         <View className="mb-4">
-          <Text className="mb-2 text-muted">{t('chats.chooseTeam')}</Text>
+          <Text className="mb-2 text-base text-muted">{t('chats.chooseTeam')}</Text>
           {channelTeams.map((team) => (
             <Pressable
               key={team.teamId}
@@ -203,11 +203,11 @@ const ChatGroup = ({
   <View className="mb-4">
     <View className="mb-1 flex-row items-center">
       {accent !== undefined ? <View className="mr-2 h-2.5 w-2.5 rounded-full" style={{ backgroundColor: accent }} /> : null}
-      <Text className="font-semibold text-ink">{title}</Text>
+      <Text className="text-base font-semibold text-ink">{title}</Text>
     </View>
     {items.map((chat) => (
       <Pressable key={chat.chatId} className="mb-2 rounded-xl bg-inset p-3" onPress={() => onOpen(chat.chatId)}>
-        <Text className="text-ink">{chat.name ?? chat.chatId}</Text>
+        <Text className="text-base text-ink">{chat.name ?? chat.chatId}</Text>
       </Pressable>
     ))}
   </View>

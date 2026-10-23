@@ -59,10 +59,10 @@ export const PollBubble = ({ message, onDark }: { message: ChatMessage; onDark: 
 
   return (
     <View className="min-w-56">
-      <Text className="mb-1 font-semibold text-ink" style={text}>
+      <Text className="mb-1 text-base font-semibold text-ink" style={text}>
         {poll.question}
       </Text>
-      <Text className="mb-2 text-xs text-muted" style={text}>
+      <Text className="mb-2 text-sm text-muted" style={text}>
         {poll.multiple ? t('polls.pickAny') : t('polls.pickOne')}
       </Text>
       {poll.options.map((option) => {
@@ -82,17 +82,17 @@ export const PollBubble = ({ message, onDark }: { message: ChatMessage; onDark: 
               style={{ width: `${(count / total) * 100}%`, backgroundColor: brand.accent, opacity: 0.25 }}
             />
             <View className="flex-row justify-between px-2 py-1.5">
-              <Text className={chosen ? 'font-semibold text-ink' : 'text-ink'} style={text}>
+              <Text className={`text-base${chosen ? ' font-semibold text-ink' : ' text-ink'}`} style={text}>
                 {option.text}
               </Text>
-              <Text className="ml-2 text-ink" style={text}>
+              <Text className="ml-2 text-base text-ink" style={text}>
                 {count}
               </Text>
             </View>
           </Pressable>
         );
       })}
-      <Text className="text-xs text-muted" style={text}>
+      <Text className="text-sm text-muted" style={text}>
         {closed ? t('polls.closed', { count: tally.voters }) : t('polls.votes', { count: tally.voters })}
       </Text>
       <ErrorText message={error} />

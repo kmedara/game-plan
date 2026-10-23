@@ -114,7 +114,7 @@ export default function ChatThreadScreen() {
               {item.poll !== undefined ? (
                 <PollBubble message={item} onDark={mine} />
               ) : item.body.length > 0 ? (
-                <Text className="text-ink" style={mine ? { color: brand.onPrimary } : undefined}>{item.body}</Text>
+                <Text className="text-base text-ink" style={mine ? { color: brand.onPrimary } : undefined}>{item.body}</Text>
               ) : null}
               {item.attachmentKeys?.map((key) => (
                 <Attachment key={key} chatId={id} objectKey={key} />
@@ -136,7 +136,7 @@ export default function ChatThreadScreen() {
                 onPress={() => setNamedMessageId((current) => (current === item.messageId ? undefined : item.messageId))}
               >
                 {namedMessageId === item.messageId ? (
-                  <Text className="text-xs text-muted">{item.senderDisplayName}</Text>
+                  <Text className="text-sm text-muted">{item.senderDisplayName}</Text>
                 ) : null}
                 {content}
               </Pressable>
@@ -192,7 +192,7 @@ export default function ChatThreadScreen() {
             </Text>
           </Pressable>
           <TextInput
-            className="flex-1 py-2 text-ink"
+            className="min-w-0 flex-1 px-1 py-2 text-base text-ink"
             value={draft}
             onChangeText={setDraft}
             placeholder={t('chats.message')}

@@ -61,7 +61,7 @@ export const Field = ({
   onSave?: () => void | Promise<void>;
 }) => (
   <View className="mb-3">
-    <Text className="mb-1 text-sm text-muted">{label}</Text>
+    <Text className="mb-1 text-base text-muted">{label}</Text>
     <View className={`flex-row rounded-xl border border-line bg-inset${multiline === true ? ' items-end' : ' items-center'}`}>
       <TextInput
         className={`min-w-0 flex-1 px-3 py-2 text-base text-ink${multiline === true ? ' min-h-24' : ''}`}
@@ -132,7 +132,7 @@ export const AutocompleteField = ({
 
   return (
     <View className="mb-3" style={{ zIndex: open ? 20 : 0 }}>
-      <Text className="mb-1 text-sm text-muted">{label}</Text>
+      <Text className="mb-1 text-base text-muted">{label}</Text>
       <View>
         <View className="flex-row items-center rounded-xl border border-line bg-inset">
           <TextInput
@@ -185,9 +185,9 @@ export const AutocompleteField = ({
                 setOpen(false);
               }}
             >
-              <Text className={choice.disabledReason !== undefined ? 'text-muted' : 'text-ink'}>{choice.label}</Text>
+              <Text className={`text-base${choice.disabledReason !== undefined ? ' text-muted' : ' text-ink'}`}>{choice.label}</Text>
               {choice.disabledReason !== undefined ? (
-                <Text className="text-xs text-muted">{choice.disabledReason}</Text>
+                <Text className="text-sm text-muted">{choice.disabledReason}</Text>
               ) : null}
             </Pressable>
           ))}
@@ -320,7 +320,7 @@ export const Button = ({
 };
 
 export const ErrorText = ({ message }: { message: string | undefined }) =>
-  message === undefined ? null : <Text className="mb-2 text-danger">{message}</Text>;
+  message === undefined ? null : <Text className="mb-2 text-base text-danger">{message}</Text>;
 
 /**
  * Form submit control. Shows a loader on the button, then a confirmation or the thrown error.

@@ -179,8 +179,8 @@ export default function ScheduleScreen() {
           );
         })}
       </View>
-      <Text className="mb-2 text-lg font-semibold text-ink">{dayTitle(selected, zone, appLocale)}</Text>
-      {dayEvents.length === 0 ? <Text className="mb-3 text-muted">{t('schedule.nothingScheduled')}</Text> : null}
+      <Text className="mb-2 text-xl font-semibold text-ink">{dayTitle(selected, zone, appLocale)}</Text>
+      {dayEvents.length === 0 ? <Text className="mb-3 text-base text-muted">{t('schedule.nothingScheduled')}</Text> : null}
       {dayEvents.map((item) => {
         const eventTeam = teams.find((team) => team.teamId === item.teamId);
         return (
