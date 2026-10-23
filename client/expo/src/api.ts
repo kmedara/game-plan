@@ -61,6 +61,7 @@ import type {
   InvitePreview,
   JoinRequestCreated,
   JoinRequestList,
+  MessageHistoryQuery,
   MessagePage,
   OauthExchangeResponse,
   PresignDownloadQuery,
@@ -770,8 +771,12 @@ export class ApiClient {
     return this.request('POST', '/chat/channels', { teamId, name });
   }
 
-  async listMessages(chatId: string): Promise<MessagePage> {
-    return this.request('GET', `/chat/${chatId}/messages`);
+  async listMessages(chatId: string, options: MessageHistoryQuery = {}): Promise<MessagePage> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set('limit', String(options.limit));
+    if (options.cursor !== undefined) params.set('cursor', options.cursor);
+    const qs = params.toString();
+    return this.request('GET', `/chat/${chatId}/messages${qs.length > 0 ? `?${qs}` : ''}`);
   }
 
   async sendMessage(

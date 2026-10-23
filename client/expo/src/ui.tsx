@@ -2,7 +2,7 @@
  * Small form controls shared by the screens.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Image } from 'expo-image';
 import { ActivityIndicator, Animated, Platform, Pressable, ScrollView, type ScrollViewProps, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -218,6 +218,45 @@ export const TimeZoneField = ({
     onPick={(choice) => onChange(choice.id)}
     onSave={onSave}
   />
+);
+
+/** A selectable pill. */
+export const Chip = ({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) => {
+  const { brand } = useApp();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      className="mb-2 mr-2 shrink-0 rounded-full border px-3 py-1"
+      style={{ borderColor: selected ? brand.primary : colors.line, backgroundColor: selected ? brand.primary : colors.paper }}
+      onPress={onPress}
+    >
+      <Text style={{ color: selected ? brand.onPrimary : colors.ink }}>{label}</Text>
+    </Pressable>
+  );
+};
+
+/**
+ * Lays out chips in one row. When they overflow, the row scrolls sideways (including
+ * inside a vertical {@link RefreshableScroll} on web and native).
+ */
+export const HorizontalChipRow = ({ children, className }: { children: ReactNode; className?: string }) => (
+  <ScrollView
+    horizontal
+    nestedScrollEnabled
+    directionalLockEnabled
+    showsHorizontalScrollIndicator={Platform.OS === 'web'}
+    keyboardShouldPersistTaps="handled"
+    className={className}
+    style={
+      Platform.OS === 'web'
+        ? ({ flexGrow: 0, alignSelf: 'stretch', overflowX: 'auto', overscrollBehaviorX: 'contain' } as const)
+        : { flexGrow: 0, alignSelf: 'stretch' }
+    }
+    contentContainerStyle={{ flexDirection: 'row', alignItems: 'center' }}
+  >
+    {children}
+  </ScrollView>
 );
 
 export type ButtonTone = 'primary' | 'secondary' | 'danger';

@@ -2,7 +2,13 @@
  * Chat list, message history, and the writes that update them.
  */
 
-import { mutationOptions, queryOptions, type QueryClient } from '@tanstack/react-query';
+import {
+  infiniteQueryOptions,
+  mutationOptions,
+  queryOptions,
+  type InfiniteData,
+  type QueryClient,
+} from '@tanstack/react-query';
 import type {
   ChatMessage,
   CreatePollBody,
@@ -17,11 +23,34 @@ import { queryKeys } from './keys';
 export const chatsQuery = (api: Pick<ApiClient, 'listChats'>) =>
   queryOptions({ queryKey: queryKeys.chats, queryFn: () => api.listChats() });
 
+/** Cached thread history: pages newest-first, each page newest-first. */
+export type MessageHistory = InfiniteData<MessagePage, string | undefined>;
+
+/** Messages per page; the thread fetches the next page as the reader nears the oldest one. */
+export const MESSAGE_PAGE = 30;
+
+/** Pages a refetch reloads from the newest; older pages are dropped and load again on scroll. */
+export const MESSAGE_REFETCH_PAGES = 1;
+
 export const messagesQuery = (api: Pick<ApiClient, 'listMessages'>, chatId: string) =>
-  queryOptions({
+  infiniteQueryOptions({
     queryKey: queryKeys.messages(chatId),
-    queryFn: () => api.listMessages(chatId),
+    queryFn: ({ pageParam }) =>
+      api.listMessages(chatId, { limit: MESSAGE_PAGE, ...(pageParam !== undefined ? { cursor: pageParam } : {}) }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.cursor,
+    // query-core reads `pages` on every refetch, but only types it for queryClient.infiniteQuery.
+    ...({ pages: MESSAGE_REFETCH_PAGES } as object),
   });
+
+/**
+ * Every loaded message in a thread, newest first.
+ *
+ * @param history - The cached pages, if any.
+ * @returns The pages joined in order.
+ */
+export const historyMessages = (history: Pick<MessageHistory, 'pages'> | undefined): ChatMessage[] =>
+  history?.pages.flatMap((page) => page.messages) ?? [];
 
 /**
  * Prepends a message when that thread is already in the cache.
@@ -39,10 +68,16 @@ export const rememberChatMessage = (
   message: ChatMessage,
   create = false,
 ): void => {
-  queryClient.setQueryData(queryKeys.messages(message.chatId), (current: MessagePage | undefined) => {
-    if (current === undefined) return create ? { messages: [message] } : current;
-    if (current.messages.some((item) => item.messageId === message.messageId)) return current;
-    return { ...current, messages: [message, ...current.messages] };
+  queryClient.setQueryData(queryKeys.messages(message.chatId), (current: MessageHistory | undefined) => {
+    if (current === undefined) {
+      return create ? { pages: [{ messages: [message] }], pageParams: [undefined] } : current;
+    }
+    if (historyMessages(current).some((item) => item.messageId === message.messageId)) return current;
+    const [newest, ...older] = current.pages;
+    return {
+      ...current,
+      pages: [{ ...newest, messages: [message, ...(newest?.messages ?? [])] }, ...older],
+    };
   });
 };
 
@@ -60,15 +95,18 @@ export const rememberPollTally = (
   messageId: string,
   update: Partial<PollTally>,
 ): void => {
-  queryClient.setQueryData(queryKeys.messages(chatId), (current: MessagePage | undefined) => {
+  queryClient.setQueryData(queryKeys.messages(chatId), (current: MessageHistory | undefined) => {
     if (current === undefined) return current;
     return {
       ...current,
-      messages: current.messages.map((message) =>
-        message.messageId !== messageId || message.poll === undefined
-          ? message
-          : { ...message, pollTally: { counts: {}, voters: 0, mine: [], ...message.pollTally, ...update } },
-      ),
+      pages: current.pages.map((page) => ({
+        ...page,
+        messages: page.messages.map((message) =>
+          message.messageId !== messageId || message.poll === undefined
+            ? message
+            : { ...message, pollTally: { counts: {}, voters: 0, mine: [], ...message.pollTally, ...update } },
+        ),
+      })),
     };
   });
 };

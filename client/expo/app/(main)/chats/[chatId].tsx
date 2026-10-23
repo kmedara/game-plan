@@ -2,24 +2,24 @@
  * Message thread with a virtualized list, live updates, and polls.
  */
 
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ChatMessage } from '@gameplan/types';
 import Send from 'lucide-react-native/icons/send';
 import X from 'lucide-react-native/icons/x';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Image } from 'expo-image';
-import { FlatList, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { errorMessageKey, queryError } from '@/src/errors';
-import { PullRefreshFrame, usePullRefreshList } from '@/src/pull-refresh';
 import { CHAT_PHOTO_MAX_DIMENSION, pickAndUploadImage, useDownloadUrl, type UploadedImage } from '@/src/media';
 import { openLink } from '@/src/open-link';
 import { PollBubble, PollComposer } from '@/src/poll';
-import { chatsQuery, messagesQuery, sendMessageMutation } from '@/src/queries/chat';
+import { chatsQuery, historyMessages, messagesQuery, sendMessageMutation } from '@/src/queries/chat';
 import { membersQuery } from '@/src/queries/teams';
 import { useApp, useBrandTeam } from '@/src/state';
 import { chatOverlayColor } from '@/src/team-media';
+import { colors } from '@/src/theme';
 import { ErrorText, ProfilePhoto } from '@/src/ui';
 
 export default function ChatThreadScreen() {
@@ -35,9 +35,12 @@ export default function ChatThreadScreen() {
   const backgroundKey = id.length > 0 && id === team?.defaultChatId ? team.theme?.chatBackgroundKey : undefined;
   const scrim = chatOverlayColor(team?.theme?.chatBackgroundOverlay);
   const backgroundUri = useDownloadUrl(backgroundKey, { teamId: team?.teamId });
-  const messagesLoaded = useQuery({ ...messagesQuery(api, id), enabled: id.length > 0 });
+  const messagesLoaded = useInfiniteQuery({ ...messagesQuery(api, id), enabled: id.length > 0 });
   const sendMessage = useMutation(sendMessageMutation(api, queryClient));
-  const messages = messagesLoaded.data?.messages ?? [];
+  const messages = historyMessages(messagesLoaded.data);
+  const loadOlder = (): void => {
+    if (messagesLoaded.hasNextPage && !messagesLoaded.isFetchingNextPage) void messagesLoaded.fetchNextPage();
+  };
   const [draft, setDraft] = useState('');
   const [photos, setPhotos] = useState<UploadedImage[]>([]);
   const [error, setError] = useState<string | undefined>();
@@ -81,7 +84,6 @@ export default function ChatThreadScreen() {
   const removePhoto = (key: string): void => {
     setPhotos((current) => current.filter((photo) => photo.key !== key));
   };
-  const pull = usePullRefreshList();
 
   return (
     <View className="flex-1">
@@ -91,53 +93,57 @@ export default function ChatThreadScreen() {
           {scrim !== undefined ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: scrim }]} /> : null}
         </>
       ) : null}
-      <PullRefreshFrame pull={pull.frame}>
-        <FlatList
-          {...pull.listProps}
-          data={messages}
-          inverted
-          keyExtractor={(item) => item.messageId}
-          extraData={namedMessageId}
-          style={[{ backgroundColor: 'transparent' }, pull.listProps.style]}
-          contentContainerClassName="px-3 py-3"
-          renderItem={({ item }) => {
-            const mine = item.senderId === api.user?.userId;
-            const content = (
-              <>
-                {item.poll !== undefined ? (
-                  <PollBubble message={item} onDark={mine} />
-                ) : item.body.length > 0 ? (
-                  <Text className="text-ink" style={mine ? { color: brand.onPrimary } : undefined}>{item.body}</Text>
-                ) : null}
-                {item.attachmentKeys?.map((key) => (
-                  <Attachment key={key} chatId={id} objectKey={key} />
-                ))}
-              </>
-            );
-            if (mine) {
-              return (
-                <View className="mb-3 max-w-[80%] self-end rounded-2xl p-3" style={{ backgroundColor: brand.primary }}>
-                  {content}
-                </View>
-              );
-            }
+      {/* Inverted, so reaching the end (the oldest loaded message) fetches the page before it.
+          No pull-to-refresh: live events keep the thread current, and a pull fights scrolling back. */}
+      <FlatList
+        data={messages}
+        inverted
+        keyExtractor={(item) => item.messageId}
+        extraData={namedMessageId}
+        style={{ flex: 1, backgroundColor: 'transparent' }}
+        contentContainerClassName="px-3 py-3"
+        onEndReached={loadOlder}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          messagesLoaded.isFetchingNextPage ? <ActivityIndicator className="py-3" color={colors.field} /> : undefined
+        }
+        renderItem={({ item }) => {
+          const mine = item.senderId === api.user?.userId;
+          const content = (
+            <>
+              {item.poll !== undefined ? (
+                <PollBubble message={item} onDark={mine} />
+              ) : item.body.length > 0 ? (
+                <Text className="text-ink" style={mine ? { color: brand.onPrimary } : undefined}>{item.body}</Text>
+              ) : null}
+              {item.attachmentKeys?.map((key) => (
+                <Attachment key={key} chatId={id} objectKey={key} />
+              ))}
+            </>
+          );
+          if (mine) {
             return (
-              <View className="mb-3 max-w-[85%] flex-row items-end self-start">
-                <SenderAvatar message={item} teamId={profileTeamId(item.senderId)} />
-                <Pressable
-                  className="ml-2 shrink rounded-2xl border border-line bg-paper p-3"
-                  onPress={() => setNamedMessageId((current) => (current === item.messageId ? undefined : item.messageId))}
-                >
-                  {namedMessageId === item.messageId ? (
-                    <Text className="text-xs text-muted">{item.senderDisplayName}</Text>
-                  ) : null}
-                  {content}
-                </Pressable>
+              <View className="mb-3 max-w-[80%] self-end rounded-2xl p-3" style={{ backgroundColor: brand.primary }}>
+                {content}
               </View>
             );
-          }}
-        />
-      </PullRefreshFrame>
+          }
+          return (
+            <View className="mb-3 max-w-[85%] flex-row items-end self-start">
+              <SenderAvatar message={item} teamId={profileTeamId(item.senderId)} />
+              <Pressable
+                className="ml-2 shrink rounded-2xl border border-line bg-paper p-3"
+                onPress={() => setNamedMessageId((current) => (current === item.messageId ? undefined : item.messageId))}
+              >
+                {namedMessageId === item.messageId ? (
+                  <Text className="text-xs text-muted">{item.senderDisplayName}</Text>
+                ) : null}
+                {content}
+              </Pressable>
+            </View>
+          );
+        }}
+      />
       <View className="border-t border-line bg-raised px-3 pb-4 pt-2">
         <ErrorText
           message={

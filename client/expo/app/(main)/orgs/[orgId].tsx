@@ -16,7 +16,7 @@ import { orgQuery, refreshOrg } from '@/src/queries/orgs';
 import { directoryQuery } from '@/src/queries/teams';
 import { useApp } from '@/src/state';
 import { BILLING_RETURN_LINK, openStripePage } from '@/src/stripe-page';
-import { ErrorText, Field, SubmitButton } from '@/src/ui';
+import { Chip, ErrorText, Field, HorizontalChipRow, SubmitButton } from '@/src/ui';
 
 /** Error sentences specific to organizations. */
 const ORG_ERRORS = {
@@ -90,22 +90,16 @@ const PlanSection = ({ org, message }: SectionProps) => {
       ) : (
         <View className="mt-2">
           <Text className="mb-2 text-ink">{t('orgs.subscribeHint')}</Text>
-          <View className="mb-2 flex-row">
+          <HorizontalChipRow className="mb-2">
             {(['month', 'year'] as const).map((value) => (
-              <Pressable
+              <Chip
                 key={value}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: interval === value }}
-                className="mr-2 rounded-full border border-line px-3 py-1"
-                style={{ opacity: interval === value ? 1 : 0.5 }}
+                label={`${t(value === 'month' ? 'plans.monthly' : 'plans.yearly')} · ${t(`plans.price.organization.${value}`)}`}
+                selected={interval === value}
                 onPress={() => setBillingInterval(value)}
-              >
-                <Text className="text-ink">
-                  {t(value === 'month' ? 'plans.monthly' : 'plans.yearly')} · {t(`plans.price.organization.${value}`)}
-                </Text>
-              </Pressable>
+              />
             ))}
-          </View>
+          </HorizontalChipRow>
           <SubmitButton
             label={t('orgs.subscribe')}
             loadedText=""

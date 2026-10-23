@@ -5,7 +5,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { BillingInterval, PlanTier } from '@gameplan/types';
 import { errorMessageKey } from '@/src/errors';
@@ -16,7 +16,7 @@ import { useApp } from '@/src/state';
 import { BILLING_RETURN_LINK, openStripePage } from '@/src/stripe-page';
 import { useTeamsWithPermission } from '@/src/team-access';
 import { colors } from '@/src/theme';
-import { Button, SubmitButton } from '@/src/ui';
+import { Button, Chip, HorizontalChipRow, SubmitButton } from '@/src/ui';
 
 /** Error sentences for plan purchases. */
 const BILLING_ERRORS = {
@@ -79,10 +79,10 @@ export default function PlansScreen() {
       ) : null}
 
       {buyHere ? (
-        <View className="mb-3 flex-row">
+        <HorizontalChipRow className="mb-3">
           <Chip label={t('plans.monthly')} selected={interval === 'month'} onPress={() => setBillingInterval('month')} />
           <Chip label={t('plans.yearly')} selected={interval === 'year'} onPress={() => setBillingInterval('year')} />
-        </View>
+        </HorizontalChipRow>
       ) : null}
 
       {TIERS.map(({ tier, features }) => (
@@ -131,18 +131,3 @@ export default function PlansScreen() {
   );
 }
 
-/** A selectable pill. */
-const Chip = ({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) => {
-  const { brand } = useApp();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      className="mb-2 mr-2 rounded-full border px-3 py-1"
-      style={{ borderColor: selected ? brand.primary : colors.line, backgroundColor: selected ? brand.primary : colors.paper }}
-      onPress={onPress}
-    >
-      <Text style={{ color: selected ? brand.onPrimary : colors.ink }}>{label}</Text>
-    </Pressable>
-  );
-};
