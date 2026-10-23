@@ -416,6 +416,7 @@
   "plans": {
     "title": "Planes",
     "subtitle": "Todo equipo puede seguir gratis. Los planes de pago agregan video, almacenamiento, exenciones y herramientas para entrenadores.",
+    "subtitleTeam": "Planes para {{team}}. Todo equipo puede seguir gratis; los planes de pago agregan video, almacenamiento, exenciones y herramientas para entrenadores.",
     "monthly": "Mensual",
     "yearly": "Anual (2 meses gratis)",
     "current": "Plan actual",

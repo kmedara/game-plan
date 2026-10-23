@@ -48,7 +48,7 @@ const titles: Record<string, string> = {
 
 /** One level up. A member or the payments page returns to that team; dues return to the profile. */
 const parentPath = (pathname: string): string => {
-  const teamPage = /^\/teams\/([^/]+)\/(members\/[^/]+|payments)$/.exec(pathname);
+  const teamPage = /^\/teams\/([^/]+)\/(members\/[^/]+|payments|plans)$/.exec(pathname);
   if (teamPage !== null) return `/teams/${teamPage[1]}`;
   if (pathname === '/dues' || pathname === '/orgs') return '/profile';
   if (pathname.startsWith('/orgs/')) return '/orgs';

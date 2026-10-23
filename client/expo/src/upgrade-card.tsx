@@ -18,7 +18,7 @@ export const UpgradeCard = ({ teamId, message }: { teamId: string; message: stri
         <Button
           label={t('plans.seePlans')}
           tone="secondary"
-          onPress={() => router.push({ pathname: '/plans', params: { teamId } })}
+          onPress={() => router.push({ pathname: '/teams/[teamId]/plans', params: { teamId } })}
         />
       ) : (
         <Text className="text-muted">{t('plans.manageOnWeb')}</Text>

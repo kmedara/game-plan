@@ -11,7 +11,7 @@ export default function BillingReturn() {
     return <Redirect href={{ pathname: '/orgs/[orgId]', params: { orgId } }} />;
   }
   if (teamId !== undefined && teamId.length > 0) {
-    return <Redirect href={{ pathname: '/teams/[teamId]', params: { teamId } }} />;
+    return <Redirect href={{ pathname: '/teams/[teamId]/plans', params: { teamId } }} />;
   }
   return <Redirect href="/plans" />;
 }

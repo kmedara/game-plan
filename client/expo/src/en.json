@@ -414,6 +414,7 @@
   "plans": {
     "title": "Plans",
     "subtitle": "Every team can stay free. Paid plans add video, storage, waivers, and coaching tools.",
+    "subtitleTeam": "Plans for {{team}}. Every team can stay free; paid plans add video, storage, waivers, and coaching tools.",
     "monthly": "Monthly",
     "yearly": "Yearly (2 months free)",
     "current": "Current plan",

@@ -57,7 +57,7 @@ export const TeamPlanSection = ({
           <Button
             label={t('plans.seePlans')}
             tone="secondary"
-            onPress={() => router.push({ pathname: '/plans', params: { teamId } })}
+            onPress={() => router.push({ pathname: '/teams/[teamId]/plans', params: { teamId } })}
           />
         )
       ) : null}
