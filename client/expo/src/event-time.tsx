@@ -42,7 +42,7 @@ export const EventTimeFields = ({
         <TimeClock minutes={startMinutes} onChange={onChangeStart} />
       ) : (
         <Pressable
-          className="rounded-xl border border-line bg-inset px-3 py-2"
+          className="w-full self-stretch rounded-xl border border-line bg-inset px-3 py-2"
           onPress={() => setOpen((current) => (current === 'start' ? undefined : 'start'))}
         >
           <Text className="text-base text-ink">{startLabel}</Text>
