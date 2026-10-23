@@ -79,7 +79,6 @@ flowchart LR
     WS["API Gateway WebSocket<br/>(delivery only)"]
     Queue["SQS fan-out queue + DLQ"]
     Fanout["fanout Lambda"]
-    SNS["SNS push topic"]
   end
 
   subgraph Platform["GamePlanPlatform"]
@@ -99,7 +98,7 @@ flowchart LR
   URLs -->|"enqueue after write"| Queue
   Queue --> Fanout
   Fanout -->|"open sockets"| WS
-  Fanout -->|"no socket"| SNS
+  Fanout -->|"no socket"| ExpoWeb["Expo and Web Push"]
   URLs -->|"presigned URLs"| Media
   Web -->|"upload/download bytes"| Media
   URLs --> Cognito
@@ -284,7 +283,7 @@ HTTP is CloudFront → Lambda function URL. There is no API Gateway on that path
 
 ## Realtime
 
-Clients write messages and RSVPs over HTTP. The area stores the row, then enqueues SQS. Fan-out posts to open sockets. Chat messages and moved events publish to SNS (Web Push or a device token) when no socket accepted the post. Join requests and reminders publish that push as well. A reminder job already lists its recipients, so fan-out delivers to those ids and skips the roster query. A post that reports the connection gone deletes that socket row. A throttled post is queued again for those recipients only, after a short delay, and does not also send a push.
+Clients write messages and RSVPs over HTTP. The area stores the row, then enqueues SQS. Fan-out posts to open sockets. Chat messages and moved events send Expo or Web Push when no socket accepted the post. Join requests and reminders send that push as well. A reminder job already lists its recipients, so fan-out delivers to those ids and skips the roster query. A post that reports the connection gone deletes that socket row. A throttled post is queued again for those recipients only, after a short delay, and does not also send a push.
 
 - **Why:** writes stay validated and rate-limited. The socket has no business logic, so a dropped connection does not drop data. The queue retries (dead-letter after five attempts) without holding the write response.
 - **Cost:** other users see the change slightly later than a direct broadcast. Delivery is at-least-once, so clients must ignore duplicates.

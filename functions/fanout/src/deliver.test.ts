@@ -20,7 +20,6 @@ const {
   deleteItem,
   enqueueFanout,
   managementSend,
-  snsSend,
   sendDevicePushes,
   ApiGatewayManagementApiClientMock,
 } = vi.hoisted(() => ({
@@ -28,7 +27,6 @@ const {
   deleteItem: vi.fn(),
   enqueueFanout: vi.fn(),
   managementSend: vi.fn(),
-  snsSend: vi.fn(),
   sendDevicePushes: vi.fn(),
   ApiGatewayManagementApiClientMock: vi.fn(function ApiGatewayManagementApiClient(this: {
     send: typeof managementSend;
@@ -61,13 +59,6 @@ vi.mock('./push-send.js', () => ({
   sendDevicePushes: (...args: unknown[]) => sendDevicePushes(...args),
 }));
 
-vi.mock('@aws-sdk/client-sns', () => ({
-  SNSClient: vi.fn(function SNSClient(this: { send: typeof snsSend }) {
-    this.send = snsSend;
-  }),
-  PublishCommand: vi.fn((input: unknown) => ({ input })),
-}));
-
 const chatJob = {
   type: 'chat_message' as const,
   chatId: 'c1',
@@ -85,8 +76,6 @@ const scheduleJob = {
 
 const { deliverFanoutJob, parseFanoutJob, resetFanoutClients } = await import('./deliver.js');
 const { GoneException } = await import('@aws-sdk/client-apigatewaymanagementapi');
-const { ApiGatewayManagementApiClient } = await import('@aws-sdk/client-apigatewaymanagementapi');
-const { SNSClient } = await import('@aws-sdk/client-sns');
 
 describe('parseFanoutJob', () => {
   it('accepts a chat message job', () => {
@@ -114,13 +103,10 @@ describe('deliverFanoutJob', () => {
     enqueueFanout.mockReset();
     enqueueFanout.mockResolvedValue(undefined);
     managementSend.mockReset();
-    snsSend.mockReset();
     sendDevicePushes.mockReset();
     sendDevicePushes.mockResolvedValue([]);
     ApiGatewayManagementApiClientMock.mockClear();
-    vi.mocked(SNSClient).mockClear();
     delete process.env.WEBSOCKET_CALLBACK_URL;
-    delete process.env.PUSH_TOPIC_ARN;
     delete process.env.AWS_REGION;
     delete process.env.FANOUT_QUEUE_URL;
     delete process.env.FANOUT_DELIVER_URL;
@@ -205,7 +191,7 @@ describe('deliverFanoutJob', () => {
       region: 'us-west-2',
     });
     expect(managementSend).toHaveBeenCalledTimes(1);
-    expect(snsSend).not.toHaveBeenCalled();
+    expect(sendDevicePushes).not.toHaveBeenCalled();
   });
 
   it('uses local credentials for a localhost management endpoint', async () => {
@@ -359,25 +345,6 @@ describe('deliverFanoutJob', () => {
     info.mockRestore();
   });
 
-  it('treats an empty PUSH_TOPIC_ARN as missing', async () => {
-    process.env.PUSH_TOPIC_ARN = '';
-    queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
-      if (pk === chatPk('c1') && prefix === CHAT_MEMBER_SK_PREFIX) return [{ userId: 'u1' }];
-      if (prefix === CONNECTION_SK_PREFIX) return [];
-      if (prefix === DEVICE_SK_PREFIX) {
-        return [{ deviceId: 'd1', token: 't', platform: 'ios' }];
-      }
-      return [];
-    });
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-
-    await deliverFanoutJob(chatJob);
-
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('"reason":"no_topic"'));
-    expect(snsSend).not.toHaveBeenCalled();
-    info.mockRestore();
-  });
-
   it('defaults the management client region when AWS_REGION is unset', async () => {
     process.env.WEBSOCKET_CALLBACK_URL = 'https://ws.example.com';
     queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
@@ -439,31 +406,12 @@ describe('deliverFanoutJob', () => {
 
     expect(ApiGatewayManagementApiClientMock).not.toHaveBeenCalled();
     expect(info).toHaveBeenCalledWith(
-      expect.stringContaining('"reason":"no_topic"'),
+      expect.stringContaining('"reason":"no_devices"'),
     );
-    info.mockRestore();
-  });
-
-  it('skips push when the topic is missing', async () => {
-    queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
-      if (pk === chatPk('c1') && prefix === CHAT_MEMBER_SK_PREFIX) return [{ userId: 'u1' }];
-      if (prefix === CONNECTION_SK_PREFIX) return [];
-      if (prefix === DEVICE_SK_PREFIX) return [{ deviceId: 'd1', token: 't', platform: 'ios' }];
-      return [];
-    });
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-
-    await deliverFanoutJob(chatJob);
-
-    expect(info).toHaveBeenCalledWith(
-      expect.stringContaining('"reason":"no_topic"'),
-    );
-    expect(snsSend).not.toHaveBeenCalled();
     info.mockRestore();
   });
 
   it('skips push when the user has no devices', async () => {
-    process.env.PUSH_TOPIC_ARN = 'arn:aws:sns:us-east-1:123:push';
     queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
       if (pk === chatPk('c1') && prefix === CHAT_MEMBER_SK_PREFIX) return [{ userId: 'u1' }];
       if (prefix === CONNECTION_SK_PREFIX) return [];
@@ -477,12 +425,11 @@ describe('deliverFanoutJob', () => {
     expect(info).toHaveBeenCalledWith(
       expect.stringContaining('"reason":"no_devices"'),
     );
-    expect(snsSend).not.toHaveBeenCalled();
+    expect(sendDevicePushes).not.toHaveBeenCalled();
     info.mockRestore();
   });
 
-  it('publishes push for chat_message when topic and devices exist', async () => {
-    process.env.PUSH_TOPIC_ARN = 'arn:aws:sns:us-east-1:123:push';
+  it('sends a device push for chat_message when devices exist', async () => {
     queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
       if (pk === chatPk('c1') && prefix === CHAT_MEMBER_SK_PREFIX) return [{ userId: 'u1' }];
       if (prefix === CONNECTION_SK_PREFIX) return [];
@@ -491,20 +438,18 @@ describe('deliverFanoutJob', () => {
       }
       return [];
     });
-    snsSend.mockResolvedValue(undefined);
 
     await deliverFanoutJob(chatJob);
 
-    expect(snsSend).toHaveBeenCalledTimes(1);
-    const command = snsSend.mock.calls[0]?.[0] as { input?: { Subject?: string; Message?: string } };
-    expect(command.input?.Subject).toBe('New message');
-    const message = JSON.parse(command.input?.Message ?? '{}') as { body?: string; title?: string };
-    expect(message.title).toBe('New message');
-    expect(message.body).toBe('hello world');
+    expect(sendDevicePushes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'New message',
+        body: 'hello world',
+      }),
+    );
   });
 
-  it('publishes push for schedule_changed when topic and devices exist', async () => {
-    process.env.PUSH_TOPIC_ARN = 'arn:aws:sns:us-east-1:123:push';
+  it('does not push schedule_changed even when devices exist', async () => {
     queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
       if (pk === teamPk('t1') && prefix === TEAM_MEMBER_SK_PREFIX) return [{ userId: 'u1' }];
       if (prefix === CONNECTION_SK_PREFIX) return [];
@@ -513,17 +458,13 @@ describe('deliverFanoutJob', () => {
       }
       return [];
     });
-    snsSend.mockResolvedValue(undefined);
-
     await deliverFanoutJob(scheduleJob);
 
-    expect(snsSend).not.toHaveBeenCalled();
     expect(sendDevicePushes).not.toHaveBeenCalled();
   });
 
   it('does not push event_moved when a socket accepts the event', async () => {
     process.env.WEBSOCKET_CALLBACK_URL = 'https://ws.example.com';
-    process.env.PUSH_TOPIC_ARN = 'arn:aws:sns:us-east-1:123:push';
     queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
       if (pk === teamPk('t1') && prefix === TEAM_MEMBER_SK_PREFIX) return [{ userId: 'u1' }];
       if (pk === userPk('u1') && prefix === CONNECTION_SK_PREFIX) return [{ connectionId: 'conn-1' }];
@@ -545,11 +486,9 @@ describe('deliverFanoutJob', () => {
     expect(managementSend).toHaveBeenCalledTimes(1);
     expect(queryBySkPrefix).not.toHaveBeenCalledWith(userPk('u1'), DEVICE_SK_PREFIX);
     expect(sendDevicePushes).not.toHaveBeenCalled();
-    expect(snsSend).not.toHaveBeenCalled();
   });
 
   it('pushes event_moved when no socket is open', async () => {
-    process.env.PUSH_TOPIC_ARN = 'arn:aws:sns:us-east-1:123:push';
     queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
       if (pk === teamPk('t1') && prefix === TEAM_MEMBER_SK_PREFIX) return [{ userId: 'u1' }];
       if (prefix === CONNECTION_SK_PREFIX) return [];
@@ -558,8 +497,6 @@ describe('deliverFanoutJob', () => {
       }
       return [];
     });
-    snsSend.mockResolvedValue(undefined);
-
     await deliverFanoutJob({
       type: 'event_moved',
       teamId: 't1',
@@ -853,31 +790,5 @@ describe('deliverFanoutJob', () => {
     resetFanoutClients();
     await deliverFanoutJob(chatJob);
     expect(ApiGatewayManagementApiClientMock).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe('resetFanoutClients', () => {
-  it('clears cached SNS and management clients', async () => {
-    process.env.WEBSOCKET_CALLBACK_URL = 'https://ws.example.com';
-    process.env.PUSH_TOPIC_ARN = 'arn:aws:sns:us-east-1:123:push';
-    queryBySkPrefix.mockImplementation(async (pk: string, prefix: string) => {
-      if (pk === chatPk('c1') && prefix === CHAT_MEMBER_SK_PREFIX) return [{ userId: 'u1' }];
-      if (prefix === CONNECTION_SK_PREFIX) return [];
-      if (prefix === DEVICE_SK_PREFIX) {
-        return [{ deviceId: 'd', token: 't', platform: 'ios' }];
-      }
-      return [];
-    });
-    snsSend.mockResolvedValue(undefined);
-    managementSend.mockResolvedValue(undefined);
-    sendDevicePushes.mockResolvedValue([]);
-
-    await deliverFanoutJob(chatJob);
-    const snsCallsAfterFirst = vi.mocked(SNSClient).mock.calls.length;
-
-    resetFanoutClients();
-    await deliverFanoutJob(chatJob);
-
-    expect(vi.mocked(SNSClient).mock.calls.length).toBeGreaterThan(snsCallsAfterFirst);
   });
 });

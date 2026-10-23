@@ -17,7 +17,6 @@ import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import type * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
@@ -277,10 +276,6 @@ export class Api extends Construct {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    const pushTopic = new sns.Topic(this, 'PushTopic', {
-      topicName: 'gameplan-push',
-    });
-
     const shared = { NODE_ENV: 'production', CLIENT_ORIGIN: props.corsOrigin };
     const tableEnv = { TABLE_NAME: props.table.tableName };
     const queueEnv = { FANOUT_QUEUE_URL: queue.queueUrl };
@@ -382,7 +377,6 @@ export class Api extends Construct {
             ...shared,
             ...tableEnv,
             ...queueEnv,
-            PUSH_TOPIC_ARN: pushTopic.topicArn,
             VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY ?? '',
             VAPID_PRIVATE_KEY_PARAMETER: vapidPrivateKeyParameter,
             VAPID_SUBJECT: process.env.VAPID_SUBJECT ?? 'mailto:push@gameplan.local',
@@ -503,7 +497,6 @@ export class Api extends Construct {
 
     functions.fanout.addEnvironment('WEBSOCKET_CALLBACK_URL', socketStage.callbackUrl);
     socketStage.grantManagementApiAccess(functions.fanout);
-    pushTopic.grantPublish(functions.fanout);
     queue.grantSendMessages(functions.chat);
     queue.grantSendMessages(functions.schedule);
     queue.grantSendMessages(functions.teams);

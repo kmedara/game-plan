@@ -12,7 +12,6 @@ import {
   GoneException,
   PostToConnectionCommand,
 } from '@aws-sdk/client-apigatewaymanagementapi';
-import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
 import { canWithRoles, rolesFromMembership } from '@gameplan/rules';
 import { fanoutJobSchema } from '@gameplan/schemas';
 import type { FanoutJob } from '@gameplan/types';
@@ -58,9 +57,6 @@ type DeviceItem = {
 /** Lazily created management API client for PostToConnection. */
 let managementClient: ApiGatewayManagementApiClient | undefined;
 
-/** Lazily created SNS client for offline push. */
-let snsClient: SNSClient | undefined;
-
 /**
  * Returns the WebSocket management client, or `undefined` when unset locally.
  *
@@ -84,21 +80,10 @@ const getManagementClient = (): ApiGatewayManagementApiClient | undefined => {
 };
 
 /**
- * Returns the SNS client used for offline push.
- *
- * @returns The shared SNS client.
- */
-const getSnsClient = (): SNSClient => {
-  snsClient ??= new SNSClient({});
-  return snsClient;
-};
-
-/**
  * Resets cached clients (tests only).
  */
 export const resetFanoutClients = (): void => {
   managementClient = undefined;
-  snsClient = undefined;
 };
 
 /**
@@ -361,20 +346,18 @@ const publishPush = async (
   job: FanoutJob,
   devices: DeviceItem[],
 ): Promise<void> => {
-  const topicArn = process.env.PUSH_TOPIC_ARN;
-  const topicMissing = topicArn === undefined || topicArn.length === 0;
-  if (devices.length === 0 || topicMissing) {
+  if (devices.length === 0) {
     console.info(
       JSON.stringify({
         service: 'fanout',
         event: 'push_skipped',
         userId,
-        reason: topicMissing ? 'no_topic' : 'no_devices',
+        reason: 'no_devices',
         type: job.type,
       }),
     );
+    return;
   }
-  if (devices.length === 0) return;
 
   if (job.type === 'schedule_changed' || job.type === 'signups_changed' || job.type === 'poll_updated') return;
 
@@ -421,33 +404,14 @@ const publishPush = async (
 
   const gone = await sendDevicePushes({ title, body, data: clientPayload(job), devices });
   for (const device of gone) await deleteGoneDevice(userId, device.deviceId);
-  if (topicMissing || topicArn === undefined) return;
-
-  await getSnsClient().send(
-    new PublishCommand({
-      TopicArn: topicArn,
-      Subject: title,
-      Message: JSON.stringify({
-        userId,
-        title,
-        body,
-        data: clientPayload(job),
-        devices: devices.map((device) => ({
-          deviceId: device.deviceId,
-          token: device.token,
-          platform: device.platform,
-        })),
-      }),
-    }),
-  );
 };
 
 /**
  * Delivers one fan-out job to every recipient.
  *
  * Open sockets get the WebSocket frame. Users with no live socket get a push
- * when devices and a topic are configured. Throttled recipients are requeued
- * on their own and are not pushed in this attempt.
+ * when they have registered devices. Throttled recipients are requeued on
+ * their own and are not pushed in this attempt.
  *
  * @param job - The delivery job parsed from the queue or local HTTP body.
  */
