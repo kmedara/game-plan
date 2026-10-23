@@ -64,8 +64,11 @@ resource "stripe_price" "plan" {
   # key and is not recognised by the billing webhook until they are moved.
   transfer_lookup_key = true
 
+  # The provider sends an interval count of 0 when it is unset, which Stripe
+  # rejects.
   recurring {
-    interval = each.value.interval
+    interval       = each.value.interval
+    interval_count = 1
   }
 
   lifecycle {
