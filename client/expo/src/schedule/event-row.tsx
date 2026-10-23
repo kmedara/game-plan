@@ -1,5 +1,6 @@
 /**
- * One occurrence on the selected day, striped in its event type's color.
+ * One occurrence on the selected day. The left stripe is the team's color; the
+ * dot and type label use the fixed event-type palette.
  */
 
 import Pencil from 'lucide-react-native/icons/pencil';
@@ -18,6 +19,7 @@ import { ICON, RsvpChoices, useHour12 } from './rsvp';
 export const EventRow = ({
   item,
   zone,
+  teamColor,
   teamName,
   logoKey,
   logoName,
@@ -31,6 +33,7 @@ export const EventRow = ({
 }: {
   item: TeamOccurrence;
   zone: string;
+  teamColor: string;
   teamName: string | undefined;
   logoKey: string | undefined;
   logoName: string | undefined;
@@ -50,7 +53,7 @@ export const EventRow = ({
   return (
     <View
       className="mb-3 rounded-xl bg-inset p-3"
-      style={{ borderLeftWidth: 4, borderLeftColor: EVENT_TYPE_COLORS[item.eventType] }}
+      style={{ borderLeftWidth: 4, borderLeftColor: teamColor }}
     >
       <Pressable accessibilityRole="button" onPress={onView}>
         <View className={showLogo ? 'pr-24' : canManage ? 'pr-16' : ''}>

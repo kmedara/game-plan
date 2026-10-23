@@ -42,7 +42,7 @@ import {
 } from '@/src/queries/schedule';
 import { useApp, useBrandTeam } from '@/src/state';
 import { useTeamsWithPermission } from '@/src/team-access';
-import { colors, EVENT_TYPE_COLORS } from '@/src/theme';
+import { brandColors, colors, EVENT_TYPE_COLORS } from '@/src/theme';
 import { Button, ErrorText } from '@/src/ui';
 import { AddEvent } from '@/src/schedule/add-event';
 import { EventDetail } from '@/src/schedule/event-detail';
@@ -188,6 +188,7 @@ export default function ScheduleScreen() {
             key={`${item.teamId}-${item.eventId}-${item.startsAt}`}
             item={item}
             zone={zone}
+            teamColor={brandColors(eventTeam?.theme).primary}
             teamName={singleTeam ? undefined : eventTeam?.name}
             logoKey={singleTeam ? undefined : eventTeam?.theme?.logoKey}
             logoName={eventTeam?.name}
