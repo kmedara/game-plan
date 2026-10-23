@@ -1,6 +1,6 @@
 # API docs (Swagger)
 
-The local stack serves an interactive **Swagger UI** page at http://localhost:3000/docs. It lists every HTTP route by
+HTTP areas, auth, and edge behavior: [`api.md`](api.md). The local stack serves an interactive **Swagger UI** page at http://localhost:3000/docs. It lists every HTTP route by
 product area, shows the request body and query string for each one, and can send real requests through the local proxy
 with **Try it out**. The page only exists locally; the deployed Amazon API Gateway has no docs route.
 

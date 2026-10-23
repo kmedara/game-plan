@@ -69,9 +69,9 @@ Maps setup is in [docs/maps/README.md](docs/maps/README.md). Interactive route d
 
 ## Repo
 
-- `client/expo` — website, iOS, and Android. `npm run client:start` for dev, `npm run client:build` for the static export. Store builds and review are in [docs/store-release.md](docs/store-release.md).
+- `client/expo` — website, iOS, and Android. `npm run client:start` for dev, `npm run client:build` for the static export. Architecture and cache: [docs/client.md](docs/client.md). Store builds: [docs/store-release.md](docs/store-release.md).
 - `lib/schemas` — Zod contracts. `npm run generate:types` writes `lib/types` (also part of `npm run typecheck`). Commit the generated file.
-- `functions/<area>` — one Lambda per area. Areas share the table and do not call each other.
+- `functions/<area>` — one Lambda per area. HTTP areas, routes, and auth: [docs/api.md](docs/api.md).
 
 ## Cloud
 
@@ -84,7 +84,7 @@ Maps setup is in [docs/maps/README.md](docs/maps/README.md). Interactive route d
 
 The deploy job runs `cdk deploy --all`, applies the Stripe and Expo Terraform ([infrastructure/terraform](infrastructure/terraform/README.md)), builds the Expo site, syncs the bucket, and invalidates CloudFront. Re-run it from the Actions tab to choose `staging` or `production`.
 
-Each GitHub environment has one secret, `AWS_ROLE_ARN`. The Stripe key and Expo token Terraform uses are in Parameter Store (`<prefix>/stripe-api-key`, test mode for staging and live for production, and `<prefix>/expo-token`). Hostnames are `https://<environment>.example.com`, with the API at `/api` and the socket at `wss://<environment>.example.com/api/socket`. Parameter Store inputs are listed under **Secrets at run time** in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Each GitHub environment has one secret, `AWS_ROLE_ARN`. The Stripe key and Expo token Terraform uses are in Parameter Store (`<prefix>/stripe-api-key`, test mode for staging and live for production, and `<prefix>/expo-token`). Hostnames, certificates, and CloudFront are in [docs/dns-and-hosting.md](docs/dns-and-hosting.md). Security, secrets, and auth: [docs/security.md](docs/security.md). Deploy parameters: [docs/configuration.md](docs/configuration.md).
 
 ### Invite email and texts
 

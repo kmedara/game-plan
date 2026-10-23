@@ -103,8 +103,8 @@ resource "stripe_webhook_endpoint" "billing" {
   enabled_events = local.billing_webhook_events
 }
 
-# The functions read the signing secrets from Parameter Store (docs/ARCHITECTURE.md,
-# "Secrets at run time"). `overwrite` takes over a parameter set by hand.
+# The functions read the signing secrets from Parameter Store (docs/stripe.md).
+# `overwrite` takes over a parameter set by hand.
 resource "aws_ssm_parameter" "payments_webhook_secret" {
   name        = "${local.ssm_prefix}/stripe-webhook-secret"
   description = "Signing secret of the Stripe Connect webhook (payments). Managed by Terraform."
