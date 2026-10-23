@@ -5,6 +5,7 @@
 import {
   inviteMessageBody,
   invitePageUrl,
+  inviteSiteOrigin,
   isEmailAddress,
   mailtoInviteUrl,
   smsBodySeparator,
@@ -37,6 +38,15 @@ describe('invite share links', () => {
     );
     expect(smsInviteUrl('+12025550123', 'code abc', '?')).toBe('sms:+12025550123?body=code%20abc');
     expect(smsInviteUrl('+12025550123', 'code abc', '&')).toBe('sms:+12025550123&body=code%20abc');
+  });
+
+  it('links the phone apps to the website host that serves the API', () => {
+    expect(inviteSiteOrigin('https://app.example.com', 'https://other.example.com/api')).toBe(
+      'https://app.example.com',
+    );
+    expect(inviteSiteOrigin('', 'https://app.example.com/api/')).toBe('https://app.example.com');
+    expect(inviteSiteOrigin('', 'https://api.example.com')).toBeUndefined();
+    expect(inviteSiteOrigin('', 'not a url')).toBeUndefined();
   });
 
   it('uses an ampersand body on iPhone', () => {

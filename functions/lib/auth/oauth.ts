@@ -3,6 +3,7 @@
  */
 
 import { createHash, randomBytes } from 'node:crypto';
+import type { SocialProvider } from '@gameplan/types';
 
 /** Tokens returned by Cognito's `/oauth2/token` endpoint. */
 export type OAuthTokens = {
@@ -68,13 +69,49 @@ export const generatePkcePair = (): { verifier: string; challenge: string } => {
   return { verifier, challenge };
 };
 
+/** Cognito's name for each social identity provider on the user pool. */
+const COGNITO_PROVIDER_NAMES: Record<SocialProvider, string> = {
+  apple: 'SignInWithApple',
+  google: 'Google',
+  facebook: 'Facebook',
+};
+
+/**
+ * Social providers the user pool has, from `AUTH_SOCIAL_PROVIDERS`.
+ *
+ * The infrastructure sets the list from the credentials it configured, so a
+ * provider never shows on the login screen without a working pool connection.
+ *
+ * @returns Configured providers, in the order the login screen shows them.
+ */
+export const configuredSocialProviders = (): SocialProvider[] =>
+  (process.env.AUTH_SOCIAL_PROVIDERS ?? '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part): part is SocialProvider => Object.hasOwn(COGNITO_PROVIDER_NAMES, part));
+
+/**
+ * Reads a requested provider, keeping it only when the pool has it.
+ *
+ * @param raw - The `provider` query value.
+ * @returns The provider, or `undefined` for the Managed login page.
+ */
+export const requestedSocialProvider = (raw: string | undefined): SocialProvider | undefined =>
+  configuredSocialProviders().find((provider) => provider === raw);
+
 /**
  * Builds the Cognito Hosted UI authorize URL.
  *
- * @param input - OAuth state and PKCE challenge.
+ * With a provider, Cognito skips its own page and goes straight to Apple or Google.
+ *
+ * @param input - OAuth state, PKCE challenge, and an optional social provider.
  * @returns An absolute authorize URL.
  */
-export const buildAuthorizeUrl = (input: { state: string; challenge: string }): string => {
+export const buildAuthorizeUrl = (input: {
+  state: string;
+  challenge: string;
+  provider?: SocialProvider;
+}): string => {
   const config = getCognitoOAuthConfig();
   const params = new URLSearchParams({
     client_id: config.clientId,
@@ -85,6 +122,7 @@ export const buildAuthorizeUrl = (input: { state: string; challenge: string }): 
     code_challenge: input.challenge,
     code_challenge_method: 'S256',
   });
+  if (input.provider !== undefined) params.set('identity_provider', COGNITO_PROVIDER_NAMES[input.provider]);
   return `https://${config.hostedUiDomain}/oauth2/authorize?${params.toString()}`;
 };
 

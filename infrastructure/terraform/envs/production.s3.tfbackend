@@ -1,0 +1,5 @@
+# Pass the bucket at init: -backend-config="bucket=<state bucket in this account>"
+key          = "gameplan/production/stripe-expo.tfstate"
+region       = "us-east-1"
+encrypt      = true
+use_lockfile = true

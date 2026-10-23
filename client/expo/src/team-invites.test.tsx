@@ -13,6 +13,7 @@ jest.mock('@gameplan/types', () => ({
 
 jest.mock('@gameplan/rules', () => ({
   callerCanGrant: () => true,
+  isSafeLink: jest.requireActual('@gameplan/rules').isSafeLink,
 }));
 
 const mockCreateInvite = jest.fn();

@@ -162,6 +162,7 @@ const memoryProvider = (): IdentityProvider => {
     async logout() {
       throw new Error('logout_failed');
     },
+    async deleteUser() {},
   };
 };
 
@@ -228,6 +229,32 @@ describe('identity oauth and session edges', () => {
     expect(result.cookies?.some((c) => c.startsWith(`${OAUTH_STATE_COOKIE}=`))).toBe(true);
     expect(result.cookies?.some((c) => c.startsWith(`${OAUTH_VERIFIER_COOKIE}=`))).toBe(true);
     expect(result.cookies?.some((c) => c.startsWith(`${OAUTH_RETURN_COOKIE}=`))).toBe(true);
+  });
+
+  it('sends a configured social provider straight to Apple or Google', async () => {
+    process.env.COGNITO_CLIENT_ID = 'client';
+    process.env.COGNITO_HOSTED_UI_DOMAIN = 'auth.example.com';
+    process.env.AUTH_SOCIAL_PROVIDERS = 'apple,google';
+    try {
+      const providers = await handler(httpEvent('GET', '/identity/oauth/providers'));
+      expect(providers.statusCode).toBe(200);
+      expect(JSON.parse(String(providers.body))).toEqual({ providers: ['apple', 'google'] });
+
+      const apple = await handler(httpEvent('GET', '/identity/oauth/login', { query: { provider: 'apple' } }));
+      expect(new URL(String(apple.headers?.location)).searchParams.get('identity_provider')).toBe('SignInWithApple');
+      const google = await handler(httpEvent('GET', '/identity/oauth/login', { query: { provider: 'google' } }));
+      expect(new URL(String(google.headers?.location)).searchParams.get('identity_provider')).toBe('Google');
+
+      // Facebook is not on this pool, so the Managed login page is shown instead.
+      const facebook = await handler(
+        httpEvent('GET', '/identity/oauth/login', { query: { provider: 'facebook' } }),
+      );
+      expect(new URL(String(facebook.headers?.location)).searchParams.has('identity_provider')).toBe(false);
+    } finally {
+      delete process.env.AUTH_SOCIAL_PROVIDERS;
+    }
+    const none = await handler(httpEvent('GET', '/identity/oauth/providers'));
+    expect(JSON.parse(String(none.body))).toEqual({ providers: [] });
   });
 
   it('rejects unsafe or invalid returnTo values', async () => {

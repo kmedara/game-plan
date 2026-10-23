@@ -10,12 +10,18 @@ import MessageCircle from 'lucide-react-native/icons/message-circle';
 import User from 'lucide-react-native/icons/user';
 import Users from 'lucide-react-native/icons/users';
 import { useIsRestoring, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Image } from 'expo-image';
 import { Platform, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { canCreateTeam } from '@gameplan/rules';
 import { useDownloadUrl } from '@/src/media';
+import {
+  consumePendingInvite,
+  inviteCodeToRemember,
+  readPendingInvite,
+  savePendingInvite,
+} from '@/src/pending-invite';
 import { adoptCacheOwner } from '@/src/query-client';
 import { useLiveQuerySync } from '@/src/use-live-query-sync';
 import { NotificationPrompt } from '@/src/notification-prompt';
@@ -53,11 +59,16 @@ export default function MainLayout() {
   const { t } = useTranslation();
   const pathname = usePathname();
   const router = useRouter();
-  const { api, brand, brandTeam, live, teams } = useApp();
+  const { api, brand, brandTeam, live, teams, selectTeam } = useApp();
   const queryClient = useQueryClient();
   const restoring = useIsRestoring();
   useLiveQuerySync();
   const [ready, setReady] = useState(api.isAuthenticated());
+  const [joiningInvite, setJoiningInvite] = useState(false);
+  const selectTeamRef = useRef(selectTeam);
+  const replaceRef = useRef(router.replace);
+  selectTeamRef.current = selectTeam;
+  replaceRef.current = router.replace;
   const logoUrl = useDownloadUrl(brandTeam?.theme?.logoKey, { teamId: brandTeam?.teamId });
   const onChats = pathname === '/chats';
   const channelTeams = useTeamsWithPermission('create_team_channels', onChats);
@@ -75,7 +86,41 @@ export default function MainLayout() {
     });
   }, [api, live, queryClient]);
 
-  if (restoring || !ready) return <View className="flex-1 bg-canvas" />;
+  useEffect(() => {
+    if (!ready || restoring) return;
+    const code = inviteCodeToRemember(
+      pathname,
+      api.isAuthenticated(),
+      api.user?.needsProfileCompletion === true,
+    );
+    if (code === undefined) return;
+    void savePendingInvite(code);
+  }, [api, pathname, ready, restoring]);
+
+  useEffect(() => {
+    if (!ready || restoring) return;
+    if (!api.isAuthenticated() || api.user?.needsProfileCompletion === true) return;
+    let cancelled = false;
+    void (async () => {
+      const code = await readPendingInvite();
+      if (cancelled || code === undefined) return;
+      setJoiningInvite(true);
+      const result = await consumePendingInvite(api, queryClient);
+      if (cancelled) return;
+      if (result.status === 'joined') {
+        selectTeamRef.current(result.teamId);
+        replaceRef.current('/schedule');
+      } else if (result.status === 'failed') {
+        replaceRef.current(`/invite/${encodeURIComponent(result.code)}`);
+      }
+      setJoiningInvite(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [api, queryClient, ready, restoring, api.user?.needsProfileCompletion]);
+
+  if (restoring || !ready || joiningInvite) return <View className="flex-1 bg-canvas" />;
   if (!api.isAuthenticated()) return <Redirect href="/login" />;
   if (api.user?.needsProfileCompletion && !pathname.startsWith('/complete-profile')) {
     return <Redirect href="/complete-profile" />;

@@ -5,6 +5,7 @@
     "scheme": "gameplan",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "web": {
       "bundler": "metro",
@@ -28,6 +29,23 @@
         {
           "color": "#0a6e38"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "GamePlan uses your photo library when you pick a team logo, a profile picture, or a file to share in chat.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#0a6e38"
+        }
       ]
     ],
     "experiments": {
@@ -35,10 +53,17 @@
     },
     "ios": {
       "bundleIdentifier": "com.gameplan.app",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "com.gameplan.app"
+      "package": "com.gameplan.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a6e38"
+      }
     },
     "extra": {
       "eas": {

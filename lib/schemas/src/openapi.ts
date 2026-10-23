@@ -38,7 +38,9 @@ import {
   loginBodySchema,
   oauthExchangeBodySchema,
   oauthExchangeResponseSchema,
+  oauthProvidersSchema,
   refreshBodySchema,
+  socialProviderSchema,
   registerBodySchema,
   resendConfirmationBodySchema,
   sessionTokensSchema,
@@ -202,6 +204,10 @@ const AREAS: Record<string, AreaSpec> = {
       '/identity/logout': { post: { summary: 'Clear the refresh cookie' } },
       '/identity/me': {
         get: { summary: 'Current user profile', response: userProfileSchema, secured: true },
+        delete: {
+          summary: "Delete the caller's account, memberships, and personal data",
+          secured: true,
+        },
       },
       '/identity/socket-ticket': {
         post: {
@@ -274,8 +280,15 @@ const AREAS: Record<string, AreaSpec> = {
           query: z.object({
             returnTo: z.string().optional(),
             delivery: z.enum(['native']).optional(),
+            provider: socialProviderSchema.optional(),
           }),
           redirect: true,
+        },
+      },
+      '/identity/oauth/providers': {
+        get: {
+          summary: 'Social sign-ins configured on this deployment',
+          response: oauthProvidersSchema,
         },
       },
       '/identity/oauth/callback': {

@@ -13,6 +13,8 @@ jest.mock('expo-web-browser', () => ({
 
 describe('open-link', () => {
   beforeEach(() => {
+    // jest-expo already mocks `Linking.openURL`, so the spy is that mock and keeps earlier calls.
+    jest.clearAllMocks();
     jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
   });
 

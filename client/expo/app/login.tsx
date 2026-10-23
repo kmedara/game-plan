@@ -1,5 +1,8 @@
 /**
  * Cognito Hosted UI on the web, and a one-time-code handoff on device.
+ *
+ * Apple and Google buttons skip the Hosted UI page and go straight to that
+ * provider; the email button opens the Hosted UI.
  */
 
 import * as WebBrowser from 'expo-web-browser';
@@ -7,7 +10,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Platform, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import type { SocialProvider } from '@gameplan/types';
 import { config, NATIVE_AUTH_REDIRECT } from '@/src/config';
+import { errorMessageKey } from '@/src/errors';
+import { SocialSignIn } from '@/src/social-sign-in';
 import { useApp } from '@/src/state';
 import { ErrorText, SubmitButton } from '@/src/ui';
 
@@ -18,10 +24,22 @@ export default function LoginScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ error?: string }>();
   const { api, live } = useApp();
-  const [error] = useState<string | undefined>(
+  const [error, setError] = useState<string | undefined>(
     typeof params.error === 'string' ? params.error : undefined,
   );
   const [seedEmail, setSeedEmail] = useState('');
+  const [providers, setProviders] = useState<SocialProvider[]>([]);
+
+  useEffect(() => {
+    if (config.authDisabled) return;
+    let cancelled = false;
+    void api.oauthProviders().then((list) => {
+      if (!cancelled) setProviders(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [api]);
 
   useEffect(() => {
     if (!config.authDisabled) return;
@@ -35,14 +53,15 @@ export default function LoginScreen() {
     router.replace(api.user?.needsProfileCompletion ? '/complete-profile' : '/schedule');
   };
 
-  const startHostedUi = async (): Promise<void> => {
+  const startHostedUi = async (provider?: SocialProvider): Promise<void> => {
+    const providerQuery = provider === undefined ? '' : `&provider=${provider}`;
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const returnTo = encodeURIComponent(`${window.location.origin}/schedule`);
-      window.location.href = `${config.apiBaseUrl}/identity/oauth/login?returnTo=${returnTo}`;
+      window.location.href = `${config.apiBaseUrl}/identity/oauth/login?returnTo=${returnTo}${providerQuery}`;
       return;
     }
     const result = await WebBrowser.openAuthSessionAsync(
-      `${config.apiBaseUrl}/identity/oauth/login?delivery=native`,
+      `${config.apiBaseUrl}/identity/oauth/login?delivery=native${providerQuery}`,
       NATIVE_AUTH_REDIRECT,
     );
     if (result.type !== 'success') return;
@@ -54,6 +73,13 @@ export default function LoginScreen() {
     const session = await api.exchangeOAuth(code);
     live.connect();
     router.replace(session.next === 'complete-profile' ? '/complete-profile' : '/schedule');
+  };
+
+  const startSocial = (provider: SocialProvider): void => {
+    setError(undefined);
+    startHostedUi(provider).catch((err: unknown) => {
+      setError(t(errorMessageKey(err, 'errors.common.requestFailed')));
+    });
   };
 
   const continueLocal = async (): Promise<void> => {
@@ -79,8 +105,14 @@ export default function LoginScreen() {
           </>
         ) : (
           <>
-            <SubmitButton label={t('auth.continueCognito')} onPress={startHostedUi} loadedText="" />
-            <Text className="text-muted">{t('auth.cognitoHint')}</Text>
+            <SocialSignIn providers={providers} onSignIn={startSocial} />
+            <SubmitButton
+              label={t(providers.length > 0 ? 'auth.continueEmail' : 'auth.continueCognito')}
+              onPress={() => startHostedUi()}
+              loadedText=""
+              tone={providers.length > 0 ? 'secondary' : undefined}
+            />
+            <Text className="text-muted">{t(providers.length > 0 ? 'auth.emailHint' : 'auth.cognitoHint')}</Text>
           </>
         )}
       </View>

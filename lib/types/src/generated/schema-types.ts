@@ -618,6 +618,8 @@ export type GuardianLink = {
   email?: string;
 }
 
+export type HttpsUrl = string;
+
 export type InvitePreview = {
   code: string;
   teamId: string;
@@ -894,6 +896,10 @@ export type OauthExchangeResponse = {
 }
 
 export type OauthNext = 'teams' | 'complete-profile';
+
+export type OauthProviders = {
+  providers: ('apple' | 'google' | 'facebook')[];
+}
 
 export type OccurrenceTarget = {
   occurrenceStartsAt: string;
@@ -1331,6 +1337,8 @@ export type SignupsResponse = {
   }[];
 }
 
+export type SocialProvider = 'apple' | 'google' | 'facebook';
+
 export type SocketTicket = {
   ticket: string;
   expiresIn: number;
@@ -1687,6 +1695,8 @@ export type UserProfile = {
 export type UserSearchPolicy = {
   adultsOnly: boolean;
 }
+
+export type WebcalUrl = string;
 
 export const ACCOUNT_KINDS = ["adult", "minor"] as const;
 

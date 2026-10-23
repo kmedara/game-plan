@@ -25,6 +25,7 @@ import {
   parseInstant,
 } from '../../lib/expand-occurrences.js';
 import { enqueueFanout } from '../../lib/fanout-enqueue.js';
+import { dropEventFixtureId } from '../../lib/fixture-release.js';
 import { listTeamMemberIds } from '../../lib/team-roster.js';
 import { deleteRemindersForEvent, syncReminders } from './reminders.js';
 import { publicCarpoolOffer, syncCarpoolChats, type StoredCarpoolOffer } from './carpool-chat.js';
@@ -539,11 +540,8 @@ export const attachFixtureId = async (
  * @param eventId - The event to detach.
  */
 export const detachFixtureId = async (teamId: string, eventId: string): Promise<void> => {
-  const existing = await requireEvent(teamId, eventId);
-  if (existing.fixtureId === undefined) return;
-  const { fixtureId: _fixtureId, ...rest } = existing;
-  const now = new Date().toISOString();
-  await putItem({ ...rest, updatedAt: now });
+  await requireEvent(teamId, eventId);
+  if (!(await dropEventFixtureId(teamId, eventId))) return;
   await enqueueFanout({ type: 'schedule_changed', teamId, eventId });
 };
 

@@ -55,7 +55,12 @@
     "seedUser": "el usuario de prueba",
     "continue": "Continuar",
     "continueCognito": "Continuar con Cognito",
-    "cognitoHint": "Google, Apple, Facebook o correo — a través de Cognito Hosted UI."
+    "cognitoHint": "Google, Apple, Facebook o correo — a través de Cognito Hosted UI.",
+    "continueApple": "Continuar con Apple",
+    "continueGoogle": "Continuar con Google",
+    "continueEmail": "Continuar con correo",
+    "emailHint": "Inicia sesión o crea una cuenta con tu correo electrónico.",
+    "or": "o"
   },
   "completeProfile": {
     "title": "Completa tu perfil",
@@ -171,6 +176,16 @@
     "notificationsOn": "Las notificaciones están activadas en este navegador.",
     "notificationsBlocked": "Las notificaciones están bloqueadas. Permítelas para este sitio en la configuración del navegador y vuelve a cargar.",
     "notificationsNeedInstall": "Para recibir notificaciones en iPhone, toca Compartir, luego Agregar a pantalla de inicio, y abre GamePlan desde la pantalla de inicio."
+  },
+  "account": {
+    "delete": "Eliminar cuenta",
+    "deleteTitle": "¿Eliminar tu cuenta?",
+    "deleteRemoves": "Esto elimina tu perfil, foto, información médica y de emergencia, ajustes y calendario, y te quita de todos los equipos y chats. Un equipo gratuito sin nadie más se elimina con su calendario y su chat. No se puede deshacer.",
+    "deleteKeeps": "Los mensajes que enviaste y tus respuestas y pagos anteriores se quedan con cada equipo, sin tu perfil.",
+    "deleteConfirm": "Eliminar mi cuenta",
+    "blocked": "Antes de eliminar tu cuenta, entrega esto:",
+    "blockedOrg": "{{name}}: transfiere o cierra esta organización.",
+    "blockedTeam": "{{name}}: nombra a otra persona administradora del equipo o cancela el plan del equipo."
   },
   "memberProfile": {
     "title": "Perfil",
@@ -425,8 +440,8 @@
         "year": "$90 / año"
       },
       "organization": {
-        "month": "$49 / mes",
-        "year": "$490 / año"
+        "month": "$35 / mes",
+        "year": "$350 / año"
       }
     },
     "feature": {
@@ -685,6 +700,9 @@
       "otherOrg": "Ese equipo ya pertenece a otra organización.",
       "alreadyIn": "Ese equipo ya está en esta organización.",
       "planRequired": "Esto necesita el plan de organización."
+    },
+    "account": {
+      "deleteFailed": "No se pudo eliminar tu cuenta. Inténtalo de nuevo."
     }
   }
 }

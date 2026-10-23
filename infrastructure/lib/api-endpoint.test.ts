@@ -32,15 +32,16 @@ describe('area function urls', () => {
     template.resourceCountIs('AWS::ApiGatewayV2::Api', 1);
     template.hasResourceProperties('AWS::ApiGatewayV2::Api', { ProtocolType: 'WEBSOCKET' });
 
-    // Every area URL is IAM-only. The two Stripe webhooks are the only public
-    // URLs, each on a function that serves only that route.
+    // Every area URL is IAM-only. The two Stripe webhooks and the CSP report
+    // sink are the only public URLs, each on a function that serves only that route.
     const urls = Object.values(template.findResources('AWS::Lambda::Url'));
     const publicUrls = urls.filter((url) => url.Properties.AuthType === 'NONE');
-    expect(urls).toHaveLength(HTTP_AREAS.length + 2);
-    expect(publicUrls.map((url) => JSON.stringify(url.Properties.TargetFunctionArn)).join(' ')).toMatch(
-      /paymentswebhook[\s\S]*billingwebhook|billingwebhook[\s\S]*paymentswebhook/u,
-    );
-    expect(publicUrls).toHaveLength(2);
+    expect(urls).toHaveLength(HTTP_AREAS.length + 3);
+    const publicTargets = publicUrls.map((url) => JSON.stringify(url.Properties.TargetFunctionArn)).join(' ');
+    expect(publicTargets).toMatch(/paymentswebhook/u);
+    expect(publicTargets).toMatch(/billingwebhook/u);
+    expect(publicTargets).toMatch(/cspreport/iu);
+    expect(publicUrls).toHaveLength(3);
     for (const url of urls.filter((candidate) => !publicUrls.includes(candidate))) {
       expect(url.Properties.AuthType).toBe('AWS_IAM');
     }

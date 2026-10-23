@@ -128,4 +128,8 @@ export const createLocalIdentityProvider = (): IdentityProvider => ({
   async logout(_refreshToken?: string): Promise<void> {
     // Local JWTs are short-lived; clearing the cookie / client store is enough.
   },
+
+  async deleteUser(_userId: string): Promise<void> {
+    // The password hash lives on the profile row, which account deletion removes.
+  },
 });

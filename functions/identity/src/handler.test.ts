@@ -136,6 +136,9 @@ const memoryProvider = (): IdentityProvider => {
       throw new Error('confirmation_not_required');
     },
     async logout() {},
+    async deleteUser(userId) {
+      users.delete(userId);
+    },
   };
 };
 

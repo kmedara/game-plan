@@ -14,7 +14,7 @@ import type * as lambda from 'aws-cdk-lib/aws-lambda';
 import type * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
 import { Api } from './api';
-import { Auth, type AuthSocialContext } from './auth';
+import { Auth, type AuthSocialContext, type SocialProvider } from './auth';
 import { Database } from './database';
 import { ZoneDns } from './dns';
 import type { HttpArea } from './names';
@@ -93,6 +93,9 @@ export class GamePlanPlatform extends cdk.Stack {
   /** Cognito Hosted UI domain name, without a scheme. */
   public readonly hostedUiDomain: string;
 
+  /** Social providers configured on the user pool. */
+  public readonly socialProviders: readonly SocialProvider[];
+
   /** Product DynamoDB table. */
   public readonly table: dynamodb.Table;
 
@@ -119,6 +122,7 @@ export class GamePlanPlatform extends cdk.Stack {
     this.userPool = auth.userPool;
     this.userPoolClient = auth.userPoolClient;
     this.hostedUiDomain = auth.hostedUiDomain;
+    this.socialProviders = auth.socialProviders;
 
     this.table = new Database(this, 'Database').table;
 
@@ -141,6 +145,8 @@ export type GamePlanApiProps = cdk.StackProps & {
   userPoolClient: cognito.IUserPoolClient;
   /** Hosted UI domain from {@link GamePlanPlatform}. */
   hostedUiDomain: string;
+  /** Social providers from {@link GamePlanPlatform}, which the login screen offers. */
+  socialProviders?: readonly SocialProvider[];
   /** DynamoDB table from {@link GamePlanPlatform}. */
   table: dynamodb.Table;
   /** Media bucket from {@link GamePlanPlatform}. */
@@ -184,6 +190,7 @@ export class GamePlanApi extends cdk.Stack {
       userPool: props.userPool,
       userPoolClient: props.userPoolClient,
       hostedUiDomain: props.hostedUiDomain,
+      socialProviders: props.socialProviders,
       authCallbackUrl: props.authCallbackUrl,
       table: props.table,
       mediaBucket: props.mediaBucket,

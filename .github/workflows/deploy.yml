@@ -78,11 +78,21 @@ jobs:
           EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ env.GOOGLE_MAPS_BROWSER_API_KEY }}
           EXPO_PUBLIC_VAPID_PUBLIC_KEY: ${{ env.VAPID_PUBLIC_KEY }}
           EXPO_PUBLIC_AUTH_DISABLED: 'false'
+          # App-link files for the store apps. Leave unset until the apps ship for this environment.
+          # The same team id Sign in with Apple uses, when Parameter Store already has it.
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID || env.APPLE_TEAM_ID }}
+          ANDROID_CERT_SHA256: ${{ vars.ANDROID_CERT_SHA256 }}
 
       - name: Publish website
         run: |
           set -o pipefail
           {
             aws s3 sync client/expo/dist "s3://${SITE_BUCKET_NAME}" --delete
+            # iOS reads this file as JSON, and it has no extension to infer that from.
+            if [ -f client/expo/dist/.well-known/apple-app-site-association ]; then
+              aws s3 cp client/expo/dist/.well-known/apple-app-site-association \
+                "s3://${SITE_BUCKET_NAME}/.well-known/apple-app-site-association" \
+                --content-type application/json
+            fi
             aws cloudfront create-invalidation --distribution-id "${SITE_DISTRIBUTION_ID}" --paths "/*"
           } 2>&1 | awk -f .github/scripts/redact-aws-log.awk

@@ -100,6 +100,7 @@ const api = new GamePlanApi(app, 'GamePlanApi', {
   userPool: platform.userPool,
   userPoolClient: platform.userPoolClient,
   hostedUiDomain: platform.hostedUiDomain,
+  socialProviders: platform.socialProviders,
   table: platform.table,
   mediaBucket: platform.mediaBucket,
   ssmPrefix,

@@ -1,0 +1,36 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "base": {
+      "env": {
+        "EXPO_PUBLIC_EAS_PROJECT_ID": "fa70eb6b-e8c0-44c7-b9c8-a6c731d14f11",
+        "EXPO_PUBLIC_AUTH_DISABLED": "false"
+      }
+    },
+    "preview": {
+      "extends": "base",
+      "environment": "preview",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "extends": "base",
+      "environment": "production",
+      "distribution": "store",
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
+  }
+}

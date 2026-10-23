@@ -107,7 +107,7 @@ export const createSiteApiEdge = (scope: Construct, stageName: string): SiteApiE
       body: '{"error":"not_found"}',
     };
   }
-  if (uri.lastIndexOf('.') < uri.lastIndexOf('/')) {
+  if (uri.indexOf('/.well-known/') !== 0 && uri.lastIndexOf('.') < uri.lastIndexOf('/')) {
     request.uri = '/index.html';
   }
   return request;

@@ -1,8 +1,13 @@
 /**
  * Starts Expo or exports the website, mapping the deploy env vars onto EXPO_PUBLIC_*.
+ * An export also writes the app-link files when `APPLE_TEAM_ID` or `ANDROID_CERT_SHA256` is set.
  */
 
 import { spawn } from 'node:child_process';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import appLinks from './app-links.js';
+
+const { appleAppSiteAssociation, assetLinks, fingerprintList } = appLinks;
 
 const apiBaseUrl = (
   process.env.EXPO_PUBLIC_API_BASE_URL ??
@@ -54,5 +59,35 @@ const args =
     ? ['expo', 'export', '--platform', 'web', ...extra]
     : ['expo', 'start', ...extra];
 
+/**
+ * Writes the files that let the store apps open invite links on this host.
+ *
+ * Each file is written only when its signing id is set, so a website-only
+ * deploy does not claim links for an app it has not shipped.
+ */
+const writeAppLinkFiles = () => {
+  const appConfig = JSON.parse(readFileSync(new URL('../app.json', import.meta.url), 'utf8')).expo;
+  const dir = new URL('../dist/.well-known/', import.meta.url);
+  const teamId = process.env.APPLE_TEAM_ID?.trim();
+  const fingerprints = fingerprintList(process.env.ANDROID_CERT_SHA256);
+  if ((teamId === undefined || teamId === '') && fingerprints.length === 0) return;
+  mkdirSync(dir, { recursive: true });
+  if (teamId !== undefined && teamId !== '') {
+    writeFileSync(
+      new URL('apple-app-site-association', dir),
+      JSON.stringify(appleAppSiteAssociation(teamId, appConfig.ios.bundleIdentifier)),
+    );
+  }
+  if (fingerprints.length > 0) {
+    writeFileSync(
+      new URL('assetlinks.json', dir),
+      JSON.stringify(assetLinks(appConfig.android.package, fingerprints)),
+    );
+  }
+};
+
 const child = spawn('npx', args, { stdio: 'inherit', shell: true, env: process.env });
-child.on('exit', (code) => process.exit(code ?? 1));
+child.on('exit', (code) => {
+  if (code === 0 && mode === 'export') writeAppLinkFiles();
+  process.exit(code ?? 1);
+});

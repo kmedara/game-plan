@@ -10,11 +10,17 @@ import {
   handleCreateGuardianInvite,
   handleRemoveGuardianLink,
 } from './guardians.js';
+import { handleDeleteAccount } from './delete-account.js';
 import { handleLogin } from './login.js';
 import { handleLogout } from './logout.js';
 import { handleMe } from './me.js';
 import { handleListMedical, handlePutMedical } from './medical.js';
-import { handleOAuthCallback, handleOAuthLogin, handleOAuthLogout } from './oauth.js';
+import {
+  handleOAuthCallback,
+  handleOAuthLogin,
+  handleOAuthLogout,
+  handleOAuthProviders,
+} from './oauth.js';
 import { handleOAuthExchange } from './oauth-exchange.js';
 import { handleGetPreferences, handleUpdatePreferences } from './preferences.js';
 import { handleRefresh } from './refresh.js';
@@ -27,6 +33,7 @@ export {
   handleCompleteProfile,
   handleConfirmRegistration,
   handleCreateGuardianInvite,
+  handleDeleteAccount,
   handleGetPreferences,
   handleLogin,
   handleListMedical,
@@ -36,6 +43,7 @@ export {
   handleOAuthExchange,
   handleOAuthLogin,
   handleOAuthLogout,
+  handleOAuthProviders,
   handlePutMedical,
   handleRefresh,
   handleRegister,
@@ -55,7 +63,9 @@ export const httpRoutes: readonly HttpRoute[] = [
   handleRefresh,
   handleLogout,
   handleMe,
+  handleDeleteAccount,
   handleSocketTicket,
+  handleOAuthProviders,
   handleOAuthLogin,
   handleOAuthCallback,
   handleOAuthLogout,

@@ -23,6 +23,27 @@ export const invitePageUrl = (origin: string, code: string): string =>
   `${origin.replace(/\/$/u, '')}/invite/${encodeURIComponent(code)}`;
 
 /**
+ * Website origin an invite link should point at.
+ *
+ * The website uses its own origin. The phone apps have none, so they use the
+ * API host: deploys serve the API at `/api` on the website host. A link to that
+ * host opens the store app when it is installed, and the website when it is not.
+ *
+ * @param windowOrigin - `window.location.origin`, or an empty string off the web.
+ * @param apiBaseUrl - The HTTP API base, such as `https://app.example.com/api`.
+ * @returns The origin, or `undefined` when neither gives a website.
+ */
+export const inviteSiteOrigin = (windowOrigin: string, apiBaseUrl: string): string | undefined => {
+  if (windowOrigin.length > 0) return windowOrigin;
+  try {
+    const url = new URL(apiBaseUrl);
+    return url.pathname.replace(/\/+$/u, '') === '/api' ? url.origin : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
  * Plain-text body for an email or text invite.
  *
  * @param parts - The translated intro, the code label, the code, and an optional link.

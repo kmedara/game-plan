@@ -26,6 +26,7 @@ import {
   CHAT_PREFIX,
   DIRECTORY_KEY,
   FEED_PREFIX,
+  FIXTURE_PREFIX,
   HANDOFF_PREFIX,
   INVITE_PREFIX,
   ORG_PREFIX,
@@ -50,6 +51,8 @@ export type ApiProps = {
   hostedUiDomain: string;
   /** Absolute OAuth callback URL for the identity BFF. */
   authCallbackUrl: string;
+  /** Social providers on the user pool, which identity lists for the login screen. */
+  socialProviders?: readonly string[];
   /** Single-table DynamoDB resource for user, team, schedule, and chat data. */
   table: dynamodb.Table;
   /** Private bucket that stores message file bytes. */
@@ -280,6 +283,7 @@ export class Api extends Construct {
     const oauthEnv = {
       COGNITO_HOSTED_UI_DOMAIN: props.hostedUiDomain,
       AUTH_CALLBACK_URL: props.authCallbackUrl,
+      AUTH_SOCIAL_PROVIDERS: (props.socialProviders ?? []).join(','),
     };
     // Functions get parameter names only. The secret values are read at run time.
     const mapsKeyParameter = `${props.ssmPrefix}/google-maps-api-key`;
@@ -322,7 +326,14 @@ export class Api extends Construct {
     const environmentFor = (area: Area): Record<string, string> => {
       switch (area) {
         case 'identity':
-          return { ...shared, ...tableEnv, ...tokenEnv, ...oauthEnv };
+          return {
+            ...shared,
+            ...tableEnv,
+            ...tokenEnv,
+            ...oauthEnv,
+            // Account deletion removes the profile photo.
+            MEDIA_BUCKET: props.mediaBucket.bucketName,
+          };
         case 'teams':
           return { ...shared, ...tableEnv, ...tokenEnv, ...queueEnv };
         case 'socket':
@@ -508,8 +519,22 @@ export class Api extends Construct {
     });
 
     grantPartitions(props.table, functions.identity, {
-      read: [USER_PREFIX, TICKET_PREFIX, HANDOFF_PREFIX],
-      write: [USER_PREFIX, TICKET_PREFIX, HANDOFF_PREFIX],
+      // Account deletion reads the teams, chats, and organizations a person is in,
+      // rewrites private chat names, and removes their rows from those partitions.
+      // A team left with nobody on it is deleted too: its invite codes, directory
+      // entry, Stripe lookups, and shared games, where the other club's game is
+      // rewritten (TEAM# write) to drop the link.
+      read: [USER_PREFIX, TICKET_PREFIX, HANDOFF_PREFIX, TEAM_PREFIX, CHAT_PREFIX, ORG_PREFIX, FIXTURE_PREFIX],
+      write: [USER_PREFIX, TICKET_PREFIX, HANDOFF_PREFIX, CHAT_PREFIX, TEAM_PREFIX],
+      remove: [
+        ORG_PREFIX,
+        FEED_PREFIX,
+        FIXTURE_PREFIX,
+        INVITE_PREFIX,
+        DIRECTORY_KEY,
+        STRIPE_ACCOUNT_PREFIX,
+        STRIPE_CUSTOMER_PREFIX,
+      ],
       emailIndex: true,
     });
     grantPartitions(props.table, functions.teams, {
@@ -520,9 +545,9 @@ export class Api extends Construct {
     });
     grantPartitions(props.table, functions.schedule, {
       // Carpool claims write the driver-and-riders chat under CHAT# and USER#.
-      // FEED# maps a calendar feed token to its owner.
-      read: [TEAM_PREFIX, REMINDERS_KEY, CHAT_PREFIX, USER_PREFIX, FEED_PREFIX, ORG_PREFIX],
-      write: [TEAM_PREFIX, REMINDERS_KEY, CHAT_PREFIX, USER_PREFIX, FEED_PREFIX],
+      // FEED# maps a calendar feed token to its owner. FIXTURE# holds games shared between clubs.
+      read: [TEAM_PREFIX, REMINDERS_KEY, CHAT_PREFIX, USER_PREFIX, FEED_PREFIX, ORG_PREFIX, FIXTURE_PREFIX],
+      write: [TEAM_PREFIX, REMINDERS_KEY, CHAT_PREFIX, USER_PREFIX, FEED_PREFIX, FIXTURE_PREFIX],
     });
     grantPartitions(props.table, functions.chat, {
       read: [CHAT_PREFIX, USER_PREFIX, TEAM_PREFIX, ORG_PREFIX],
@@ -576,13 +601,16 @@ export class Api extends Construct {
       // A gone socket is deleted. LeadingKeys cannot limit DeleteItem to CONN#.
       remove: [USER_PREFIX],
     });
-    // Replace an unconfirmed signup so a later register can prove the same inbox.
-    // Confirmed users are not deleted. Sign-up confirmation uses the public client API.
+    // Replace an unconfirmed signup so a later register can prove the same inbox,
+    // and delete an account its owner asked to delete. `ListUsers` finds a
+    // social account's username from its sub. Sign-up confirmation uses the public client API.
     props.userPool.grant(
       functions.identity,
       'cognito-idp:AdminGetUser',
       'cognito-idp:AdminDeleteUser',
+      'cognito-idp:ListUsers',
     );
+    props.mediaBucket.grantDelete(functions.identity, 'uploads/*');
     props.mediaBucket.grantRead(functions.media);
     props.mediaBucket.grantPut(functions.media);
 

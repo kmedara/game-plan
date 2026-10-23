@@ -36,6 +36,7 @@ const handlers = { identity, teams, schedule, chat, media, places, payments, bil
 const PROTECTED: Record<string, RouteCase[]> = {
   identity: [
     { route: 'handleMe', method: 'GET', path: '/identity/me' },
+    { route: 'handleDeleteAccount', method: 'DELETE', path: '/identity/me' },
     { route: 'handleSocketTicket', method: 'POST', path: '/identity/socket-ticket' },
     { route: 'handleCompleteProfile', method: 'POST', path: '/identity/profile/complete' },
     { route: 'handleCreateGuardianInvite', method: 'POST', path: '/identity/guardians' },
@@ -164,6 +165,7 @@ const PUBLIC: Record<string, string[]> = {
     'handleLogin',
     'handleRefresh',
     'handleLogout',
+    'handleOAuthProviders',
     'handleOAuthLogin',
     'handleOAuthCallback',
     'handleOAuthLogout',

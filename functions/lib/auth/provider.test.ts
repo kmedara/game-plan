@@ -62,6 +62,7 @@ describe('getIdentityProvider', () => {
         throw new Error('stub-refresh');
       },
       async logout() {},
+      async deleteUser() {},
     };
     setIdentityProvider(stub);
     expect(getIdentityProvider()).toBe(stub);

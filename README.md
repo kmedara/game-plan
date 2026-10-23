@@ -69,7 +69,7 @@ Maps setup is in [docs/maps/README.md](docs/maps/README.md). Interactive route d
 
 ## Repo
 
-- `client/expo` — website, iOS, and Android. `npm run client:start` for dev, `npm run client:build` for the static export.
+- `client/expo` — website, iOS, and Android. `npm run client:start` for dev, `npm run client:build` for the static export. Store builds and review are in [docs/store-release.md](docs/store-release.md).
 - `lib/schemas` — Zod contracts. `npm run generate:types` writes `lib/types` (also part of `npm run typecheck`). Commit the generated file.
 - `functions/<area>` — one Lambda per area. Areas share the table and do not call each other.
 

@@ -219,7 +219,7 @@ The organization plan is a Stripe subscription with two items: the base price (`
 - **Why:** the team pointer is its own row because the teams area rewrites `META` whole. Joining gives the organization's admins `team_admin`, so the team's billing manager must agree. Copying the plan keeps a team's entitlement check one read. The guard fallback means no route had to learn about organizations.
 In the app, Profile links adults to **Organizations** (`app/(main)/orgs`): the list and create form, and one page per organization with the plan, teams (invited by name through the team directory), admins, and announcements. The team screen shows the team's organization and any invitation, with Join and Decline for its billing manager (`client/expo/src/team-org.tsx`). Organization admins reach member teams from the organization page, since those teams are not in their own team list.
 
-- **Cost:** Stripe requires every item on a subscription to renew on the same interval, so a yearly organization pays extra teams yearly ($60 each) rather than monthly as first planned. A plan change writes every member team's row. Every area that uses `requireMembership` can read `ORG#`. Announcements go out one team at a time from one request, which is fine for dozens of teams and not for thousands.
+- **Cost:** Stripe requires every item on a subscription to renew on the same interval, so a yearly organization pays extra teams yearly ($50 each, the same two months free as the base price) rather than monthly as first planned. A plan change writes every member team's row. Every area that uses `requireMembership` can read `ORG#`. Announcements go out one team at a time from one request, which is fine for dozens of teams and not for thousands.
 
 ### Team dues
 
@@ -480,6 +480,7 @@ A function receives the parameter name and reads the value through `readSecret` 
 | Stripe webhook signing secret | payments, payments-webhook | `<prefix>/stripe-webhook-secret` |
 | Stripe Billing webhook signing secret | billing-webhook | `<prefix>/stripe-billing-webhook-secret` |
 
+- The two webhook signing secrets are Strings written by Terraform (`infrastructure/terraform`), which also creates the Stripe endpoints, products, and prices. The Stripe secret key is still set by hand.
 - Each role has `ssm:GetParameter` on its own parameter. The origin secret is a random String set by hand. CloudFront needs the literal value, so it cannot be a SecureString. The site stack resolves it at deploy time for the header.
 - Values stay in memory for five minutes. A rotation is picked up without a deploy. A failed read is not cached.
 - A missing parameter means not configured. Places returns `503`, fan-out skips web push, and the authorizer rejects every connect.

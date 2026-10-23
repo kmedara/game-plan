@@ -15,7 +15,8 @@ export const linkSchema = (schemes: readonly string[]) =>
   z
     .string()
     .url()
-    .refine((value) => schemes.includes(new URL(value).protocol), {
+    // Zod still runs a refinement after `.url()` fails, so a malformed value must not throw here.
+    .refine((value) => URL.canParse(value) && schemes.includes(new URL(value).protocol), {
       message: `Must start with ${schemes.map((scheme) => `${scheme}//`).join(' or ')}`,
     });
 

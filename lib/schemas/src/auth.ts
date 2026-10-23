@@ -122,6 +122,14 @@ export const oauthExchangeBodySchema = z
   })
   .strict();
 
+/** A social sign-in the login screen can start directly. */
+export const socialProviderSchema = z.enum(['apple', 'google', 'facebook']);
+
+/** Social sign-ins configured on this deployment, in the order the login screen shows them. */
+export const oauthProvidersSchema = z.object({
+  providers: z.array(socialProviderSchema),
+});
+
 /** Where the app should go after a native Hosted UI sign-in. */
 export const oauthNextSchema = z.enum(['teams', 'complete-profile']);
 
@@ -208,6 +216,12 @@ export type SocketTicket = z.infer<typeof socketTicketSchema>;
 
 /** Inferred type for {@link oauthExchangeBodySchema}. */
 export type OAuthExchangeBody = z.infer<typeof oauthExchangeBodySchema>;
+
+/** Inferred type for {@link socialProviderSchema}. */
+export type SocialProvider = z.infer<typeof socialProviderSchema>;
+
+/** Inferred type for {@link oauthProvidersSchema}. */
+export type OAuthProviders = z.infer<typeof oauthProvidersSchema>;
 
 /** Inferred type for {@link oauthNextSchema}. */
 export type OAuthNext = z.infer<typeof oauthNextSchema>;

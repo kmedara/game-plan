@@ -27,10 +27,15 @@ describe('site stack', () => {
     expect(config.CustomErrorResponses).toBeUndefined();
     expect(config.CacheBehaviors?.map((behavior) => behavior.PathPattern)).toEqual([
       ...HTTP_AREAS.map((area) => `/api/${area}*`),
+      '/api/csp-report',
       '/api/socket',
     ]);
+    // The CSP report origin is unsigned on purpose: browsers cannot hash a report body.
     const apiOrigins = config.Origins.filter(
-      (origin) => origin.S3OriginConfig === undefined && origin.OriginCustomHeaders === undefined,
+      (origin) =>
+        origin.S3OriginConfig === undefined &&
+        origin.OriginCustomHeaders === undefined &&
+        !JSON.stringify(origin.DomainName).includes('cspReport'),
     );
     expect(apiOrigins).toHaveLength(HTTP_AREAS.length);
     for (const origin of apiOrigins) {
@@ -44,6 +49,24 @@ describe('site stack', () => {
     expect(code).toContain('uri.substring(4)');
     expect(code).toContain("request.headers['x-viewer-authorization'] = { value: authorization.value }");
     expect(code).toContain("delete request.headers['x-viewer-authorization']");
+  });
+
+  it('serves index.html for app routes but leaves files and app-link files alone', () => {
+    const { site } = siteStackForTest();
+    const spa = Object.values(Template.fromStack(site).findResources('AWS::CloudFront::Function')).find(
+      (resource) => String(resource.Properties.Name ?? '').includes('SpaRewrite') ||
+        String(resource.Properties.FunctionConfig?.Comment ?? '').startsWith('Serve index.html'),
+    );
+    const handler = new Function(`${String(spa?.Properties.FunctionCode)}; return handler;`)() as (event: {
+      request: { uri: string };
+    }) => { uri?: string };
+    const rewrite = (uri: string): string | undefined => handler({ request: { uri } }).uri;
+
+    expect(rewrite('/invite/abc')).toBe('/index.html');
+    expect(rewrite('/schedule')).toBe('/index.html');
+    expect(rewrite('/manifest.json')).toBe('/manifest.json');
+    expect(rewrite('/.well-known/apple-app-site-association')).toBe('/.well-known/apple-app-site-association');
+    expect(rewrite('/.well-known/assetlinks.json')).toBe('/.well-known/assetlinks.json');
   });
 
   it('forwards socket connects to the WebSocket stage with the origin secret', () => {

@@ -12,6 +12,7 @@ import {
   InitiateAuthCommand,
   InvalidParameterException,
   LimitExceededException,
+  ListUsersCommand,
   NotAuthorizedException,
   ResendConfirmationCodeCommand,
   RevokeTokenCommand,
@@ -298,6 +299,22 @@ export const createCognitoIdentityProvider = (): IdentityProvider => {
     } catch (error) {
       if (error instanceof NotAuthorizedException) throw new Error('invalid_token');
       throw error;
+    }
+  },
+
+  async deleteUser(userId: string): Promise<void> {
+    const { userPoolId } = cognitoConfig();
+    const client = getCognitoClient();
+    // A Google or Apple account's username is `Google_<id>`, not the sub, so look it up.
+    const found = await client.send(
+      new ListUsersCommand({ UserPoolId: userPoolId, Filter: `sub = "${userId.replace(/"/gu, '')}"`, Limit: 1 }),
+    );
+    const username = found.Users?.[0]?.Username;
+    if (username === undefined) return;
+    try {
+      await client.send(new AdminDeleteUserCommand({ UserPoolId: userPoolId, Username: username }));
+    } catch (error) {
+      if (!(error instanceof UserNotFoundException)) throw error;
     }
   },
 

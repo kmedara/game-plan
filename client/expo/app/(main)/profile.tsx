@@ -1,6 +1,6 @@
 /**
  * Profile photo, phone, notifications, reminder times, calendar sync, emergency info, dues link,
- * positions, theme note, and sign-out.
+ * positions, theme note, account deletion, and sign-out.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -12,6 +12,7 @@ import { Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { positionsWithinLimit } from '@gameplan/rules';
 import { config } from '@/src/config';
+import { DeleteAccountSection } from '@/src/delete-account';
 import { errorMessageKey, queryError } from '@/src/errors';
 import { PROFILE_PHOTO_MAX_DIMENSION, pickAndUploadImage, useDownloadUrl } from '@/src/media';
 import { ReminderSettings } from '@/src/reminder-settings';
@@ -130,6 +131,13 @@ export default function ProfileScreen() {
     if (Platform.OS !== 'web') router.replace('/login');
   };
 
+  // The server already ended the session, so there is no hosted sign-out to visit.
+  const leaveDeletedAccount = async (): Promise<void> => {
+    live.disconnect();
+    await clearPersistedCache(queryClient);
+    router.replace('/login');
+  };
+
   return (
     <View className="flex-1">
     <RefreshableScroll className="flex-1 px-4 pt-4">
@@ -211,6 +219,7 @@ export default function ProfileScreen() {
           </View>
         );
       })}
+      <DeleteAccountSection onDeleted={leaveDeletedAccount} />
     </RefreshableScroll>
     <View className="px-4 pb-2">
       <Button label={t('profile.signOut')} onPress={() => void logout()} tone="danger" />

@@ -20,6 +20,25 @@ export type AuthSocialContext = {
   applePrivateKey?: string;
 };
 
+/** A social sign-in the app can start directly, skipping the Managed login page. */
+export type SocialProvider = 'apple' | 'google' | 'facebook';
+
+/**
+ * Social providers whose credentials are complete.
+ *
+ * @param social - Credentials from CDK context or the environment.
+ * @returns The providers the user pool will have, in the order the app shows them.
+ */
+export const socialProvidersFor = (social: AuthSocialContext): SocialProvider[] => {
+  const providers: SocialProvider[] = [];
+  if (social.appleClientId && social.appleTeamId && social.appleKeyId && social.applePrivateKey) {
+    providers.push('apple');
+  }
+  if (social.googleClientId && social.googleClientSecret) providers.push('google');
+  if (social.facebookAppId && social.facebookAppSecret) providers.push('facebook');
+  return providers;
+};
+
 /** Props for {@link Auth}. */
 export type AuthProps = {
   /** OAuth callback URLs registered on the app client (API callback routes). */
@@ -55,6 +74,9 @@ export class Auth extends Construct {
 
   /** Cognito Managed login hostname (no scheme), including the `auth.<region>.amazoncognito.com` suffix. */
   public readonly hostedUiDomain: string;
+
+  /** Social providers configured on the pool. */
+  public readonly socialProviders: readonly SocialProvider[];
 
   /**
    * Creates the user pool, optional social IdPs, Managed login domain, and outputs.
@@ -92,6 +114,7 @@ export class Auth extends Construct {
     ];
     const idpConstructs: Construct[] = [];
     const social = props.social ?? {};
+    this.socialProviders = socialProvidersFor(social);
 
     if (social.googleClientId && social.googleClientSecret) {
       idpConstructs.push(

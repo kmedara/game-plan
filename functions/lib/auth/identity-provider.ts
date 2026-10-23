@@ -104,6 +104,15 @@ export type IdentityProvider = {
    * @param refreshToken - The refresh token to revoke, when present.
    */
   logout: (refreshToken?: string) => Promise<void>;
+
+  /**
+   * Removes the sign-in account, which also ends every session it issued.
+   *
+   * An account that is already gone counts as removed, so a retried deletion finishes.
+   *
+   * @param userId - The user's `sub`.
+   */
+  deleteUser: (userId: string) => Promise<void>;
 };
 
 /** DynamoDB shape of the user profile row under `USER#id` / `PROFILE`. */

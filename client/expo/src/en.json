@@ -55,7 +55,12 @@
     "seedUser": "the seed user",
     "continue": "Continue",
     "continueCognito": "Continue with Cognito",
-    "cognitoHint": "Google, Apple, Facebook, or email — via Cognito Hosted UI."
+    "cognitoHint": "Google, Apple, Facebook, or email — via Cognito Hosted UI.",
+    "continueApple": "Continue with Apple",
+    "continueGoogle": "Continue with Google",
+    "continueEmail": "Continue with email",
+    "emailHint": "Sign in or create an account with your email address.",
+    "or": "or"
   },
   "completeProfile": {
     "title": "Finish your profile",
@@ -171,6 +176,16 @@
     "notificationsOn": "Notifications are on for this browser.",
     "notificationsBlocked": "Notifications are blocked. Allow them for this site in your browser settings, then reload.",
     "notificationsNeedInstall": "To get notifications on iPhone, tap Share, then Add to Home Screen, and open GamePlan from the Home Screen."
+  },
+  "account": {
+    "delete": "Delete account",
+    "deleteTitle": "Delete your account?",
+    "deleteRemoves": "This removes your profile, photo, emergency and medical info, settings, and calendar feed, and takes you off every team and chat. A free team with nobody else on it is deleted with its schedule and chat. This cannot be undone.",
+    "deleteKeeps": "Messages you sent and your past RSVPs and payments stay with each team, without your profile.",
+    "deleteConfirm": "Delete my account",
+    "blocked": "Hand these over before you delete your account:",
+    "blockedOrg": "{{name}}: transfer or close this organization.",
+    "blockedTeam": "{{name}}: make someone else a team admin, or cancel the team plan."
   },
   "memberProfile": {
     "title": "Profile",
@@ -423,8 +438,8 @@
         "year": "$90 / year"
       },
       "organization": {
-        "month": "$49 / month",
-        "year": "$490 / year"
+        "month": "$35 / month",
+        "year": "$350 / year"
       }
     },
     "feature": {
@@ -683,6 +698,9 @@
       "otherOrg": "That team already belongs to another organization.",
       "alreadyIn": "That team is already in this organization.",
       "planRequired": "This needs the organization plan."
+    },
+    "account": {
+      "deleteFailed": "Could not delete your account. Try again."
     }
   }
 }

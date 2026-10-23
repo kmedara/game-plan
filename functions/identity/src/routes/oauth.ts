@@ -7,6 +7,7 @@ import {
   buildAuthorizeUrl,
   buildLogoutUrl,
   clearRefreshSetCookie,
+  configuredSocialProviders,
   exchangeAuthorizationCode,
   generateOAuthState,
   generatePkcePair,
@@ -14,9 +15,10 @@ import {
   putProfile,
   readOAuthIdClaims,
   refreshSetCookie,
+  requestedSocialProvider,
 } from "../../../lib/auth/index.js";
-import { readCookie, redirect } from "../../../lib/http.js";
-import type { UserProfile } from "@gameplan/types";
+import { json, readCookie, redirect } from "../../../lib/http.js";
+import type { OauthProviders, UserProfile } from "@gameplan/types";
 import { errorMessage, functionArea, logError } from "../../../lib/log.js";
 import { issueOAuthHandoff } from "../../../lib/oauth-handoff.js";
 import { route } from "../../../lib/pipeline.js";
@@ -51,7 +53,21 @@ const resolveReturnTo = (raw: string | undefined): string => {
 };
 
 /**
+ * Handles `GET /identity/oauth/providers`.
+ *
+ * Public: the login screen asks before anyone is signed in.
+ *
+ * @returns The social sign-ins this deployment offers.
+ */
+export const handleOAuthProviders = route("GET", "/identity/oauth/providers", async () =>
+  json(200, { providers: configuredSocialProviders() } satisfies OauthProviders),
+);
+
+/**
  * Handles `GET /identity/oauth/login`.
+ *
+ * `provider` sends the browser straight to Apple or Google instead of the
+ * Managed login page. An unknown or unconfigured provider falls back to that page.
  *
  * @param event - The HTTP API event.
  * @returns A redirect to Cognito Hosted UI.
@@ -59,9 +75,10 @@ const resolveReturnTo = (raw: string | undefined): string => {
 export const handleOAuthLogin = route("GET", "/identity/oauth/login", async ({ event }) => {
   const native = event.queryStringParameters?.delivery === "native";
   const returnTo = resolveReturnTo(event.queryStringParameters?.returnTo);
+  const provider = requestedSocialProvider(event.queryStringParameters?.provider);
   const state = generateOAuthState();
   const { verifier, challenge } = generatePkcePair();
-  const location = buildAuthorizeUrl({ state, challenge });
+  const location = buildAuthorizeUrl({ state, challenge, provider });
   return redirect(location, [
     ...oauthSetCookie(OAUTH_STATE_COOKIE, state),
     ...oauthSetCookie(OAUTH_VERIFIER_COOKIE, verifier),

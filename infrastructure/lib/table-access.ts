@@ -45,6 +45,9 @@ export const FEED_PREFIX = 'FEED#*';
 /** `STRIPE_CUSTOMER#<customerId>` which team a Stripe Billing customer pays for. */
 export const STRIPE_CUSTOMER_PREFIX = 'STRIPE_CUSTOMER#*';
 
+/** `FIXTURE#<fixtureId>` one game shared between two clubs. */
+export const FIXTURE_PREFIX = 'FIXTURE#*';
+
 /** `PAYMENT_REMINDERS` dated rows for dues reminders. */
 export const PAYMENT_REMINDERS_KEY = 'PAYMENT_REMINDERS';
 

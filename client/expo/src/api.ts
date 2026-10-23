@@ -14,6 +14,7 @@ import type {
   AcceptedInvite,
   ApprovedJoinRequest,
   BillingInterval,
+  OauthProviders,
   OrgDetail,
   OrgList,
   OrgSummary,
@@ -106,6 +107,21 @@ import {
 } from './refresh-store';
 
 type Listener = () => void;
+
+/**
+ * Thrown when the account cannot be deleted yet.
+ *
+ * The person owns an organization, or is the only admin of a team that still
+ * has members or pays for its own plan, and has to hand it over first.
+ */
+export class AccountDeletionBlocked extends Error {
+  constructor(
+    readonly ownedOrgs: readonly string[],
+    readonly soleAdminTeams: readonly string[],
+  ) {
+    super('account_deletion_blocked');
+  }
+}
 
 /** Fetch for API calls. Writes carry the body hash the function URLs require. */
 const apiFetch = withContentHash((input, init) => fetch(input, init));
@@ -305,6 +321,51 @@ export class ApiClient {
     await this.session.adopt(tokens);
     this.emit();
     return tokens;
+  }
+
+  /**
+   * Social sign-ins this deployment offers. Any failure shows none, which
+   * leaves the email sign-in, so the login screen still works offline.
+   *
+   * @returns Providers in the order the login screen shows them.
+   */
+  async oauthProviders(): Promise<OauthProviders['providers']> {
+    try {
+      const response = await apiFetch(`${config.apiBaseUrl}/identity/oauth/providers`, { credentials: 'omit' });
+      if (!response.ok) return [];
+      return ((await response.json()) as OauthProviders).providers;
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Deletes the signed-in account, then forgets the session on this device.
+   *
+   * @throws {@link AccountDeletionBlocked} when something has to be handed over first.
+   */
+  async deleteAccount(): Promise<void> {
+    const response = await this.fetchAuthorized('DELETE', '/identity/me');
+    if (response.status === 409) {
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        ownedOrgs?: string[];
+        soleAdminTeams?: string[];
+      };
+      if (body.error === 'account_deletion_blocked') {
+        throw new AccountDeletionBlocked(body.ownedOrgs ?? [], body.soleAdminTeams ?? []);
+      }
+    }
+    if (!response.ok) throw new Error(await errorCode(response));
+    this.clearTeamContext();
+    this.setSessionHint(false);
+    try {
+      // The account is gone, so the revoke may fail; the local session still has to go.
+      await this.session.logout();
+    } catch {
+      // Already signed out on the server.
+    }
+    this.emit();
   }
 
   async logout(): Promise<void> {

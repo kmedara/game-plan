@@ -13,11 +13,13 @@ import { createInviteMutation, deleteInviteMutation, invitesQuery } from '@/src/
 import {
   inviteMessageBody,
   invitePageUrl,
+  inviteSiteOrigin,
   isEmailAddress,
   mailtoInviteUrl,
   smsBodySeparator,
   smsInviteUrl,
 } from '@/src/invite-share';
+import { config } from '@/src/config';
 import { errorMessageKey } from '@/src/errors';
 import { openLink } from '@/src/open-link';
 import { toE164Phone } from '@/src/phone';
@@ -53,9 +55,10 @@ export const TeamInvites = ({
   const ensureInvite = async (role: TeamRole): Promise<TeamInvite> => createInvite.mutateAsync(role);
 
   const messageFor = (invite: TeamInvite): { subject: string; body: string } => {
-    const origin =
+    const windowOrigin =
       typeof window === 'undefined' || window.location == null ? '' : window.location.origin;
-    const url = origin.length > 0 ? invitePageUrl(origin, invite.code) : undefined;
+    const origin = inviteSiteOrigin(windowOrigin, config.apiBaseUrl);
+    const url = origin === undefined ? undefined : invitePageUrl(origin, invite.code);
     const role = t(roleLabel(invite.role));
     return {
       subject: t('teamAdmin.inviteSubject', { team: teamName }),
