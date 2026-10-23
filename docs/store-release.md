@@ -16,15 +16,15 @@ The custom-scheme links `gameplan://auth`, `gameplan://billing`, and `gameplan:/
 ## One-time setup
 
 1. **Accounts.** An Apple Developer Program membership and a Google Play Console account. Create the app in App Store Connect (bundle id `com.gameplan.app`) and in Play Console (package `com.gameplan.app`).
-2. **EAS environment variables.** Terraform sets these for the `preview` (staging) and `production` environments of project `gameplan` (see [`infrastructure/terraform`](../infrastructure/terraform/README.md)); do not edit them on expo.dev:
+2. **EAS environment variables.** Terraform sets these for the `preview` (staging) and `production` environments of project `gameplan` (see [`infrastructure/terraform`](../infrastructure/terraform/README.md)); do not edit them on expo.dev. Change the Parameter Store source instead; the next deploy copies it:
 
    | Variable | Value | Visibility |
    | --- | --- | --- |
    | `EXPO_PUBLIC_API_BASE_URL` | `https://<environment>.<domain>/api` | Plain text |
    | `EXPO_PUBLIC_WS_BASE_URL` | `wss://<environment>.<domain>/api/socket` | Plain text |
-   | `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` | Browser Maps key (used by the web map only) | Plain text |
-   | `GOOGLE_MAPS_ANDROID_API_KEY` | Maps SDK for Android key, restricted to the package and signing certificate | Sensitive |
-   | `EXPO_PUBLIC_IOS_WEB_UPGRADE` | `false` for the first submission (see [Payments](#payments-and-review)) | Plain text |
+   | `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` | Browser Maps key (used by the web map only), from `<prefix>/google-maps-browser-api-key` | Plain text |
+   | `GOOGLE_MAPS_ANDROID_API_KEY` | Maps SDK for Android key, restricted to the package and signing certificate, from `<prefix>/google-maps-android-api-key` | Sensitive |
+   | `EXPO_PUBLIC_IOS_WEB_UPGRADE` | `<prefix>/ios-web-upgrade`; unset means `false`, which the first submission needs (see [Payments](#payments-and-review)) | Plain text |
 
    The link host comes from `EXPO_PUBLIC_API_BASE_URL`, so there is no separate host setting. `npm run client:start` and the website build do not read these.
 3. **Signing.** Run the first build from `client/expo` and let EAS create and keep the credentials:
@@ -128,7 +128,7 @@ The app never reads the device's location; event addresses are typed by staff. D
 
 ## Payments and review
 
-- **Team and club plans** are bought on the website through Stripe. On iOS the build shows "Plans are managed on the GamePlan website" and no price or link while `EXPO_PUBLIC_IOS_WEB_UPGRADE` is `false`. Turn it on only for storefronts where Apple allows an external purchase link.
+- **Team and club plans** are bought on the website through Stripe. On iOS the build shows "Plans are managed on the GamePlan website" and no price or link while `EXPO_PUBLIC_IOS_WEB_UPGRADE` is `false`. Turn it on (`<prefix>/ios-web-upgrade` = `true`) only for storefronts where Apple allows an external purchase link.
 - **Team dues** are payments for real-world activities (fees, uniforms, travel), which both stores allow outside in-app purchase. Say so in the review notes.
 - **Review notes:** give a demo adult account on a team with events, chat, and an open due. Note that the app is for organized teams, invite-only by design, and that minors' accounts are managed by their guardians.
 - **Age rating:** answer "Yes" to user-generated content (team chat) and "No" to unrestricted web access. Do not choose the Kids category: the app is for teams that include minors, not directed at children.

@@ -2,8 +2,10 @@
  * Unit tests for Parameter Store name mapping and stack-output loading.
  */
 
+import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
+import { GamePlanPlatform } from './gameplan-stack';
 import { envFromOutputs, envFromParameters, formatGithubEnv, missingEnv, REQUIRED_CLIENT_ENV } from './ssm-parameters';
 import { siteStackForTest } from './test-fixtures';
 
@@ -98,6 +100,17 @@ describe('ssm parameters', () => {
       SITE_DISTRIBUTION_ID: 'E123',
       API_BASE_URL: 'https://app.example.com/api',
     });
+  });
+
+  it('finds the Terraform state bucket in the platform template', () => {
+    const platform = new GamePlanPlatform(new cdk.App(), 'GamePlanPlatform', {
+      corsOrigin: 'https://staging.example.com',
+      callbackUrls: ['https://staging.example.com/api/identity/oauth/callback'],
+      logoutUrls: ['https://staging.example.com/login'],
+    });
+    const keys = Object.keys(Template.fromStack(platform).toJSON().Outputs as object);
+    const env = envFromOutputs({ GamePlanPlatform: Object.fromEntries(keys.map((key) => [key, 'value'])) });
+    expect(env.TF_STATE_BUCKET).toBe('value');
   });
 
   it('finds the site settings in the site template', () => {

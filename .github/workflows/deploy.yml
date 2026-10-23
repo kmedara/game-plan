@@ -69,6 +69,41 @@ jobs:
       - name: Load stack outputs
         run: npx tsx infrastructure/scripts/load-outputs-env.ts "$GITHUB_WORKSPACE/cdk-outputs.json"
 
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.0
+          terraform_wrapper: false
+
+      # Stripe plans and webhooks, and the EAS build variables. Runs after CDK
+      # because the webhook URLs and the state bucket are stack outputs.
+      - name: Apply Stripe and Expo
+        working-directory: infrastructure/terraform
+        run: |
+          set -o pipefail
+          missing=""
+          for name in TF_STATE_BUCKET TF_VAR_stripe_api_key EXPO_TOKEN; do
+            if [ -z "${!name}" ]; then
+              missing="${missing} ${name}"
+            fi
+          done
+          if [ -n "${missing}" ]; then
+            echo "Missing Terraform settings:${missing}. TF_STATE_BUCKET is a GamePlanPlatform output; the others are GitHub secrets."
+            exit 1
+          fi
+          {
+            terraform init -input=false \
+              -backend-config="envs/${DEPLOY_ENV}.s3.tfbackend" \
+              -backend-config="bucket=${TF_STATE_BUCKET}" \
+              -backend-config="region=${AWS_REGION}"
+            terraform apply -input=false -auto-approve -var-file="envs/${DEPLOY_ENV}.tfvars"
+          } 2>&1 | awk -f "$GITHUB_WORKSPACE/.github/scripts/redact-aws-log.awk"
+        env:
+          TF_IN_AUTOMATION: 'true'
+          TF_VAR_aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          TF_VAR_ssm_prefix: ${{ vars.SSM_PREFIX || '/gameplan' }}
+          TF_VAR_stripe_api_key: ${{ secrets.STRIPE_API_KEY }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
       - name: Build website
         run: npm run client:build
         env:

@@ -37,6 +37,8 @@ export const OUTPUT_ENV: Record<string, string> = {
   SiteWebSocketUrl: 'WS_BASE_URL',
   SiteBucketName: 'SITE_BUCKET_NAME',
   SiteDistributionId: 'SITE_DISTRIBUTION_ID',
+  // Terraform reads its other inputs from Parameter Store itself.
+  TerraformStateBucketName: 'TF_STATE_BUCKET',
 };
 
 /** Environment variables the website build and upload require. */

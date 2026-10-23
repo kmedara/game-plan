@@ -43,6 +43,11 @@ run "staging" {
   }
 
   assert {
+    condition     = local.eas_values.EXPO_PUBLIC_IOS_WEB_UPGRADE == "false"
+    error_message = "The iOS upgrade link should be off when ios-web-upgrade is unset."
+  }
+
+  assert {
     condition = toset(keys(local.eas_visibility)) == toset([
       "EXPO_PUBLIC_API_BASE_URL",
       "EXPO_PUBLIC_WS_BASE_URL",
@@ -68,11 +73,20 @@ run "staging" {
   }
 }
 
-run "android_maps_key_is_sensitive" {
+run "optional_parameters" {
   command = plan
 
-  variables {
-    google_maps_android_api_key = "android-key"
+  override_data {
+    target = data.aws_ssm_parameters_by_path.deploy
+    values = {
+      names  = ["/gameplan/hosted-zone-name", "/gameplan/google-maps-android-api-key", "/gameplan/ios-web-upgrade"]
+      values = ["example.com", "android-key", "true"]
+    }
+  }
+
+  assert {
+    condition     = local.eas_values.EXPO_PUBLIC_IOS_WEB_UPGRADE == "true"
+    error_message = "ios-web-upgrade should reach EXPO_PUBLIC_IOS_WEB_UPGRADE."
   }
 
   assert {

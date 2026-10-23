@@ -11,7 +11,7 @@ import type * as cognito from 'aws-cdk-lib/aws-cognito';
 import type * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import type * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import type * as lambda from 'aws-cdk-lib/aws-lambda';
-import type * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
 import { Api } from './api';
 import { Auth, type AuthSocialContext, type SocialProvider } from './auth';
@@ -81,7 +81,8 @@ export type GamePlanPlatformProps = cdk.StackProps & {
 };
 
 /**
- * Cognito, DynamoDB, and the media bucket. These exist before the API functions.
+ * Cognito, DynamoDB, the media bucket, and the Terraform state bucket. These
+ * exist before the API functions.
  */
 export class GamePlanPlatform extends cdk.Stack {
   /** Cognito user pool that owns accounts. */
@@ -130,6 +131,19 @@ export class GamePlanPlatform extends cdk.Stack {
       corsOrigin: props.corsOrigin,
       cdnReads: props.mediaCdn,
     }).mediaBucket;
+
+    // State for `infrastructure/terraform` (Stripe and Expo). It holds the webhook
+    // signing secrets, and losing it would orphan the Stripe endpoints and prices,
+    // so it is versioned and retained.
+    const terraformState = new s3.Bucket(this, 'TerraformStateBucket', {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      versioned: true,
+      lifecycleRules: [{ noncurrentVersionExpiration: cdk.Duration.days(90) }],
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+    new cdk.CfnOutput(this, 'TerraformStateBucketName', { value: terraformState.bucketName });
   }
 }
 

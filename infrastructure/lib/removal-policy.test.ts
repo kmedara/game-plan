@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { GamePlanPlatform } from './gameplan-stack';
 
 describe('stateful resources', () => {
-  it('retains the user pool, table, and media bucket, and never empties the bucket', () => {
+  it('retains the user pool, table, media bucket, and Terraform state bucket, and never empties a bucket', () => {
     const app = new cdk.App();
     const platform = new GamePlanPlatform(app, 'GamePlanPlatform', {
       corsOrigin: 'https://staging.example.com',

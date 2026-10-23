@@ -82,6 +82,6 @@ Maps setup is in [docs/maps/README.md](docs/maps/README.md). Interactive route d
 | [ci.yml](.github/workflows/ci.yml) | Pull requests and pushes to `master`. Typecheck and tests. |
 | [deploy.yml](.github/workflows/deploy.yml) | Push to `master` updates staging. A GitHub release updates production. |
 
-The deploy job runs `cdk deploy --all`, builds the Expo site, syncs the bucket, and invalidates CloudFront. Re-run it from the Actions tab to choose `staging` or `production`.
+The deploy job runs `cdk deploy --all`, applies the Stripe and Expo Terraform ([infrastructure/terraform](infrastructure/terraform/README.md)), builds the Expo site, syncs the bucket, and invalidates CloudFront. Re-run it from the Actions tab to choose `staging` or `production`.
 
-Each GitHub environment has one secret, `AWS_ROLE_ARN`. Hostnames are `https://<environment>.example.com`, with the API at `/api` and the socket at `wss://<environment>.example.com/api/socket`. Parameter Store inputs are listed under **Secrets at run time** in [ARCHITECTURE.md](ARCHITECTURE.md).
+Each GitHub environment has three secrets: `AWS_ROLE_ARN`, `STRIPE_API_KEY` (test mode for staging, live for production), and `EXPO_TOKEN`. Hostnames are `https://<environment>.example.com`, with the API at `/api` and the socket at `wss://<environment>.example.com/api/socket`. Parameter Store inputs are listed under **Secrets at run time** in [ARCHITECTURE.md](ARCHITECTURE.md).
