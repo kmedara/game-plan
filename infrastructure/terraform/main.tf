@@ -8,7 +8,7 @@ provider "aws" {
 }
 
 provider "stripe" {
-  api_key = var.stripe_api_key
+  api_key = local.stripe_api_key
 }
 
 data "aws_cloudformation_stack" "api" {
@@ -31,4 +31,8 @@ locals {
   # Same `<environment>.<zone>` host as `publicUrlsFor` in `lib/deploy-config.ts`.
   zone_name     = lower(trimsuffix(nonsensitive(lookup(local.parameters, "hosted-zone-name", "")), "."))
   site_hostname = "${var.deploy_env}.${local.zone_name}"
+
+  # Provider credentials. Stripe key: test mode for staging, live mode for production.
+  stripe_api_key = lookup(local.parameters, "stripe-api-key", "")
+  expo_token     = lookup(local.parameters, "expo-token", "")
 }

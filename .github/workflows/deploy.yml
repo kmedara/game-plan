@@ -80,16 +80,11 @@ jobs:
         working-directory: infrastructure/terraform
         run: |
           set -o pipefail
-          missing=""
-          for name in TF_STATE_BUCKET TF_VAR_stripe_api_key EXPO_TOKEN; do
-            if [ -z "${!name}" ]; then
-              missing="${missing} ${name}"
-            fi
-          done
-          if [ -n "${missing}" ]; then
-            echo "Missing Terraform settings:${missing}. TF_STATE_BUCKET is a GamePlanPlatform output; the others are GitHub secrets."
+          if [ -z "${TF_STATE_BUCKET}" ]; then
+            echo "Missing TF_STATE_BUCKET, a GamePlanPlatform output."
             exit 1
           fi
+          # Terraform reads the Stripe key and Expo token from Parameter Store itself.
           {
             terraform init -input=false \
               -backend-config="envs/${DEPLOY_ENV}.s3.tfbackend" \
@@ -101,8 +96,6 @@ jobs:
           TF_IN_AUTOMATION: 'true'
           TF_VAR_aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
           TF_VAR_ssm_prefix: ${{ vars.SSM_PREFIX || '/gameplan' }}
-          TF_VAR_stripe_api_key: ${{ secrets.STRIPE_API_KEY }}
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: Build website
         run: npm run client:build

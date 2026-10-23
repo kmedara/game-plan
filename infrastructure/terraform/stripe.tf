@@ -80,6 +80,16 @@ resource "stripe_webhook_endpoint" "payments" {
   connect        = true
   api_version    = local.stripe_api_version
   enabled_events = local.payments_webhook_events
+
+  lifecycle {
+    precondition {
+      condition = can(regex(
+        var.deploy_env == "production" ? "^(sk|rk)_live_" : "^(sk|rk)_test_",
+        local.stripe_api_key,
+      ))
+      error_message = "${local.ssm_prefix}/stripe-api-key must be a live-mode Stripe key for production and a test-mode key for every other environment."
+    }
+  }
 }
 
 # Platform endpoint: team and organization subscriptions.

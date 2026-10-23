@@ -15,8 +15,8 @@ The deploy workflow applies this right after `cdk deploy`, since the webhook URL
 
 | Input | Source |
 | --- | --- |
-| Stripe key | GitHub secret `STRIPE_API_KEY` |
-| Expo token | GitHub secret `EXPO_TOKEN` (expo.dev → Access tokens; a robot token works) |
+| Stripe key | Parameter Store `<prefix>/stripe-api-key` (test mode for staging, live for production) |
+| Expo token | Parameter Store `<prefix>/expo-token` (expo.dev → Access tokens; a robot token works) |
 | State bucket | `TerraformStateBucketName` output of the `GamePlanPlatform` stack (CDK creates it: versioned, private, retained on stack delete) |
 | Website host | Parameter Store `<prefix>/hosted-zone-name` (already set for CDK) |
 | Browser Maps key | Parameter Store `<prefix>/google-maps-browser-api-key` (already set for CDK) |
@@ -28,7 +28,7 @@ Terraform reads the Parameter Store values itself, so a change there reaches EAS
 ## One-time setup
 
 1. Nothing for the state bucket: the CDK deploy creates it in each account. State holds the webhook signing secrets, so do not open the bucket up.
-2. The GitHub secrets `STRIPE_API_KEY` and `EXPO_TOKEN` in the `staging` and `production` environments.
+2. `<prefix>/stripe-api-key` and `<prefix>/expo-token` as Strings in each environment's account. The deploy workflow does not load them into the job's environment, so only Terraform sees them.
 3. On the deploy role (`AWS_ROLE_ARN`), beyond what CDK needs: `s3:ListBucket`, `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` on the state bucket; `ssm:GetParameter`, `ssm:PutParameter`, `ssm:DeleteParameter`, `ssm:AddTagsToResource`, `ssm:ListTagsForResource` on `<prefix>/*`, plus `ssm:DescribeParameters`; and `cloudformation:DescribeStacks` on `GamePlanApi`.
 4. If Stripe already has the products, prices, or webhooks from a manual setup:
    - **Prices** need no action. A new price takes the lookup key (`transfer_lookup_key`). Archive the old ones in the dashboard once no subscription uses them.
@@ -37,12 +37,9 @@ Terraform reads the Parameter Store values itself, so a change there reaches EAS
 
 ## Run by hand
 
-From `infrastructure/terraform`, with AWS credentials for the environment's account. Do not run it while a deploy is applying the same environment; the state lock stops the second one.
+From `infrastructure/terraform`, with AWS credentials for the environment's account. The Stripe key and Expo token come from Parameter Store, as in CI. Do not run it while a deploy is applying the same environment; the state lock stops the second one.
 
 ```sh
-export TF_VAR_stripe_api_key=sk_test_...            # sk_live_... for production
-export EXPO_TOKEN=...
-
 bucket=$(aws cloudformation describe-stacks --stack-name GamePlanPlatform \
   --query "Stacks[0].Outputs[?OutputKey=='TerraformStateBucketName'].OutputValue" --output text)
 terraform init -backend-config=envs/staging.s3.tfbackend -backend-config="bucket=$bucket"

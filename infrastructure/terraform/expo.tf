@@ -2,8 +2,8 @@
 # Values come from Parameter Store under the same prefix the CDK app reads.
 #
 # The project id and account come from `app.json`, so they stay in one place.
-# The provider reads `EXPO_TOKEN`. It cannot import, so a variable created by
-# hand on expo.dev must be deleted there before the first apply.
+# The token is `<prefix>/expo-token`. The provider cannot import, so a variable
+# created by hand on expo.dev must be deleted there before the first apply.
 
 locals {
   expo_app = jsondecode(file("${path.module}/../../client/expo/app.json")).expo
@@ -43,6 +43,7 @@ locals {
 
 provider "expo" {
   account_name = local.expo_app.owner
+  token        = local.expo_token
 }
 
 resource "expo_app_variable" "build" {
@@ -58,6 +59,10 @@ resource "expo_app_variable" "build" {
     precondition {
       condition     = local.zone_name != ""
       error_message = "${local.ssm_prefix}/hosted-zone-name is not set, so the app's API URLs cannot be built."
+    }
+    precondition {
+      condition     = nonsensitive(local.expo_token != "")
+      error_message = "${local.ssm_prefix}/expo-token is not set (expo.dev → Access tokens; a robot token works)."
     }
   }
 }

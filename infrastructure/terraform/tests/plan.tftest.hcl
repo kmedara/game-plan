@@ -13,8 +13,8 @@ mock_provider "aws" {
   override_data {
     target = data.aws_ssm_parameters_by_path.deploy
     values = {
-      names  = ["/gameplan/hosted-zone-name", "/gameplan/google-maps-browser-api-key"]
-      values = ["example.com.", "browser-key"]
+      names  = ["/gameplan/hosted-zone-name", "/gameplan/google-maps-browser-api-key", "/gameplan/stripe-api-key", "/gameplan/expo-token"]
+      values = ["example.com.", "browser-key", "sk_test_mock", "expo-mock"]
     }
   }
 }
@@ -26,7 +26,6 @@ mock_provider "expo" {}
 variables {
   deploy_env      = "staging"
   eas_environment = "preview"
-  stripe_api_key  = "sk_test_mock"
 }
 
 run "staging" {
@@ -79,8 +78,8 @@ run "optional_parameters" {
   override_data {
     target = data.aws_ssm_parameters_by_path.deploy
     values = {
-      names  = ["/gameplan/hosted-zone-name", "/gameplan/google-maps-android-api-key", "/gameplan/ios-web-upgrade", "/gameplan/support-email"]
-      values = ["example.com", "android-key", "true", "privacy@example.com"]
+      names  = ["/gameplan/hosted-zone-name", "/gameplan/google-maps-android-api-key", "/gameplan/ios-web-upgrade", "/gameplan/support-email", "/gameplan/stripe-api-key", "/gameplan/expo-token"]
+      values = ["example.com", "android-key", "true", "privacy@example.com", "sk_test_mock", "expo-mock"]
     }
   }
 
@@ -116,8 +115,21 @@ run "production_rejects_test_key" {
   variables {
     deploy_env      = "production"
     eas_environment = "production"
-    stripe_api_key  = "sk_test_mock"
   }
 
-  expect_failures = [var.stripe_api_key]
+  expect_failures = [stripe_webhook_endpoint.payments]
+}
+
+run "missing_expo_token" {
+  command = plan
+
+  override_data {
+    target = data.aws_ssm_parameters_by_path.deploy
+    values = {
+      names  = ["/gameplan/hosted-zone-name", "/gameplan/stripe-api-key"]
+      values = ["example.com", "sk_test_mock"]
+    }
+  }
+
+  expect_failures = [expo_app_variable.build]
 }
