@@ -220,43 +220,45 @@ export const TimeZoneField = ({
   />
 );
 
-/** A selectable pill. */
-export const Chip = ({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) => {
+/** A selectable pill. Use {@link equal} when the chip sits in an {@link EqualChipRow}. */
+export const Chip = ({
+  label,
+  selected,
+  onPress,
+  equal,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+  equal?: boolean;
+}) => {
   const { brand } = useApp();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
-      className="mb-2 mr-2 shrink-0 rounded-full border px-3 py-1"
+      className={
+        equal
+          ? 'min-w-0 flex-1 items-center justify-center rounded-full border px-2 py-2'
+          : 'mb-2 mr-2 shrink-0 rounded-full border px-3 py-1'
+      }
       style={{ borderColor: selected ? brand.primary : colors.line, backgroundColor: selected ? brand.primary : colors.paper }}
       onPress={onPress}
     >
-      <Text style={{ color: selected ? brand.onPrimary : colors.ink }}>{label}</Text>
+      <Text
+        className={equal ? 'text-center text-sm' : undefined}
+        numberOfLines={equal ? 2 : undefined}
+        style={{ color: selected ? brand.onPrimary : colors.ink }}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 };
 
-/**
- * Lays out chips in one row. When they overflow, the row scrolls sideways (including
- * inside a vertical {@link RefreshableScroll} on web and native).
- */
-export const HorizontalChipRow = ({ children, className }: { children: ReactNode; className?: string }) => (
-  <ScrollView
-    horizontal
-    nestedScrollEnabled
-    directionalLockEnabled
-    showsHorizontalScrollIndicator={Platform.OS === 'web'}
-    keyboardShouldPersistTaps="handled"
-    className={className}
-    style={
-      Platform.OS === 'web'
-        ? ({ flexGrow: 0, alignSelf: 'stretch', overflowX: 'auto', overscrollBehaviorX: 'contain' } as const)
-        : { flexGrow: 0, alignSelf: 'stretch' }
-    }
-    contentContainerStyle={{ flexDirection: 'row', alignItems: 'center' }}
-  >
-    {children}
-  </ScrollView>
+/** Two (or few) chips in one row, each taking equal width. */
+export const EqualChipRow = ({ children, className }: { children: ReactNode; className?: string }) => (
+  <View className={`flex-row gap-2${className !== undefined ? ` ${className}` : ''}`}>{children}</View>
 );
 
 export type ButtonTone = 'primary' | 'secondary' | 'danger';

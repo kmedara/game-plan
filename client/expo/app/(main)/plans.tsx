@@ -16,7 +16,7 @@ import { useApp } from '@/src/state';
 import { BILLING_RETURN_LINK, openStripePage } from '@/src/stripe-page';
 import { useTeamsWithPermission } from '@/src/team-access';
 import { colors } from '@/src/theme';
-import { Button, Chip, HorizontalChipRow, SubmitButton } from '@/src/ui';
+import { Button, Chip, EqualChipRow, SubmitButton } from '@/src/ui';
 
 /** Error sentences for plan purchases. */
 const BILLING_ERRORS = {
@@ -79,10 +79,10 @@ export default function PlansScreen() {
       ) : null}
 
       {buyHere ? (
-        <HorizontalChipRow className="mb-3">
-          <Chip label={t('plans.monthly')} selected={interval === 'month'} onPress={() => setBillingInterval('month')} />
-          <Chip label={t('plans.yearly')} selected={interval === 'year'} onPress={() => setBillingInterval('year')} />
-        </HorizontalChipRow>
+        <EqualChipRow className="mb-3">
+          <Chip equal label={t('plans.monthly')} selected={interval === 'month'} onPress={() => setBillingInterval('month')} />
+          <Chip equal label={t('plans.yearly')} selected={interval === 'year'} onPress={() => setBillingInterval('year')} />
+        </EqualChipRow>
       ) : null}
 
       {TIERS.map(({ tier, features }) => (

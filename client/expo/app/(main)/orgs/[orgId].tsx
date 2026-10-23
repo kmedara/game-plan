@@ -16,7 +16,7 @@ import { orgQuery, refreshOrg } from '@/src/queries/orgs';
 import { directoryQuery } from '@/src/queries/teams';
 import { useApp } from '@/src/state';
 import { BILLING_RETURN_LINK, openStripePage } from '@/src/stripe-page';
-import { Chip, ErrorText, Field, HorizontalChipRow, SubmitButton } from '@/src/ui';
+import { Chip, EqualChipRow, ErrorText, Field, SubmitButton } from '@/src/ui';
 
 /** Error sentences specific to organizations. */
 const ORG_ERRORS = {
@@ -90,16 +90,17 @@ const PlanSection = ({ org, message }: SectionProps) => {
       ) : (
         <View className="mt-2">
           <Text className="mb-2 text-ink">{t('orgs.subscribeHint')}</Text>
-          <HorizontalChipRow className="mb-2">
+          <EqualChipRow className="mb-2">
             {(['month', 'year'] as const).map((value) => (
               <Chip
                 key={value}
+                equal
                 label={`${t(value === 'month' ? 'plans.monthly' : 'plans.yearly')} · ${t(`plans.price.organization.${value}`)}`}
                 selected={interval === value}
                 onPress={() => setBillingInterval(value)}
               />
             ))}
-          </HorizontalChipRow>
+          </EqualChipRow>
           <SubmitButton
             label={t('orgs.subscribe')}
             loadedText=""
