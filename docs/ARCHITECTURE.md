@@ -1,6 +1,6 @@
 # GamePlan architecture
 
-How GamePlan is put together, and the costs of those choices. Setup and deploy steps are in [`README.md`](README.md).
+How GamePlan is put together, and the costs of those choices. Setup and deploy steps are in [`README.md`](../README.md).
 
 | | Choice | Main cost |
 | --- | --- | --- |

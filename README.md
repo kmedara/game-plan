@@ -2,7 +2,7 @@
 
 Teams keep practices, games, and chat in one product. One CDK app, one Lambda per area, and an Expo app for the website and the phones.
 
-Day-to-day work runs on the laptop. Design and cloud detail live in [ARCHITECTURE.md](ARCHITECTURE.md).
+Day-to-day work runs on the laptop. Design and cloud detail live in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Run locally
 
@@ -84,4 +84,4 @@ Maps setup is in [docs/maps/README.md](docs/maps/README.md). Interactive route d
 
 The deploy job runs `cdk deploy --all`, applies the Stripe and Expo Terraform ([infrastructure/terraform](infrastructure/terraform/README.md)), builds the Expo site, syncs the bucket, and invalidates CloudFront. Re-run it from the Actions tab to choose `staging` or `production`.
 
-Each GitHub environment has three secrets: `AWS_ROLE_ARN`, `STRIPE_API_KEY` (test mode for staging, live for production), and `EXPO_TOKEN`. Hostnames are `https://<environment>.example.com`, with the API at `/api` and the socket at `wss://<environment>.example.com/api/socket`. Parameter Store inputs are listed under **Secrets at run time** in [ARCHITECTURE.md](ARCHITECTURE.md).
+Each GitHub environment has three secrets: `AWS_ROLE_ARN`, `STRIPE_API_KEY` (test mode for staging, live for production), and `EXPO_TOKEN`. Hostnames are `https://<environment>.example.com`, with the API at `/api` and the socket at `wss://<environment>.example.com/api/socket`. Parameter Store inputs are listed under **Secrets at run time** in [ARCHITECTURE.md](docs/ARCHITECTURE.md).

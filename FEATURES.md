@@ -1,6 +1,6 @@
 # GamePlan features
 
-What GamePlan offers each group it is sold to. Plan prices and the role permission matrix are described in [ARCHITECTURE.md](ARCHITECTURE.md#plans-and-entitlements).
+What GamePlan offers each group it is sold to. Plan prices and the role permission matrix are described in [ARCHITECTURE.md](docs/ARCHITECTURE.md#plans-and-entitlements).
 
 ## Who it is for
 
