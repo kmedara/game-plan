@@ -1270,12 +1270,25 @@ export type SearchUsersQuery = {
   email: string;
 }
 
+export type SendInviteBody = {
+  channel: 'email' | 'text';
+  to: string;
+  role?: 'team_admin' | 'coach' | 'player' | 'parent';
+  locale?: 'en' | 'es';
+}
+
 export type SendMessageBody = {
   body: string;
   /**
    * @maxItems 10
    */
   attachmentKeys?: string[];
+}
+
+export type SentInvite = {
+  channel: 'email' | 'text';
+  code: string;
+  role: 'team_admin' | 'coach' | 'player' | 'parent';
 }
 
 export type SessionTokens = {

@@ -28,6 +28,7 @@ How GamePlan is put together, and the costs of those choices. Setup and deploy s
   - [Calendar sync](#calendar-sync)
   - [Emergency and medical info](#emergency-and-medical-info)
   - [Volunteer sign-ups](#volunteer-sign-ups)
+  - [Invites sent by GamePlan](#invites-sent-by-gameplan)
   - [Polls in chat](#polls-in-chat)
   - [Organizations](#organizations)
   - [Team dues](#team-dues)
@@ -198,6 +199,15 @@ Staff with `manage_events` add slots to one occurrence ("Snacks, 1", "Drivers, 3
 
 - **Why:** one read shows the whole occurrence, and every write is conditional on the row's `version`, so two parents taking the last place at once cannot both get it; the loser sees `condition_failed` and retries. Unlike carpool seats, claims are not queued offline, since a claim replayed hours later could take a place that is gone.
 - **Cost:** concurrent edits to different slots of one occurrence also collide and one retries. The app signs up the caller only; the guardian-for-child path is in the API, not yet a screen.
+
+### Invites sent by GamePlan
+
+Each role on a team has one invite code. Staff with `invite_members` can copy it, or have GamePlan email or text it (`POST /teams/:teamId/invites/send`), which creates the code if needed. The server writes the message in English or Spanish from the team name, the inviter's name, the role, the code, and the `/invite/<code>` link; the request only picks the recipient, role, and language. Email goes through SES from `invites@<website host>` as "<name> via GamePlan", with the inviter's address as Reply-To. Texts go through AWS End User Messaging SMS from one registered toll-free number, only to `+1` numbers, and end with "Reply STOP to opt out". Each send counts against `SENT_INVITES#<day>` rows on the team (100 a day) and the sender (50 a day), which expire through `ttl`. Recipients are not stored or logged.
+
+The site stack verifies the website host in SES and writes its DKIM records through the DNS custom resource. The toll-free number is requested and registered by hand, and its ARN goes in `<prefix>/sms-origination-identity`. Until a channel is set up, the endpoint answers `email_not_configured` or `text_not_configured` before counting the send, and the app opens the person's own mail or messages app instead.
+
+- **Why:** the invite comes from GamePlan rather than the coach's personal number or address. Building the text on the server means the endpoint cannot send arbitrary words in GamePlan's name, and the daily counts and `+1` rule bound the cost of SMS fraud.
+- **Cost:** SES starts in the sandbox and US texting needs carrier registration, both one-time requests per account. Every text costs money, and the SMS spending limit and the daily counts cap how many go out. The two counters are separate writes, team first, so a send refused by the sender's limit still counts toward the team's.
 
 ### Polls in chat
 

@@ -105,6 +105,9 @@ const api = new GamePlanApi(app, 'GamePlanApi', {
   mediaBucket: platform.mediaBucket,
   ssmPrefix,
   mediaSigningPublicKey,
+  // The site stack verifies this host in SES when it owns the DNS records.
+  inviteEmailDomain: dns?.siteHostname,
+  smsOriginationIdentity: definedString(process.env.SMS_ORIGINATION_IDENTITY),
 });
 
 new GamePlanSite(app, 'GamePlanSite', {

@@ -66,6 +66,16 @@ export type ApiProps = {
    * Without it, downloads stay on presigned S3 URLs.
    */
   mediaSigningPublicKey?: string;
+  /**
+   * Website hostname verified in SES. The teams function emails invites from
+   * `invites@` this host. Without it, the app opens the person's own mail app.
+   */
+  inviteEmailDomain?: string;
+  /**
+   * ARN of the registered toll-free number that texts invites. Without it, the
+   * app opens the person's own messages app.
+   */
+  smsOriginationIdentity?: string;
 };
 
 /**
@@ -280,6 +290,11 @@ export class Api extends Construct {
       COGNITO_CLIENT_ID: props.userPoolClient.userPoolClientId,
       COGNITO_REGION: cdk.Stack.of(this).region,
     };
+    // Invites GamePlan emails and texts. A channel left out stays on the person's own app.
+    const inviteSendEnv = {
+      ...(props.inviteEmailDomain === undefined ? {} : { INVITE_EMAIL_FROM: `invites@${props.inviteEmailDomain}` }),
+      ...(props.smsOriginationIdentity === undefined ? {} : { SMS_ORIGINATION_IDENTITY: props.smsOriginationIdentity }),
+    };
     const oauthEnv = {
       COGNITO_HOSTED_UI_DOMAIN: props.hostedUiDomain,
       AUTH_CALLBACK_URL: props.authCallbackUrl,
@@ -335,7 +350,7 @@ export class Api extends Construct {
             MEDIA_BUCKET: props.mediaBucket.bucketName,
           };
         case 'teams':
-          return { ...shared, ...tableEnv, ...tokenEnv, ...queueEnv };
+          return { ...shared, ...tableEnv, ...tokenEnv, ...queueEnv, ...inviteSendEnv };
         case 'socket':
           return { ...shared, ...tableEnv };
         case 'schedule':
@@ -613,6 +628,29 @@ export class Api extends Construct {
     props.mediaBucket.grantDelete(functions.identity, 'uploads/*');
     props.mediaBucket.grantRead(functions.media);
     props.mediaBucket.grantPut(functions.media);
+
+    // Teams sends invites only from the verified website host and the one registered number.
+    const stack = cdk.Stack.of(this);
+    if (props.inviteEmailDomain !== undefined) {
+      functions.teams.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['ses:SendEmail'],
+          resources: [`arn:${stack.partition}:ses:${stack.region}:${stack.account}:identity/${props.inviteEmailDomain}`],
+        }),
+      );
+    }
+    if (props.smsOriginationIdentity !== undefined) {
+      functions.teams.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['sms-voice:SendTextMessage'],
+          resources: [
+            props.smsOriginationIdentity,
+            // A number checks its opt-out list on every send.
+            `arn:${stack.partition}:sms-voice:${stack.region}:${stack.account}:opt-out-list/*`,
+          ],
+        }),
+      );
+    }
 
     new cdk.CfnOutput(this, 'WebSocketUrl', {
       value: socketStage.url,

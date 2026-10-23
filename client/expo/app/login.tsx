@@ -6,7 +6,7 @@
  */
 
 import * as WebBrowser from 'expo-web-browser';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Platform, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -116,6 +116,9 @@ export default function LoginScreen() {
           </>
         )}
       </View>
+      <Link href="/privacy" className="mt-4 self-center text-muted underline">
+        {t('auth.privacy')}
+      </Link>
     </View>
   );
 }

@@ -135,6 +135,12 @@ export const memoryAccess = {
   deleteItem: async (pk: string, sk: string): Promise<void> => {
     store.delete(itemKey(pk, sk));
   },
+  incrementCounter: async (pk: string, sk: string, limit: number, ttl: number): Promise<number> => {
+    const current = Number(store.get(itemKey(pk, sk))?.count ?? 0);
+    if (current >= limit) throw failed('ConditionalCheckFailedException');
+    store.set(itemKey(pk, sk), { [TABLE_PK]: pk, [TABLE_SK]: sk, count: current + 1, ttl });
+    return current + 1;
+  },
   transactWrite: async (items: readonly TransactEntry[]): Promise<void> => {
     for (const entry of items) {
       if (entry.Put === undefined) continue;

@@ -10,6 +10,7 @@ import {
   handleAcceptInvite,
   handleCreateInvite,
   handleDeleteInvite,
+  handleSendInvite,
   handleGetInvite,
   handleListInvites,
 } from './invites.js';
@@ -44,6 +45,7 @@ export {
   handleListTeams,
   handleRejectJoinRequest,
   handleSearchDirectory,
+  handleSendInvite,
   handleSetPositions,
   handleUpdatePermissions,
   handleUpdateTeam,
@@ -67,6 +69,7 @@ export const httpRoutes: readonly HttpRoute[] = [
   handleUpdatePermissions,
   handleCreateInvite,
   handleListInvites,
+  handleSendInvite,
   handleDeleteInvite,
   handleCreateJoinRequest,
   handleListJoinRequests,

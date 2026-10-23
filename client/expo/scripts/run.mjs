@@ -51,6 +51,8 @@ process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY =
   process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? process.env.GOOGLE_MAPS_BROWSER_API_KEY ?? '';
 process.env.EXPO_PUBLIC_VAPID_PUBLIC_KEY =
   process.env.EXPO_PUBLIC_VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY ?? '';
+process.env.EXPO_PUBLIC_SUPPORT_EMAIL =
+  process.env.EXPO_PUBLIC_SUPPORT_EMAIL ?? process.env.SUPPORT_EMAIL ?? '';
 
 const mode = process.argv[2] ?? 'start';
 const extra = process.argv.slice(3);

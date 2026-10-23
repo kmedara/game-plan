@@ -8,6 +8,7 @@ import {
   conflict,
   type ErrorMappingFn,
   forbidden,
+  json,
   notFound,
   unauthorized,
 } from "../../../lib/http.js";
@@ -44,7 +45,19 @@ export const mapTeamsError: ErrorMappingFn = (
       return forbidden(error.message);
     case "already_a_member":
     case "join_request_exists":
+    case "recipient_opted_out":
       return conflict(error.message);
+    case "invalid_recipient":
+    case "text_country_unsupported":
+      return badRequest(error.message);
+    case "invite_send_limit":
+      return json(429, { error: error.message });
+    // The app falls back to the person's own mail or messages app.
+    case "email_not_configured":
+    case "text_not_configured":
+      return json(503, { error: error.message });
+    case "invite_send_failed":
+      return json(502, { error: error.message });
     case "manage_permissions_required_for_team_admin":
     case "team_admin_permissions_locked":
     case "roles_required":

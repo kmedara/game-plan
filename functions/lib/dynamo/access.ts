@@ -8,6 +8,7 @@ import {
   PutCommand,
   QueryCommand,
   TransactWriteCommand,
+  UpdateCommand,
   type QueryCommandInput,
   type TransactWriteCommandInput,
 } from "@aws-sdk/lib-dynamodb";
@@ -106,6 +107,36 @@ export const deleteItem = async (pk: string, sk: string): Promise<void> => {
       Key: { [TABLE_PK]: pk, [TABLE_SK]: sk },
     }),
   );
+};
+
+/**
+ * Adds one to a counter row unless it has reached the limit.
+ *
+ * @param pk - The partition key value.
+ * @param sk - The sort key value.
+ * @param limit - The count the row may not go past.
+ * @param ttl - Unix seconds when the row expires.
+ * @returns The new count.
+ * @throws `ConditionalCheckFailedException` when the count is already at the limit.
+ */
+export const incrementCounter = async (
+  pk: string,
+  sk: string,
+  limit: number,
+  ttl: number,
+): Promise<number> => {
+  const result = await getDocClient().send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: { [TABLE_PK]: pk, [TABLE_SK]: sk },
+      UpdateExpression: "SET #ttl = :ttl ADD #count :one",
+      ConditionExpression: "attribute_not_exists(#count) OR #count < :limit",
+      ExpressionAttributeNames: { "#count": "count", "#ttl": "ttl" },
+      ExpressionAttributeValues: { ":one": 1, ":limit": limit, ":ttl": ttl },
+      ReturnValues: "UPDATED_NEW",
+    }),
+  );
+  return Number(result.Attributes?.count ?? 0);
 };
 
 /**

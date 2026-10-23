@@ -81,7 +81,9 @@ import type {
   RsvpResponse,
   ScheduleList,
   SearchTeamDirectoryQuery,
+  SendInviteBody,
   SendMessageBody,
+  SentInvite,
   SocketTicket,
   TeamDirectoryPage,
   TeamInvite,
@@ -444,6 +446,11 @@ export class ApiClient {
 
   async createInvite(teamId: string, role?: CreateInviteBody['role']): Promise<TeamInvite> {
     return this.request('POST', `/teams/${teamId}/invites`, role === undefined ? {} : { role });
+  }
+
+  /** GamePlan emails or texts the role's code from its own address or number. */
+  async sendInvite(teamId: string, body: SendInviteBody): Promise<SentInvite> {
+    return this.request('POST', `/teams/${teamId}/invites/send`, body);
   }
 
   async deleteInvite(teamId: string, role: TeamInvite['role']): Promise<void> {

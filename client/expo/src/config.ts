@@ -11,6 +11,8 @@ export type AppConfig = {
   easProjectId: string;
   /** Whether the iOS app may link to web checkout. Apple allows it only in some storefronts. */
   iosWebUpgrade: boolean;
+  /** Where people send privacy and support requests. The privacy page omits the line when blank. */
+  supportEmail: string;
 };
 
 export const config: AppConfig = {
@@ -21,6 +23,7 @@ export const config: AppConfig = {
   vapidPublicKey: process.env.EXPO_PUBLIC_VAPID_PUBLIC_KEY ?? '',
   easProjectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? '',
   iosWebUpgrade: process.env.EXPO_PUBLIC_IOS_WEB_UPGRADE === 'true',
+  supportEmail: (process.env.EXPO_PUBLIC_SUPPORT_EMAIL ?? '').trim(),
 };
 
 /** Custom-scheme redirect identity uses after a native Hosted UI sign-in. */

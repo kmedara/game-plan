@@ -9,6 +9,7 @@ import LoginScreen from '../app/login';
 const mockOauthProviders = jest.fn(async (): Promise<string[]> => []);
 
 jest.mock('expo-router', () => ({
+  Link: ({ children }: { children: string }) => children,
   useRouter: () => ({ replace: jest.fn() }),
   useLocalSearchParams: () => ({}),
 }));

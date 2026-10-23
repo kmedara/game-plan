@@ -65,6 +65,7 @@ const PROTECTED: Record<string, RouteCase[]> = {
     { route: 'handleUpdatePermissions', method: 'PUT', path: '/teams/team-1/permissions' },
     { route: 'handleCreateInvite', method: 'POST', path: '/teams/team-1/invites' },
     { route: 'handleListInvites', method: 'GET', path: '/teams/team-1/invites' },
+    { route: 'handleSendInvite', method: 'POST', path: '/teams/team-1/invites/send' },
     { route: 'handleDeleteInvite', method: 'DELETE', path: '/teams/team-1/invites/code-1' },
     { route: 'handleCreateJoinRequest', method: 'POST', path: '/teams/team-1/join-requests' },
     { route: 'handleListJoinRequests', method: 'GET', path: '/teams/team-1/join-requests' },

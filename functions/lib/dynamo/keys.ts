@@ -142,6 +142,15 @@ export const teamInviteSk = (role: string): string => `INVITE#${role}`;
 /** Sort-key prefix for every invite on a team. */
 export const TEAM_INVITE_SK_PREFIX = 'INVITE#' as const;
 
+/**
+ * Sort key for one UTC day's count of invites GamePlan emailed or texted, on
+ * the team or the sender's partition. Not under `INVITE#`, so listing invites
+ * never returns it.
+ *
+ * @param day - The UTC date, `YYYY-MM-DD`.
+ */
+export const sentInvitesSk = (day: string): string => `SENT_INVITES#${day}`;
+
 /** Sort key for a join request under the team partition. */
 export const joinRequestSk = (requestId: string): string => `JOIN#${requestId}`;
 

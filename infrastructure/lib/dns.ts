@@ -119,6 +119,25 @@ export class ZoneDns extends Construct {
   }
 
   /**
+   * Keeps CNAMEs in the zone, such as the DKIM records that let SES send as the
+   * website hostname.
+   *
+   * @param id - Construct id for the record set.
+   * @param records - Names and values.
+   */
+  addCnames(id: string, records: readonly { name: string; value: string }[]): void {
+    new cdk.CustomResource(this, id, {
+      serviceToken: this.provider.serviceToken,
+      properties: {
+        Mode: 'records',
+        HostedZoneId: this.zone.hostedZoneId,
+        RoleArn: this.zone.roleArn ?? '',
+        Cnames: records.map((record) => ({ Name: record.name, Value: record.value })),
+      },
+    });
+  }
+
+  /**
    * Points the website hostname at its CloudFront distribution.
    *
    * @param targets - Website distribution.

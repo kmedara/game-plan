@@ -22,6 +22,8 @@ import {
   teamMemberListSchema,
   teamMemberProfileSchema,
   teamInviteSchema,
+  sendInviteBodySchema,
+  sentInviteSchema,
   teamListSchema,
   teamSummarySchema,
   updatePositionsBodySchema,
@@ -381,6 +383,13 @@ const AREAS: Record<string, AreaSpec> = {
           summary: 'Create an invite code',
           body: createInviteBodySchema,
           response: teamInviteSchema,
+        },
+      },
+      '/teams/{teamId}/invites/send': {
+        post: {
+          summary: 'Email or text the invite code for a role from GamePlan',
+          body: sendInviteBodySchema,
+          response: sentInviteSchema,
         },
       },
       '/teams/{teamId}/invites/{role}': {

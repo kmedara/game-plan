@@ -14,6 +14,8 @@ locals {
   # `true` shows plan prices and the website link on iOS. Leave unset until
   # Apple allows it for the storefront.
   ios_web_upgrade = nonsensitive(lookup(local.parameters, "ios-web-upgrade", "false")) == "true"
+  # Address the privacy page lists for privacy and support requests.
+  support_email = nonsensitive(lookup(local.parameters, "support-email", ""))
 
   # Name to visibility. Kept apart from the values so `for_each` never sees a
   # sensitive value.
@@ -26,6 +28,7 @@ locals {
     # The browser key ships in the website anyway.
     nonsensitive(local.maps_browser_key != "") ? { EXPO_PUBLIC_GOOGLE_MAPS_API_KEY = "PUBLIC" } : {},
     nonsensitive(local.maps_android_key != "") ? { GOOGLE_MAPS_ANDROID_API_KEY = "SENSITIVE" } : {},
+    local.support_email != "" ? { EXPO_PUBLIC_SUPPORT_EMAIL = "PUBLIC" } : {},
   )
 
   eas_values = {
@@ -34,6 +37,7 @@ locals {
     EXPO_PUBLIC_IOS_WEB_UPGRADE     = tostring(local.ios_web_upgrade)
     EXPO_PUBLIC_GOOGLE_MAPS_API_KEY = local.maps_browser_key
     GOOGLE_MAPS_ANDROID_API_KEY     = local.maps_android_key
+    EXPO_PUBLIC_SUPPORT_EMAIL       = local.support_email
   }
 }
 

@@ -25,6 +25,7 @@ The custom-scheme links `gameplan://auth`, `gameplan://billing`, and `gameplan:/
    | `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` | Browser Maps key (used by the web map only), from `<prefix>/google-maps-browser-api-key` | Plain text |
    | `GOOGLE_MAPS_ANDROID_API_KEY` | Maps SDK for Android key, restricted to the package and signing certificate, from `<prefix>/google-maps-android-api-key` | Sensitive |
    | `EXPO_PUBLIC_IOS_WEB_UPGRADE` | `<prefix>/ios-web-upgrade`; unset means `false`, which the first submission needs (see [Payments](#payments-and-review)) | Plain text |
+   | `EXPO_PUBLIC_SUPPORT_EMAIL` | The address on the privacy page, from `<prefix>/support-email`. The website build reads the same parameter. Unset leaves the contact line off the page. | Plain text |
 
    The link host comes from `EXPO_PUBLIC_API_BASE_URL`, so there is no separate host setting. `npm run client:start` and the website build do not read these.
 3. **Signing.** Run the first build from `client/expo` and let EAS create and keep the credentials:
@@ -121,6 +122,7 @@ GamePlan does not use analytics, ad, or tracking SDKs, so nothing is "used to tr
 | Chat messages and polls | Other user content | Team chat |
 | Payment status (cards stay with Stripe) | Purchase history | Team dues and plans |
 | Push token | Device ID | Notifications |
+| Email address or phone number typed to send an invite | Contact info (of someone else) | GamePlan emails or texts the invite once; the address or number is not stored |
 
 The app never reads the device's location; event addresses are typed by staff. Data Safety on Play: the same list, data encrypted in transit, and people can delete their account in the app (Profile → Delete account).
 
@@ -135,6 +137,6 @@ The app never reads the device's location; event addresses are typed by staff. D
 
 ## Still blocking the first submission
 
-- **Privacy policy URL.** Both stores require one, and the app should link to it from the profile and login screens.
-- **Play's web deletion link.** Play also asks for a web page where people can request deletion without the app. The website has the same Profile → Delete account screen, so that URL can be `https://<host>/profile` once the policy page explains it.
+- **Privacy policy review.** The policy is at `https://<host>/privacy` (text in [`client/expo/src/privacy-policy.ts`](../client/expo/src/privacy-policy.ts)), linked from the login and profile screens. Use that URL in both stores and as Play's account-deletion URL: its "Deleting your account" section explains how. Before submitting, set `<prefix>/support-email`, and have someone qualified review the text, the Spanish translation, and how children under 13 sign up (below).
+- **Children under 13.** Anyone can create an account with any birthday, and the app only tells adults (18+) from minors. In the US, collecting information from a child under 13 needs verifiable parental consent (COPPA). Decide between an age gate that sends under-13s to a guardian-created account, or a consent flow, before launch; the policy says only that GamePlan is not directed at young children and deletes a child's information on a guardian's request.
 - **Sign in with Apple must be on whenever Google is.** Apple requires it (guideline 4.8). Set the Apple parameters in production before, or together with, the Google ones.

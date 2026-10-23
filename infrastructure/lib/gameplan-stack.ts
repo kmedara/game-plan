@@ -12,6 +12,7 @@ import type * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import type * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import type * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as ses from 'aws-cdk-lib/aws-ses';
 import type { Construct } from 'constructs';
 import { Api } from './api';
 import { Auth, type AuthSocialContext, type SocialProvider } from './auth';
@@ -169,6 +170,10 @@ export type GamePlanApiProps = cdk.StackProps & {
   ssmPrefix: string;
   /** RSA public key PEM for signed media URLs on the website. Needs `mediaCdn` on the platform. */
   mediaSigningPublicKey?: string;
+  /** Website hostname SES sends invites from. The site stack verifies it. */
+  inviteEmailDomain?: string;
+  /** ARN of the registered phone number that texts invites. */
+  smsOriginationIdentity?: string;
 };
 
 /**
@@ -211,6 +216,8 @@ export class GamePlanApi extends cdk.Stack {
       corsOrigin: props.corsOrigin,
       ssmPrefix: props.ssmPrefix,
       mediaSigningPublicKey: props.mediaSigningPublicKey,
+      inviteEmailDomain: props.inviteEmailDomain,
+      smsOriginationIdentity: props.smsOriginationIdentity,
     });
     this.mediaKeyGroup = api.mediaKeyGroup;
     this.functionUrls = api.functionUrls;
@@ -276,6 +283,13 @@ export class GamePlanSite extends cdk.Stack {
         handlerId: 'dns-aliases',
       });
       dns.addAliases({ distribution: this.distribution });
+
+      // Lets SES send team invites as invites@<website host>. The DKIM records
+      // sign the mail for that host, so it passes DMARC without a custom MAIL FROM.
+      const inviteEmail = new ses.EmailIdentity(this, 'InviteEmailIdentity', {
+        identity: ses.Identity.domain(props.dns.siteHostname),
+      });
+      dns.addCnames('InviteEmailDkim', inviteEmail.dkimRecords);
     }
   }
 }

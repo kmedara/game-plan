@@ -112,6 +112,30 @@ export const createInviteBodySchema = z
   })
   .strict();
 
+/** Languages an emailed or texted invite can be written in. */
+export const INVITE_MESSAGE_LOCALES = ['en', 'es'] as const;
+
+/**
+ * Body for `POST /teams/:teamId/invites/send`: GamePlan emails or texts the
+ * role's code. The message text is built on the server, never taken from here.
+ */
+export const sendInviteBodySchema = z
+  .object({
+    channel: z.enum(['email', 'text']),
+    /** An email address, or a phone number for a text. */
+    to: z.string().trim().min(3).max(254),
+    role: teamRoleSchema.optional(),
+    locale: z.enum(INVITE_MESSAGE_LOCALES).optional(),
+  })
+  .strict();
+
+/** Response after an invite is sent. */
+export const sentInviteSchema = z.object({
+  channel: z.enum(['email', 'text']),
+  code: z.string(),
+  role: teamRoleSchema,
+});
+
 /** Body for approving a join request and assigning a role. */
 export const approveJoinRequestBodySchema = z
   .object({
@@ -368,6 +392,12 @@ export type UpdateRolePermissionsBody = z.infer<
 
 /** Inferred type for {@link createInviteBodySchema}. */
 export type CreateInviteBody = z.infer<typeof createInviteBodySchema>;
+
+/** Inferred type for {@link sendInviteBodySchema}. */
+export type SendInviteBody = z.infer<typeof sendInviteBodySchema>;
+
+/** Inferred type for {@link sentInviteSchema}. */
+export type SentInvite = z.infer<typeof sentInviteSchema>;
 
 /** Inferred type for {@link approveJoinRequestBodySchema}. */
 export type ApproveJoinRequestBody = z.infer<

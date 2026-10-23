@@ -60,7 +60,8 @@
     "continueGoogle": "Continuar con Google",
     "continueEmail": "Continuar con correo",
     "emailHint": "Inicia sesión o crea una cuenta con tu correo electrónico.",
-    "or": "o"
+    "or": "o",
+    "privacy": "Política de privacidad"
   },
   "completeProfile": {
     "title": "Completa tu perfil",
@@ -137,7 +138,9 @@
     "settingsSaved": "Configuración guardada.",
     "saveSettings": "Guardar configuración",
     "inviteMembers": "Invitar miembros",
-    "inviteHint": "Cada rol tiene un código. Envíalo por correo o texto, o cópialo. Quien lo use se une con ese rol, y el mismo código se puede usar más de una vez.",
+    "inviteHint": "Cada rol tiene un código. GamePlan puede enviarlo por correo o mensaje de texto, o puedes copiarlo. Quien lo use se une con ese rol, y el mismo código se puede usar más de una vez.",
+    "inviteEmailed": "Invitación enviada por correo a {{to}}.",
+    "inviteTexted": "Invitación enviada por mensaje a {{to}}.",
     "email": "Correo",
     "phone": "Teléfono",
     "emailInvite": "Enviar por correo",
@@ -653,6 +656,10 @@
       "badInviteEmail": "Ingresa un correo válido.",
       "badInvitePhone": "Ingresa un número de teléfono válido.",
       "sendInviteFailed": "No se pudo abrir el mensaje.",
+      "inviteNotSent": "No se pudo enviar la invitación. Inténtalo de nuevo o copia el código.",
+      "inviteSendLimit": "Ya enviaste el máximo de invitaciones permitido hoy. Copia el código para compartirlo o inténtalo mañana.",
+      "recipientOptedOut": "Ese número dejó de recibir mensajes de GamePlan. Envía el código de otra forma.",
+      "textCountryUnsupported": "GamePlan solo puede enviar mensajes a números de EE. UU. y Canadá. Envía la invitación por correo o copia el código.",
       "copyFailed": "No se pudo copiar el enlace. Selecciónalo y cópialo manualmente.",
       "settingsRequired": "El nombre y la zona horaria son obligatorios.",
       "badLogoType": "Elige un JPEG, PNG, WebP o GIF.",

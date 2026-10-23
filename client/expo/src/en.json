@@ -60,7 +60,8 @@
     "continueGoogle": "Continue with Google",
     "continueEmail": "Continue with email",
     "emailHint": "Sign in or create an account with your email address.",
-    "or": "or"
+    "or": "or",
+    "privacy": "Privacy policy"
   },
   "completeProfile": {
     "title": "Finish your profile",
@@ -137,7 +138,9 @@
     "settingsSaved": "Settings saved.",
     "saveSettings": "Save settings",
     "inviteMembers": "Invite members",
-    "inviteHint": "Each role has one code. Email or text it, or copy it. Anyone who uses it joins as that role, and the same code can be used more than once.",
+    "inviteHint": "Each role has one code. GamePlan can email or text it for you, or you can copy it. Anyone who uses it joins as that role, and the same code can be used more than once.",
+    "inviteEmailed": "Invite emailed to {{to}}.",
+    "inviteTexted": "Invite texted to {{to}}.",
     "email": "Email",
     "phone": "Phone",
     "emailInvite": "Email invite",
@@ -651,6 +654,10 @@
       "badInviteEmail": "Enter a valid email address.",
       "badInvitePhone": "Enter a valid phone number.",
       "sendInviteFailed": "Could not open the message.",
+      "inviteNotSent": "Could not send the invite. Try again, or copy the code instead.",
+      "inviteSendLimit": "You have sent the most invites allowed today. Copy the code to share it, or try again tomorrow.",
+      "recipientOptedOut": "That number has opted out of GamePlan texts. Send the code another way.",
+      "textCountryUnsupported": "GamePlan can text only US and Canadian numbers. Email the invite or copy the code.",
       "copyFailed": "Could not copy the link. Select it and copy it manually.",
       "settingsRequired": "Name and time zone are required.",
       "badLogoType": "Choose a JPEG, PNG, WebP, or GIF.",

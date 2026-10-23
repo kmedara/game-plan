@@ -11,6 +11,7 @@ import type {
   CreateInviteBody,
   CreateTeamBody,
   RolePermissions,
+  SendInviteBody,
   TeamInvite,
   TeamMemberProfile,
   TeamRole,
@@ -154,7 +155,14 @@ export const createInviteMutation = (api: Pick<ApiClient, 'createInvite'>, query
       ]),
   });
 
-export const deleteInviteMutation = (api: Pick<ApiClient, 'deleteInvite'>, queryClient: QueryClient, teamId: string) =>
+/** Sends an invite from GamePlan. Sending creates the role's code when it has none. */
+export const sendInviteMutation = (api: Pick<ApiClient, 'sendInvite'>, queryClient: QueryClient, teamId: string) =>
+  mutationOptions({
+    mutationFn: (body: SendInviteBody) => api.sendInvite(teamId, body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.invites(teamId) }),
+  });
+
+export const deleteInviteMutation =(api: Pick<ApiClient, 'deleteInvite'>, queryClient: QueryClient, teamId: string) =>
   mutationOptions({
     mutationFn: (role: TeamRole) => api.deleteInvite(teamId, role),
     onSuccess: (_result, role) =>

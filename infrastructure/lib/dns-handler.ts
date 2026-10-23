@@ -20,9 +20,27 @@ import {
 } from '@aws-sdk/client-route-53';
 import { AssumeRoleCommand, STSClient } from '@aws-sdk/client-sts';
 
-/** Properties for the certificate and alias custom resources. */
+/** One CNAME the `records` mode keeps in the zone. */
+export type CnameRecord = { Name: string; Value: string };
+
+/** Record types the `records` mode writes. */
+export type RecordType = 'CNAME' | 'MX' | 'TXT';
+
+/**
+ * One record set the `records` mode keeps in the zone.
+ *
+ * MX values are `<priority> <host>`. TXT values are plain text; quoting and
+ * the 255-character split Route 53 needs happen here.
+ */
+export type DnsRecord = { Name: string; Type: RecordType; Values: string[] };
+
+/** Properties for the certificate, alias, and record custom resources. */
 type DnsProperties = {
-  Mode: 'certificates' | 'aliases';
+  Mode: 'certificates' | 'aliases' | 'records';
+  /** For `records`: the CNAMEs to keep, such as SES DKIM records. */
+  Cnames?: CnameRecord[];
+  /** For `records`: other record sets to keep, such as the mail provider's MX and TXT. */
+  Records?: DnsRecord[];
   HostedZoneId: string;
   RoleArn?: string;
   SiteDomain?: string;
@@ -224,6 +242,111 @@ const deleteAlias = async (
 };
 
 /**
+ * Deletes a CNAME. A missing record is already gone.
+ *
+ * @param client - The Route 53 client.
+ * @param hostedZoneId - The zone that owns the name.
+ * @param record - The record as it was written.
+ */
+const deleteCname = async (client: Route53Client, hostedZoneId: string, record: CnameRecord): Promise<void> => {
+  try {
+    await changeCname(client, hostedZoneId, 'DELETE', record.Name, record.Value);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes('not found')) throw error;
+  }
+};
+
+/**
+ * Formats one TXT value for Route 53: quoted, with quotes and backslashes
+ * escaped, and split into 255-character strings (SPF and DKIM can run longer).
+ *
+ * @param text - The plain value.
+ * @returns The value as Route 53 stores it.
+ */
+export const txtRecordValue = (text: string): string => {
+  const chunks = text.match(/[sS]{1,255}/gu) ?? [''];
+  return chunks.map((chunk) => `"${chunk.replace(/["\]/gu, (char) => `\${char}`)}"`).join(' ');
+};
+
+/**
+ * Every record set a `records` resource keeps, with its CNAMEs folded in.
+ *
+ * @param props - The resource properties.
+ * @returns Record sets.
+ */
+export const recordsOf = (props: Pick<DnsProperties, 'Cnames' | 'Records'> | undefined): DnsRecord[] => [
+  ...(props?.Cnames ?? []).map((record): DnsRecord => ({ Name: record.Name, Type: 'CNAME', Values: [record.Value] })),
+  ...(props?.Records ?? []),
+];
+
+/**
+ * Record sets a previous deploy wrote that the current one no longer has.
+ *
+ * @param previous - Record sets from the previous deploy.
+ * @param current - Record sets now.
+ * @returns The ones to delete. A name and type kept with new values is upserted instead.
+ */
+export const staleRecords = (previous: readonly DnsRecord[] | undefined, current: readonly DnsRecord[]): DnsRecord[] => {
+  const key = (record: DnsRecord): string => `${record.Type} ${record.Name.toLowerCase().replace(/.$/u, '')}`;
+  const kept = new Set(current.map(key));
+  return (previous ?? []).filter((record) => !kept.has(key(record)));
+};
+
+/**
+ * Upserts or deletes one record set.
+ *
+ * @param client - The Route 53 client.
+ * @param hostedZoneId - The zone that owns the name.
+ * @param action - `UPSERT` or `DELETE`.
+ * @param record - The record set.
+ */
+const changeRecord = async (
+  client: Route53Client,
+  hostedZoneId: string,
+  action: 'UPSERT' | 'DELETE',
+  record: DnsRecord,
+): Promise<void> => {
+  const change = await client.send(
+    new ChangeResourceRecordSetsCommand({
+      HostedZoneId: hostedZoneId,
+      ChangeBatch: {
+        Changes: [
+          {
+            Action: action,
+            ResourceRecordSet: {
+              Name: record.Name,
+              Type: record.Type,
+              TTL: 300,
+              ResourceRecords: record.Values.map((value) => ({
+                Value: record.Type === 'TXT' ? txtRecordValue(value) : value,
+              })),
+            },
+          },
+        ],
+      },
+    }),
+  );
+  await waitForChange(client, change.ChangeInfo?.Id);
+};
+
+/**
+ * Deletes a record set. A missing one is already gone.
+ *
+ * @param client - The Route 53 client.
+ * @param hostedZoneId - The zone that owns the name.
+ * @param record - The record set as it was written.
+ */
+const deleteRecord = async (client: Route53Client, hostedZoneId: string, record: DnsRecord): Promise<void> => {
+  try {
+    await changeRecord(client, hostedZoneId, 'DELETE', record);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes('not found')) throw error;
+  }
+};
+
+/**
  * Finds an existing certificate for a domain, preferring one that is already issued.
  *
  * @param client - The ACM client for the certificate region.
@@ -406,7 +529,24 @@ export const exportedCertificateDomain = (
 export const handler = async (event: DnsEvent): Promise<{ PhysicalResourceId: string; Data?: DnsData }> => {
   const props = event.ResourceProperties;
   const route53 = await route53Client(props.RoleArn);
-  const physicalResourceId = event.PhysicalResourceId ?? `${props.Mode}:${props.SiteDomain ?? props.SiteName}`;
+  const physicalResourceId =
+    event.PhysicalResourceId ??
+    `${props.Mode}:${props.SiteDomain ?? props.SiteName ?? recordsOf(props)[0]?.Name}`;
+
+  if (props.Mode === 'records') {
+    const records = recordsOf(props);
+    if (event.RequestType === 'Delete') {
+      for (const record of records) await deleteRecord(route53, props.HostedZoneId, record);
+      return { PhysicalResourceId: physicalResourceId };
+    }
+    for (const record of records) await changeRecord(route53, props.HostedZoneId, 'UPSERT', record);
+    if (event.RequestType === 'Update') {
+      for (const record of staleRecords(recordsOf(event.OldResourceProperties), records)) {
+        await deleteRecord(route53, props.HostedZoneId, record);
+      }
+    }
+    return { PhysicalResourceId: physicalResourceId };
+  }
 
   if (props.Mode === 'aliases') {
     const action = event.RequestType === 'Delete' ? 'DELETE' : 'UPSERT';

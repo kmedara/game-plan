@@ -79,14 +79,19 @@ run "optional_parameters" {
   override_data {
     target = data.aws_ssm_parameters_by_path.deploy
     values = {
-      names  = ["/gameplan/hosted-zone-name", "/gameplan/google-maps-android-api-key", "/gameplan/ios-web-upgrade"]
-      values = ["example.com", "android-key", "true"]
+      names  = ["/gameplan/hosted-zone-name", "/gameplan/google-maps-android-api-key", "/gameplan/ios-web-upgrade", "/gameplan/support-email"]
+      values = ["example.com", "android-key", "true", "privacy@example.com"]
     }
   }
 
   assert {
     condition     = local.eas_values.EXPO_PUBLIC_IOS_WEB_UPGRADE == "true"
     error_message = "ios-web-upgrade should reach EXPO_PUBLIC_IOS_WEB_UPGRADE."
+  }
+
+  assert {
+    condition     = expo_app_variable.build["EXPO_PUBLIC_SUPPORT_EMAIL"].value == "privacy@example.com"
+    error_message = "support-email should reach EXPO_PUBLIC_SUPPORT_EMAIL for the privacy page."
   }
 
   assert {

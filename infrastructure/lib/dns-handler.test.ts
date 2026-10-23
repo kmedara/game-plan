@@ -3,7 +3,25 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { exportedCertificateDomain } from './dns-handler';
+import { exportedCertificateDomain, staleCnames } from './dns-handler';
+
+describe('stale CNAMEs', () => {
+  it('deletes names the new deploy dropped and keeps names it rewrites', () => {
+    expect(
+      staleCnames(
+        [
+          { Name: 'a._domainkey.staging.example.com', Value: 'a.dkim.amazonses.com' },
+          { Name: 'b._domainkey.staging.example.com', Value: 'b.dkim.amazonses.com' },
+        ],
+        [{ Name: 'a._domainkey.staging.example.com', Value: 'a2.dkim.amazonses.com' }],
+      ),
+    ).toEqual([{ Name: 'b._domainkey.staging.example.com', Value: 'b.dkim.amazonses.com' }]);
+  });
+
+  it('has nothing to delete on the first deploy', () => {
+    expect(staleCnames(undefined, [{ Name: 'a', Value: 'b' }])).toEqual([]);
+  });
+});
 
 describe('exported certificate domain', () => {
   it('keeps the retained hostname after the website hostname has already changed', () => {

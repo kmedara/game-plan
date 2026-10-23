@@ -1,5 +1,6 @@
 /**
- * Email and text invites create the role code, then open the message.
+ * Email and text invites go out from GamePlan, and open the person's own app
+ * only while the server cannot send on that channel.
  */
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
@@ -17,6 +18,7 @@ jest.mock('@gameplan/rules', () => ({
 }));
 
 const mockCreateInvite = jest.fn();
+const mockSendInvite = jest.fn();
 
 jest.mock('expo-clipboard', () => ({
   setStringAsync: jest.fn(),
@@ -25,6 +27,7 @@ jest.mock('expo-clipboard', () => ({
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
+    i18n: { language: 'en' },
   }),
 }));
 
@@ -32,6 +35,7 @@ jest.mock('@/src/state', () => ({
   useApp: () => ({
     api: {
       createInvite: (...args: unknown[]) => mockCreateInvite(...args),
+      sendInvite: (...args: unknown[]) => mockSendInvite(...args),
       deleteInvite: jest.fn(),
       listInvites: jest.fn(async () => []),
     },
@@ -58,6 +62,7 @@ const renderInvites = (onError = jest.fn()) => {
 describe('team invites', () => {
   beforeEach(() => {
     mockCreateInvite.mockReset();
+    mockSendInvite.mockReset();
     jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
   });
 
@@ -73,7 +78,47 @@ describe('team invites', () => {
     expect(mockCreateInvite).not.toHaveBeenCalled();
   });
 
-  it('creates the selected role code and opens a mailto link', async () => {
+  it('has GamePlan email the invite and says where it went', async () => {
+    mockSendInvite.mockResolvedValue({ channel: 'email', code: 'coach-code', role: 'coach' });
+    renderInvites();
+    fireEvent.press(screen.getByText('role.coach'));
+    fireEvent.changeText(screen.getByLabelText('teamAdmin.email'), ' player@example.com ');
+    fireEvent.press(screen.getByText('teamAdmin.emailInvite'));
+    await waitFor(() =>
+      expect(mockSendInvite).toHaveBeenCalledWith('team-1', {
+        channel: 'email',
+        to: 'player@example.com',
+        role: 'coach',
+        locale: 'en',
+      }),
+    );
+    expect(await screen.findByText('teamAdmin.inviteEmailed')).toBeTruthy();
+    expect(Linking.openURL).not.toHaveBeenCalled();
+    expect(mockCreateInvite).not.toHaveBeenCalled();
+  });
+
+  it('has GamePlan text the invite to the number in E.164', async () => {
+    mockSendInvite.mockResolvedValue({ channel: 'text', code: 'player-code', role: 'player' });
+    renderInvites();
+    fireEvent.changeText(screen.getByLabelText('teamAdmin.phone'), '(202) 555-0123');
+    fireEvent.press(screen.getByText('teamAdmin.textInvite'));
+    await waitFor(() =>
+      expect(mockSendInvite).toHaveBeenCalledWith('team-1', expect.objectContaining({ channel: 'text', to: '+12025550123' })),
+    );
+    expect(await screen.findByText('teamAdmin.inviteTexted')).toBeTruthy();
+  });
+
+  it('shows the daily limit sentence', async () => {
+    mockSendInvite.mockRejectedValue(new Error('invite_send_limit'));
+    const { onError } = renderInvites();
+    fireEvent.changeText(screen.getByLabelText('teamAdmin.email'), 'player@example.com');
+    fireEvent.press(screen.getByText('teamAdmin.emailInvite'));
+    await waitFor(() => expect(onError).toHaveBeenCalledWith('errors.teamAdmin.inviteSendLimit'));
+    expect(Linking.openURL).not.toHaveBeenCalled();
+  });
+
+  it('opens a mailto link while GamePlan cannot send email yet', async () => {
+    mockSendInvite.mockRejectedValue(new Error('email_not_configured'));
     mockCreateInvite.mockResolvedValue(invite('coach', 'coach-code'));
     renderInvites();
     fireEvent.press(screen.getByText('role.coach'));
@@ -86,7 +131,8 @@ describe('team invites', () => {
     expect(Linking.openURL).toHaveBeenCalledWith(expect.stringContaining(encodeURIComponent('coach-code')));
   });
 
-  it('creates the selected role code and opens an sms link', async () => {
+  it('opens an sms link while GamePlan cannot text yet', async () => {
+    mockSendInvite.mockRejectedValue(new Error('text_not_configured'));
     mockCreateInvite.mockResolvedValue(invite('player', 'player-code'));
     renderInvites();
     fireEvent.changeText(screen.getByLabelText('teamAdmin.phone'), '(202) 555-0123');

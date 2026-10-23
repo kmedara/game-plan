@@ -85,3 +85,10 @@ Maps setup is in [docs/maps/README.md](docs/maps/README.md). Interactive route d
 The deploy job runs `cdk deploy --all`, applies the Stripe and Expo Terraform ([infrastructure/terraform](infrastructure/terraform/README.md)), builds the Expo site, syncs the bucket, and invalidates CloudFront. Re-run it from the Actions tab to choose `staging` or `production`.
 
 Each GitHub environment has three secrets: `AWS_ROLE_ARN`, `STRIPE_API_KEY` (test mode for staging, live for production), and `EXPO_TOKEN`. Hostnames are `https://<environment>.example.com`, with the API at `/api` and the socket at `wss://<environment>.example.com/api/socket`. Parameter Store inputs are listed under **Secrets at run time** in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+### Invite email and texts
+
+GamePlan sends team invites from its own address and number ([how](docs/ARCHITECTURE.md#invites-sent-by-gameplan)). Until each channel is set up in an account, the app opens the person's own mail or messages app. Once per account:
+
+1. **Email.** Deploy with the hosted zone set; the site stack verifies `<environment>.<domain>` in SES and writes its DKIM records. Then request SES production access (SES console → Account dashboard), or mail only reaches addresses verified in SES.
+2. **Texts.** In AWS End User Messaging SMS, request a US toll-free number with the SMS capability and submit its toll-free registration (use case: team invitations; sample message as in `functions/teams/src/invite-message.ts`). Approval takes about 1–4 weeks. Raise the account's SMS spending limit above the $1 default. Put the number's ARN in `<prefix>/sms-origination-identity` and deploy.

@@ -219,6 +219,9 @@ export default function ProfileScreen() {
           </View>
         );
       })}
+      <View className="mt-4">
+        <Button label={t('auth.privacy')} tone="secondary" onPress={() => router.push('/privacy')} />
+      </View>
       <DeleteAccountSection onDeleted={leaveDeletedAccount} />
     </RefreshableScroll>
     <View className="px-4 pb-2">

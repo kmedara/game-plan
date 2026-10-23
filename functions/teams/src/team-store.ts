@@ -23,6 +23,7 @@ import {
   chatPk,
   deleteItem,
   getItem,
+  incrementCounter,
   inviteMetaSk,
   invitePk,
   joinRequestSk,
@@ -30,6 +31,7 @@ import {
   queryBySkPrefix,
   queryPage,
   rolePermissionsSk,
+  sentInvitesSk,
   teamInviteSk,
   teamMemberSk,
   teamMetaSk,
@@ -876,6 +878,41 @@ export const getInviteByCode = async (code: string): Promise<InviteItem> => {
   const invite = await getItem<InviteItem>(invitePk(code), inviteMetaSk());
   if (invite === undefined) throw new Error("invite_not_found");
   return invite;
+};
+
+/** Invites GamePlan may email or text for one team in a UTC day. */
+export const TEAM_DAILY_INVITE_SENDS = 100;
+
+/** Invites GamePlan may email or text for one person in a UTC day, across teams. */
+export const SENDER_DAILY_INVITE_SENDS = 50;
+
+/**
+ * Counts one emailed or texted invite against the team's and the sender's
+ * daily limits. Texts cost money and both channels can be abused, so a full
+ * day refuses further sends.
+ *
+ * @param teamId - The team the invite is for.
+ * @param userId - The person sending it.
+ * @param now - The current time.
+ * @throws `invite_send_limit` when either limit is reached.
+ */
+export const countInviteSend = async (
+  teamId: string,
+  userId: string,
+  now = new Date(),
+): Promise<void> => {
+  const day = now.toISOString().slice(0, 10);
+  // Kept a day past the one it counts, then removed by TTL.
+  const ttl = Math.floor(Date.parse(`${day}T00:00:00.000Z`) / 1000) + 2 * 24 * 60 * 60;
+  try {
+    await incrementCounter(teamPk(teamId), sentInvitesSk(day), TEAM_DAILY_INVITE_SENDS, ttl);
+    await incrementCounter(userPk(userId), sentInvitesSk(day), SENDER_DAILY_INVITE_SENDS, ttl);
+  } catch (error) {
+    if (error instanceof Error && error.name === "ConditionalCheckFailedException") {
+      throw new Error("invite_send_limit");
+    }
+    throw error;
+  }
 };
 
 /**

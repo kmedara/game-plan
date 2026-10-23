@@ -1,5 +1,9 @@
 /**
  * Role invite links the caller can email, text, copy, and delete.
+ *
+ * GamePlan sends the email or text from its own address and number. Until a
+ * channel is set up on the server, that channel opens the person's own mail or
+ * messages app with the invite filled in instead.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,7 +13,7 @@ import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { callerCanGrant } from '@gameplan/rules';
 import { TEAM_ROLES, type TeamInvite, type TeamRole } from '@gameplan/types';
-import { createInviteMutation, deleteInviteMutation, invitesQuery } from '@/src/queries/teams';
+import { createInviteMutation, deleteInviteMutation, invitesQuery, sendInviteMutation } from '@/src/queries/teams';
 import {
   inviteMessageBody,
   invitePageUrl,
@@ -20,7 +24,7 @@ import {
   smsInviteUrl,
 } from '@/src/invite-share';
 import { config } from '@/src/config';
-import { errorMessageKey } from '@/src/errors';
+import { errorCode, errorMessageKey } from '@/src/errors';
 import { openLink } from '@/src/open-link';
 import { toE164Phone } from '@/src/phone';
 import { roleLabel } from '@/src/roles';
@@ -28,6 +32,16 @@ import { RolePicker } from '@/src/role-picker';
 import { useApp } from '@/src/state';
 import { TrashIcon } from '@/src/team-media';
 import { Button, Field } from '@/src/ui';
+
+/** Codes from the send endpoint that mean the server has no sender for the channel yet. */
+const NOT_CONFIGURED = new Set(['email_not_configured', 'text_not_configured']);
+
+/** Sentences for send failures that read the same for email and text. */
+const SEND_ERRORS: Readonly<Record<string, string>> = {
+  invite_send_limit: 'errors.teamAdmin.inviteSendLimit',
+  recipient_opted_out: 'errors.teamAdmin.recipientOptedOut',
+  text_country_unsupported: 'errors.teamAdmin.textCountryUnsupported',
+};
 
 export const TeamInvites = ({
   teamId,
@@ -40,16 +54,18 @@ export const TeamInvites = ({
   callerRole: TeamRole;
   onError: (message: string) => void;
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { api } = useApp();
   const queryClient = useQueryClient();
   const { data: invites = [] } = useQuery(invitesQuery(api, teamId));
   const createInvite = useMutation(createInviteMutation(api, queryClient, teamId));
+  const send = useMutation(sendInviteMutation(api, queryClient, teamId));
   const remove = useMutation(deleteInviteMutation(api, queryClient, teamId));
   const [inviteRole, setInviteRole] = useState<TeamRole>('player');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [sending, setSending] = useState<'email' | 'text' | undefined>();
+  const [sentNotice, setSentNotice] = useState<string | undefined>();
   const grantableRoles = TEAM_ROLES.filter((role) => callerCanGrant(callerRole, role));
 
   const ensureInvite = async (role: TeamRole): Promise<TeamInvite> => createInvite.mutateAsync(role);
@@ -80,35 +96,60 @@ export const TeamInvites = ({
     }
   };
 
+  /**
+   * Opens the person's own mail or messages app with the invite filled in.
+   *
+   * @returns Whether the app opened.
+   */
+  const openOwnApp = async (channel: 'email' | 'text', recipient: string): Promise<boolean> => {
+    const invite = await ensureInvite(inviteRole);
+    const message = messageFor(invite);
+    const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
+    const url =
+      channel === 'email'
+        ? mailtoInviteUrl(recipient, message.subject, message.body)
+        : smsInviteUrl(recipient, message.body, smsBodySeparator(userAgent));
+    try {
+      await openLink(url);
+      return true;
+    } catch {
+      onError(t('errors.teamAdmin.sendInviteFailed'));
+      return false;
+    }
+  };
+
   const sendInvite = async (channel: 'email' | 'text'): Promise<void> => {
     const recipient = channel === 'email' ? email.trim() : toE164Phone(phone);
     if (channel === 'email' && !isEmailAddress(email)) {
       onError(t('errors.teamAdmin.badInviteEmail'));
       return;
     }
-    if (channel === 'text' && recipient === undefined) {
+    if (recipient === undefined) {
       onError(t('errors.teamAdmin.badInvitePhone'));
       return;
     }
     setSending(channel);
+    setSentNotice(undefined);
     try {
-      const invite = await ensureInvite(inviteRole);
-      const message = messageFor(invite);
-      const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
-      const url =
-        channel === 'email'
-          ? mailtoInviteUrl(email, message.subject, message.body)
-          : smsInviteUrl(recipient ?? '', message.body, smsBodySeparator(userAgent));
       try {
-        await openLink(url);
-      } catch {
-        onError(t('errors.teamAdmin.sendInviteFailed'));
-        return;
+        await send.mutateAsync({
+          channel,
+          to: recipient,
+          role: inviteRole,
+          locale: i18n.language?.startsWith('es') === true ? 'es' : 'en',
+        });
+        setSentNotice(
+          t(channel === 'email' ? 'teamAdmin.inviteEmailed' : 'teamAdmin.inviteTexted', { to: recipient }),
+        );
+      } catch (err) {
+        if (!NOT_CONFIGURED.has(errorCode(err))) throw err;
+        if (!(await openOwnApp(channel, recipient))) return;
       }
       if (channel === 'email') setEmail('');
       else setPhone('');
     } catch (err) {
-      onError(t(errorMessageKey(err, 'errors.teamAdmin.inviteFailed')));
+      const badRecipient = channel === 'email' ? 'errors.teamAdmin.badInviteEmail' : 'errors.teamAdmin.badInvitePhone';
+      onError(t(errorMessageKey(err, 'errors.teamAdmin.inviteNotSent', { ...SEND_ERRORS, invalid_recipient: badRecipient })));
     } finally {
       setSending(undefined);
     }
@@ -153,6 +194,11 @@ export const TeamInvites = ({
         disabled={sending !== undefined}
         onPress={() => void sendInvite('text')}
       />
+      {sentNotice === undefined ? null : (
+        <Text className="mb-2 text-ink" accessibilityLiveRegion="polite">
+          {sentNotice}
+        </Text>
+      )}
       <Button
         label={
           invites.some((invite) => invite.role === inviteRole)
