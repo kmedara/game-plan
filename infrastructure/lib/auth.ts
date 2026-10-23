@@ -57,6 +57,16 @@ export type AuthProps = {
    * When set, a pre sign-up Lambda rejects every address that is not listed.
    */
   signupAllowlistParameter?: string;
+  /**
+   * SES-verified domain Cognito sends verification and password-reset email
+   * from, as `no-reply@<domain>`. Without it Cognito uses its own sender,
+   * which allows only about 50 messages a day.
+   *
+   * Set it only once the domain is verified and the account is out of the SES
+   * sandbox: in the sandbox, mail to unverified addresses fails, which would
+   * stop sign-ups.
+   */
+  sesEmailDomain?: string;
 };
 
 /**
@@ -104,6 +114,15 @@ export class Auth extends Construct {
         requireDigits: true,
       },
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
+      ...(props.sesEmailDomain === undefined
+        ? {}
+        : {
+            email: cognito.UserPoolEmail.withSES({
+              fromEmail: `no-reply@${props.sesEmailDomain}`,
+              fromName: 'GamePlan',
+              sesVerifiedDomain: props.sesEmailDomain,
+            }),
+          }),
       // Accounts cannot be recreated (password hashes do not export), so a stack
       // delete or replacement leaves the pool in place.
       removalPolicy: cdk.RemovalPolicy.RETAIN,

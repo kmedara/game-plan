@@ -11,7 +11,17 @@
  */
 
 import * as cdk from 'aws-cdk-lib';
-import { definedString, hostnameOf, publicUrlsFor, siteApiBaseUrl, splitUrlList, urlListFromUnknown } from '../lib/deploy-config';
+import {
+  allowlistEmails,
+  definedString,
+  hostnameOf,
+  mailDomainFor,
+  mailRecordsFor,
+  publicUrlsFor,
+  siteApiBaseUrl,
+  splitUrlList,
+  urlListFromUnknown,
+} from '../lib/deploy-config';
 import { GamePlanApi, GamePlanDns, GamePlanPlatform, GamePlanSite } from '../lib/gameplan-stack';
 import { getStackEnv } from '../lib/stack-env';
 
@@ -78,6 +88,26 @@ const dns =
 
 const dnsStack = dns === undefined ? undefined : new GamePlanDns(app, 'GamePlanDns', { env, ...dns });
 
+// The app's own email (invites, Cognito account mail) is sent through SES from
+// this domain. The site stack verifies it, so it needs the hosted zone.
+const emailDomain =
+  dns === undefined || domain === undefined || deployEnv === undefined
+    ? undefined
+    : mailDomainFor(deployEnv, domain, dns.siteHostname);
+// The mail provider's records live on the bare domain, which only production owns.
+const mailRecords =
+  dns === undefined || domain === undefined || deployEnv !== 'production'
+    ? []
+    : mailRecordsFor(domain, {
+        mx: process.env.MAIL_MX,
+        txt: process.env.MAIL_TXT,
+        dmarc: process.env.MAIL_DMARC,
+        extra: process.env.MAIL_RECORDS,
+      });
+// Cognito switches to SES only when asked: in the SES sandbox it could not
+// email new sign-ups.
+const cognitoSesEmail = process.env.COGNITO_SES_EMAIL?.trim().toLowerCase() === 'true';
+
 const staging = deployEnv === 'staging';
 const ssmPrefix = (process.env.SSM_PREFIX ?? '/gameplan').replace(/\/+$/u, '');
 // Signed, edge-cached media URLs. The private key stays in Parameter Store for the media function.
@@ -91,6 +121,7 @@ const platform = new GamePlanPlatform(app, 'GamePlanPlatform', {
   social,
   signupAllowlistParameter: staging ? `${ssmPrefix}/staging-signup-allowlist` : undefined,
   mediaCdn: mediaSigningPublicKey !== undefined,
+  sesEmailDomain: cognitoSesEmail ? emailDomain : undefined,
 });
 
 const api = new GamePlanApi(app, 'GamePlanApi', {
@@ -105,8 +136,8 @@ const api = new GamePlanApi(app, 'GamePlanApi', {
   mediaBucket: platform.mediaBucket,
   ssmPrefix,
   mediaSigningPublicKey,
-  // The site stack verifies this host in SES when it owns the DNS records.
-  inviteEmailDomain: dns?.siteHostname,
+  // The site stack verifies this domain in SES when it owns the DNS records.
+  inviteEmailDomain: emailDomain,
   smsOriginationIdentity: definedString(process.env.SMS_ORIGINATION_IDENTITY),
 });
 
@@ -121,4 +152,7 @@ new GamePlanSite(app, 'GamePlanSite', {
   socket: api.socket,
   mediaBucket: platform.mediaBucket,
   mediaKeyGroup: api.mediaKeyGroup,
+  emailDomain,
+  mailRecords,
+  sesTestRecipients: staging ? allowlistEmails(process.env.STAGING_SIGNUP_ALLOWLIST) : [],
 });

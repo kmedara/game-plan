@@ -6,6 +6,7 @@
  * CloudFormation exports, so a later deploy does not recreate Cognito or the table.
  */
 
+import { createHash } from 'node:crypto';
 import * as cdk from 'aws-cdk-lib';
 import type * as cognito from 'aws-cdk-lib/aws-cognito';
 import type * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
@@ -15,8 +16,9 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as ses from 'aws-cdk-lib/aws-ses';
 import type { Construct } from 'constructs';
 import { Api } from './api';
-import { Auth, type AuthSocialContext, type SocialProvider } from './auth';
+import { Auth, type AuthProps, type AuthSocialContext, type SocialProvider } from './auth';
 import { Database } from './database';
+import type { MailRecord } from './deploy-config';
 import { ZoneDns } from './dns';
 import type { HttpArea } from './names';
 import type { SiteApiProps, SiteSocketProps } from './site-api';
@@ -79,6 +81,8 @@ export type GamePlanPlatformProps = cdk.StackProps & {
   signupAllowlistParameter?: string;
   /** Lets the website distribution read uploads, for signed media URLs. */
   mediaCdn?: boolean;
+  /** SES-verified domain Cognito sends account email from. See {@link AuthProps.sesEmailDomain}. */
+  sesEmailDomain?: string;
 };
 
 /**
@@ -120,6 +124,7 @@ export class GamePlanPlatform extends cdk.Stack {
       social: props.social,
       selfSignUpEnabled: props.selfSignUpEnabled,
       signupAllowlistParameter: props.signupAllowlistParameter,
+      sesEmailDomain: props.sesEmailDomain,
     });
     this.userPool = auth.userPool;
     this.userPoolClient = auth.userPoolClient;
@@ -244,6 +249,18 @@ export type GamePlanSiteProps = cdk.StackProps &
     mediaBucket: s3.IBucket;
     /** Key group from {@link GamePlanApi}. Serves cached uploads at `/uploads/*` when set. */
     mediaKeyGroup?: cloudfront.IKeyGroup;
+    /**
+     * Domain SES sends the app's email from (`mailDomainFor`). Defaults to the
+     * website hostname. Needs `dns`, which writes its DKIM records.
+     */
+    emailDomain?: string;
+    /** The mail provider's records for the bare domain (`mailRecordsFor`). Production only. */
+    mailRecords?: readonly MailRecord[];
+    /**
+     * Addresses SES may deliver to while the account is in the SES sandbox:
+     * the staging sign-up allowlist. SES emails each one a verification link.
+     */
+    sesTestRecipients?: readonly string[];
   };
 
 /**
@@ -284,12 +301,22 @@ export class GamePlanSite extends cdk.Stack {
       });
       dns.addAliases({ distribution: this.distribution });
 
-      // Lets SES send team invites as invites@<website host>. The DKIM records
-      // sign the mail for that host, so it passes DMARC without a custom MAIL FROM.
+      // Lets SES send the app's email (invites, and Cognito's account email when
+      // it is switched to SES) from the mail domain. The DKIM records sign the
+      // mail for that domain, so it passes DMARC without a custom MAIL FROM.
       const inviteEmail = new ses.EmailIdentity(this, 'InviteEmailIdentity', {
-        identity: ses.Identity.domain(props.dns.siteHostname),
+        identity: ses.Identity.domain(props.emailDomain ?? props.dns.siteHostname),
       });
       dns.addCnames('InviteEmailDkim', inviteEmail.dkimRecords);
+      dns.addRecords('MailProviderRecords', props.mailRecords ?? []);
+    }
+
+    // In the SES sandbox, mail only reaches verified addresses. Verifying the
+    // people allowed to sign up lets them receive invites on staging. The id is
+    // a hash so an address does not appear in construct paths.
+    for (const address of props.sesTestRecipients ?? []) {
+      const id = createHash('sha256').update(address).digest('hex').slice(0, 12);
+      new ses.EmailIdentity(this, `SesTestRecipient${id}`, { identity: ses.Identity.email(address) });
     }
   }
 }

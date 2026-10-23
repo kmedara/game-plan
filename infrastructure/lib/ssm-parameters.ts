@@ -33,6 +33,15 @@ export const PARAMETER_ENV: Record<string, string> = {
   'support-email': 'SUPPORT_EMAIL',
   // ARN of the registered toll-free number that texts invites. Unset keeps texts on the person's phone.
   'sms-origination-identity': 'SMS_ORIGINATION_IDENTITY',
+  // `true` sends Cognito's account email through SES. Leave unset while SES is in the sandbox.
+  'cognito-ses-email': 'COGNITO_SES_EMAIL',
+  // The mail provider's records for the bare domain, written by the production deploy.
+  'mail-mx': 'MAIL_MX',
+  'mail-txt': 'MAIL_TXT',
+  'mail-dmarc': 'MAIL_DMARC',
+  'mail-records': 'MAIL_RECORDS',
+  // Staging verifies these addresses in SES so invites reach them in the SES sandbox.
+  'staging-signup-allowlist': 'STAGING_SIGNUP_ALLOWLIST',
 };
 
 /** Stack output ids, mapped to the environment variables the website build and upload read. */
