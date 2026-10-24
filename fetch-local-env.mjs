@@ -1,9 +1,13 @@
 /**
  * Writes the environment variables `npm run up:build` interpolates into `.env`.
  *
- * Cognito values come from CloudFormation exports. Maps keys and VAPID settings come
- * from Parameter Store under `/gameplan/` and are optional. Existing `.env` lines for
- * other names are kept.
+ * Cognito values come from CloudFormation exports. Maps keys, VAPID settings, the
+ * Stripe test key, and the support inbox come from Parameter Store under `/gameplan/`
+ * and are optional; a missing parameter keeps the value already in `.env`. Existing
+ * `.env` lines for other names are kept.
+ *
+ * The Stripe webhook signing secrets are not fetched: they belong to the deployed
+ * endpoints, and local webhooks are signed by `stripe listen` (docs/stripe.md).
  *
  * Usage: `node fetch-local-env.mjs --profile <name>`
  */
@@ -26,6 +30,8 @@ const PARAMETERS = {
   'vapid-public-key': 'VAPID_PUBLIC_KEY',
   'vapid-private-key': 'VAPID_PRIVATE_KEY',
   'vapid-subject': 'VAPID_SUBJECT',
+  'stripe-secret-key': 'STRIPE_SECRET_KEY',
+  'support-email': 'SUPPORT_EMAIL',
 };
 
 const region = process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? 'us-east-1';
@@ -79,14 +85,14 @@ const exportValue = (name) => {
 };
 
 /**
- * Reads one String parameter. A missing parameter returns an empty string.
+ * Reads one parameter, decrypting a `SecureString`. A missing parameter returns an empty string.
  *
  * @param name - Full parameter name.
  * @returns The parameter value, or `''` when the name does not exist.
  */
 const parameterValue = (name) => {
   try {
-    return aws(['ssm', 'get-parameter', '--name', name, '--query', 'Parameter.Value']);
+    return aws(['ssm', 'get-parameter', '--name', name, '--with-decryption', '--query', 'Parameter.Value']);
   } catch {
     return '';
   }
@@ -123,7 +129,11 @@ const missing = [];
 for (const [suffix, key] of Object.entries(PARAMETERS)) {
   const value = parameterValue(`${prefix}/${suffix}`);
   if (value === '') missing.push(key);
-  fetched.set(key, value);
+  else fetched.set(key, value);
+}
+const stripeKey = fetched.get('STRIPE_SECRET_KEY');
+if (stripeKey !== undefined && !/^(sk|rk)_test_/u.test(stripeKey)) {
+  throw new Error(`${prefix}/stripe-secret-key is not a test-mode key; local runs must not use live Stripe.`);
 }
 
 let existing = '';
