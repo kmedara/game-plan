@@ -134,6 +134,7 @@ describe('site stack', () => {
       Properties: {
         ResponseHeadersPolicyConfig: {
           SecurityHeadersConfig: { ContentSecurityPolicy: { ContentSecurityPolicy: unknown; Override: boolean } };
+          CustomHeadersConfig: { Items: { Header: string; Value: string }[] };
         };
       };
     };
@@ -147,6 +148,15 @@ describe('site stack', () => {
     expect(value).toContain('.s3.us-east-1.amazonaws.com');
     expect(value).not.toContain('unsafe-eval');
     expect(value).not.toMatch(/script-src[^;]*'unsafe-inline'/u);
+    expect(value).toContain('report-uri /api/csp-report');
+    expect(value).toContain('report-to csp');
+
+    const custom = Object.fromEntries(
+      policy.Properties.ResponseHeadersPolicyConfig.CustomHeadersConfig.Items.map((item) => [item.Header, item.Value]),
+    );
+    expect(custom['Reporting-Endpoints']).toBe('csp="/api/csp-report"');
+    expect(custom['Content-Security-Policy-Report-Only']).toContain("require-trusted-types-for 'script'");
+    expect(custom['Content-Security-Policy-Report-Only']).toContain('report-to csp');
   });
 
   it('lets only this distribution invoke the function URLs', () => {

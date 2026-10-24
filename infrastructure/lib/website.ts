@@ -11,7 +11,13 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import { SITE_API_PREFIX } from './deploy-config';
 import { MEDIA_CDN_KEY_PREFIX } from './names';
-import { addSiteApiBehaviors, createSiteApiEdge, SITE_SOCKET_PATH, type SiteApiProps } from './site-api';
+import {
+  addSiteApiBehaviors,
+  createSiteApiEdge,
+  SITE_CSP_REPORT_PATH,
+  SITE_SOCKET_PATH,
+  type SiteApiProps,
+} from './site-api';
 
 /** Inputs for the website construct. */
 export type WebsiteProps = SiteApiProps & {
@@ -105,6 +111,29 @@ const GOOGLE_MAPS = {
   style: ['https://fonts.googleapis.com'],
 };
 
+/** Reporting API endpoint name the policies send violations to. */
+const CSP_REPORT_GROUP = 'csp';
+
+/**
+ * Directives that send violations to {@link SITE_CSP_REPORT_PATH}.
+ *
+ * Chromium uses `report-to` and ignores `report-uri` when both are present.
+ * Firefox and Safari only read `report-uri`.
+ */
+const REPORTING = [`report-uri ${SITE_CSP_REPORT_PATH}`, `report-to ${CSP_REPORT_GROUP}`];
+
+/**
+ * Report-only policy for Trusted Types.
+ *
+ * With Trusted Types enforced, assigning a plain string to a script sink such
+ * as `innerHTML`, `eval`, or `script.src` throws, so injected markup cannot run.
+ * The Metro bundle and the Maps loader set `script.src` themselves, so this
+ * only reports until the logs show which sinks the app uses. To enforce it,
+ * add `require-trusted-types-for 'script'` to {@link contentSecurityPolicy},
+ * with a `trusted-types` allow-list for any policies those scripts create.
+ */
+const TRUSTED_TYPES_REPORT_ONLY = ["require-trusted-types-for 'script'", ...REPORTING].join('; ');
+
 /**
  * Builds the website Content-Security-Policy.
  *
@@ -132,6 +161,7 @@ const contentSecurityPolicy = (mediaOrigins: readonly string[], socketOrigin?: s
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
+    ...REPORTING,
   ].join('; ');
 
 /**
@@ -202,6 +232,12 @@ export class Website extends Construct {
           referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
           override: true,
         },
+      },
+      customHeadersBehavior: {
+        customHeaders: [
+          { header: 'Reporting-Endpoints', value: `${CSP_REPORT_GROUP}="${SITE_CSP_REPORT_PATH}"`, override: true },
+          { header: 'Content-Security-Policy-Report-Only', value: TRUSTED_TYPES_REPORT_ONLY, override: true },
+        ],
       },
     });
 
