@@ -9,6 +9,8 @@
 import type {
   AccountKind,
   ChatParticipant,
+  EventType,
+  GameSide,
   PlanTier,
   TeamPermission,
   TeamPlan,
@@ -438,6 +440,34 @@ export const positionsWithinLimit = (positions: readonly string[]): boolean =>
  */
 export const assertPositionLimit = (positions: readonly string[]): void => {
   if (!positionsWithinLimit(positions)) throw new Error('too_many_positions');
+};
+
+/** Fields that decide what an event is called. */
+export type EventTitleFields = {
+  eventType: EventType;
+  title?: string;
+  opponentName?: string;
+  side?: GameSide;
+};
+
+/**
+ * The name an event goes by in reminders, pushes, and feeds.
+ *
+ * Practices and games have no title of their own: a practice is "Practice" and
+ * a game is its side against the opponent. Meetings and other events use the
+ * title they were given.
+ *
+ * @param event - The event type, title, and game fields.
+ * @returns Plain English text, at most 200 characters.
+ */
+export const eventTitle = (event: EventTitleFields): string => {
+  if (event.eventType === 'practice') return 'Practice';
+  if (event.eventType === 'game') {
+    const side = event.side === 'home' ? 'Home' : event.side === 'away' ? 'Away' : undefined;
+    if (event.opponentName === undefined) return side === undefined ? 'Game' : `${side} game`;
+    return `${side ?? 'Game'} vs ${event.opponentName}`.slice(0, 200);
+  }
+  return event.title ?? '';
 };
 
 /**
