@@ -19,6 +19,10 @@ import { sessionResponse, withIdentityErrors } from './session.js';
 /**
  * Refreshes a session from a body token or the refresh cookie.
  *
+ * Tokens come back in JSON only when the caller sent the refresh token in the
+ * body, which only the Expo app can do. A website refresh rides on the HttpOnly
+ * cookie, so script on the page cannot ask for the tokens in the response.
+ *
  * @param event - The HTTP API event.
  * @returns A session response or an error.
  */
@@ -28,6 +32,7 @@ export const handleRefresh = route(
   withIdentityErrors(),
   withBodyValidation(refreshBodySchema),
   async ({ event, body }) => {
+    const fromBody = body.refreshToken !== undefined;
     const refreshToken = body.refreshToken ?? readCookie(event, REFRESH_COOKIE);
     if (refreshToken === undefined || refreshToken.length === 0) {
       return unauthorized('invalid_token');
@@ -45,7 +50,7 @@ export const handleRefresh = route(
       tokens.expiresIn,
       user,
       tokens.refreshToken,
-      wantsBodyRefreshToken(headerOf(event, REFRESH_DELIVERY_HEADER)),
+      fromBody && wantsBodyRefreshToken(headerOf(event, REFRESH_DELIVERY_HEADER)),
     );
   },
 );

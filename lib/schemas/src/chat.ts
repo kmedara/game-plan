@@ -1,8 +1,8 @@
 /**
- * Chat, adult search, and message wire contracts.
+ * Chat, teammate search, and message wire contracts.
  */
 
-import { displayNameSchema } from './display-name.js';
+import { displayNameSchema, personNameSchema } from './display-name.js';
 import { accountKindSchema, chatKindSchema } from './enums.js';
 import { z } from './zod.js';
 
@@ -57,13 +57,28 @@ export const userSearchPolicySchema = z
 export type UserSearchPolicy = z.infer<typeof userSearchPolicySchema>;
 
 /**
- * Query for exact-email adult search.
+ * Query for searching the caller's teammates by first, last, or display name.
  *
- * The handler applies {@link UserSearchPolicy} so a later safety pass can widen
- * who appears without a new chat model.
+ * Matches the start of any name word, so `ada`, `love`, and `ada lo` all find
+ * Ada Lovelace.
  */
 export const searchUsersQuerySchema = z.object({
-  email: z.string().email().min(3).max(320),
+  q: z.string().trim().min(2).max(100),
+});
+
+/** One teammate found by name, read from the roster rows the caller shares with them. */
+export const teammateMatchSchema = z.object({
+  userId: z.string().min(1),
+  displayName: displayNameSchema,
+  firstName: personNameSchema.optional(),
+  lastName: personNameSchema.optional(),
+  /** Teams the caller and this person are both on. */
+  teamIds: z.array(z.string().min(1)).min(1),
+});
+
+/** Response for `GET /chat/users/search`, sorted by display name. */
+export const teammateSearchResultSchema = z.object({
+  users: z.array(teammateMatchSchema),
 });
 
 /** Query for reverse-chronological message history. */
@@ -187,6 +202,12 @@ export type CreatePrivateChatBody = z.infer<typeof createPrivateChatBodySchema>;
 
 /** Inferred type for {@link searchUsersQuerySchema}. */
 export type SearchUsersQuery = z.infer<typeof searchUsersQuerySchema>;
+
+/** Inferred type for {@link teammateMatchSchema}. */
+export type TeammateMatch = z.infer<typeof teammateMatchSchema>;
+
+/** Inferred type for {@link teammateSearchResultSchema}. */
+export type TeammateSearchResult = z.infer<typeof teammateSearchResultSchema>;
 
 /** Inferred type for {@link messageHistoryQuerySchema}. */
 export type MessageHistoryQuery = z.infer<typeof messageHistoryQuerySchema>;

@@ -250,8 +250,9 @@ export type ClaimSignupBody = {
 }
 
 export type CompleteProfileBody = {
-  birthday: string;
-  displayName?: string;
+  birthday?: string;
+  firstName: string;
+  lastName: string;
 }
 
 export type ConfirmationRequired = {
@@ -885,6 +886,8 @@ export type OauthExchangeResponse = {
     userId: string;
     email: string;
     displayName: string;
+    firstName?: string;
+    lastName?: string;
     accountKind: 'adult' | 'minor';
     birthday?: string;
     photoKey?: string;
@@ -1009,6 +1012,8 @@ export type PaymentReturnQuery = {
   result: 'success' | 'cancel' | 'onboarded' | 'refresh';
   teamId?: string;
 }
+
+export type PersonName = string;
 
 export type PhoneNumber = string;
 
@@ -1143,7 +1148,8 @@ export type RefreshBody = {
 export type RegisterBody = {
   email: string;
   password: string;
-  displayName: string;
+  firstName: string;
+  lastName: string;
   birthday: string;
 }
 
@@ -1267,7 +1273,7 @@ export type SearchTeamDirectoryQuery = {
 }
 
 export type SearchUsersQuery = {
-  email: string;
+  q: string;
 }
 
 export type SendInviteBody = {
@@ -1298,6 +1304,8 @@ export type SessionTokens = {
     userId: string;
     email: string;
     displayName: string;
+    firstName?: string;
+    lastName?: string;
     accountKind: 'adult' | 'minor';
     birthday?: string;
     photoKey?: string;
@@ -1450,6 +1458,30 @@ export type TeamList = {
       cancelAtPeriodEnd?: boolean;
       orgId?: string;
     };
+  }[];
+}
+
+export type TeammateMatch = {
+  userId: string;
+  displayName: string;
+  firstName?: string;
+  lastName?: string;
+  /**
+   * @minItems 1
+   */
+  teamIds: [string, ...string[]];
+}
+
+export type TeammateSearchResult = {
+  users: {
+    userId: string;
+    displayName: string;
+    firstName?: string;
+    lastName?: string;
+    /**
+     * @minItems 1
+     */
+    teamIds: [string, ...string[]];
   }[];
 }
 
@@ -1703,6 +1735,8 @@ export type UserProfile = {
   userId: string;
   email: string;
   displayName: string;
+  firstName?: string;
+  lastName?: string;
   accountKind: 'adult' | 'minor';
   birthday?: string;
   photoKey?: string;

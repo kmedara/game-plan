@@ -37,7 +37,9 @@ describe('createLocalIdentityProvider', () => {
     const tokens = await provider.register({
       email: '  Ada@Example.COM ',
       password: 'secret-pass',
-      displayName: '  Ada  ',
+      displayName: '  Ada Lovelace  ',
+      firstName: ' Ada ',
+      lastName: ' Lovelace ',
       accountKind: 'adult',
     });
 
@@ -50,6 +52,7 @@ describe('createLocalIdentityProvider', () => {
     expect(mockPutItem).toHaveBeenCalledOnce();
     const stored = mockPutItem.mock.calls[0][0] as UserProfileItem;
     expect(stored.passwordHash).toMatch(/^scrypt\$/u);
+    expect(stored).toMatchObject({ displayName: 'Ada Lovelace', firstName: 'Ada', lastName: 'Lovelace' });
   });
 
   it('rejects registration when the email is already taken', async () => {
@@ -59,7 +62,9 @@ describe('createLocalIdentityProvider', () => {
       createLocalIdentityProvider().register({
         email: 'taken@example.com',
         password: 'x',
-        displayName: 'X',
+        displayName: 'X Y',
+        firstName: 'X',
+        lastName: 'Y',
         accountKind: 'adult',
       }),
     ).rejects.toThrow('email_taken');
@@ -71,7 +76,9 @@ describe('createLocalIdentityProvider', () => {
     await createLocalIdentityProvider().register({
       email: 'fresh@example.com',
       password: 'good-pass',
-      displayName: 'Fresh',
+      displayName: 'Fresh Start',
+      firstName: 'Fresh',
+      lastName: 'Start',
       accountKind: 'adult',
     });
     const hash = (mockPutItem.mock.calls[0][0] as UserProfileItem).passwordHash!;

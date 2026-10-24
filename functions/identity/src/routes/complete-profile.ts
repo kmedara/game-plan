@@ -1,14 +1,14 @@
 /**
- * `POST /identity/profile/complete` — finish birthday after social Hosted UI sign-in.
+ * `POST /identity/profile/complete` — finish birthday and first and last name.
  */
 
 import { completeProfileBodySchema } from '@gameplan/schemas';
 import {
   getProfile,
+  profileNeedsCompletion,
   putProfile,
   requireUser,
   toUserProfile,
-  usableDisplayName,
 } from '../../../lib/auth/index.js';
 import { accountKindFromBirthday } from '@gameplan/rules';
 import { badRequest, json } from '../../../lib/http.js';
@@ -17,6 +17,10 @@ import { withIdentityErrors } from './session.js';
 
 /**
  * Handles `POST /identity/profile/complete`.
+ *
+ * Social sign-in leaves the birthday unset. Accounts made before names were
+ * collected have a birthday but no first or last name. Either finishes here.
+ * A stored birthday never changes, since it decides the account kind.
  *
  * @param event - The HTTP API event.
  * @returns The completed profile, or an error.
@@ -29,11 +33,22 @@ export const handleCompleteProfile = route(
   withBodyValidation(completeProfileBodySchema),
   async ({ user: auth, body }) => {
     const existing = await getProfile(auth.userId);
-    if (existing?.birthday !== undefined) throw new Error('profile_already_complete');
+    if (existing !== undefined && !profileNeedsCompletion(existing)) {
+      throw new Error('profile_already_complete');
+    }
+    if (
+      existing?.birthday !== undefined &&
+      body.birthday !== undefined &&
+      body.birthday !== existing.birthday
+    ) {
+      throw new Error('birthday_already_set');
+    }
 
+    const birthday = existing?.birthday ?? body.birthday;
+    if (birthday === undefined) return badRequest('birthday_required');
     let accountKind: 'adult' | 'minor';
     try {
-      accountKind = accountKindFromBirthday(body.birthday);
+      accountKind = accountKindFromBirthday(birthday);
     } catch {
       return badRequest('invalid_birthday');
     }
@@ -48,18 +63,14 @@ export const handleCompleteProfile = route(
           : undefined;
     if (email === undefined) return badRequest('email_required');
 
-    const displayName =
-      usableDisplayName(body.displayName, auth.userId) ||
-      usableDisplayName(existing?.displayName, auth.userId) ||
-      email.split('@')[0] ||
-      'Player';
-
     const profile = await putProfile({
       userId: auth.userId,
       email,
-      displayName,
+      displayName: `${body.firstName} ${body.lastName}`,
+      firstName: body.firstName,
+      lastName: body.lastName,
       accountKind,
-      birthday: body.birthday,
+      birthday,
       createdAt: existing?.createdAt,
       passwordHash: existing?.passwordHash,
       photoKey: existing?.photoKey,

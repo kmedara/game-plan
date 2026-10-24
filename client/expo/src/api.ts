@@ -95,6 +95,8 @@ import type {
   TeamMemberList,
   TeamMemberProfile,
   TeamSummary,
+  TeammateMatch,
+  TeammateSearchResult,
   UpdateEventBody,
   UpdateFixtureBody,
   UpdatePositionsBody,
@@ -762,10 +764,10 @@ export class ApiClient {
     return body.chats;
   }
 
-  async searchChatUser(email: string): Promise<UserProfile> {
-    const params = new URLSearchParams({ email: email.trim() });
-    const body = await this.request<{ user: UserProfile }>('GET', `/chat/users/search?${params}`);
-    return body.user;
+  async searchTeammates(query: string): Promise<TeammateMatch[]> {
+    const params = new URLSearchParams({ q: query.trim() });
+    const body = await this.request<TeammateSearchResult>('GET', `/chat/users/search?${params}`);
+    return body.users;
   }
 
   async createPrivateChat(body: CreatePrivateChatBody): Promise<ChatSummary> {

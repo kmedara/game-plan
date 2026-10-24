@@ -5,6 +5,7 @@
 import { QueryCommand } from '@aws-sdk/lib-dynamodb';
 import type { AccountKind } from '@gameplan/types';
 import { renameChatMember } from '../chat-member-names.js';
+import { renameRosterMember, rosterNames } from '../roster-names.js';
 import { getItem, putItem } from '../dynamo/access.js';
 import { getDocClient } from '../dynamo/client.js';
 import { GSI_EMAIL, TABLE_PK, TABLE_SK, profileSk, userPk } from '../dynamo/keys.js';
@@ -66,7 +67,8 @@ export const findProfileByEmail = async (
  * Writes (or overwrites) a user profile row.
  *
  * Local mode may include `passwordHash`. Cognito mode never stores a password.
- * A changed display name is copied onto the user's private chats.
+ * A changed display name is copied onto the user's private chats, and any
+ * name change onto their roster rows.
  *
  * @param input - Profile fields to persist.
  * @returns The stored profile item.
@@ -75,6 +77,8 @@ export const putProfile = async (input: {
   userId: string;
   email: string;
   displayName: string;
+  firstName?: string;
+  lastName?: string;
   accountKind: AccountKind;
   birthday?: string;
   /** Pass `null` to clear a photo. Omit to leave the row without one. */
@@ -90,6 +94,8 @@ export const putProfile = async (input: {
     userId: input.userId,
     email: input.email.trim().toLowerCase(),
     displayName: input.displayName.trim(),
+    ...(input.firstName !== undefined ? { firstName: input.firstName.trim() } : {}),
+    ...(input.lastName !== undefined ? { lastName: input.lastName.trim() } : {}),
     accountKind: input.accountKind,
     createdAt: input.createdAt ?? new Date().toISOString(),
     ...(input.birthday !== undefined ? { birthday: input.birthday } : {}),
@@ -105,6 +111,16 @@ export const putProfile = async (input: {
   await putItem(item);
   if (previous !== undefined && previous.displayName !== item.displayName) {
     await renameChatMember(item.userId, item.displayName);
+  }
+  const names = rosterNames(item);
+  if (
+    previous !== undefined &&
+    names !== undefined &&
+    (previous.displayName !== item.displayName ||
+      previous.firstName !== item.firstName ||
+      previous.lastName !== item.lastName)
+  ) {
+    await renameRosterMember(item.userId, names);
   }
   return item;
 };

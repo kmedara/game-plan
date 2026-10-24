@@ -21,27 +21,27 @@ import { sessionResponse, withIdentityErrors } from './session.js';
 /**
  * Ensures a profile row exists after Cognito register (local already wrote one).
  *
- * @param userId - The new user id.
- * @param email - The account email.
- * @param displayName - The display name from registration.
- * @param accountKind - Adult or minor.
- * @param birthday - Calendar date of birth.
+ * @param input - The new user's id, email, names, account kind, and birthday.
  * @returns The profile item.
  */
-const ensureProfile = async (
-  userId: string,
-  email: string,
-  displayName: string,
-  accountKind: UserProfile['accountKind'],
-  birthday: string,
-): Promise<UserProfileItem> => {
-  const existing = await getProfile(userId);
+const ensureProfile = async (input: {
+  userId: string;
+  email: string;
+  displayName: string;
+  firstName: string;
+  lastName: string;
+  accountKind: UserProfile['accountKind'];
+  birthday: string;
+}): Promise<UserProfileItem> => {
+  const existing = await getProfile(input.userId);
   if (existing !== undefined) return existing;
-  return putProfile({ userId, email, displayName, accountKind, birthday });
+  return putProfile(input);
 };
 
 /**
  * Handles `POST /identity/register`.
+ *
+ * The display name is `firstName lastName`.
  *
  * @param event - The HTTP API event.
  * @returns A session response or an error.
@@ -59,30 +59,30 @@ export const handleRegister = route(
       return badRequest('invalid_birthday');
     }
 
+    const names = {
+      displayName: `${body.firstName} ${body.lastName}`,
+      firstName: body.firstName,
+      lastName: body.lastName,
+    };
     const registered: RegisterResult = await getIdentityProvider().register({
       email: body.email,
       password: body.password,
-      displayName: body.displayName,
+      ...names,
       accountKind,
     });
+    const profileInput = {
+      userId: registered.userId,
+      email: registered.email,
+      ...names,
+      accountKind,
+      birthday: body.birthday,
+    };
     if (registered.status === 'confirmation_required') {
-      await ensureProfile(
-        registered.userId,
-        registered.email,
-        body.displayName,
-        accountKind,
-        body.birthday,
-      );
+      await ensureProfile(profileInput);
       return json(202, { confirmationRequired: true, email: registered.email });
     }
 
-    const profile = await ensureProfile(
-      registered.userId,
-      registered.email,
-      body.displayName,
-      accountKind,
-      body.birthday,
-    );
+    const profile = await ensureProfile(profileInput);
     return sessionResponse(
       201,
       registered.accessToken,

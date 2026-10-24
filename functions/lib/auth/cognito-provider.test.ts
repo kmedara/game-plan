@@ -74,7 +74,9 @@ describe('createCognitoIdentityProvider', () => {
       createCognitoIdentityProvider().register({
         email: 'a@example.com',
         password: 'x',
-        displayName: 'A',
+        displayName: 'A B',
+        firstName: 'A',
+        lastName: 'B',
         accountKind: 'adult',
       }),
     ).rejects.toThrow('cognito_not_configured');
@@ -87,6 +89,8 @@ describe('createCognitoIdentityProvider', () => {
       email: '  New@Example.com ',
       password: 'Secret1!',
       displayName: '  New User ',
+      firstName: 'New',
+      lastName: 'User',
       accountKind: 'adult',
     });
 
@@ -105,7 +109,9 @@ describe('createCognitoIdentityProvider', () => {
       createCognitoIdentityProvider().register({
         email: 'bare@example.com',
         password: 'Secret1!',
-        displayName: 'Bare',
+        displayName: 'Bare Name',
+        firstName: 'Bare',
+        lastName: 'Name',
         accountKind: 'adult',
       }),
     ).rejects.toThrow('email_not_confirmed');
@@ -116,7 +122,9 @@ describe('createCognitoIdentityProvider', () => {
     const input = {
       email: 'dup@example.com',
       password: 'x',
-      displayName: 'D',
+      displayName: 'D E',
+      firstName: 'D',
+      lastName: 'E',
       accountKind: 'adult' as const,
     };
 

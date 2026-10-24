@@ -87,6 +87,7 @@ import {
   messagePageSchema,
   searchUsersQuerySchema,
   sendMessageBodySchema,
+  teammateSearchResultSchema,
 } from './chat.js';
 import {
   deviceRegistrationSchema,
@@ -278,7 +279,7 @@ const AREAS: Record<string, AreaSpec> = {
       },
       '/identity/profile/complete': {
         post: {
-          summary: 'Finish a social-login profile',
+          summary: 'Finish a profile with birthday and first and last name',
           body: completeProfileBodySchema,
           response: userProfileSchema,
           secured: true,
@@ -545,7 +546,11 @@ const AREAS: Record<string, AreaSpec> = {
         post: { summary: 'Create a private chat', body: createPrivateChatBodySchema, response: chatSummarySchema },
       },
       '/chat/users/search': {
-        get: { summary: 'Find a user by exact email', query: searchUsersQuerySchema },
+        get: {
+          summary: "Find the caller's teammates by name",
+          query: searchUsersQuerySchema,
+          response: teammateSearchResultSchema,
+        },
       },
       '/chat/{chatId}/messages': {
         get: {

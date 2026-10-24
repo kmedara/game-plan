@@ -51,6 +51,7 @@ export {
 } from "./refresh-cookie.js";
 
 export {
+  profileNeedsCompletion,
   toUserProfile,
   type IdentityProvider,
   type IdentityTokens,

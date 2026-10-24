@@ -6,13 +6,15 @@ import { describe, expect, it } from 'vitest';
 import { toUserProfile, type UserProfileItem } from './identity-provider.js';
 
 describe('toUserProfile', () => {
-  it('maps optional birthday, photo, and phone fields', () => {
+  it('maps optional name, birthday, photo, and phone fields', () => {
     const complete: UserProfileItem = {
       PK: 'USER#u1',
       SK: 'PROFILE',
       userId: 'u1',
       email: 'a@example.com',
-      displayName: 'Ada',
+      displayName: 'Ada Lovelace',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
       accountKind: 'adult',
       birthday: '1990-01-01',
       photoKey: 'photos/u1.jpg',
@@ -22,13 +24,19 @@ describe('toUserProfile', () => {
     expect(toUserProfile(complete)).toEqual({
       userId: 'u1',
       email: 'a@example.com',
-      displayName: 'Ada',
+      displayName: 'Ada Lovelace',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
       accountKind: 'adult',
       birthday: '1990-01-01',
       photoKey: 'photos/u1.jpg',
       phoneNumber: '+12025550123',
       needsProfileCompletion: false,
     });
+
+    const unnamed: UserProfileItem = { ...complete, lastName: undefined };
+    expect(toUserProfile(unnamed).needsProfileCompletion).toBe(true);
+    expect(toUserProfile(unnamed)).not.toHaveProperty('lastName');
 
     const pending: UserProfileItem = {
       ...complete,

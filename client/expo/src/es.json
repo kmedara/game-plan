@@ -66,7 +66,8 @@
   "completeProfile": {
     "title": "Completa tu perfil",
     "hint": "Entra al juego.",
-    "displayName": "Nombre para mostrar",
+    "firstName": "Nombre",
+    "lastName": "Apellido",
     "birthday": "Fecha de nacimiento",
     "month": "Mes",
     "day": "Día",
@@ -629,6 +630,7 @@
       "lineupCopyFailed": "No se pudo copiar la alineación anterior.",
       "messageFailed": "No se pudo abrir un chat con esa persona.",
       "sportMismatch": "Esos clubes practican deportes distintos.",
+      "changed": "Alguien acaba de cambiar este evento. Vuelve a cargarlo e inténtalo de nuevo.",
       "sideRequired": "Elige local o visitante antes de compartir.",
       "chooseSide": "Elige local o visitante.",
       "opponentRequired": "Escribe el rival.",

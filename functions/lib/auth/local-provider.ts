@@ -2,7 +2,8 @@
  * DynamoDB-backed identity provider for local development without Cognito.
  */
 
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, scryptSync } from 'node:crypto';
+import { safeEqual } from '../safe-equal.js';
 import { getItem, putItem } from '../dynamo/access.js';
 import { TABLE_PK, TABLE_SK, profileSk, userPk } from '../dynamo/keys.js';
 import type { LoginBody } from '@gameplan/types';
@@ -52,9 +53,7 @@ const verifyPassword = (password: string, stored: string): boolean => {
     r: SCRYPT_R,
     p: SCRYPT_P,
   });
-  const expected = Buffer.from(hash, 'hex');
-  if (actual.length !== expected.length) return false;
-  return timingSafeEqual(actual, expected);
+  return safeEqual(actual, Buffer.from(hash, 'hex'));
 };
 
 /**
@@ -84,6 +83,8 @@ export const createLocalIdentityProvider = (): IdentityProvider => ({
       userId,
       email,
       displayName: input.displayName.trim(),
+      firstName: input.firstName.trim(),
+      lastName: input.lastName.trim(),
       accountKind: input.accountKind,
       createdAt,
       passwordHash: hashPassword(input.password),

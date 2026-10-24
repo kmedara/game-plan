@@ -22,6 +22,7 @@ import {
   teamDirectorySk,
   inviteMetaSk,
   invitePk,
+  profileSk,
   rolePermissionsSk,
   teamMemberSk,
   teamMetaSk,
@@ -60,6 +61,8 @@ const {
   toTeamSummary,
   updateTeamSettings,
 } = await import('./team-store.js');
+
+const { renameRosterMember } = await import('../../lib/roster-names.js');
 
 const seedProfile = (userId: string, accountKind: AccountKind): void => {
   profiles.set(userId, {
@@ -391,6 +394,92 @@ describe('team-store edge cases', () => {
     const kept = await setMemberPositions(team.teamId, adminId, ['Wing']);
     expect(kept.roles).toEqual(['coach']);
     expect(kept.positions).toEqual(['Wing']);
+  });
+
+  it('copies profile names onto roster rows and keeps them through role, position, and name changes', async () => {
+    const adminId = randomUUID();
+    const playerId = randomUUID();
+    seedProfile(adminId, 'adult');
+    for (const [userId, firstName, lastName] of [
+      [adminId, 'Ada', 'Lovelace'],
+      [playerId, 'Grace', 'Hopper'],
+    ] as const) {
+      store.set(itemKey(userPk(userId), profileSk()), {
+        [TABLE_PK]: userPk(userId),
+        [TABLE_SK]: profileSk(),
+        userId,
+        displayName: `${firstName} ${lastName}`,
+        firstName,
+        lastName,
+      });
+    }
+    const team = await createTeam({ name: 'Hawks', timeZone: 'UTC', userId: adminId });
+    const rowOf = (userId: string) => store.get(itemKey(teamPk(team.teamId), teamMemberSk(userId)));
+    const ada = { displayName: 'Ada Lovelace', firstName: 'Ada', lastName: 'Lovelace' };
+    expect(rowOf(adminId)).toMatchObject({ role: 'team_admin', ...ada });
+
+    const code = 'names-invite';
+    store.set(itemKey(invitePk(code), inviteMetaSk()), {
+      [TABLE_PK]: invitePk(code),
+      [TABLE_SK]: inviteMetaSk(),
+      code,
+      teamId: team.teamId,
+      role: 'player',
+      createdAt: new Date().toISOString(),
+    });
+    const grace = { displayName: 'Grace Hopper', firstName: 'Grace', lastName: 'Hopper' };
+    await expect(acceptInvite(code, playerId)).resolves.toMatchObject({ member: grace });
+    expect(rowOf(playerId)).toMatchObject({ role: 'player', ...grace });
+
+    await assignMemberRole(team.teamId, adminId, ['team_admin', 'coach']);
+    expect(rowOf(adminId)).toMatchObject({ roles: ['team_admin', 'coach'], ...ada });
+    await setMemberPositions(team.teamId, adminId, ['Wing']);
+    expect(rowOf(adminId)).toMatchObject({ positions: ['Wing'], ...ada });
+
+    await renameRosterMember(adminId, { displayName: 'Ada King', firstName: 'Ada', lastName: 'King' });
+    expect(rowOf(adminId)).toMatchObject({
+      roles: ['team_admin', 'coach'],
+      positions: ['Wing'],
+      displayName: 'Ada King',
+      firstName: 'Ada',
+      lastName: 'King',
+    });
+    expect(rowOf(playerId)).toMatchObject(grace);
+  });
+
+  it('changes only its own fields, so other attributes on the rows survive', async () => {
+    const adminId = randomUUID();
+    seedProfile(adminId, 'adult');
+    const team = await createTeam({ name: 'Hawks', timeZone: 'UTC', userId: adminId });
+    const rosterKey = itemKey(teamPk(team.teamId), teamMemberSk(adminId));
+    const userKey = itemKey(userPk(adminId), userTeamSk(team.teamId));
+    // Stands in for a write another request made after this one read the row.
+    store.set(rosterKey, { ...store.get(rosterKey), displayName: 'Written Meanwhile' });
+    store.set(userKey, { ...store.get(userKey), note: 'kept' });
+
+    await assignMemberRole(team.teamId, adminId, ['team_admin', 'coach']);
+    await setMemberPositions(team.teamId, adminId, ['Wing']);
+    expect(store.get(rosterKey)).toMatchObject({
+      roles: ['team_admin', 'coach'],
+      positions: ['Wing'],
+      displayName: 'Written Meanwhile',
+    });
+    expect(store.get(userKey)).toMatchObject({ roles: ['team_admin', 'coach'], positions: ['Wing'], note: 'kept' });
+
+    await setMemberPositions(team.teamId, adminId, []);
+    expect(store.get(rosterKey)).not.toHaveProperty('positions');
+    expect(store.get(userKey)).not.toHaveProperty('positions');
+  });
+
+  it('renames without bringing back a roster row the member left', async () => {
+    const adminId = randomUUID();
+    seedProfile(adminId, 'adult');
+    const team = await createTeam({ name: 'Hawks', timeZone: 'UTC', userId: adminId });
+    store.delete(itemKey(teamPk(team.teamId), teamMemberSk(adminId)));
+
+    await renameRosterMember(adminId, { displayName: 'Ada King', firstName: 'Ada', lastName: 'King' });
+    expect(store.has(itemKey(teamPk(team.teamId), teamMemberSk(adminId)))).toBe(false);
+    await expect(setMemberPositions(team.teamId, adminId, ['Wing'])).rejects.toThrow('not_a_member');
   });
 
   it('assertProposedRolePermissions skips members without profiles', async () => {

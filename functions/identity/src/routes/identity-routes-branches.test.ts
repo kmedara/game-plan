@@ -93,7 +93,8 @@ describe('identity route branches', () => {
         body: {
           email: 'reg@example.com',
           password: 'Password1',
-          displayName: 'New Name',
+          firstName: 'New',
+          lastName: 'Name',
           birthday: '1990-01-01',
         },
       }),
@@ -129,57 +130,62 @@ describe('identity route branches', () => {
     const result = await handler(
       httpEvent('POST', '/identity/profile/complete', {
         headers: { authorization: `Bearer ${token}` },
-        body: { birthday: '1990-05-15' },
+        body: { birthday: '1990-05-15', firstName: 'Stored', lastName: 'Person' },
       }),
     );
     expect(result.statusCode).toBe(200);
     expect(JSON.parse(result.body ?? '')).toMatchObject({
       email: 'stored@example.com',
-      displayName: 'Stored Name',
+      displayName: 'Stored Person',
     });
   });
 
-  it('uses the Player fallback when email local-part is empty', async () => {
+  it('names the profile from the first and last name, not the stored or token name', async () => {
     const userId = randomUUID();
-    const token = signLocalJwt({
-      sub: userId,
-      email: '@provider.example',
-      token_use: 'access',
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 3600,
-    });
-    const result = await handler(
-      httpEvent('POST', '/identity/profile/complete', {
-        headers: { authorization: `Bearer ${token}` },
-        body: { birthday: '1990-05-15' },
-      }),
-    );
-    expect(result.statusCode).toBe(200);
-    expect(JSON.parse(result.body ?? '')).toMatchObject({
-      displayName: 'Player',
-    });
-  });
-
-  it('completes a profile using token email and display name fallbacks', async () => {
-    const userId = randomUUID();
-    const token = signLocalJwt({
-      sub: userId,
-      email: 'complete@example.com',
-      token_use: 'access',
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 3600,
-    });
-    const result = await handler(
-      httpEvent('POST', '/identity/profile/complete', {
-        headers: { authorization: `Bearer ${token}` },
-        body: { birthday: '1990-05-15' },
-      }),
-    );
-    expect(result.statusCode).toBe(200);
-    expect(JSON.parse(result.body ?? '')).toMatchObject({
+    profiles.set(userId, {
+      userId,
       email: 'complete@example.com',
       displayName: 'complete',
+      accountKind: 'adult',
     });
+    const token = signLocalJwt({
+      sub: userId,
+      email: 'complete@example.com',
+      token_use: 'access',
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const result = await handler(
+      httpEvent('POST', '/identity/profile/complete', {
+        headers: { authorization: `Bearer ${token}` },
+        body: { birthday: '1990-05-15', firstName: 'Grace', lastName: 'Hopper' },
+      }),
+    );
+    expect(result.statusCode).toBe(200);
+    expect(JSON.parse(result.body ?? '')).toMatchObject({
+      email: 'complete@example.com',
+      displayName: 'Grace Hopper',
+      firstName: 'Grace',
+      lastName: 'Hopper',
+    });
+  });
+
+  it('rejects a blank first or last name', async () => {
+    const userId = randomUUID();
+    const token = signLocalJwt({
+      sub: userId,
+      email: 'blank@example.com',
+      token_use: 'access',
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const result = await handler(
+      httpEvent('POST', '/identity/profile/complete', {
+        headers: { authorization: `Bearer ${token}` },
+        body: { birthday: '1990-05-15', firstName: '   ', lastName: 'Hopper' },
+      }),
+    );
+    expect(result.statusCode).toBe(400);
   });
 
   it('returns unauthorized when /me hits an unmapped auth error', async () => {

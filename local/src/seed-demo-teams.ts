@@ -56,7 +56,8 @@ type DemoTeamSeed = {
   admin: {
     userId: string;
     email: string;
-    displayName: string;
+    firstName: string;
+    lastName: string;
   };
 };
 
@@ -71,7 +72,8 @@ const DEMO_TEAMS: readonly DemoTeamSeed[] = [
     admin: {
       userId: '22222222-2222-4222-8222-222222222222',
       email: 'peoria-admin@localhost',
-      displayName: 'Riley Peoria',
+      firstName: 'Riley',
+      lastName: 'Peoria',
     },
   },
   {
@@ -83,7 +85,8 @@ const DEMO_TEAMS: readonly DemoTeamSeed[] = [
     admin: {
       userId: '44444444-4444-4444-8444-444444444444',
       email: 'seacoast-admin@localhost',
-      displayName: 'Morgan Seacoast',
+      firstName: 'Morgan',
+      lastName: 'Seacoast',
     },
   },
 ];
@@ -148,19 +151,24 @@ const removeNonSeedItems = async (): Promise<number> => {
 };
 
 /**
- * Ensures one demo admin profile exists.
+ * Ensures one demo admin profile exists with a first and last name.
+ *
+ * Rows seeded before names were collected get them added.
  *
  * @param admin - The admin identity for a demo team.
  */
 const ensureAdmin = async (admin: DemoTeamSeed['admin']): Promise<void> => {
   const existing = await getProfile(admin.userId);
-  if (existing !== undefined) return;
+  if (existing?.firstName !== undefined && existing.lastName !== undefined) return;
   await putProfile({
+    ...existing,
     userId: admin.userId,
     email: admin.email,
-    displayName: admin.displayName,
-    accountKind: 'adult',
-    birthday: ADMIN_BIRTHDAY,
+    displayName: `${admin.firstName} ${admin.lastName}`,
+    firstName: admin.firstName,
+    lastName: admin.lastName,
+    accountKind: existing?.accountKind ?? 'adult',
+    birthday: existing?.birthday ?? ADMIN_BIRTHDAY,
   });
 };
 
@@ -282,6 +290,9 @@ const ensureTeam = async (seed: DemoTeamSeed): Promise<'created' | 'exists'> => 
           userId: seed.admin.userId,
           role: 'team_admin',
           joinedAt: createdAt,
+          displayName: `${seed.admin.firstName} ${seed.admin.lastName}`,
+          firstName: seed.admin.firstName,
+          lastName: seed.admin.lastName,
         },
       },
     },

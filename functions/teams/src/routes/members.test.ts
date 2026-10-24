@@ -282,6 +282,7 @@ describe('handleAssignRole', () => {
       email: `${memberId}@example.com`,
       displayName: 'Pat Player',
       accountKind: 'adult',
+      birthday: '1990-01-01',
       createdAt: new Date().toISOString(),
     });
     for (const role of Object.keys(DEFAULT_ROLE_PERMISSIONS)) {
@@ -314,7 +315,10 @@ describe('handleAssignRole', () => {
     expect(body.role).toBe('coach');
     expect(body.roles).toEqual(['coach', 'parent']);
     expect(assignMemberRole).toHaveBeenCalledWith(teamId, memberId, ['parent', 'coach']);
-    expect(body.user).toMatchObject({ displayName: 'Pat Player' });
+    // Same roster fields as GET member: no nested profile, no birthday.
+    expect(body.displayName).toBe('Pat Player');
+    expect(body).not.toHaveProperty('user');
+    expect(body).not.toHaveProperty('birthday');
   });
 
   it('rejects a duplicate role and a set the caller cannot grant', async () => {

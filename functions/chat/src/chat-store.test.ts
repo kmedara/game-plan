@@ -9,6 +9,7 @@ import type { AccountKind } from '@gameplan/types';
 import type { UserProfileItem } from '../../lib/auth/identity-provider.js';
 import { DEFAULT_ROLE_PERMISSIONS } from '@gameplan/types';
 import {
+  chatAttachmentSk,
   TABLE_PK,
   TABLE_SK,
   chatMemberSk,
@@ -167,6 +168,10 @@ describe('chat-store', () => {
       body: { body: 'see file', attachmentKeys: [objectKey] },
     });
     expect(message.attachmentKeys).toEqual([objectKey]);
+    expect(store.get(itemKey(chatPk(chatId), chatAttachmentSk(objectKey)))).toMatchObject({
+      messageId: message.messageId,
+      objectKey,
+    });
     expect(fanout).toHaveBeenCalledWith(
       expect.objectContaining({
         attachmentKeys: [objectKey],

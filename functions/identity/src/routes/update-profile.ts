@@ -36,6 +36,8 @@ export const handleUpdateProfile = route(
       userId: existing.userId,
       email: existing.email,
       displayName: existing.displayName,
+      firstName: existing.firstName,
+      lastName: existing.lastName,
       accountKind: existing.accountKind,
       birthday: existing.birthday,
       createdAt: existing.createdAt,

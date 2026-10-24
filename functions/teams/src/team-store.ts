@@ -22,6 +22,7 @@ import {
   chatMetaSk,
   chatPk,
   deleteItem,
+  fieldUpdate,
   getItem,
   incrementCounter,
   inviteMetaSk,
@@ -44,6 +45,11 @@ import {
 } from "../../lib/dynamo/index.js";
 import { chatMembershipItems } from "../../lib/chat-membership.js";
 import { getProfile } from "../../lib/auth/profile.js";
+import {
+  loadRosterNames,
+  rosterNameFields,
+  type RosterNames,
+} from "../../lib/roster-names.js";
 import { refreshTeamFixtureChats } from "../../lib/fixture-chat.js";
 import { enqueueFanout } from "../../lib/fanout-enqueue.js";
 import { TABLE_NAME } from "../../lib/names.js";
@@ -81,6 +87,10 @@ export type TeamMemberItem = {
   joinedAt: string;
   /** Positions this member plays. Omitted when they have not set any. */
   positions?: string[];
+  /** Copied from the profile; see `lib/roster-names.ts`. Missing on older rows. */
+  displayName?: string;
+  firstName?: string;
+  lastName?: string;
 };
 
 /** User-side team membership under `USER#id` / `TEAM#teamId`. */
@@ -241,18 +251,6 @@ const normalizePositions = (positions: readonly string[]): string[] => {
   return next;
 };
 
-/**
- * Attribute spread that omits `positions` when the member has none.
- *
- * @param positions - Stored positions, when present.
- * @returns A `positions` field, or an empty object.
- */
-const positionsField = (
-  positions: readonly string[] | undefined,
-): { positions: string[] } | Record<string, never> =>
-  positions !== undefined && positions.length > 0
-    ? { positions: [...positions] }
-    : {};
 
 /**
  * Loads a roster membership, or returns `undefined` when absent.
@@ -290,6 +288,7 @@ export const requireMembership = async (
  * @param userId - The joining user.
  * @param role - The assigned role.
  * @param joinedAt - ISO timestamp.
+ * @param names - The user's names from their profile, copied onto the roster row.
  * @returns Put items for a `TransactWriteItems` call.
  */
 const membershipPuts = (
@@ -297,6 +296,7 @@ const membershipPuts = (
   userId: string,
   role: TeamRole,
   joinedAt: string,
+  names: RosterNames | undefined,
 ) => {
   const table = TABLE_NAME;
   const roles = membershipRoleFields([role]);
@@ -310,6 +310,7 @@ const membershipPuts = (
           userId,
           ...roles,
           joinedAt,
+          ...rosterNameFields(names),
         } satisfies TeamMemberItem,
         ConditionExpression: "attribute_not_exists(#pk)",
         ExpressionAttributeNames: { "#pk": TABLE_PK },
@@ -407,7 +408,7 @@ export const createTeam = async (input: {
         },
       },
     },
-    ...membershipPuts(team, input.userId, "team_admin", createdAt),
+    ...membershipPuts(team, input.userId, "team_admin", createdAt, await loadRosterNames(input.userId)),
   ]);
 
   return team;
@@ -668,9 +669,13 @@ export const listMembers = async (teamId: string): Promise<TeamMemberItem[]> =>
 /**
  * Replaces the roles a member holds. The route checks rank and account rules first.
  *
+ * Only the role fields are written, on both the roster row and the user-side
+ * row, so a name or position change made at the same time is kept.
+ *
  * @param teamId - The team id.
  * @param userId - The member whose roles change.
  * @param roles - The replacement set. Must contain at least one role.
+ * @throws `TransactionCanceledException` when the member left after the read.
  */
 export const assignMemberRole = async (
   teamId: string,
@@ -678,47 +683,26 @@ export const assignMemberRole = async (
   roles: readonly TeamRole[],
 ): Promise<TeamMemberItem> => {
   const member = await requireMembership(teamId, userId);
-  const joinedAt = member.joinedAt;
-  const positions = positionsField(member.positions);
   const roleFields = membershipRoleFields(roles);
-  const updated: TeamMemberItem = {
-    [TABLE_PK]: teamPk(teamId),
-    [TABLE_SK]: teamMemberSk(userId),
-    userId,
-    ...roleFields,
-    joinedAt,
-    ...positions,
-  };
   await transactWrite([
-    { Put: { TableName: TABLE_NAME, Item: updated } },
-    {
-      Put: {
-        TableName: TABLE_NAME,
-        Item: {
-          [TABLE_PK]: userPk(userId),
-          [TABLE_SK]: userTeamSk(teamId),
-          teamId,
-          ...roleFields,
-          joinedAt,
-          ...positions,
-        } satisfies UserTeamItem,
-      },
-    },
+    { Update: fieldUpdate(teamPk(teamId), teamMemberSk(userId), roleFields) },
+    { Update: fieldUpdate(userPk(userId), userTeamSk(teamId), roleFields) },
   ]);
   await refreshTeamFixtureChats(teamId);
-  return updated;
+  return { ...member, ...roleFields };
 };
 
 /**
  * Replaces the positions the member plays on a team.
  *
- * Writes both the roster row and the user-side membership so a later role
- * change keeps the same list.
+ * Only `positions` is written, on both the roster row and the user-side row,
+ * so a role or name change made at the same time is kept.
  *
  * @param teamId - The team id.
  * @param userId - The member updating their own positions.
  * @param positions - The replacement list. An empty list clears them.
  * @returns The member's roles and the positions that were stored.
+ * @throws `TransactionCanceledException` when the member left after the read.
  */
 export const setMemberPositions = async (
   teamId: string,
@@ -727,37 +711,12 @@ export const setMemberPositions = async (
 ): Promise<{ role: TeamRole; roles: TeamRole[]; positions: string[] }> => {
   const member = await requireMembership(teamId, userId);
   const next = normalizePositions(positions);
-  const stored = positionsField(next);
-  const roleFields = membershipRoleFields(rolesFromMembership(member));
+  const stored = { positions: next.length > 0 ? next : undefined };
   await transactWrite([
-    {
-      Put: {
-        TableName: TABLE_NAME,
-        Item: {
-          [TABLE_PK]: teamPk(teamId),
-          [TABLE_SK]: teamMemberSk(userId),
-          userId,
-          ...roleFields,
-          joinedAt: member.joinedAt,
-          ...stored,
-        } satisfies TeamMemberItem,
-      },
-    },
-    {
-      Put: {
-        TableName: TABLE_NAME,
-        Item: {
-          [TABLE_PK]: userPk(userId),
-          [TABLE_SK]: userTeamSk(teamId),
-          teamId,
-          ...roleFields,
-          joinedAt: member.joinedAt,
-          ...stored,
-        } satisfies UserTeamItem,
-      },
-    },
+    { Update: fieldUpdate(teamPk(teamId), teamMemberSk(userId), stored) },
+    { Update: fieldUpdate(userPk(userId), userTeamSk(teamId), stored) },
   ]);
-  return { ...roleFields, positions: next };
+  return { ...membershipRoleFields(rolesFromMembership(member)), positions: next };
 };
 
 /**
@@ -977,7 +936,8 @@ export const acceptInvite = async (
   if (existing !== undefined) throw new Error("already_a_member");
 
   const joinedAt = new Date().toISOString();
-  await transactWrite(membershipPuts(team, userId, invite.role, joinedAt));
+  const names = await loadRosterNames(userId);
+  await transactWrite(membershipPuts(team, userId, invite.role, joinedAt, names));
 
   return {
     team,
@@ -988,6 +948,7 @@ export const acceptInvite = async (
       role: invite.role,
       roles: [invite.role],
       joinedAt,
+      ...rosterNameFields(names),
     },
   };
 };
@@ -1089,8 +1050,9 @@ export const approveJoinRequest = async (
   }
 
   const joinedAt = new Date().toISOString();
+  const names = await loadRosterNames(request.userId);
   await transactWrite([
-    ...membershipPuts(team, request.userId, role, joinedAt),
+    ...membershipPuts(team, request.userId, role, joinedAt, names),
     {
       Delete: {
         TableName: TABLE_NAME,
@@ -1111,6 +1073,7 @@ export const approveJoinRequest = async (
       role,
       roles: [role],
       joinedAt,
+      ...rosterNameFields(names),
     },
   };
 };

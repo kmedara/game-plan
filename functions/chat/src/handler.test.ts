@@ -100,7 +100,11 @@ const seedProfile = (input: {
   email: string;
   accountKind: AccountKind;
   displayName?: string;
+  firstName?: string;
+  lastName?: string;
   photoKey?: string;
+  birthday?: string;
+  phoneNumber?: string;
 }): void => {
   const email = input.email.trim().toLowerCase();
   store.set(itemKey(userPk(input.userId), profileSk()), {
@@ -109,9 +113,13 @@ const seedProfile = (input: {
     userId: input.userId,
     email,
     displayName: input.displayName ?? 'Player',
+    ...(input.firstName !== undefined ? { firstName: input.firstName } : {}),
+    ...(input.lastName !== undefined ? { lastName: input.lastName } : {}),
     accountKind: input.accountKind,
     createdAt: new Date().toISOString(),
     ...(input.photoKey !== undefined ? { photoKey: input.photoKey } : {}),
+    ...(input.birthday !== undefined ? { birthday: input.birthday } : {}),
+    ...(input.phoneNumber !== undefined ? { phoneNumber: input.phoneNumber } : {}),
   });
   emailIndex.set(email, { PK: userPk(input.userId), SK: profileSk() });
 };
@@ -385,46 +393,158 @@ describe('chat channels and private chats', () => {
   });
 });
 
-describe('adult search', () => {
-  it('returns an adult by exact email', async () => {
+describe('teammate search', () => {
+  /**
+   * Searches as the caller and returns the matching user ids.
+   *
+   * @param authorization - The caller's bearer header.
+   * @param q - The typed query.
+   * @returns The status code and the users in response order.
+   */
+  const searchAs = async (
+    authorization: string,
+    q: string,
+  ): Promise<{ statusCode: number | undefined; users: Array<Record<string, unknown>> }> => {
+    const result = await handler(
+      httpEvent('GET', '/chat/users/search', { headers: { authorization }, query: { q } }),
+    );
+    const body = JSON.parse(result.body ?? '{}') as { users?: Array<Record<string, unknown>> };
+    return { statusCode: result.statusCode, users: body.users ?? [] };
+  };
+
+  it('finds teammates by first or last name, without phone or birthday', async () => {
     const caller = authFor();
-    const targetId = randomUUID();
-    const email = `adult-${targetId}@example.com`;
+    const adaId = randomUUID();
+    const grace = randomUUID();
     seedProfile({ userId: caller.userId, email: `${caller.userId}@example.com`, accountKind: 'adult' });
     seedProfile({
-      userId: targetId,
-      email,
+      userId: adaId,
+      email: `${adaId}@example.com`,
       accountKind: 'adult',
-      displayName: 'Ada Adult',
+      displayName: 'Ada Lovelace',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      birthday: '1990-04-02',
+      phoneNumber: '+15555550123',
+    });
+    seedProfile({
+      userId: grace,
+      email: `${grace}@example.com`,
+      accountKind: 'adult',
+      displayName: 'Grace Hopper',
+      firstName: 'Grace',
+      lastName: 'Hopper',
+    });
+    seedTeam({
+      members: [
+        { userId: caller.userId, role: 'player' },
+        { userId: adaId, role: 'player' },
+        { userId: grace, role: 'coach' },
+      ],
     });
 
-    const result = await handler(
-      httpEvent('GET', '/chat/users/search', {
-        headers: { authorization: caller.authorization },
-        query: { email },
-      }),
-    );
-    expect(result.statusCode).toBe(200);
-    expect(JSON.parse(result.body ?? '')).toMatchObject({
-      user: { userId: targetId, email, displayName: 'Ada Adult', accountKind: 'adult' },
+    const byFirst = await searchAs(caller.authorization, 'ada');
+    expect(byFirst.statusCode).toBe(200);
+    expect(byFirst.users).toEqual([
+      expect.objectContaining({ userId: adaId, displayName: 'Ada Lovelace', firstName: 'Ada', lastName: 'Lovelace' }),
+    ]);
+    expect(byFirst.users[0]).not.toHaveProperty('birthday');
+    expect(byFirst.users[0]).not.toHaveProperty('phoneNumber');
+    expect(byFirst.users[0]).not.toHaveProperty('needsProfileCompletion');
+
+    expect((await searchAs(caller.authorization, 'HOP')).users.map((user) => user.userId)).toEqual([grace]);
+    expect((await searchAs(caller.authorization, 'ada lov')).users.map((user) => user.userId)).toEqual([adaId]);
+    expect((await searchAs(caller.authorization, 'ace')).users).toEqual([]);
+  });
+
+  it('copies profile names onto older roster rows the first time it reads them', async () => {
+    const caller = authFor();
+    const adaId = randomUUID();
+    seedProfile({ userId: caller.userId, email: `${caller.userId}@example.com`, accountKind: 'adult' });
+    seedProfile({
+      userId: adaId,
+      email: `${adaId}@example.com`,
+      accountKind: 'adult',
+      displayName: 'Ada Lovelace',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+    });
+    const { teamId } = seedTeam({
+      members: [
+        { userId: caller.userId, role: 'player' },
+        { userId: adaId, role: 'coach' },
+      ],
+    });
+    const rowKey = itemKey(teamPk(teamId), teamMemberSk(adaId));
+    expect(store.get(rowKey)).not.toHaveProperty('displayName');
+
+    await searchAs(caller.authorization, 'ada');
+    expect(store.get(rowKey)).toMatchObject({
+      userId: adaId,
+      role: 'coach',
+      displayName: 'Ada Lovelace',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
     });
   });
 
-  it('hides minors from search', async () => {
+  it('reads names from the roster row without loading the profile', async () => {
     const caller = authFor();
-    const minorId = randomUUID();
-    const email = `minor-${minorId}@example.com`;
+    const named = randomUUID();
     seedProfile({ userId: caller.userId, email: `${caller.userId}@example.com`, accountKind: 'adult' });
-    seedProfile({ userId: minorId, email, accountKind: 'minor' });
+    const { teamId } = seedTeam({
+      members: [
+        { userId: caller.userId, role: 'player' },
+        { userId: named, role: 'player' },
+      ],
+    });
+    store.set(itemKey(teamPk(teamId), teamMemberSk(named)), {
+      ...store.get(itemKey(teamPk(teamId), teamMemberSk(named))),
+      displayName: 'Roster Name',
+      firstName: 'Roster',
+      lastName: 'Name',
+    });
 
-    const result = await handler(
-      httpEvent('GET', '/chat/users/search', {
-        headers: { authorization: caller.authorization },
-        query: { email },
-      }),
-    );
-    expect(result.statusCode).toBe(404);
-    expect(JSON.parse(result.body ?? '')).toEqual({ error: 'user_not_found' });
+    const { users } = await searchAs(caller.authorization, 'roster');
+    expect(users).toEqual([
+      { userId: named, displayName: 'Roster Name', firstName: 'Roster', lastName: 'Name', teamIds: [teamId] },
+    ]);
+  });
+
+  it('searches every team the caller is on, once per person, never the caller', async () => {
+    const caller = authFor();
+    const shared = randomUUID();
+    const other = randomUUID();
+    seedProfile({ userId: caller.userId, email: `${caller.userId}@example.com`, accountKind: 'adult', displayName: 'Sam Searcher' });
+    seedProfile({ userId: shared, email: `${shared}@example.com`, accountKind: 'minor', displayName: 'Sam Shared' });
+    seedProfile({ userId: other, email: `${other}@example.com`, accountKind: 'adult', displayName: 'Sam Other' });
+    seedTeam({ members: [{ userId: caller.userId, role: 'coach' }, { userId: shared, role: 'player' }] });
+    seedTeam({
+      members: [
+        { userId: caller.userId, role: 'coach' },
+        { userId: shared, role: 'player' },
+        { userId: other, role: 'player' },
+      ],
+    });
+
+    const { users } = await searchAs(caller.authorization, 'sam');
+    expect(users.map((user) => user.userId)).toEqual([other, shared]);
+  });
+
+  it('does not find people outside the caller teams', async () => {
+    const caller = authFor();
+    const stranger = randomUUID();
+    seedProfile({ userId: caller.userId, email: `${caller.userId}@example.com`, accountKind: 'adult' });
+    seedProfile({ userId: stranger, email: `${stranger}@example.com`, accountKind: 'adult', displayName: 'Stranger Danger' });
+    seedTeam({ members: [{ userId: caller.userId, role: 'player' }] });
+    seedTeam({ members: [{ userId: stranger, role: 'player' }] });
+
+    expect(await searchAs(caller.authorization, 'stranger')).toEqual({ statusCode: 200, users: [] });
+  });
+
+  it('rejects a query shorter than two characters', async () => {
+    const caller = authFor();
+    expect((await searchAs(caller.authorization, ' a ')).statusCode).toBe(400);
   });
 });
 

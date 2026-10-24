@@ -7,7 +7,7 @@ import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserProfileItem } from '../../lib/auth/identity-provider.js';
 import { issueLocalTokens, signLocalJwt } from '../../lib/auth/local-jwt.js';
-import { REFRESH_COOKIE } from '../../lib/auth/refresh-cookie.js';
+import { ACCESS_COOKIE, REFRESH_COOKIE } from '../../lib/auth/refresh-cookie.js';
 import { resetIdentityProvider, setIdentityProvider } from '../../lib/auth/provider.js';
 import type { IdentityProvider, IdentityTokens } from '../../lib/auth/identity-provider.js';
 import {
@@ -40,6 +40,8 @@ vi.mock('../../lib/auth/profile.js', () => ({
     userId: string;
     email: string;
     displayName: string;
+    firstName?: string;
+    lastName?: string;
     accountKind: 'adult' | 'minor';
     birthday?: string;
     photoKey?: string | null;
@@ -52,6 +54,8 @@ vi.mock('../../lib/auth/profile.js', () => ({
       userId: input.userId,
       email: input.email,
       displayName: input.displayName,
+      ...(input.firstName !== undefined ? { firstName: input.firstName } : {}),
+      ...(input.lastName !== undefined ? { lastName: input.lastName } : {}),
       accountKind: input.accountKind,
       createdAt: input.createdAt ?? new Date().toISOString(),
       ...(input.birthday !== undefined ? { birthday: input.birthday } : {}),
@@ -99,7 +103,8 @@ const httpEvent = (
  *
  * @param userId - The user id.
  * @param email - The email address.
- * @param birthday - Optional birthday (omit for incomplete profile).
+ * @param birthday - Optional birthday. A row with one also gets a first and
+ *   last name, so it is complete; omit it for an incomplete profile.
  */
 const seedProfile = (
   userId: string,
@@ -114,7 +119,7 @@ const seedProfile = (
     displayName: 'Seed User',
     accountKind: 'adult',
     createdAt: '2026-01-01T00:00:00.000Z',
-    ...(birthday !== undefined ? { birthday } : {}),
+    ...(birthday !== undefined ? { birthday, firstName: 'Seed', lastName: 'User' } : {}),
   });
 };
 
@@ -334,6 +339,26 @@ describe('identity oauth and session edges', () => {
     );
     expect(incomplete.headers?.location).toBe('http://localhost:4200/complete-profile');
 
+    const unnamedId = randomUUID();
+    seedProfile(unnamedId, 'unnamed@example.com', '1990-01-01');
+    const { firstName: _first, lastName: _last, ...unnamed } = profiles.get(unnamedId)!;
+    profiles.set(unnamedId, unnamed);
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id_token: fakeJwt({ sub: unnamedId, email: 'unnamed@example.com' }),
+        access_token: 'access',
+        refresh_token: 'refresh-unnamed',
+      }),
+    });
+    const unnamedResult = await handler(
+      httpEvent('GET', '/identity/oauth/callback', {
+        query: { code: 'c', state: 's' },
+        cookies: [`${OAUTH_STATE_COOKIE}=s`, `${OAUTH_VERIFIER_COOKIE}=v`],
+      }),
+    );
+    expect(unnamedResult.headers?.location).toBe('http://localhost:4200/complete-profile');
+
     delete process.env.CLIENT_ORIGIN;
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -405,29 +430,65 @@ describe('identity oauth and session edges', () => {
     expect(fallback.headers?.location).toBe('http://localhost:4200/login');
   });
 
+  it('oauth logout revokes the refresh token and clears both session cookies', async () => {
+    const logout = vi.fn(async () => undefined);
+    setIdentityProvider({ ...memoryProvider(), logout });
+
+    const result = await handler(
+      httpEvent('GET', '/identity/oauth/logout', {
+        cookies: [`${REFRESH_COOKIE}=refresh-token`, `${ACCESS_COOKIE}=access-token`],
+      }),
+    );
+    expect(logout).toHaveBeenCalledWith('refresh-token');
+    for (const name of [REFRESH_COOKIE, ACCESS_COOKIE]) {
+      expect(result.cookies?.some((c) => c.startsWith(`${name}=;`) && c.includes('Max-Age=0'))).toBe(true);
+    }
+  });
+
   it('completes a profile after Hosted UI sign-in', async () => {
     const userId = randomUUID();
     const email = `${userId}@example.com`;
     const { accessToken } = issueLocalTokens(userId, email);
     seedProfile(userId, email);
 
+    const names = { firstName: 'Kid', lastName: 'Player' };
+    const missingNames = await handler(
+      httpEvent('POST', '/identity/profile/complete', {
+        headers: { authorization: `Bearer ${accessToken}` },
+        body: { birthday: '2012-06-01' },
+      }),
+    );
+    expect(missingNames.statusCode).toBe(400);
+
+    const missingBirthday = await handler(
+      httpEvent('POST', '/identity/profile/complete', {
+        headers: { authorization: `Bearer ${accessToken}` },
+        body: names,
+      }),
+    );
+    expect(missingBirthday.statusCode).toBe(400);
+    expect(JSON.parse(missingBirthday.body ?? '')).toEqual({ error: 'birthday_required' });
+
     const result = await handler(
       httpEvent('POST', '/identity/profile/complete', {
         headers: { authorization: `Bearer ${accessToken}` },
-        body: { birthday: '2012-06-01', displayName: '  Kid  ' },
+        body: { birthday: '2012-06-01', firstName: '  Kid ', lastName: ' Player  ' },
       }),
     );
     expect(result.statusCode).toBe(200);
     expect(JSON.parse(result.body ?? '')).toMatchObject({
-      displayName: 'Kid',
+      displayName: 'Kid Player',
+      firstName: 'Kid',
+      lastName: 'Player',
       accountKind: 'minor',
       birthday: '2012-06-01',
+      needsProfileCompletion: false,
     });
 
     const badBirthday = await handler(
       httpEvent('POST', '/identity/profile/complete', {
         headers: { authorization: `Bearer ${accessToken}` },
-        body: { birthday: 'not-a-date' },
+        body: { birthday: 'not-a-date', ...names },
       }),
     );
     expect(badBirthday.statusCode).toBe(400);
@@ -435,11 +496,45 @@ describe('identity oauth and session edges', () => {
     const again = await handler(
       httpEvent('POST', '/identity/profile/complete', {
         headers: { authorization: `Bearer ${accessToken}` },
-        body: { birthday: '1990-01-01' },
+        body: { birthday: '1990-01-01', ...names },
       }),
     );
     expect(again.statusCode).toBe(409);
     expect(JSON.parse(again.body ?? '')).toEqual({ error: 'profile_already_complete' });
+
+    const olderId = randomUUID();
+    const olderTokens = issueLocalTokens(olderId, `${olderId}@example.com`);
+    profiles.set(olderId, {
+      PK: `USER#${olderId}`,
+      SK: 'PROFILE',
+      userId: olderId,
+      email: `${olderId}@example.com`,
+      displayName: 'kid',
+      accountKind: 'minor',
+      birthday: '2012-06-01',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    const olderBirthdayChange = await handler(
+      httpEvent('POST', '/identity/profile/complete', {
+        headers: { authorization: `Bearer ${olderTokens.accessToken}` },
+        body: { birthday: '1990-01-01', ...names },
+      }),
+    );
+    expect(olderBirthdayChange.statusCode).toBe(409);
+    expect(JSON.parse(olderBirthdayChange.body ?? '')).toEqual({ error: 'birthday_already_set' });
+    const olderNamed = await handler(
+      httpEvent('POST', '/identity/profile/complete', {
+        headers: { authorization: `Bearer ${olderTokens.accessToken}` },
+        body: names,
+      }),
+    );
+    expect(olderNamed.statusCode).toBe(200);
+    expect(JSON.parse(olderNamed.body ?? '')).toMatchObject({
+      displayName: 'Kid Player',
+      accountKind: 'minor',
+      birthday: '2012-06-01',
+      needsProfileCompletion: false,
+    });
 
     const freshId = randomUUID();
     const freshEmail = `${freshId}@example.com`;
@@ -452,7 +547,7 @@ describe('identity oauth and session edges', () => {
     const mappedBirthday = await handler(
       httpEvent('POST', '/identity/profile/complete', {
         headers: { authorization: `Bearer ${freshTokens.accessToken}` },
-        body: { birthday: '1990-01-01' },
+        body: { birthday: '1990-01-01', ...names },
       }),
     );
     expect(mappedBirthday.statusCode).toBe(400);
@@ -469,7 +564,7 @@ describe('identity oauth and session edges', () => {
     const missingEmail = await handler(
       httpEvent('POST', '/identity/profile/complete', {
         headers: { authorization: `Bearer ${tokenNoEmail}` },
-        body: { birthday: '1990-01-01' },
+        body: { birthday: '1990-01-01', ...names },
       }),
     );
     expect(missingEmail.statusCode).toBe(400);

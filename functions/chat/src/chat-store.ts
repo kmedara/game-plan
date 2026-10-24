@@ -16,11 +16,14 @@ import type {
   MessageHistoryQuery,
   MessagePage,
   Poll,
+  TeammateMatch,
 } from '@gameplan/types';
 import {
   MESSAGE_SK_PREFIX,
+  chatAttachmentSk,
   TABLE_PK,
   TABLE_SK,
+  TEAM_MEMBER_SK_PREFIX,
   USER_CHAT_SK_PREFIX,
   USER_TEAM_SK_PREFIX,
   chatMemberSk,
@@ -47,6 +50,12 @@ import {
 import { chatMembershipItems } from '../../lib/chat-membership.js';
 import { enqueueFanout } from '../../lib/fanout-enqueue.js';
 import { listGuardianIds } from '../../lib/guardians.js';
+import {
+  loadRosterNames,
+  rosterNames,
+  writeRosterNames,
+  type RosterNames,
+} from '../../lib/roster-names.js';
 import { listTeamMemberIds } from '../../lib/team-roster.js';
 import { isOwnedUploadKey } from '../../lib/upload-keys.js';
 import type { ChatParticipant } from '@gameplan/types';
@@ -293,6 +302,62 @@ export const loadChatParticipants = async (
 ): Promise<ChatParticipant[]> => Promise.all(userIds.map((userId) => toParticipant(userId)));
 
 /**
+ * Loads everyone who shares at least one team with the user, from the names
+ * stored on the roster rows.
+ *
+ * A row written before names were copied gets them from the profile here,
+ * once per person, so later reads skip the profile.
+ *
+ * @param userId - The caller.
+ * @returns One entry per teammate, never the caller. Members without names or a profile are skipped.
+ */
+export const listTeammates = async (userId: string): Promise<TeammateMatch[]> => {
+  const teams = await queryBySkPrefix<UserTeamItem>(userPk(userId), USER_TEAM_SK_PREFIX);
+  const rosters = await Promise.all(
+    teams.flatMap((row) =>
+      typeof row.teamId === 'string'
+        ? [
+            queryBySkPrefix<Record<string, unknown> & { userId?: unknown }>(
+              teamPk(row.teamId),
+              TEAM_MEMBER_SK_PREFIX,
+            ).then((members) => ({ teamId: row.teamId, members })),
+          ]
+        : [],
+    ),
+  );
+
+  const profileNames = new Map<string, Promise<RosterNames | undefined>>();
+  const namesFor = async (
+    teamId: string,
+    row: Record<string, unknown>,
+    memberId: string,
+  ): Promise<RosterNames | undefined> => {
+    const stored = rosterNames(row);
+    if (stored !== undefined) return stored;
+    let pending = profileNames.get(memberId);
+    if (pending === undefined) {
+      pending = loadRosterNames(memberId);
+      profileNames.set(memberId, pending);
+    }
+    const loaded = await pending;
+    if (loaded !== undefined) await writeRosterNames(teamId, memberId, loaded);
+    return loaded;
+  };
+
+  const teammates = new Map<string, TeammateMatch>();
+  for (const { teamId, members } of rosters) {
+    for (const row of members) {
+      if (typeof row.userId !== 'string' || row.userId === userId) continue;
+      const names = await namesFor(teamId, row, row.userId);
+      if (names === undefined) continue;
+      const known = teammates.get(row.userId);
+      teammates.set(row.userId, { userId: row.userId, ...names, teamIds: [...(known?.teamIds ?? []), teamId] });
+    }
+  }
+  return [...teammates.values()];
+};
+
+/**
  * Writes membership rows in TransactWrite batches that stay under the item cap.
  *
  * @param chat - Chat fields for the user-side rows.
@@ -495,6 +560,18 @@ export const sendMessage = async (input: {
     ...(input.poll !== undefined ? { poll: input.poll } : {}),
   };
 
+  // Before the message, so every attachment a member can see is already downloadable.
+  await Promise.all(
+    attachmentKeys.map((key) =>
+      putItem({
+        [TABLE_PK]: chatPk(input.chatId),
+        [TABLE_SK]: chatAttachmentSk(key),
+        chatId: input.chatId,
+        messageId,
+        objectKey: key,
+      }),
+    ),
+  );
   await putItem(item);
   if (input.poll !== undefined) {
     await putItem({

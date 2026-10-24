@@ -28,6 +28,8 @@ vi.mock('../../lib/auth/profile.js', () => ({
     userId: string;
     email: string;
     displayName: string;
+    firstName?: string;
+    lastName?: string;
     accountKind: 'adult' | 'minor';
     birthday?: string;
     photoKey?: string | null;
@@ -40,6 +42,8 @@ vi.mock('../../lib/auth/profile.js', () => ({
       userId: input.userId,
       email: input.email,
       displayName: input.displayName,
+      ...(input.firstName !== undefined ? { firstName: input.firstName } : {}),
+      ...(input.lastName !== undefined ? { lastName: input.lastName } : {}),
       accountKind: input.accountKind,
       createdAt: input.createdAt ?? new Date().toISOString(),
       ...(input.birthday !== undefined ? { birthday: input.birthday } : {}),
@@ -165,7 +169,8 @@ describe('identity handler (in-memory)', () => {
         body: {
           email,
           password,
-          displayName: 'Ada Player',
+          firstName: ' Ada ',
+          lastName: 'Player',
           birthday: '1990-05-15',
         },
       }),
@@ -182,7 +187,22 @@ describe('identity handler (in-memory)', () => {
       email,
       accountKind: 'adult',
       displayName: 'Ada Player',
+      firstName: 'Ada',
+      lastName: 'Player',
+      needsProfileCompletion: false,
     });
+
+    const withoutNames = await handler(
+      httpEvent('POST', '/identity/register', {
+        body: {
+          email: `nameless-${randomUUID()}@example.com`,
+          password,
+          displayName: 'Ada Player',
+          birthday: '1990-05-15',
+        },
+      }),
+    );
+    expect(withoutNames.statusCode).toBe(400);
 
     const refreshFromCookie = cookieValue(registered.cookies, REFRESH_COOKIE);
     expect(refreshFromCookie).toBeTruthy();
@@ -216,12 +236,27 @@ describe('identity handler (in-memory)', () => {
     expect(JSON.parse(cookieRefresh.body ?? '')).not.toHaveProperty('accessToken');
     expect(cookieValue(cookieRefresh.cookies, ACCESS_COOKIE)).toBeTruthy();
 
+    // Page script can add the header, but a cookie refresh still keeps the tokens out of JSON.
+    const cookieRefreshAsksForBody = await handler(
+      httpEvent('POST', '/identity/refresh', {
+        body: {},
+        cookies: [`${REFRESH_COOKIE}=${encodeURIComponent(refreshFromCookie!)}`],
+        headers: { 'x-refresh-delivery': 'body' },
+      }),
+    );
+    expect(cookieRefreshAsksForBody.statusCode).toBe(200);
+    const cookieRefreshBody = JSON.parse(cookieRefreshAsksForBody.body ?? '');
+    expect(cookieRefreshBody).not.toHaveProperty('accessToken');
+    expect(cookieRefreshBody).not.toHaveProperty('refreshToken');
+    expect(cookieValue(cookieRefreshAsksForBody.cookies, ACCESS_COOKIE)).toBeTruthy();
+
     const native = await handler(
       httpEvent('POST', '/identity/register', {
         body: {
           email: `native-${randomUUID()}@example.com`,
           password,
-          displayName: 'Native User',
+          firstName: 'Native',
+          lastName: 'User',
           birthday: '2015-03-01',
         },
         headers: { 'x-refresh-delivery': 'body' },
@@ -274,7 +309,8 @@ describe('identity handler (in-memory)', () => {
         body: {
           email: `birthday-${randomUUID()}@example.com`,
           password: 'Password1',
-          displayName: 'Test',
+          firstName: 'Test',
+          lastName: 'User',
           birthday: '1990-05-15',
         },
       }),
@@ -289,7 +325,8 @@ describe('identity handler (in-memory)', () => {
     const body = {
       email,
       password: 'Password1',
-      displayName: 'First',
+      firstName: 'First',
+      lastName: 'User',
       birthday: '1990-05-15',
     };
     expect((await handler(httpEvent('POST', '/identity/register', { body }))).statusCode).toBe(
@@ -317,7 +354,8 @@ describe('identity handler (in-memory)', () => {
         body: {
           email,
           password: 'Password1',
-          displayName: 'Ada Player',
+          firstName: 'Ada',
+          lastName: 'Player',
           birthday: '1990-05-15',
         },
       }),
@@ -381,7 +419,8 @@ describe('identity handler (in-memory)', () => {
         body: {
           email,
           password: 'Password1',
-          displayName: 'Ada Player',
+          firstName: 'Ada',
+          lastName: 'Player',
           birthday: '1990-05-15',
         },
       }),

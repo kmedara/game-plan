@@ -6,15 +6,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TABLE_NAME } from '../names.js';
 import { GSI_EMAIL, profileSk, userPk } from '../dynamo/keys.js';
 
-const { mockSend, mockGetItem, mockPutItem, mockRenameChatMember } = vi.hoisted(() => ({
+const { mockSend, mockGetItem, mockPutItem, mockRenameChatMember, mockRenameRosterMember } = vi.hoisted(() => ({
   mockSend: vi.fn(),
   mockGetItem: vi.fn(),
   mockPutItem: vi.fn(),
   mockRenameChatMember: vi.fn(),
+  mockRenameRosterMember: vi.fn(),
 }));
 
 vi.mock('../chat-member-names.js', () => ({
   renameChatMember: (...args: unknown[]) => mockRenameChatMember(...args),
+}));
+
+vi.mock('../roster-names.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../roster-names.js')>()),
+  renameRosterMember: (...args: unknown[]) => mockRenameRosterMember(...args),
 }));
 
 vi.mock('../dynamo/client.js', () => ({
@@ -35,6 +41,7 @@ describe('profile helpers', () => {
     mockGetItem.mockReset();
     mockPutItem.mockReset();
     mockRenameChatMember.mockReset();
+    mockRenameRosterMember.mockReset();
   });
 
   it('derives account kind from the birthday on read', async () => {
@@ -132,5 +139,31 @@ describe('profile helpers', () => {
     mockGetItem.mockResolvedValueOnce(undefined);
     await putProfile(input);
     expect(mockRenameChatMember).not.toHaveBeenCalled();
+  });
+
+  it('copies any name change onto roster rows, including first or last name alone', async () => {
+    const input = {
+      userId: 'u7',
+      email: 'n@example.com',
+      displayName: 'Ada Lovelace',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      accountKind: 'adult' as const,
+    };
+    mockGetItem.mockResolvedValueOnce({ userId: 'u7', displayName: 'Ada Lovelace' });
+    await putProfile(input);
+    expect(mockRenameChatMember).not.toHaveBeenCalled();
+    expect(mockRenameRosterMember).toHaveBeenCalledWith('u7', {
+      displayName: 'Ada Lovelace',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+    });
+
+    mockRenameRosterMember.mockReset();
+    mockGetItem.mockResolvedValueOnce({ ...input });
+    await putProfile(input);
+    mockGetItem.mockResolvedValueOnce(undefined);
+    await putProfile(input);
+    expect(mockRenameRosterMember).not.toHaveBeenCalled();
   });
 });

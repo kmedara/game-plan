@@ -66,7 +66,8 @@
   "completeProfile": {
     "title": "Finish your profile",
     "hint": "Get in the game.",
-    "displayName": "Display name",
+    "firstName": "First name",
+    "lastName": "Last name",
     "birthday": "Birthday",
     "month": "Month",
     "day": "Day",
@@ -627,6 +628,7 @@
       "lineupCopyFailed": "Could not copy the previous lineup.",
       "messageFailed": "Could not open a chat with them.",
       "sportMismatch": "Those clubs play different sports.",
+      "changed": "Someone else just changed this event. Reload it and try again.",
       "sideRequired": "Choose home or away before sharing.",
       "chooseSide": "Choose home or away.",
       "opponentRequired": "Enter the opponent.",

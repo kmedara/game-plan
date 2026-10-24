@@ -79,7 +79,8 @@ export const mapError = (error: unknown): APIGatewayProxyStructuredResultV2 | un
     case 'email_taken':
       return conflict('email_taken');
     case 'profile_already_complete':
-      return conflict('profile_already_complete');
+    case 'birthday_already_set':
+      return conflict(error.message);
     case 'email_not_confirmed':
       return forbidden('email_not_confirmed');
     case 'invalid_confirmation_code':

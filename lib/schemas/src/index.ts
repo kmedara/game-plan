@@ -222,6 +222,8 @@ export {
   messagePageSchema,
   searchUsersQuerySchema,
   sendMessageBodySchema,
+  teammateMatchSchema,
+  teammateSearchResultSchema,
   userSearchPolicySchema,
   type ChatList,
   type ChatMessage,
@@ -237,6 +239,8 @@ export {
   type MessagePage,
   type SearchUsersQuery,
   type SendMessageBody,
+  type TeammateMatch,
+  type TeammateSearchResult,
   type UserSearchPolicy,
 } from './chat.js';
 
@@ -274,7 +278,7 @@ export {
   type PlacesReverseQuery,
 } from './places.js';
 
-export { displayNameSchema, type DisplayName } from './display-name.js';
+export { displayNameSchema, personNameSchema, type DisplayName } from './display-name.js';
 export { timeZoneSchema, type TimeZone } from './time.js';
 export { fanoutJobSchema, type FanoutJob } from './fanout.js';
 

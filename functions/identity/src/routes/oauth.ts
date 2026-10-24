@@ -6,18 +6,23 @@ import type { APIGatewayProxyStructuredResultV2 } from "aws-lambda";
 import {
   buildAuthorizeUrl,
   buildLogoutUrl,
+  clearAccessSetCookie,
   clearRefreshSetCookie,
   configuredSocialProviders,
   exchangeAuthorizationCode,
   generateOAuthState,
   generatePkcePair,
+  getIdentityProvider,
   getProfile,
+  profileNeedsCompletion,
   putProfile,
   readOAuthIdClaims,
+  REFRESH_COOKIE,
   refreshSetCookie,
   requestedSocialProvider,
 } from "../../../lib/auth/index.js";
 import { json, readCookie, redirect } from "../../../lib/http.js";
+import { clientOrigin } from "../../../lib/client-origin.js";
 import type { OauthProviders, UserProfile } from "@gameplan/types";
 import { errorMessage, functionArea, logError } from "../../../lib/log.js";
 import { issueOAuthHandoff } from "../../../lib/oauth-handoff.js";
@@ -39,16 +44,14 @@ import {
  * @returns A safe absolute URL on the client origin.
  */
 const resolveReturnTo = (raw: string | undefined): string => {
-  const clientOrigin = (
-    process.env.CLIENT_ORIGIN ?? "http://localhost:4200"
-  ).replace(/\/+$/u, "");
-  if (raw === undefined || raw.length === 0) return `${clientOrigin}/schedule`;
+  const origin = clientOrigin();
+  if (raw === undefined || raw.length === 0) return `${origin}/schedule`;
   try {
     const url = new URL(raw);
-    if (url.origin !== clientOrigin) return `${clientOrigin}/schedule`;
+    if (url.origin !== origin) return `${origin}/schedule`;
     return url.toString();
   } catch {
-    return `${clientOrigin}/schedule`;
+    return `${origin}/schedule`;
   }
 };
 
@@ -96,9 +99,7 @@ export const handleOAuthLogin = route("GET", "/identity/oauth/login", async ({ e
 export const handleOAuthCallback = route("GET", "/identity/oauth/callback", async ({
   event,
 }) => {
-  const clientOrigin = (
-    process.env.CLIENT_ORIGIN ?? "http://localhost:4200"
-  ).replace(/\/+$/u, "");
+  const origin = clientOrigin();
   const clearHandshake = [
     ...oauthClearCookie(OAUTH_STATE_COOKIE),
     ...oauthClearCookie(OAUTH_VERIFIER_COOKIE),
@@ -122,7 +123,7 @@ export const handleOAuthCallback = route("GET", "/identity/oauth/callback", asyn
   if (error) {
     if (native) return nativeError(error);
     return redirect(
-      `${clientOrigin}/login?error=${encodeURIComponent(error)}`,
+      `${origin}/login?error=${encodeURIComponent(error)}`,
       clearHandshake,
     );
   }
@@ -136,7 +137,7 @@ export const handleOAuthCallback = route("GET", "/identity/oauth/callback", asyn
   ) {
     if (native) return nativeError("invalid_state");
     return redirect(
-      `${clientOrigin}/login?error=invalid_state`,
+      `${origin}/login?error=invalid_state`,
       clearHandshake,
     );
   }
@@ -155,15 +156,15 @@ export const handleOAuthCallback = route("GET", "/identity/oauth/callback", asyn
       });
     }
     const needsProfile =
-      profile === undefined || profile.birthday === undefined;
+      profile === undefined || profileNeedsCompletion(profile);
     const destination = needsProfile
-      ? `${clientOrigin}/complete-profile`
+      ? `${origin}/complete-profile`
       : returnTo;
 
     if (tokens.refreshToken === undefined) {
       if (native) return nativeError("missing_refresh_token");
       return redirect(
-        `${clientOrigin}/login?error=missing_refresh_token`,
+        `${origin}/login?error=missing_refresh_token`,
         clearHandshake,
       );
     }
@@ -192,7 +193,7 @@ export const handleOAuthCallback = route("GET", "/identity/oauth/callback", asyn
     });
     if (native) return nativeError("sign_in_failed");
     return redirect(
-      `${clientOrigin}/login?error=sign_in_failed`,
+      `${origin}/login?error=sign_in_failed`,
       clearHandshake,
     );
   }
@@ -201,15 +202,23 @@ export const handleOAuthCallback = route("GET", "/identity/oauth/callback", asyn
 /**
  * Handles `GET /identity/oauth/logout`.
  *
+ * Revokes the refresh token and clears both session cookies, like
+ * `POST /identity/logout`, before the Hosted UI ends its own session.
+ *
  * @param event - The HTTP API event.
- * @returns A redirect that clears the session cookie and sends the browser to Cognito Hosted UI.
+ * @returns A redirect that clears the session cookies and sends the browser to Cognito Hosted UI.
  */
 export const handleOAuthLogout = route("GET", "/identity/oauth/logout", async ({ event }) => {
   const returnTo = resolveReturnTo(
     event.queryStringParameters?.returnTo ??
-      `${(process.env.CLIENT_ORIGIN ?? "http://localhost:4200").replace(/\/+$/u, "")}/login`,
+      `${clientOrigin()}/login`,
   );
-  const clear = clearRefreshSetCookie();
+  const clear = [...clearRefreshSetCookie(), clearAccessSetCookie()];
+  try {
+    await getIdentityProvider().logout(readCookie(event, REFRESH_COOKIE));
+  } catch {
+    // Best-effort revoke.
+  }
 
   try {
     return redirect(buildLogoutUrl(returnTo), clear);

@@ -2,17 +2,18 @@
  * Identity and session wire contracts.
  */
 
-import { displayNameSchema } from './display-name.js';
+import { displayNameSchema, personNameSchema } from './display-name.js';
 import { accountKindSchema } from './enums.js';
 import { phoneNumberSchema } from './phone.js';
 import { z } from './zod.js';
 
-/** Body for email-and-password registration. */
+/** Body for email-and-password registration. The display name becomes `firstName lastName`. */
 export const registerBodySchema = z
   .object({
     email: z.string().email().min(3).max(320),
     password: z.string().min(8).max(256),
-    displayName: displayNameSchema,
+    firstName: personNameSchema,
+    lastName: personNameSchema,
     /** Calendar date of birth (`YYYY-MM-DD`); the server derives `accountKind`. */
     birthday: z.string().date(),
   })
@@ -74,14 +75,17 @@ export { phoneNumberSchema } from './phone.js';
 export const userProfileSchema = z.object({
   userId: z.string().min(1),
   email: z.string().email().min(3).max(320),
+  /** `firstName lastName` once both are known. */
   displayName: displayNameSchema,
+  firstName: personNameSchema.optional(),
+  lastName: personNameSchema.optional(),
   accountKind: accountKindSchema,
   birthday: z.string().date().optional(),
   /** Object key for the profile photo in the media bucket. */
   photoKey: z.string().min(1).max(512).optional(),
   /** Contact phone teammates can see on a shared-team profile. */
   phoneNumber: phoneNumberSchema.optional(),
-  /** `true` when the caller must finish birthday (and usually display name) setup. */
+  /** `true` when the caller must still give a birthday, a first name, or a last name. */
   needsProfileCompletion: z.boolean().optional(),
 });
 
@@ -95,11 +99,18 @@ export const updateProfileBodySchema = z
   })
   .strict();
 
-/** Body for finishing a social-sign-in profile after Hosted UI. */
+/**
+ * Body for finishing a profile: after Hosted UI sign-in, or when an older
+ * account has no first and last name yet.
+ *
+ * The display name becomes `firstName lastName`.
+ */
 export const completeProfileBodySchema = z
   .object({
-    birthday: z.string().date(),
-    displayName: displayNameSchema.optional(),
+    /** Required until a birthday is stored. A stored birthday cannot change. */
+    birthday: z.string().date().optional(),
+    firstName: personNameSchema,
+    lastName: personNameSchema,
   })
   .strict();
 

@@ -2,6 +2,7 @@
  * Teammate suggestions for starting a private chat.
  */
 
+import { matchesPersonName } from '@gameplan/rules';
 import type { AutocompleteChoice } from './ui';
 
 /** Most suggestions shown at once. */
@@ -36,6 +37,9 @@ export const parseTeammateChoiceId = (id: string): { teamId: string; userId: str
 /**
  * Teammates whose name matches the query, sorted by name.
  *
+ * The query must start a word of the name, as on the server search, so `lo`
+ * finds Ada Lovelace but `ace` does not.
+ *
  * A chat is started from one team, so once someone is picked only their
  * team's roster is offered. People already picked are left out. When the
  * caller is an adult, a minor with no linked guardian is listed but cannot be
@@ -54,7 +58,6 @@ export const searchTeammates = (input: {
   callerIsAdult: boolean;
   noGuardianReason: string;
 }): AutocompleteChoice[] => {
-  const needle = input.query.trim().toLowerCase();
   return input.groups
     .filter((group) => input.pickedTeamId === undefined || group.team.teamId === input.pickedTeamId)
     .flatMap((group) =>
@@ -62,7 +65,7 @@ export const searchTeammates = (input: {
         .filter((member) => !input.pickedIds.includes(member.userId))
         .map((member) => ({ group, member, name: member.displayName ?? input.unknownName })),
     )
-    .filter((row) => row.name.toLowerCase().includes(needle))
+    .filter((row) => matchesPersonName(input.query, { displayName: row.name }))
     .sort((left, right) => left.name.localeCompare(right.name) || left.group.team.name.localeCompare(right.group.team.name))
     .slice(0, TEAMMATE_LIMIT)
     .map((row) => ({

@@ -44,7 +44,10 @@ export type IdentityTokens = {
 export type RegisterInput = {
   email: string;
   password: string;
+  /** `firstName lastName`. */
   displayName: string;
+  firstName: string;
+  lastName: string;
   accountKind: AccountKind;
 };
 
@@ -122,6 +125,10 @@ export type UserProfileItem = {
   userId: string;
   email: string;
   displayName: string;
+  /** Set at profile completion. Older rows and fresh social sign-ins may lack it. */
+  firstName?: string;
+  /** Set at profile completion. Older rows and fresh social sign-ins may lack it. */
+  lastName?: string;
   accountKind: AccountKind;
   /** Calendar date of birth (`YYYY-MM-DD`) when collected. */
   birthday?: string;
@@ -135,6 +142,17 @@ export type UserProfileItem = {
 };
 
 /**
+ * Whether the user must still finish their profile.
+ *
+ * @param item - The DynamoDB profile row.
+ * @returns `true` while the birthday, first name, or last name is missing.
+ */
+export const profileNeedsCompletion = (
+  item: Pick<UserProfileItem, 'birthday' | 'firstName' | 'lastName'>,
+): boolean =>
+  item.birthday === undefined || item.firstName === undefined || item.lastName === undefined;
+
+/**
  * Maps a profile item to the public wire shape.
  *
  * @param item - The DynamoDB profile row.
@@ -144,9 +162,11 @@ export const toUserProfile = (item: UserProfileItem): UserProfile => ({
   userId: item.userId,
   email: item.email,
   displayName: item.displayName,
+  ...(item.firstName !== undefined ? { firstName: item.firstName } : {}),
+  ...(item.lastName !== undefined ? { lastName: item.lastName } : {}),
   accountKind: accountKindForProfile(item.birthday, item.accountKind),
   ...(item.birthday !== undefined ? { birthday: item.birthday } : {}),
   ...(item.photoKey !== undefined ? { photoKey: item.photoKey } : {}),
   ...(item.phoneNumber !== undefined ? { phoneNumber: item.phoneNumber } : {}),
-  needsProfileCompletion: item.birthday === undefined,
+  needsProfileCompletion: profileNeedsCompletion(item),
 });
