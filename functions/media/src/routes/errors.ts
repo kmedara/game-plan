@@ -2,14 +2,8 @@
  * Maps media route errors to HTTP responses.
  */
 
-import type { APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
-import {
-  badRequest,
-  type ErrorMappingFn,
-  forbidden,
-  json,
-  unauthorized,
-} from '../../../lib/http.js';
+import { areaErrors } from '../../../lib/area-errors.js';
+import { badRequest, json } from '../../../lib/http.js';
 import { withMappedErrors } from '../../../lib/pipeline.js';
 
 /**
@@ -18,27 +12,21 @@ import { withMappedErrors } from '../../../lib/pipeline.js';
  * @param error - The thrown value.
  * @returns A proxy result when the error is known, otherwise `undefined`.
  */
-export const mapMediaError: ErrorMappingFn = (
-  error: unknown,
-): APIGatewayProxyStructuredResultV2 | undefined => {
-  const message = error instanceof Error ? error.message : String(error);
-  if (message === 'unauthorized') return unauthorized();
-  if (message === 'forbidden') return forbidden();
-  if (message === 'invalid_object_key' || message === 'payload_too_large') {
-    return badRequest(message);
+export const mapMediaError = areaErrors((error) => {
+  switch (error.message) {
+    case 'invalid_object_key':
+    case 'payload_too_large':
+      return badRequest(error.message);
+    case 'media_bucket_not_configured':
+      return json(503, { error: error.message });
+    default:
+      return undefined;
   }
-  if (message === 'media_bucket_not_configured') {
-    return json(503, { error: message });
-  }
-  return undefined;
-};
+});
 
 /**
  * Catches media route errors. Unknown errors are logged and become `500`.
  *
  * @returns A pipeline step that leaves the context unchanged.
  */
-export const withMediaErrors = () =>
-  withMappedErrors(mapMediaError, {
-    fallback: () => json(500, { error: 'internal' }),
-  });
+export const withMediaErrors = () => withMappedErrors(mapMediaError);

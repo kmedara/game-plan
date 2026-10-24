@@ -34,7 +34,7 @@ describe('withPlacesErrors', () => {
       requestContext: { http: { method: 'GET', path: '/' } },
     } as APIGatewayProxyEventV2);
     expect(result.statusCode).toBe(500);
-    expect(JSON.parse(result.body ?? '{}')).toEqual({ error: 'internal' });
+    expect(JSON.parse(result.body ?? '{}')).toEqual({ error: 'internal_error' });
     expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
   });
