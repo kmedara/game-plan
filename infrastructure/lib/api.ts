@@ -411,10 +411,12 @@ export class Api extends Construct {
 
     // Stripe cannot sign for CloudFront's origin access control, so the webhook
     // gets its own function with a public URL. Only Stripe source IPs are allowed
-    // by the URL's resource policy; the handler still verifies the Stripe signature on the body.
+    // by the URL's resource policy; the handler still verifies the Stripe
+    // signature on the body. CloudFormation cannot add that policy to a function
+    // that already has one, so these names must not go back to `*-webhook`.
     const paymentsWebhookFn = createFunction(
       this,
-      'payments-webhook',
+      'stripe-payments-webhook',
       areaEntry('payments', 'webhook-handler.ts'),
       { ...shared, ...tableEnv, ...queueEnv, ...paymentsEnv },
     );
@@ -430,7 +432,7 @@ export class Api extends Construct {
     allowParameterRead(functions.orgs, stripeSecretKeyParameter);
     const billingWebhookFn = createFunction(
       this,
-      'billing-webhook',
+      'stripe-billing-webhook',
       areaEntry('billing', 'webhook-handler.ts'),
       { ...shared, ...tableEnv, ...billingEnv },
     );

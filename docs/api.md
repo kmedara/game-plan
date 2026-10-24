@@ -31,7 +31,7 @@ Canonical list: `config/resources.json` and `infrastructure/lib/names.ts`. Areas
 | `socket` | No (WebSocket API) | `$connect` authorizer, keepalive |
 | `fanout` | No | SQS consumer; local `POST /fanout/deliver` |
 
-**Separate public URLs** (not behind CloudFront OAC): Stripe webhooks (`payments-webhook`, `billing-webhook`), CSP report — [`stripe.md`](stripe.md).
+**Separate public URLs** (not behind CloudFront OAC): Stripe webhooks (`stripe-payments-webhook`, `stripe-billing-webhook`), CSP report — [`stripe.md`](stripe.md).
 
 ## HTTP edge
 

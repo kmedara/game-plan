@@ -42,8 +42,8 @@ There are **two** endpoints. Both target **public Lambda function URLs** (auth `
 
 | Endpoint | URL path | Stripe type | Lambda | Signing secret (SSM) |
 | --- | --- | --- | --- | --- |
-| Payments | `POST …/payments/webhook` | **Connect** (`connect = true`) | `payments-webhook` | `<prefix>/stripe-webhook-secret` |
-| Billing | `POST …/billing/webhook` | **Platform** | `billing-webhook` | `<prefix>/stripe-billing-webhook-secret` |
+| Payments | `POST …/payments/webhook` | **Connect** (`connect = true`) | `stripe-payments-webhook` | `<prefix>/stripe-webhook-secret` |
+| Billing | `POST …/billing/webhook` | **Platform** | `stripe-billing-webhook` | `<prefix>/stripe-billing-webhook-secret` |
 
 **Why not CloudFront:** Browser API traffic uses CloudFront origin access control (SigV4). Stripe sends only `Stripe-Signature`; it cannot sign for OAC. Dedicated webhook Lambdas expose a public function URL and verify the Stripe signature on the raw body. See `infrastructure/lib/api.ts` (stack outputs `PaymentsWebhookUrl`, `BillingWebhookUrl`).
 
@@ -83,7 +83,7 @@ Terraform creates the endpoints and writes signing secrets to Parameter Store on
 | Parameter | Who uses it | Set by |
 | --- | --- | --- |
 | `<prefix>/stripe-api-key` | Terraform Stripe provider only | Hand (test key staging, live key production) |
-| `<prefix>/stripe-secret-key` | `payments`, `payments-webhook`, `billing`, `billing-webhook`, `orgs` | Hand (dashboard; same mode as environment) |
+| `<prefix>/stripe-secret-key` | `payments`, `stripe-payments-webhook`, `billing`, `stripe-billing-webhook`, `orgs` | Hand (dashboard; same mode as environment) |
 | `<prefix>/stripe-webhook-secret` | Connect webhook verification | **Terraform** (`stripe_webhook_endpoint.payments`) |
 | `<prefix>/stripe-billing-webhook-secret` | Billing webhook verification | **Terraform** (`stripe_webhook_endpoint.billing`) |
 

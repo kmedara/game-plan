@@ -109,10 +109,10 @@ describe('area function urls', () => {
       'gameplan-fanout': ['VAPID_PRIVATE_KEY_PARAMETER', '/gameplan/vapid-private-key'],
       'gameplan-places': ['GOOGLE_MAPS_API_KEY_PARAMETER', '/gameplan/google-maps-api-key'],
       'gameplan-payments': ['STRIPE_SECRET_KEY_PARAMETER', '/gameplan/stripe-secret-key'],
-      'gameplan-payments-webhook': ['STRIPE_WEBHOOK_SECRET_PARAMETER', '/gameplan/stripe-webhook-secret'],
+      'gameplan-stripe-payments-webhook': ['STRIPE_WEBHOOK_SECRET_PARAMETER', '/gameplan/stripe-webhook-secret'],
       'gameplan-billing': ['STRIPE_SECRET_KEY_PARAMETER', '/gameplan/stripe-secret-key'],
       'gameplan-orgs': ['STRIPE_SECRET_KEY_PARAMETER', '/gameplan/stripe-secret-key'],
-      'gameplan-billing-webhook': [
+      'gameplan-stripe-billing-webhook': [
         'STRIPE_BILLING_WEBHOOK_SECRET_PARAMETER',
         '/gameplan/stripe-billing-webhook-secret',
       ],
