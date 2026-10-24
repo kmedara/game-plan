@@ -110,6 +110,9 @@ export const mapError = (error: unknown): APIGatewayProxyStructuredResultV2 | un
       return json(400, { error: 'invalid_photo_key' });
     case 'cognito_not_configured':
       return json(503, { error: 'cognito_not_configured' });
+    case 'support_not_configured':
+    case 'support_send_failed':
+      return json(503, { error: error.message });
     default:
       return undefined;
   }

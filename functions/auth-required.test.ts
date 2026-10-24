@@ -47,6 +47,7 @@ const PROTECTED: Record<string, RouteCase[]> = {
     { route: 'handleUpdatePreferences', method: 'PATCH', path: '/identity/me/preferences' },
     { route: 'handleListMedical', method: 'GET', path: '/identity/medical' },
     { route: 'handlePutMedical', method: 'PUT', path: '/identity/medical/user-2' },
+    { route: 'handleSupportRequest', method: 'POST', path: '/identity/support' },
   ],
   teams: [
     { route: 'handleCreateTeam', method: 'POST', path: '/teams' },

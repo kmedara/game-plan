@@ -26,6 +26,7 @@ import { handleGetPreferences, handleUpdatePreferences } from './preferences.js'
 import { handleRefresh } from './refresh.js';
 import { handleRegister } from './register.js';
 import { handleSocketTicket } from './socket-ticket.js';
+import { handleSupportRequest } from './support.js';
 import { handleUpdateProfile } from './update-profile.js';
 
 export {
@@ -50,6 +51,7 @@ export {
   handleRemoveGuardianLink,
   handleResendConfirmation,
   handleSocketTicket,
+  handleSupportRequest,
   handleUpdatePreferences,
   handleUpdateProfile,
 };
@@ -79,4 +81,5 @@ export const httpRoutes: readonly HttpRoute[] = [
   handleUpdatePreferences,
   handleListMedical,
   handlePutMedical,
+  handleSupportRequest,
 ];
