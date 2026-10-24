@@ -39,6 +39,8 @@ import {
   grantPartitions,
 } from './table-access';
 import { areaEntry, createAreaFunctions, createFunction } from './functions';
+import { denyFunctionUrlExceptSourceIps } from './lambda-url-policy';
+import { stripeWebhookSourceCidrs } from './stripe-webhook-ips';
 
 /** Inputs the API construct needs from the auth, database, and storage constructs. */
 export type ApiProps = {
@@ -396,8 +398,8 @@ export class Api extends Construct {
     allowParameterRead(functions.payments, stripeWebhookSecretParameter);
 
     // Stripe cannot sign for CloudFront's origin access control, so the webhook
-    // gets its own function with a public URL. It serves that one route and
-    // trusts nothing but the Stripe signature.
+    // gets its own function with a public URL. Non-Stripe source IPs are denied
+    // at the URL; the handler still verifies the Stripe signature on the body.
     const paymentsWebhookFn = createFunction(
       this,
       'payments-webhook',
@@ -409,6 +411,7 @@ export class Api extends Construct {
     const paymentsWebhookUrl = paymentsWebhookFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
     });
+    denyFunctionUrlExceptSourceIps(this, 'PaymentsWebhookIpDeny', paymentsWebhookFn, stripeWebhookSourceCidrs());
 
     // Same reason as the payments webhook: Stripe cannot sign for origin access control.
     allowParameterRead(functions.billing, stripeSecretKeyParameter);
@@ -424,6 +427,7 @@ export class Api extends Construct {
     const billingWebhookUrl = billingWebhookFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
     });
+    denyFunctionUrlExceptSourceIps(this, 'BillingWebhookIpDeny', billingWebhookFn, stripeWebhookSourceCidrs());
 
     // Browsers send policy reports without the body hash origin access control
     // needs, so the reporter is public too. It only writes log lines.

@@ -28,7 +28,8 @@
     "inspect:api": "node scripts/inspect-bundles.mjs api",
     "inspect:client": "node scripts/inspect-bundles.mjs client",
     "local-dynamo": "npx dynamodb-admin --dynamo-endpoint http://localhost:8000",
-    "synth": "npm run synth -w @gameplan/infrastructure"
+    "synth": "npm run synth -w @gameplan/infrastructure",
+    "sync:stripe-webhook-ips": "node infrastructure/scripts/sync-stripe-webhook-ips.mjs"
   },
   "engines": {
     "node": ">=22.13"

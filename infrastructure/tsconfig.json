@@ -13,6 +13,6 @@
     "strictPropertyInitialization": false,
     "types": ["node"]
   },
-  "include": ["bin/**/*.ts", "lib/**/*.ts", "scripts/**/*.ts"],
+  "include": ["bin/**/*.ts", "lib/**/*.ts", "scripts/**/*.ts", "data/**/*.json"],
   "exclude": ["**/*.test.ts"]
 }

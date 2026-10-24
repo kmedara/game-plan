@@ -1,0 +1,54 @@
+name: Stripe webhook IPs
+
+on:
+  schedule:
+    - cron: '0 14 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Sync Stripe webhook IP list
+        run: node infrastructure/scripts/sync-stripe-webhook-ips.mjs
+
+      - name: Open pull request when the list changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- infrastructure/data/stripe-webhook-ips.json; then
+            echo "stripe-webhook-ips.json is up to date"
+            exit 0
+          fi
+          branch="chore/stripe-webhook-ips-$(date -u +%Y%m%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add infrastructure/data/stripe-webhook-ips.json
+          git commit -m "$(cat <<'EOF'
+chore(infra): refresh stripe webhook ips
+
+Automated sync from Stripe's published webhook IP feed.
+EOF
+)"
+          git push -u origin "$branch"
+          gh pr create --title "chore(infra): refresh stripe webhook ips" --body "$(cat <<'EOF'
+## Summary
+- Updates `infrastructure/data/stripe-webhook-ips.json` from Stripe's webhook IP feed.
+
+## Test plan
+- [ ] CI passes
+- [ ] Deploy staging after merge
+- [ ] Stripe Dashboard → send test webhook on payments and billing endpoints
+EOF
+)"

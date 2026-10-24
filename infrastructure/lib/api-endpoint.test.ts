@@ -7,6 +7,8 @@ import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 import { GamePlanApi, GamePlanPlatform } from './gameplan-stack';
 import { HTTP_AREAS } from './names';
+import { stripeWebhookUrlDenySid } from './lambda-url-policy';
+import { stripeWebhookSourceCidrs } from './stripe-webhook-ips';
 import { envFromOutputs } from './ssm-parameters';
 
 describe('area function urls', () => {
@@ -45,6 +47,18 @@ describe('area function urls', () => {
     for (const url of urls.filter((candidate) => !publicUrls.includes(candidate))) {
       expect(url.Properties.AuthType).toBe('AWS_IAM');
     }
+
+    const webhookDeny = Object.values(template.findResources('AWS::Lambda::Permission')).filter(
+      (resource) =>
+        resource.Properties.FunctionUrlAuthType === 'NONE' &&
+        resource.Properties.Action === 'lambda:InvokeFunctionUrl' &&
+        resource.Properties.Principal === '*' &&
+        resource.Properties.Effect === 'Deny' &&
+        resource.Properties.Sid === stripeWebhookUrlDenySid,
+    );
+    expect(webhookDeny).toHaveLength(2);
+    const expectedIp = stripeWebhookSourceCidrs()[0];
+    expect(JSON.stringify(webhookDeny)).toContain(expectedIp);
 
     // The site stack grants CloudFront. A reference here would make the stacks depend on each other.
     const permissions = Object.values(template.findResources('AWS::Lambda::Permission')).filter(

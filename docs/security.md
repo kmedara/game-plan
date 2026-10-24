@@ -25,7 +25,7 @@ These endpoints are **not** behind CloudFront OAC; they rely on their own verifi
 
 | Target | Gate |
 | --- | --- |
-| Stripe webhooks | `Stripe-Signature` on raw body ([`stripe.md`](stripe.md)) |
+| Stripe webhooks | `Stripe-Signature` on raw body; function URL **deny** unless source IP is in committed Stripe webhook CIDRs ([`stripe.md`](stripe.md)) |
 | CSP report | Public URL; logs only |
 | Calendar `.ics` feeds | Unguessable token in path (capability URL) |
 
