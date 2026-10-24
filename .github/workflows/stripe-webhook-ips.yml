@@ -25,6 +25,7 @@ jobs:
       - name: Open pull request when the list changed
         env:
           GH_TOKEN: ${{ github.token }}
+        # Every line stays indented: an unindented heredoc line would end this YAML block.
         run: |
           if git diff --quiet -- infrastructure/data/stripe-webhook-ips.json; then
             echo "stripe-webhook-ips.json is up to date"
@@ -35,20 +36,17 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
           git add infrastructure/data/stripe-webhook-ips.json
-          git commit -m "$(cat <<'EOF'
-chore(infra): refresh stripe webhook ips
-
-Automated sync from Stripe's published webhook IP feed.
-EOF
-)"
+          git commit -m "chore(infra): refresh stripe webhook ips" \
+            -m "Automated sync from Stripe's published webhook IP feed."
           git push -u origin "$branch"
-          gh pr create --title "chore(infra): refresh stripe webhook ips" --body "$(cat <<'EOF'
-## Summary
-- Updates `infrastructure/data/stripe-webhook-ips.json` from Stripe's webhook IP feed.
-
-## Test plan
-- [ ] CI passes
-- [ ] Deploy staging after merge
-- [ ] Stripe Dashboard → send test webhook on payments and billing endpoints
-EOF
-)"
+          body="$RUNNER_TEMP/pr-body.md"
+          {
+            echo "## Summary"
+            echo "- Updates \`infrastructure/data/stripe-webhook-ips.json\` from Stripe's webhook IP feed."
+            echo
+            echo "## Test plan"
+            echo "- [ ] CI passes"
+            echo "- [ ] Deploy staging after merge"
+            echo "- [ ] Stripe Dashboard → send test webhook on payments and billing endpoints"
+          } > "$body"
+          gh pr create --title "chore(infra): refresh stripe webhook ips" --body-file "$body"
