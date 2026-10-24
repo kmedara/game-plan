@@ -4,14 +4,12 @@
  */
 
 import { randomBytes } from 'node:crypto';
-import { DeleteCommand } from '@aws-sdk/lib-dynamodb';
-import { TABLE_NAME } from './names.js';
 import {
   SOCKET_TICKET_TTL_SECONDS,
   TABLE_PK,
   TABLE_SK,
-  getDocClient,
   putItem,
+  redeemOnce,
   ticketPk,
   ticketSk,
   type UserId,
@@ -52,34 +50,13 @@ export const issueSocketTicket = async (userId: UserId): Promise<IssuedSocketTic
 /**
  * Deletes a ticket and returns the user it was issued for.
  *
- * A second call finds nothing. A row whose time-to-live is already due is
- * deleted and rejected, because DynamoDB TTL removal can lag.
+ * A second call finds nothing, and an expired ticket is refused.
  *
  * @param ticket - The opaque id from the socket query string.
  * @returns The user id, or `undefined` when the ticket cannot be used.
  */
 export const redeemSocketTicket = async (ticket: string): Promise<UserId | undefined> => {
   if (ticket.length === 0) return undefined;
-  try {
-    const result = await getDocClient().send(
-      new DeleteCommand({
-        TableName: TABLE_NAME,
-        Key: { [TABLE_PK]: ticketPk(ticket), [TABLE_SK]: ticketSk() },
-        ConditionExpression: 'attribute_exists(#pk)',
-        ExpressionAttributeNames: { '#pk': TABLE_PK },
-        ReturnValues: 'ALL_OLD',
-      }),
-    );
-    const attributes = result.Attributes;
-    const userId = attributes?.userId;
-    const ttl = attributes?.ttl;
-    if (typeof userId !== 'string' || userId.length === 0) return undefined;
-    if (typeof ttl === 'number' && ttl <= Math.floor(Date.now() / 1000)) return undefined;
-    return userId;
-  } catch (error) {
-    if (error instanceof Error && error.name === 'ConditionalCheckFailedException') {
-      return undefined;
-    }
-    throw error;
-  }
+  const userId = (await redeemOnce(ticketPk(ticket), ticketSk()))?.userId;
+  return typeof userId === 'string' && userId.length > 0 ? userId : undefined;
 };

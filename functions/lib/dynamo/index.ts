@@ -16,7 +16,10 @@ export {
   queryPage,
   queryPartition,
   transactWrite,
+  updateFields,
 } from './access.js';
+export { fieldUpdate, type FieldUpdate, type FieldUpdateOptions } from './field-update.js';
+export { redeemOnce } from './redeem.js';
 export {
   CHAT_MEMBER_SK_PREFIX,
   CONNECTION_SK_PREFIX,
@@ -80,6 +83,7 @@ export {
   invitePk,
   joinRequestSk,
   messageSk,
+  chatAttachmentSk,
   pollSk,
   pollVoteSk,
   pollVoteSkPrefix,

@@ -14,11 +14,12 @@
  *
  * Queries return rows in sort-key order, as DynamoDB does. Conditional puts
  * honor `attribute_not_exists` and `#name = :value` (optimistic version
- * checks), transactions check every condition before
- * writing anything, and a `contains(#name, :value)` filter is applied. Global
- * secondary indexes are not modeled.
+ * checks), field updates fail on a missing row, transactions check every
+ * condition before writing anything, and a `contains(#name, :value)` filter
+ * is applied. Global secondary indexes are not modeled.
  */
 
+import { fieldUpdate, type FieldUpdate, type FieldUpdateOptions } from './field-update.js';
 import { TABLE_PK, TABLE_SK } from './keys.js';
 
 type Row = Record<string, unknown>;
@@ -39,6 +40,7 @@ type TransactEntry = {
     ExpressionAttributeValues?: Record<string, unknown>;
   };
   Delete?: { Key: Row };
+  Update?: FieldUpdate;
 };
 
 const store = new Map<string, Row>();
@@ -71,6 +73,46 @@ const equalityHolds = (
   if (match === null) return true;
   if (existing === undefined) return false;
   return existing[names[match[1] ?? ''] ?? ''] === values[match[2] ?? ''];
+};
+
+/**
+ * Works out the row a {@link FieldUpdate} would store, reading the fixed
+ * placeholder scheme `fieldUpdate` documents.
+ *
+ * @returns The next row, or `undefined` when the update's condition fails.
+ */
+const updatedRow = (update: FieldUpdate): Row | undefined => {
+  const existing = store.get(keyOf(update.Key));
+  if (existing === undefined) return undefined;
+  const names = update.ExpressionAttributeNames;
+  const values = update.ExpressionAttributeValues ?? {};
+  const next: Row = { ...existing };
+
+  for (const [placeholder, field] of Object.entries(names)) {
+    if (!placeholder.startsWith('#f')) continue;
+    const value = values[`:${placeholder.slice(1)}`];
+    if (value === undefined) delete next[field];
+    else next[field] = value;
+  }
+
+  const list = names['#list'];
+  if (list !== undefined) {
+    const current = Array.isArray(existing[list]) ? (existing[list] as unknown[]) : [];
+    if (current.includes(values[':item'])) return undefined;
+    next[list] = [...current, values[':item']];
+  }
+
+  if (names['#version'] !== undefined) {
+    const stored = existing.version;
+    if (':one' in values) {
+      next.version = (typeof stored === 'number' ? stored : 0) + 1;
+    } else {
+      const expected = values[':version'];
+      if (expected === undefined ? stored !== undefined : stored !== expected) return undefined;
+      next.version = values[':nextVersion'];
+    }
+  }
+  return next;
 };
 
 /** Rows in one partition whose sort key passes `match`, in sort-key order. */
@@ -132,6 +174,17 @@ export const memoryAccess = {
     if (!held) throw failed('ConditionalCheckFailedException');
     store.set(keyOf(item), item);
   },
+  updateFields: async <T extends Row>(
+    pk: string,
+    sk: string,
+    fields: Row,
+    options: FieldUpdateOptions = {},
+  ): Promise<T> => {
+    const next = updatedRow(fieldUpdate(pk, sk, fields, options));
+    if (next === undefined) throw failed('ConditionalCheckFailedException');
+    store.set(itemKey(pk, sk), next);
+    return next as T;
+  },
   deleteItem: async (pk: string, sk: string): Promise<void> => {
     store.delete(itemKey(pk, sk));
   },
@@ -143,6 +196,9 @@ export const memoryAccess = {
   },
   transactWrite: async (items: readonly TransactEntry[]): Promise<void> => {
     for (const entry of items) {
+      if (entry.Update !== undefined && updatedRow(entry.Update) === undefined) {
+        throw failed('TransactionCanceledException');
+      }
       if (entry.Put === undefined) continue;
       const { Item, ConditionExpression, ExpressionAttributeNames, ExpressionAttributeValues } = entry.Put;
       if (mustNotExist(ConditionExpression) && store.has(keyOf(Item))) {
@@ -155,6 +211,7 @@ export const memoryAccess = {
     for (const entry of items) {
       if (entry.Put !== undefined) store.set(keyOf(entry.Put.Item), entry.Put.Item);
       if (entry.Delete !== undefined) store.delete(keyOf(entry.Delete.Key));
+      if (entry.Update !== undefined) store.set(keyOf(entry.Update.Key), updatedRow(entry.Update)!);
     }
   },
   queryAll: async <T extends Row>(input: QueryInput): Promise<T[]> => queryRows(input) as T[],

@@ -7,16 +7,14 @@
  */
 
 import { randomBytes } from 'node:crypto';
-import { DeleteCommand } from '@aws-sdk/lib-dynamodb';
-import { TABLE_NAME } from './names.js';
 import {
   OAUTH_HANDOFF_TTL_SECONDS,
   TABLE_PK,
   TABLE_SK,
-  getDocClient,
   handoffPk,
   handoffSk,
   putItem,
+  redeemOnce,
 } from './dynamo/index.js';
 
 /** Screen the app should open after redeeming the code. */
@@ -63,8 +61,7 @@ export const issueOAuthHandoff = async (
 /**
  * Deletes a handoff code and returns the refresh token it held.
  *
- * A second call finds nothing. A row whose time-to-live is already due is
- * deleted and rejected, because DynamoDB TTL removal can lag.
+ * A second call finds nothing, and an expired code is refused.
  *
  * @param code - The opaque id from the app redirect.
  * @returns The refresh token and destination, or `undefined` when the code cannot be used.
@@ -73,28 +70,10 @@ export const redeemOAuthHandoff = async (
   code: string,
 ): Promise<RedeemedOAuthHandoff | undefined> => {
   if (code.length === 0) return undefined;
-  try {
-    const result = await getDocClient().send(
-      new DeleteCommand({
-        TableName: TABLE_NAME,
-        Key: { [TABLE_PK]: handoffPk(code), [TABLE_SK]: handoffSk() },
-        ConditionExpression: 'attribute_exists(#pk)',
-        ExpressionAttributeNames: { '#pk': TABLE_PK },
-        ReturnValues: 'ALL_OLD',
-      }),
-    );
-    const attributes = result.Attributes;
-    const refreshToken = attributes?.refreshToken;
-    const next = attributes?.next;
-    const ttl = attributes?.ttl;
-    if (typeof refreshToken !== 'string' || refreshToken.length === 0) return undefined;
-    if (next !== 'teams' && next !== 'complete-profile') return undefined;
-    if (typeof ttl === 'number' && ttl <= Math.floor(Date.now() / 1000)) return undefined;
-    return { refreshToken, next };
-  } catch (error) {
-    if (error instanceof Error && error.name === 'ConditionalCheckFailedException') {
-      return undefined;
-    }
-    throw error;
-  }
+  const attributes = await redeemOnce(handoffPk(code), handoffSk());
+  const refreshToken = attributes?.refreshToken;
+  const next = attributes?.next;
+  if (typeof refreshToken !== 'string' || refreshToken.length === 0) return undefined;
+  if (next !== 'teams' && next !== 'complete-profile') return undefined;
+  return { refreshToken, next };
 };

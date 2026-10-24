@@ -405,6 +405,13 @@ export const pollVoteSkPrefix = (messageId: string): string => `VOTE#${messageId
 export const MESSAGE_SK_PREFIX = 'MSG#' as const;
 
 /**
+ * Marks a media object key as attached to a message in this chat.
+ *
+ * Download checks read this one row instead of scanning the message history.
+ */
+export const chatAttachmentSk = (objectKey: string): string => `ATTACH#${objectKey}`;
+
+/**
  * `INVITE#<code>` — load an invite from the code in a shared link.
  *
  * The team partition also stores the invite for team-scoped listing; this

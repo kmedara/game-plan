@@ -14,6 +14,7 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import { TABLE_NAME } from "../names.js";
 import { getDocClient } from "./client.js";
+import { fieldUpdate, type FieldUpdateOptions } from "./field-update.js";
 import { TABLE_PK, TABLE_SK } from "./keys.js";
 
 /** Opaque cursor: base64url of the DynamoDB `LastEvaluatedKey`. */
@@ -92,6 +93,29 @@ export const putItem = async (
         : {}),
     }),
   );
+};
+
+/**
+ * Changes only the given attributes of an existing item.
+ *
+ * @param pk - The partition key value.
+ * @param sk - The sort key value.
+ * @param fields - Attributes to change. `undefined` removes one.
+ * @param options - Version check or bump, and a list append; see {@link FieldUpdateOptions}.
+ * @returns The whole item as stored after the update.
+ * @throws `ConditionalCheckFailedException` when the item does not exist or a
+ *   version or append condition fails.
+ */
+export const updateFields = async <T extends Record<string, unknown>>(
+  pk: string,
+  sk: string,
+  fields: Record<string, unknown>,
+  options: FieldUpdateOptions = {},
+): Promise<T> => {
+  const result = await getDocClient().send(
+    new UpdateCommand({ ...fieldUpdate(pk, sk, fields, options), ReturnValues: "ALL_NEW" }),
+  );
+  return result.Attributes as T;
 };
 
 /**
