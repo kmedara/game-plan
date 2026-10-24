@@ -43,6 +43,7 @@ import {
   putItem,
   queryBySkBetween,
   queryBySkPrefix,
+  updateFields,
   rsvpSk,
   rsvpSkLegacy,
   rsvpSkRange,
@@ -94,6 +95,8 @@ export type EventItem = {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  /** Bumped on every write so a stale edit fails. Missing on rows written before versions. */
+  version?: number;
 };
 
 /** Per-occurrence RSVP under `TEAM#id` / `RSVP#occurrence#userId`. */
@@ -260,6 +263,7 @@ export const createEvent = async (input: {
     createdBy: input.userId,
     createdAt: now,
     updatedAt: now,
+    version: 1,
   };
 
   await putItem(item);
@@ -292,6 +296,61 @@ export const requireEvent = async (teamId: string, eventId: string): Promise<Eve
   const item = await getItem<EventItem>(teamPk(teamId), eventSk(eventId));
   if (item === undefined || item.teamId !== teamId) throw new Error('event_not_found');
   return item;
+};
+
+/** True for the error DynamoDB returns when an update's condition fails. */
+const isConditionFailure = (error: unknown): boolean =>
+  error instanceof Error && error.name === 'ConditionalCheckFailedException';
+
+/**
+ * Writes fields worked out from `existing`, only if nobody wrote the event
+ * since it was read. Other attributes, such as cancelled dates, are left as
+ * stored.
+ *
+ * @param existing - The event as it was read.
+ * @param fields - Attributes to change. `undefined` removes one.
+ * @returns The event as stored after the write.
+ * @throws `event_not_found` when the event was deleted, or `event_changed`
+ *   when another write changed it after the read.
+ */
+const writeEventFields = async (existing: EventItem, fields: Partial<EventItem>): Promise<EventItem> => {
+  try {
+    return await updateFields<EventItem>(teamPk(existing.teamId), eventSk(existing.eventId), fields, {
+      version: { read: existing.version },
+    });
+  } catch (error) {
+    if (!isConditionFailure(error)) throw error;
+    await requireEvent(existing.teamId, existing.eventId);
+    throw new Error('event_changed');
+  }
+};
+
+/**
+ * Marks one series instant as not occurring.
+ *
+ * The date is appended in place, so two cancellations at once both stick. A
+ * pending edit that read the series before this fails its version check
+ * rather than writing the old list back.
+ *
+ * @param series - The series row.
+ * @param occurrenceIso - The instant to cancel.
+ * @param now - The write time.
+ * @returns The series as stored after the write.
+ * @throws `event_not_found` when the series was deleted.
+ */
+const addExdate = async (series: EventItem, occurrenceIso: string, now: string): Promise<EventItem> => {
+  try {
+    return await updateFields<EventItem>(
+      teamPk(series.teamId),
+      eventSk(series.eventId),
+      { updatedAt: now },
+      { appendUnique: { field: 'exdates', value: occurrenceIso }, version: 'bump' },
+    );
+  } catch (error) {
+    if (!isConditionFailure(error)) throw error;
+    // Either already cancelled, or the series is gone.
+    return requireEvent(series.teamId, series.eventId);
+  }
 };
 
 /**
@@ -388,8 +447,8 @@ export const updateEvent = async (input: {
   }
 
   const now = new Date().toISOString();
-  const item: EventItem = {
-    ...existing,
+  // A cleared optional field is `undefined`, which removes the attribute.
+  const item = await writeEventFields(existing, {
     eventType: nextType,
     title: eventTitle({
       eventType: nextType,
@@ -398,28 +457,17 @@ export const updateEvent = async (input: {
       side: nextSide,
     }),
     startsAt: nextStartsAt,
-    ...(nextEndsAt !== undefined ? { endsAt: nextEndsAt } : {}),
-    ...(nextLocation !== undefined ? { location: nextLocation } : {}),
-    ...(nextNotes !== undefined ? { notes: nextNotes } : {}),
-    ...(nextLatitude !== undefined ? { latitude: nextLatitude } : {}),
-    ...(nextLongitude !== undefined ? { longitude: nextLongitude } : {}),
-    ...(nextRecurrence !== undefined ? { recurrence: nextRecurrence } : {}),
-    ...(nextOpponent !== undefined ? { opponentName: nextOpponent } : {}),
-    ...(nextSide !== undefined ? { side: nextSide } : {}),
+    endsAt: nextEndsAt,
+    location: nextLocation,
+    notes: nextNotes,
+    latitude: nextLatitude,
+    longitude: nextLongitude,
+    recurrence: nextRecurrence,
+    opponentName: nextOpponent,
+    side: nextSide,
     updatedAt: now,
-  };
+  });
 
-  // Drop cleared optional fields so DynamoDB does not keep stale attributes.
-  if (nextEndsAt === undefined) delete item.endsAt;
-  if (nextLocation === undefined) delete item.location;
-  if (nextNotes === undefined) delete item.notes;
-  if (nextLatitude === undefined) delete item.latitude;
-  if (nextLongitude === undefined) delete item.longitude;
-  if (nextRecurrence === undefined) delete item.recurrence;
-  if (nextOpponent === undefined) delete item.opponentName;
-  if (nextSide === undefined) delete item.side;
-
-  await putItem(item);
   await syncReminders({
     teamId: input.teamId,
     eventId: input.eventId,
@@ -483,27 +531,21 @@ export const writeEventFacts = async (
   const team = await requireTeam(teamId);
   const existing = await requireEvent(teamId, eventId);
   const now = new Date().toISOString();
-  const item: EventItem = {
-    ...existing,
+  const hasPoint = facts.latitude !== undefined && facts.longitude !== undefined;
+  const opponentName = facts.opponentName ?? existing.opponentName;
+  const side = facts.side ?? existing.side;
+  const item = await writeEventFields(existing, {
     startsAt: new Date(facts.startsAt).toISOString(),
-    updatedAt: now,
+    endsAt: facts.endsAt !== undefined ? new Date(facts.endsAt).toISOString() : undefined,
+    location: facts.location,
+    latitude: hasPoint ? facts.latitude : undefined,
+    longitude: hasPoint ? facts.longitude : undefined,
+    title: eventTitle({ eventType: existing.eventType, title: existing.title, opponentName, side }),
     ...(facts.opponentName !== undefined ? { opponentName: facts.opponentName } : {}),
     ...(facts.side !== undefined ? { side: facts.side } : {}),
     ...(facts.fixtureId !== undefined ? { fixtureId: facts.fixtureId } : {}),
-  };
-  item.title = eventTitle(item);
-  if (facts.endsAt !== undefined) item.endsAt = new Date(facts.endsAt).toISOString();
-  else delete item.endsAt;
-  if (facts.location !== undefined) item.location = facts.location;
-  else delete item.location;
-  if (facts.latitude !== undefined && facts.longitude !== undefined) {
-    item.latitude = facts.latitude;
-    item.longitude = facts.longitude;
-  } else {
-    delete item.latitude;
-    delete item.longitude;
-  }
-  await putItem(item);
+    updatedAt: now,
+  });
   await syncReminders({
     teamId,
     eventId,
@@ -540,8 +582,7 @@ export const attachFixtureId = async (
   fixtureId: string,
 ): Promise<void> => {
   const existing = await requireEvent(teamId, eventId);
-  const now = new Date().toISOString();
-  await putItem({ ...existing, fixtureId, updatedAt: now });
+  await writeEventFields(existing, { fixtureId, updatedAt: new Date().toISOString() });
   await enqueueFanout({ type: 'schedule_changed', teamId, eventId });
 };
 
@@ -672,19 +713,17 @@ export const cancelOccurrence = async (input: {
     }
   }
 
-  const exdates = [...new Set([...(series.exdates ?? []), occurrenceIso])];
   const now = new Date().toISOString();
-  await putItem({ ...series, exdates, updatedAt: now });
-  const team = await requireTeam(input.teamId);
+  const stored = await addExdate(series, occurrenceIso, now);
   await syncReminders({
     teamId: input.teamId,
     eventId: series.eventId,
-    title: series.title,
-    startsAt: series.startsAt,
-    location: series.location,
-    recurrence: series.recurrence,
-    exdates,
-    timeZone: team.timeZone,
+    title: stored.title,
+    startsAt: stored.startsAt,
+    location: stored.location,
+    recurrence: stored.recurrence,
+    exdates: stored.exdates,
+    timeZone,
     now: new Date(now),
   });
   await enqueueFanout({
@@ -793,24 +832,21 @@ export const saveOccurrenceException = async (input: {
 
   const created = await requireEvent(input.teamId, draft.eventId);
   const now = new Date().toISOString();
-  await putItem({
-    ...created,
+  await writeEventFields(created, {
     seriesEventId: series.eventId,
     originalStartsAt: occurrenceIso,
     updatedAt: now,
   });
-  const exdates = [...new Set([...(series.exdates ?? []), occurrenceIso])];
-  await putItem({ ...series, exdates, updatedAt: now });
-  const team = await requireTeam(input.teamId);
+  const stored = await addExdate(series, occurrenceIso, now);
   await syncReminders({
     teamId: input.teamId,
     eventId: series.eventId,
-    title: series.title,
-    startsAt: series.startsAt,
-    location: series.location,
-    recurrence: series.recurrence,
-    exdates,
-    timeZone: team.timeZone,
+    title: stored.title,
+    startsAt: stored.startsAt,
+    location: stored.location,
+    recurrence: stored.recurrence,
+    exdates: stored.exdates,
+    timeZone,
     now: new Date(now),
   });
   await enqueueFanout({

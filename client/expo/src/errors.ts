@@ -22,6 +22,7 @@ const SHARED_MESSAGES: Readonly<Record<string, string>> = {
   invalid_recurrence: 'errors.event.invalidRepeat',
   invalid_ends_at: 'errors.event.endsBeforeStart',
   sport_mismatch: 'errors.event.sportMismatch',
+  event_changed: 'errors.event.changed',
   side_required: 'errors.event.sideRequired',
   fixture_locked: 'errors.event.fixtureLocked',
   fixture_linked: 'errors.event.fixtureLinked',

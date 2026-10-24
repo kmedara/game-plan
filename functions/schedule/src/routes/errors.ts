@@ -2,15 +2,8 @@
  * Maps schedule-area domain errors to HTTP responses.
  */
 
-import type { APIGatewayProxyStructuredResultV2 } from "aws-lambda";
-import {
-  badRequest,
-  conflict,
-  type ErrorMappingFn,
-  forbidden,
-  notFound,
-  unauthorized,
-} from "../../../lib/http.js";
+import { areaErrors } from "../../../lib/area-errors.js";
+import { badRequest, conflict, notFound } from "../../../lib/http.js";
 import { withMappedErrors } from "../../../lib/pipeline.js";
 
 /**
@@ -19,23 +12,14 @@ import { withMappedErrors } from "../../../lib/pipeline.js";
  * @param error - The thrown value.
  * @returns A proxy result when the error is known, otherwise `undefined`.
  */
-export const mapScheduleError: ErrorMappingFn = (
-  error: unknown,
-): APIGatewayProxyStructuredResultV2 | undefined => {
-  if (!(error instanceof Error)) return undefined;
+export const mapScheduleError = areaErrors((error) => {
   switch (error.message) {
-    case "unauthorized":
-    case "invalid_token":
-    case "token_expired":
-      return unauthorized();
-    case "team_not_found":
     case "event_not_found":
     case "occurrence_not_found":
     case "fixture_not_found":
+    case "carpool_offer_not_found":
+    case "signup_slot_not_found":
       return notFound();
-    case "not_a_member":
-    case "forbidden":
-      return forbidden();
     case "invalid_window":
     case "window_too_large":
     case "invalid_from":
@@ -60,23 +44,17 @@ export const mapScheduleError: ErrorMappingFn = (
     case "event_already_linked":
     case "fixture_locked":
     case "fixture_linked":
-      return badRequest(error.message);
-    case "sport_mismatch":
-      return conflict("sport_mismatch");
-    case "carpool_offer_not_found":
-    case "signup_slot_not_found":
-      return notFound();
     case "signup_full":
     case "signup_member_not_found":
     case "signup_capacity_below_claims":
       return badRequest(error.message);
+    case "sport_mismatch":
+    case "event_changed":
+      return conflict(error.message);
     default:
-      if (error.name === "ConditionalCheckFailedException") {
-        return conflict("condition_failed");
-      }
       return undefined;
   }
-};
+});
 
 /**
  * Catches schedule route errors and maps known ones; unknown errors become `500`.

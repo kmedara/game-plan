@@ -16,9 +16,9 @@ import {
   fixtureMetaSk,
   fixturePk,
   getItem,
-  putItem,
   queryBySkPrefix,
   teamPk,
+  updateFields,
 } from './dynamo/index.js';
 import { dissolveFixtureChat } from './fixture-chat.js';
 
@@ -36,6 +36,10 @@ type FixtureMeta = {
 /**
  * Removes the fixture link from one game.
  *
+ * Only `fixtureId` is removed, so an edit made at the same time is kept. The
+ * version is bumped, so an edit that read the game while it was still locked
+ * to the fixture fails instead of landing afterwards.
+ *
  * @param teamId - The game's team.
  * @param eventId - The game.
  * @returns `true` when the game had a link and was rewritten.
@@ -43,8 +47,18 @@ type FixtureMeta = {
 export const dropEventFixtureId = async (teamId: string, eventId: string): Promise<boolean> => {
   const event = await getItem<Record<string, unknown>>(teamPk(teamId), eventSk(eventId));
   if (event?.fixtureId === undefined) return false;
-  const { fixtureId: _fixtureId, ...rest } = event;
-  await putItem({ ...rest, updatedAt: new Date().toISOString() });
+  try {
+    await updateFields(
+      teamPk(teamId),
+      eventSk(eventId),
+      { fixtureId: undefined, updatedAt: new Date().toISOString() },
+      { version: 'bump' },
+    );
+  } catch (error) {
+    // The game was deleted after the read.
+    if (error instanceof Error && error.name === 'ConditionalCheckFailedException') return false;
+    throw error;
+  }
   return true;
 };
 

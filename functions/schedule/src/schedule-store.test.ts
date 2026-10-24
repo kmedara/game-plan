@@ -397,6 +397,63 @@ describe('series lifecycle', () => {
   });
 });
 
+// `Promise.all` interleaves the two calls at every await, so both read the
+// event before either writes it: the race these writes have to survive.
+describe('concurrent event writes', () => {
+  const THIRD_WEEK = '2026-11-21T18:00:00.000Z';
+
+  it('keeps both cancellations when two dates are cancelled at once', async () => {
+    event('series', { recurrence: weekly });
+    await Promise.all([
+      cancelOccurrence({ teamId: TEAM, eventId: 'series', occurrenceStartsAt: WEEK_LATER }),
+      cancelOccurrence({ teamId: TEAM, eventId: 'series', occurrenceStartsAt: THIRD_WEEK }),
+    ]);
+    expect(stored('series')?.exdates).toEqual(expect.arrayContaining([WEEK_LATER, THIRD_WEEK]));
+  });
+
+  it('never undoes a cancellation with an edit that read the series before it', async () => {
+    event('series', { recurrence: weekly });
+    const [edit] = await Promise.allSettled([
+      updateEvent({ teamId: TEAM, eventId: 'series', body: { notes: 'Bring water' } }),
+      cancelOccurrence({ teamId: TEAM, eventId: 'series', occurrenceStartsAt: WEEK_LATER }),
+    ]);
+    expect(stored('series')?.exdates).toEqual([WEEK_LATER]);
+    if (edit.status === 'rejected') expect(edit.reason).toEqual(new Error('event_changed'));
+    else expect(stored('series')?.notes).toBe('Bring water');
+  });
+
+  it('refuses the second of two edits that read the same version', async () => {
+    event('game');
+    const results = await Promise.allSettled([
+      updateEvent({ teamId: TEAM, eventId: 'game', body: { notes: 'Bring water' } }),
+      updateEvent({ teamId: TEAM, eventId: 'game', body: { location: 'North field' } }),
+    ]);
+    expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
+    const refused = results.find((result) => result.status === 'rejected');
+    expect(refused?.status === 'rejected' && refused.reason).toEqual(new Error('event_changed'));
+    expect(stored('game')?.version).toBe(1);
+  });
+
+  it('does not bring back an event deleted while an edit was in flight', async () => {
+    event('game');
+    const [edit] = await Promise.allSettled([
+      updateEvent({ teamId: TEAM, eventId: 'game', body: { notes: 'Bring water' } }),
+      deleteEvent(TEAM, 'game'),
+    ]);
+    expect(stored('game')).toBeUndefined();
+    if (edit.status === 'rejected') expect(edit.reason).toEqual(new Error('event_not_found'));
+  });
+
+  it('versions an older row on its first edit and keeps attributes the edit does not own', async () => {
+    event('series', { recurrence: weekly, exdates: [WEEK_LATER] });
+    await updateEvent({ teamId: TEAM, eventId: 'series', body: { notes: 'Bring water' } });
+    expect(stored('series')).toMatchObject({ version: 1, notes: 'Bring water', exdates: [WEEK_LATER] });
+    await updateEvent({ teamId: TEAM, eventId: 'series', body: { notes: null } });
+    expect(stored('series')).toMatchObject({ version: 2, exdates: [WEEK_LATER] });
+    expect(stored('series')).not.toHaveProperty('notes');
+  });
+});
+
 describe('listOccurrences', () => {
   it('keeps the newest RSVP per person and carries the game details', async () => {
     event('g1', { notes: 'N', latitude: 1, longitude: 2, opponentName: 'Owls', side: 'home', fixtureId: 'f1' });
