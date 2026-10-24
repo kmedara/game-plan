@@ -30,7 +30,7 @@ describe('messagesQuery', () => {
     expect(listMessages).toHaveBeenCalledTimes(MESSAGE_REFETCH_PAGES);
     const cached = client.getQueryData<MessageHistory>(queryKeys.messages('c1'));
     expect(cached?.pages.map((item) => item.messages[0]?.messageId)).toEqual(['new1']);
-    expect(cached?.pageParams).toEqual([undefined, 'p2']);
+    expect(cached?.pageParams).toEqual([undefined]);
   });
 
   it('loads the page before the oldest one when scrolling back', async () => {
