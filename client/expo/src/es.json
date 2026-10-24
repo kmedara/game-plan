@@ -294,6 +294,7 @@
     "opponent": "Rival",
     "home": "Local",
     "away": "Visitante",
+    "gameVs": "{{side}} vs. {{opponent}}",
     "fixtureShare": "Compartir con un club",
     "fixtureShareWith": "Nombre del club",
     "fixturePending": "Esperando al otro club.",
@@ -616,6 +617,9 @@
       "messageFailed": "No se pudo abrir un chat con esa persona.",
       "sportMismatch": "Esos clubes practican deportes distintos.",
       "sideRequired": "Elige local o visitante antes de compartir.",
+      "chooseSide": "Elige local o visitante.",
+      "opponentRequired": "Escribe el rival.",
+      "titleRequired": "Escribe un título.",
       "fixtureLocked": "Cambia la hora compartida desde el partido.",
       "fixtureLinked": "Desvincula el partido antes de eliminarlo.",
       "recurringFixture": "Un evento que se repite no se puede compartir."

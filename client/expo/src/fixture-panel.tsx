@@ -16,6 +16,7 @@ import {
   unlinkFixtureMutation,
 } from './queries/schedule';
 import { directoryQuery } from './queries/teams';
+import { eventLabel } from './schedule/event-label';
 import { useApp } from './state';
 import { Button, ErrorText } from './ui';
 
@@ -90,7 +91,7 @@ const IncomingFixture = ({
       {games.map((game) => (
         <Pressable key={game.eventId} className="py-1" onPress={() => setEventId(game.eventId)}>
           <Text className={eventId === game.eventId ? 'font-bold text-ink' : 'text-ink'}>
-            {t('schedule.fixtureUseGame', { title: game.title })}
+            {t('schedule.fixtureUseGame', { title: eventLabel(t, game) })}
           </Text>
         </Pressable>
       ))}

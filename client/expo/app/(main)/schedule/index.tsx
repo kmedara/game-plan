@@ -46,6 +46,7 @@ import { brandColors, colors, EVENT_TYPE_COLORS } from '@/src/theme';
 import { Button, ErrorText } from '@/src/ui';
 import { AddEvent } from '@/src/schedule/add-event';
 import { EventDetail } from '@/src/schedule/event-detail';
+import { eventLabel } from '@/src/schedule/event-label';
 import { EventRow } from '@/src/schedule/event-row';
 import { ScopeChoice } from '@/src/schedule/scope-choice';
 
@@ -243,7 +244,7 @@ export default function ScheduleScreen() {
       ) : null}
       <Sheet
         visible={viewing !== undefined}
-        title={viewing?.title ?? t('schedule.addEvent')}
+        title={viewing === undefined ? t('schedule.addEvent') : eventLabel(t, viewing)}
         closeLabel={t('common.close')}
         onClose={() => setViewingKey(undefined)}
       >
@@ -311,7 +312,6 @@ export default function ScheduleScreen() {
                 teamId: addingTeamId,
                 body: {
                   ...rest,
-                  title: rest.title ?? '',
                   eventType: rest.eventType ?? 'practice',
                   startsAt,
                   ...(endsAt !== undefined && endsAt !== null ? { endsAt } : {}),

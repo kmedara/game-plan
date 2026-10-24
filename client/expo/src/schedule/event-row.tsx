@@ -14,6 +14,7 @@ import { useDownloadUrl } from '@/src/media';
 import { clockLabel } from '@/src/schedule-calendar';
 import { TrashIcon } from '@/src/team-media';
 import { EVENT_TYPE_COLORS } from '@/src/theme';
+import { eventLabel } from './event-label';
 import { ICON, RsvpChoices, useHour12 } from './rsvp';
 
 export const EventRow = ({
@@ -57,7 +58,7 @@ export const EventRow = ({
     >
       <Pressable accessibilityRole="button" onPress={onView}>
         <View className={showLogo ? 'pr-24' : canManage ? 'pr-16' : ''}>
-          <Text className="text-lg font-semibold text-ink">{item.title}</Text>
+          <Text className="text-lg font-semibold text-ink">{eventLabel(t, item)}</Text>
           {teamName !== undefined ? <Text className="text-base text-muted">{teamName}</Text> : null}
           <View className="flex-row items-center">
             <View className="mr-1.5 h-2 w-2 rounded-full" style={{ backgroundColor: EVENT_TYPE_COLORS[item.eventType] }} />

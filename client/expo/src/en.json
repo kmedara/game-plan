@@ -292,6 +292,7 @@
     "opponent": "Opponent",
     "home": "Home",
     "away": "Away",
+    "gameVs": "{{side}} vs {{opponent}}",
     "fixtureShare": "Share with a club",
     "fixtureShareWith": "Club name",
     "fixturePending": "Waiting for the other club.",
@@ -614,6 +615,9 @@
       "messageFailed": "Could not open a chat with them.",
       "sportMismatch": "Those clubs play different sports.",
       "sideRequired": "Choose home or away before sharing.",
+      "chooseSide": "Choose home or away.",
+      "opponentRequired": "Enter the opponent.",
+      "titleRequired": "Enter a title.",
       "fixtureLocked": "Change the shared time from the fixture.",
       "fixtureLinked": "Unlink the game before deleting it.",
       "recurringFixture": "A repeating event cannot be shared."

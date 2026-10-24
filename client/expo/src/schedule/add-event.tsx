@@ -23,7 +23,14 @@ import { RecurrenceFields } from '@/src/recurrence-fields';
 import { recurrenceFromForm, type RepeatEnd, type RepeatFrequency } from '@/src/recurrence-form';
 import { dayKeyInZone, minutesInZone, rruleWeekDay } from '@/src/schedule-calendar';
 import { useApp } from '@/src/state';
-import { Field, SubmitButton } from '@/src/ui';
+import { Chip, EqualChipRow, Field, SubmitButton } from '@/src/ui';
+
+/** What the form says when it refuses to save. */
+const FORM_ERRORS = {
+  side_required: 'errors.event.chooseSide',
+  opponent_required: 'errors.event.opponentRequired',
+  title_required: 'errors.event.titleRequired',
+};
 
 const endChoiceFor = (startsAt: string, endsAt: string | undefined, timeZone: string): EndChoice => {
   if (endsAt === undefined) return { kind: 'none' };
@@ -105,9 +112,13 @@ export const AddEvent = ({
     return () => clearTimeout(handle);
   }, [api, query]);
 
+  const named = eventType === 'meeting' || eventType === 'other';
+
   const submit = async (): Promise<boolean | void> => {
-    if (title.trim().length === 0) return false;
-    if (eventType === 'game' && side === undefined) return false;
+    // Say what is missing instead of silently not saving.
+    if (named && title.trim().length === 0) throw new Error('title_required');
+    if (eventType === 'game' && side === undefined) throw new Error('side_required');
+    if (eventType === 'game' && opponentName.trim().length === 0) throw new Error('opponent_required');
     const window = eventWindow(timeZone, dayKey, startMinutes, end);
     const { startsAt, endsAt } = window;
     const recurrence = recurrenceFromForm({
@@ -121,7 +132,8 @@ export const AddEvent = ({
     });
     await onCreate({
       eventType,
-      title: title.trim(),
+      // Practices and games are named by the server from their type, side, and opponent.
+      ...(named ? { title: title.trim() } : {}),
       startsAt,
       endsAt: endsAt ?? null,
       location: location.trim().length > 0 ? location.trim() : null,
@@ -131,7 +143,7 @@ export const AddEvent = ({
       recurrence: recurrence ?? null,
       ...(eventType === 'game'
         ? {
-            opponentName: opponentName.trim().length > 0 ? opponentName.trim() : null,
+            opponentName: opponentName.trim(),
             side: side ?? null,
           }
         : { opponentName: null, side: null }),
@@ -160,17 +172,21 @@ export const AddEvent = ({
           </Pressable>
         ))}
       </View>
-      <Field label={t('addEvent.title')} value={title} onChangeText={setTitle} />
+      {named ? <Field label={t('addEvent.title')} value={title} onChangeText={setTitle} /> : null}
       {eventType === 'game' ? (
         <>
           <Field label={t('schedule.opponent')} value={opponentName} onChangeText={setOpponentName} />
-          <View className="mb-2 flex-row">
+          <EqualChipRow className="mb-3">
             {(['home', 'away'] as const).map((choice) => (
-              <Pressable key={choice} className="mr-3" onPress={() => setSide(choice)}>
-                <Text className={side === choice ? 'font-bold' : ''}>{t(`schedule.${choice}`)}</Text>
-              </Pressable>
+              <Chip
+                key={choice}
+                equal
+                label={t(`schedule.${choice}`)}
+                selected={side === choice}
+                onPress={() => setSide(choice)}
+              />
             ))}
-          </View>
+          </EqualChipRow>
         </>
       ) : null}
       <EventTimeFields
@@ -231,7 +247,7 @@ export const AddEvent = ({
       <SubmitButton
         label={t('common.save')}
         onPress={submit}
-        message={(err) => t(errorMessageKey(err, 'errors.common.saveFailed'))}
+        message={(err) => t(errorMessageKey(err, 'errors.common.saveFailed', FORM_ERRORS))}
       />
     </View>
   );
