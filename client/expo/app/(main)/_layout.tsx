@@ -24,6 +24,7 @@ import {
 } from '@/src/pending-invite';
 import { adoptCacheOwner } from '@/src/query-client';
 import { useLiveQuerySync } from '@/src/use-live-query-sync';
+import { HelpButton } from '@/src/help-menu';
 import { NotificationPrompt } from '@/src/notification-prompt';
 import { PullRefreshProvider } from '@/src/pull-refresh';
 import { refreshPushRegistration } from '@/src/push';
@@ -157,7 +158,7 @@ export default function MainLayout() {
         end={{ x: 1, y: 0 }}
         style={{ paddingTop: Platform.OS === 'web' ? 0 : 48 }}
       >
-      <View className="h-20 items-center justify-center">
+      <View className="h-20 items-center justify-center px-14">
         {nested ? (
           <Pressable
             className="absolute bottom-0 left-2 top-0 w-11 items-center justify-center"
@@ -184,6 +185,7 @@ export default function MainLayout() {
             {headerName}
           </Text>
         </View>
+        {pathname === '/profile' ? <HelpButton color={brand.onPrimary} /> : null}
       </View>
       {onTeams ? (
         <HeaderLinks

@@ -31,6 +31,7 @@ import type {
   MemberMedical,
   Preferences,
   UpdatePreferencesBody,
+  SupportRequestBody,
   TeamBilling,
   Charge,
   ChargeDetail,
@@ -231,6 +232,10 @@ export class ApiClient {
 
   async updatePreferences(body: UpdatePreferencesBody): Promise<Preferences> {
     return this.request('PATCH', '/identity/me/preferences', body);
+  }
+
+  async sendSupportRequest(body: SupportRequestBody): Promise<void> {
+    await this.request('POST', '/identity/support', body);
   }
 
   async updateProfile(input: UpdateProfileBody): Promise<UserProfile> {

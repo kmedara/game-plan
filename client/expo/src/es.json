@@ -589,6 +589,19 @@
     "askBillingManager": "Quien administra la facturación de este equipo puede aceptar.",
     "refunded": "El plan propio del equipo se canceló y se reembolsaron {{amount}} a la tarjeta."
   },
+  "help": {
+    "title": "Ayuda",
+    "contactSupport": "Contactar soporte"
+  },
+  "support": {
+    "subject": "Asunto",
+    "message": "¿Cómo podemos ayudarte?",
+    "send": "Enviar",
+    "sent": "Gracias. Responderemos al correo de tu cuenta.",
+    "subjectRequired": "Escribe un asunto.",
+    "messageRequired": "Escribe un mensaje.",
+    "sendFailed": "No se pudo enviar tu mensaje. Inténtalo de nuevo."
+  },
   "errors": {
     "common": {
       "loadFailed": "No se pudo cargar. Inténtalo de nuevo.",

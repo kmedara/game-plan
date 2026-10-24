@@ -587,6 +587,19 @@
     "askBillingManager": "Someone who manages this team’s billing can accept.",
     "refunded": "The team’s own plan was cancelled and {{amount}} refunded to the card."
   },
+  "help": {
+    "title": "Help",
+    "contactSupport": "Contact support"
+  },
+  "support": {
+    "subject": "Subject",
+    "message": "How can we help?",
+    "send": "Send",
+    "sent": "Thanks. We'll reply to your account email.",
+    "subjectRequired": "Enter a subject.",
+    "messageRequired": "Enter a message.",
+    "sendFailed": "Could not send your message. Try again."
+  },
   "errors": {
     "common": {
       "loadFailed": "Could not load this. Try again.",
