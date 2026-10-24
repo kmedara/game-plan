@@ -2,10 +2,12 @@
  * Cognito pre sign-up trigger for staging.
  *
  * Allows an address only when it appears in the Parameter Store allowlist.
- * A missing parameter or a blank value rejects every sign-up.
+ * A missing parameter or a blank value rejects every sign-up. A warm function
+ * reuses the list for up to five minutes, so an added address may wait that long.
  */
 
 import type { PreSignUpTriggerHandler } from 'aws-lambda';
+import { readSecret } from '../../lib/parameters.js';
 
 /** Cognito shows this message when the address is not on the allowlist. */
 const REJECTED = 'Sign-up is not open for this email';
@@ -38,19 +40,8 @@ export const emailAllowed = (email: string | undefined, allowlist: string): bool
  * @returns The same event when the address is allowed.
  */
 export const handler: PreSignUpTriggerHandler = async (event) => {
-  const name = process.env.ALLOWLIST_PARAMETER?.trim() ?? '';
-  if (name.length === 0) throw new Error(REJECTED);
-
-  let allowlist = '';
-  try {
-    const { GetParameterCommand, SSMClient } = await import('@aws-sdk/client-ssm');
-    const result = await new SSMClient({}).send(new GetParameterCommand({ Name: name }));
-    allowlist = result.Parameter?.Value ?? '';
-  } catch {
-    throw new Error(REJECTED);
-  }
-
-  if (!emailAllowed(event.request.userAttributes.email, allowlist)) {
+  const allowlist = await readSecret('ALLOWLIST_PARAMETER', 'SIGNUP_ALLOWLIST');
+  if (allowlist === undefined || !emailAllowed(event.request.userAttributes.email, allowlist)) {
     throw new Error(REJECTED);
   }
   return event;
