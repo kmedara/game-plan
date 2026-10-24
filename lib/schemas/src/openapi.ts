@@ -124,6 +124,7 @@ import {
   teamCheckoutBodySchema,
 } from './plans.js';
 import { preferencesSchema, updatePreferencesBodySchema } from './preferences.js';
+import { supportRequestBodySchema } from './support.js';
 import {
   addOrgAdminBodySchema,
   createOrgBodySchema,
@@ -247,6 +248,13 @@ const AREAS: Record<string, AreaSpec> = {
           summary: 'Change some settings',
           body: updatePreferencesBodySchema,
           response: preferencesSchema,
+          secured: true,
+        },
+      },
+      '/identity/support': {
+        post: {
+          summary: "Email GamePlan support. Replies go to the caller's address",
+          body: supportRequestBodySchema,
           secured: true,
         },
       },

@@ -351,6 +351,8 @@ export {
   type UpdatePreferencesBody,
 } from './preferences.js';
 
+export { supportRequestBodySchema, type SupportRequestBody } from './support.js';
+
 export {
   MAX_EMERGENCY_CONTACTS,
   emergencyContactSchema,

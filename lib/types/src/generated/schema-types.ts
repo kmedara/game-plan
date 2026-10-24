@@ -1359,6 +1359,11 @@ export type SocketTicket = {
 
 export type Sport = string;
 
+export type SupportRequestBody = {
+  subject: string;
+  message: string;
+}
+
 export type TeamBilling = {
   teamId: string;
   plan: {
