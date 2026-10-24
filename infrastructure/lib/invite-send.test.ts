@@ -67,6 +67,34 @@ describe('invites sent from GamePlan', () => {
     expect(JSON.stringify(template.toJSON())).not.toMatch(/ses:SendEmail|sms-voice:SendTextMessage/u);
   });
 
+  it('lets identity email the support inbox from the same host', () => {
+    const template = apiTemplate({ inviteEmailDomain: 'staging.example.com', supportEmail: 'help@example.com' });
+
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'gameplan-identity',
+      Environment: {
+        Variables: Match.objectLike({
+          SUPPORT_EMAIL: 'help@example.com',
+          SUPPORT_EMAIL_FROM: 'support@staging.example.com',
+        }),
+      },
+    });
+    const sends = Object.values(template.findResources('AWS::IAM::Policy')).filter((policy) =>
+      JSON.stringify(policy.Properties.PolicyDocument).includes('ses:SendEmail'),
+    );
+    // One grant for teams (invites) and one for identity (support).
+    expect(sends).toHaveLength(2);
+  });
+
+  it('sends no support mail without a verified host', () => {
+    const template = apiTemplate({ supportEmail: 'help@example.com' });
+    const identity = Object.values(template.findResources('AWS::Lambda::Function')).find(
+      (fn) => fn.Properties.FunctionName === 'gameplan-identity',
+    );
+    expect(identity?.Properties.Environment.Variables.SUPPORT_EMAIL).toBeUndefined();
+    expect(JSON.stringify(template.toJSON())).not.toMatch(/ses:SendEmail/u);
+  });
+
   it('verifies the website host in SES and publishes its DKIM records', () => {
     const { site } = siteStackForTest({
       siteHostname: 'staging.example.com',

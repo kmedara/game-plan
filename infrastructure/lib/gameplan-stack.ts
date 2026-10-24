@@ -179,6 +179,8 @@ export type GamePlanApiProps = cdk.StackProps & {
   inviteEmailDomain?: string;
   /** ARN of the registered phone number that texts invites. */
   smsOriginationIdentity?: string;
+  /** Inbox that receives the app's support form. */
+  supportEmail?: string;
 };
 
 /**
@@ -223,6 +225,7 @@ export class GamePlanApi extends cdk.Stack {
       mediaSigningPublicKey: props.mediaSigningPublicKey,
       inviteEmailDomain: props.inviteEmailDomain,
       smsOriginationIdentity: props.smsOriginationIdentity,
+      supportEmail: props.supportEmail,
     });
     this.mediaKeyGroup = api.mediaKeyGroup;
     this.functionUrls = api.functionUrls;

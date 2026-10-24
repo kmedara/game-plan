@@ -77,6 +77,12 @@ export type ApiProps = {
    * app opens the person's own messages app.
    */
   smsOriginationIdentity?: string;
+  /**
+   * Inbox that receives the app's support form. The identity function sends to
+   * it from `support@` {@link inviteEmailDomain}. Without both, the app opens
+   * the person's own mail app.
+   */
+  supportEmail?: string;
 };
 
 /**
@@ -292,6 +298,11 @@ export class Api extends Construct {
       ...(props.inviteEmailDomain === undefined ? {} : { INVITE_EMAIL_FROM: `invites@${props.inviteEmailDomain}` }),
       ...(props.smsOriginationIdentity === undefined ? {} : { SMS_ORIGINATION_IDENTITY: props.smsOriginationIdentity }),
     };
+    // The support form, sent from the same verified domain as invites.
+    const supportEnv: Record<string, string> =
+      props.supportEmail === undefined || props.inviteEmailDomain === undefined
+        ? {}
+        : { SUPPORT_EMAIL: props.supportEmail, SUPPORT_EMAIL_FROM: `support@${props.inviteEmailDomain}` };
     const oauthEnv = {
       COGNITO_HOSTED_UI_DOMAIN: props.hostedUiDomain,
       AUTH_CALLBACK_URL: props.authCallbackUrl,
@@ -343,6 +354,7 @@ export class Api extends Construct {
             ...tableEnv,
             ...tokenEnv,
             ...oauthEnv,
+            ...supportEnv,
             // Account deletion removes the profile photo.
             MEDIA_BUCKET: props.mediaBucket.bucketName,
           };
@@ -630,6 +642,14 @@ export class Api extends Construct {
     const stack = cdk.Stack.of(this);
     if (props.inviteEmailDomain !== undefined) {
       functions.teams.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['ses:SendEmail'],
+          resources: [`arn:${stack.partition}:ses:${stack.region}:${stack.account}:identity/${props.inviteEmailDomain}`],
+        }),
+      );
+    }
+    if (props.supportEmail !== undefined && props.inviteEmailDomain !== undefined) {
+      functions.identity.addToRolePolicy(
         new iam.PolicyStatement({
           actions: ['ses:SendEmail'],
           resources: [`arn:${stack.partition}:ses:${stack.region}:${stack.account}:identity/${props.inviteEmailDomain}`],

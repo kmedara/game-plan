@@ -29,7 +29,7 @@ export const PARAMETER_ENV: Record<string, string> = {
   'vapid-private-key': 'VAPID_PRIVATE_KEY',
   'vapid-subject': 'VAPID_SUBJECT',
   'media-signing-public-key': 'MEDIA_SIGNING_PUBLIC_KEY',
-  // The website build maps this onto EXPO_PUBLIC_SUPPORT_EMAIL for the privacy page.
+  // The support form's inbox. The website build also maps it onto EXPO_PUBLIC_SUPPORT_EMAIL for the privacy page.
   'support-email': 'SUPPORT_EMAIL',
   // ARN of the registered toll-free number that texts invites. Unset keeps texts on the person's phone.
   'sms-origination-identity': 'SMS_ORIGINATION_IDENTITY',

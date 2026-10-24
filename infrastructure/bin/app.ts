@@ -139,6 +139,7 @@ const api = new GamePlanApi(app, 'GamePlanApi', {
   // The site stack verifies this domain in SES when it owns the DNS records.
   inviteEmailDomain: emailDomain,
   smsOriginationIdentity: definedString(process.env.SMS_ORIGINATION_IDENTITY),
+  supportEmail: definedString(process.env.SUPPORT_EMAIL),
 });
 
 new GamePlanSite(app, 'GamePlanSite', {
