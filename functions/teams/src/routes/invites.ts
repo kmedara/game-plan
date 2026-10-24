@@ -7,6 +7,7 @@ import { assertCallerCanGrant } from '@gameplan/rules';
 import { TEAM_ROLES, type TeamRole } from '@gameplan/types';
 import { requireMembership, requirePermission, requireUser } from '../../../lib/auth/index.js';
 import { getProfile } from '../../../lib/auth/profile.js';
+import { clientOrigin } from '../../../lib/client-origin.js';
 import { badRequest, json } from '../../../lib/http.js';
 import { route, withBodyValidation } from '../../../lib/pipeline.js';
 import { assertAccountMayHoldRole } from '../../../lib/role-rules.js';
@@ -33,7 +34,7 @@ const SINGLE_EMAIL = /^[^\s@,;<>"()]+@[^\s@,;<>"()]+\.[^\s@,;<>"()]+$/u;
  * @returns The absolute URL.
  */
 const invitePageUrl = (code: string): string =>
-  `${(process.env.CLIENT_ORIGIN ?? 'http://localhost:4200').replace(/\/+$/u, '')}/invite/${encodeURIComponent(code)}`;
+  `${clientOrigin()}/invite/${encodeURIComponent(code)}`;
 
 /**
  * Checks and normalizes the recipient for a channel.

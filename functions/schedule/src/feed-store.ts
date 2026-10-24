@@ -10,6 +10,7 @@
 import { randomBytes } from 'node:crypto';
 import type { CalendarFeed } from '@gameplan/types';
 import { listChildIds } from '../../lib/guardians.js';
+import { clientOrigin } from '../../lib/client-origin.js';
 import {
   TABLE_PK,
   TABLE_SK,
@@ -57,8 +58,7 @@ const newToken = (): string => randomBytes(24).toString('base64url');
  * @returns The `https` and `webcal` URLs.
  */
 export const feedLinks = (token: string): CalendarFeed => {
-  const origin = (process.env.CLIENT_ORIGIN ?? 'http://localhost:4200').replace(/\/+$/u, '');
-  const url = `${origin}/api/schedule/feeds/${token}.ics`;
+  const url = `${clientOrigin()}/api/schedule/feeds/${token}.ics`;
   return { url, webcalUrl: url.replace(/^https?:/u, 'webcal:') };
 };
 
