@@ -47,7 +47,7 @@ There are **two** endpoints. Both target **public Lambda function URLs** (auth `
 
 **Why not CloudFront:** Browser API traffic uses CloudFront origin access control (SigV4). Stripe sends only `Stripe-Signature`; it cannot sign for OAC. Dedicated webhook Lambdas expose a public function URL and verify the Stripe signature on the raw body. See `infrastructure/lib/api.ts` (stack outputs `PaymentsWebhookUrl`, `BillingWebhookUrl`).
 
-**Security note:** Those URLs skip CloudFront WAF. Each function URL also **denies** invokes whose source IP is not in Stripe's published webhook list (`infrastructure/data/stripe-webhook-ips.json`, refreshed by a weekly GitHub workflow). The **signing secret** remains the primary gate. See [`security.md`](security.md#exceptions-public-urls).
+**Security note:** Those URLs skip CloudFront WAF. Each function URL's resource policy also allows invokes only from Stripe's published webhook IPs (`infrastructure/data/stripe-webhook-ips.json`, refreshed by a weekly GitHub workflow). The **signing secret** remains the primary gate. See [`security.md`](security.md#exceptions-public-urls).
 
 ### Registered events
 

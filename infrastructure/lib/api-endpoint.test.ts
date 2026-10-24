@@ -7,7 +7,7 @@ import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 import { GamePlanApi, GamePlanPlatform } from './gameplan-stack';
 import { HTTP_AREAS } from './names';
-import { stripeWebhookUrlDenySid } from './lambda-url-policy';
+import { stripeWebhookUrlAllowSids } from './lambda-url-policy';
 import { stripeWebhookSourceCidrs } from './stripe-webhook-ips';
 import { envFromOutputs } from './ssm-parameters';
 
@@ -48,17 +48,21 @@ describe('area function urls', () => {
       expect(url.Properties.AuthType).toBe('AWS_IAM');
     }
 
-    const webhookDeny = Object.values(template.findResources('AWS::Lambda::Permission')).filter(
-      (resource) =>
-        resource.Properties.FunctionUrlAuthType === 'NONE' &&
-        resource.Properties.Action === 'lambda:InvokeFunctionUrl' &&
-        resource.Properties.Principal === '*' &&
-        resource.Properties.Effect === 'Deny' &&
-        resource.Properties.Sid === stripeWebhookUrlDenySid,
+    // Each webhook URL is open only to Stripe's IPs, through a full resource
+    // policy. The URL's own unconditioned permissions must be gone.
+    const webhookPolicies = Object.values(template.findResources('AWS::Lambda::ResourcePolicy'));
+    expect(webhookPolicies).toHaveLength(2);
+    for (const policy of webhookPolicies) {
+      const statements = policy.Properties.PolicyDocument.Statement as Array<{ Sid: string; Condition: unknown }>;
+      expect(statements.map((statement) => statement.Sid)).toEqual([...stripeWebhookUrlAllowSids]);
+      for (const statement of statements) {
+        expect(statement.Condition).toMatchObject({ IpAddress: { 'aws:SourceIp': [...stripeWebhookSourceCidrs()] } });
+      }
+    }
+    const webhookPermissions = Object.values(template.findResources('AWS::Lambda::Permission')).filter(
+      (resource) => /webhook/iu.test(JSON.stringify(resource.Properties.FunctionName)),
     );
-    expect(webhookDeny).toHaveLength(2);
-    const expectedIp = stripeWebhookSourceCidrs()[0];
-    expect(JSON.stringify(webhookDeny)).toContain(expectedIp);
+    expect(webhookPermissions).toHaveLength(0);
 
     // The site stack grants CloudFront. A reference here would make the stacks depend on each other.
     const permissions = Object.values(template.findResources('AWS::Lambda::Permission')).filter(
