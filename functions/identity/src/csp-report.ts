@@ -12,6 +12,7 @@
  */
 
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
+import { rawBody } from '../../lib/http.js';
 
 /** Larger bodies are dropped unread. A real report is well under 4 KB. */
 export const MAX_REPORT_BYTES = 16 * 1024;
@@ -101,7 +102,7 @@ export const cspViolations = (body: unknown): CspViolation[] => {
  */
 export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyStructuredResultV2> => {
   if (event.requestContext.http.method !== 'POST' || event.rawPath !== '/csp-report') return { statusCode: 404 };
-  const raw = event.body === undefined ? '' : event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body;
+  const raw = rawBody(event);
   if (raw.length === 0 || Buffer.byteLength(raw) > MAX_REPORT_BYTES) return { statusCode: 204 };
   let body: unknown;
   try {

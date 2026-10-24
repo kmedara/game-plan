@@ -342,16 +342,27 @@ export const headerOf = (
 };
 
 /**
+ * Reads the request body as text, decoding it when API Gateway sent base64.
+ *
+ * Signature checks such as Stripe's need these exact bytes, so nothing is parsed.
+ *
+ * @param event - The HTTP API event.
+ * @returns The body text, or an empty string when there is none.
+ */
+export const rawBody = (event: APIGatewayProxyEventV2): string => {
+  if (event.body === undefined) return "";
+  return event.isBase64Encoded ? Buffer.from(event.body, "base64").toString("utf8") : event.body;
+};
+
+/**
  * Parses a JSON request body, or returns `undefined` when empty or invalid.
  *
  * @param event - The HTTP API event.
  * @returns The parsed object, or `undefined`.
  */
 export const parseJsonBody = (event: APIGatewayProxyEventV2): unknown => {
-  if (event.body === undefined || event.body.length === 0) return undefined;
-  const raw = event.isBase64Encoded
-    ? Buffer.from(event.body, "base64").toString("utf8")
-    : event.body;
+  const raw = rawBody(event);
+  if (raw.length === 0) return undefined;
   try {
     return JSON.parse(raw) as unknown;
   } catch {
