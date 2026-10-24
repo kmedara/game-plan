@@ -2,13 +2,20 @@
  * AWS WAF rules for the HTTP API.
  *
  * WAF here is pay-as-you-go, not a CloudFront flat-rate plan. A rate rule can
- * count by the Authorization header, so each access token has its own limit.
- * The website distribution attaches these rules to `/api/`.
+ * count by the Authorization header or the website's access cookie, so each
+ * access token has its own limit. The website distribution attaches these
+ * rules to `/api/`.
  */
 
 import * as cdk from 'aws-cdk-lib';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
+
+/**
+ * Cookie the website sends its access token in. Must match `ACCESS_COOKIE` in
+ * `functions/lib/auth/refresh-cookie.ts`.
+ */
+export const ACCESS_TOKEN_COOKIE = 'ts_access';
 
 /** Requests one access token may make in {@link WINDOW}. */
 const TOKEN_LIMIT = 600;
@@ -102,6 +109,35 @@ const hasAuthorization = (): wafv2.CfnWebACL.StatementProperty => ({
 });
 
 /**
+ * Matches requests that carry the website's access cookie.
+ *
+ * @returns A size constraint on that cookie's value.
+ */
+const hasAccessCookie = (): wafv2.CfnWebACL.StatementProperty => ({
+  sizeConstraintStatement: {
+    fieldToMatch: {
+      cookies: {
+        matchPattern: { includedCookies: [ACCESS_TOKEN_COOKIE] },
+        matchScope: 'VALUE',
+        oversizeHandling: 'MATCH',
+      },
+    },
+    comparisonOperator: 'GE',
+    size: 1,
+    textTransformations: [{ priority: 0, type: 'NONE' }],
+  },
+});
+
+/**
+ * Matches requests that carry an access token in either place.
+ *
+ * @returns An or-statement over the header and the cookie.
+ */
+const hasAccessToken = (): wafv2.CfnWebACL.StatementProperty => ({
+  orStatement: { statements: [hasAuthorization(), hasAccessCookie()] },
+});
+
+/**
  * Matches a viewer path prefix, such as `/api/` on the website distribution.
  *
  * @param prefix - The path prefix, including the leading slash.
@@ -165,14 +201,14 @@ export const apiRateLimitRules = (
   const prefix = pathPrefix === undefined ? undefined : uriStartsWith(pathPrefix);
   const socket = socketPath === undefined ? undefined : uriIs(socketPath);
   const feed = feedPrefix === undefined ? undefined : uriStartsWith(feedPrefix);
-  const anonymous = { notStatement: { statement: hasAuthorization() } };
+  const anonymous = { notStatement: { statement: hasAccessToken() } };
   const notSocket = socket === undefined ? undefined : { notStatement: { statement: socket } };
   const notFeed = feed === undefined ? undefined : { notStatement: { statement: feed } };
   const feedRules =
     feed === undefined
       ? []
       : [
-          rateRule('PerCalendarFeed', 4, {
+          rateRule('PerCalendarFeed', 5, {
             rateBasedStatement: {
               limit: FEED_URL_LIMIT,
               evaluationWindowSec: WINDOW.toSeconds(),
@@ -181,7 +217,7 @@ export const apiRateLimitRules = (
               scopeDownStatement: feed,
             },
           }),
-          rateRule('CalendarFeedIp', 5, {
+          rateRule('CalendarFeedIp', 6, {
             rateBasedStatement: {
               limit: FEED_IP_LIMIT,
               evaluationWindowSec: WINDOW.toSeconds(),
@@ -194,7 +230,7 @@ export const apiRateLimitRules = (
     socket === undefined
       ? []
       : [
-          rateRule('SocketConnectIp', 2, {
+          rateRule('SocketConnectIp', 3, {
             rateBasedStatement: {
               limit: SOCKET_CONNECT_IP_LIMIT,
               evaluationWindowSec: WINDOW.toSeconds(),
@@ -220,7 +256,24 @@ export const apiRateLimitRules = (
         scopeDownStatement: allOf([hasAuthorization(), prefix]),
       },
     }),
-    rateRule('PerAnonymousIp', 1, {
+    // The website sends no Authorization header; its token is in this cookie.
+    rateRule('PerAccessCookie', 1, {
+      rateBasedStatement: {
+        limit: TOKEN_LIMIT,
+        evaluationWindowSec: WINDOW.toSeconds(),
+        aggregateKeyType: 'CUSTOM_KEYS',
+        customKeys: [
+          {
+            cookie: {
+              name: ACCESS_TOKEN_COOKIE,
+              textTransformations: [{ priority: 0, type: 'NONE' }],
+            },
+          },
+        ],
+        scopeDownStatement: allOf([hasAccessCookie(), prefix]),
+      },
+    }),
+    rateRule('PerAnonymousIp', 2, {
       rateBasedStatement: {
         limit: ANONYMOUS_IP_LIMIT,
         evaluationWindowSec: WINDOW.toSeconds(),
@@ -229,7 +282,7 @@ export const apiRateLimitRules = (
       },
     }),
     ...socketRules,
-    rateRule('PerIpFlood', 3, {
+    rateRule('PerIpFlood', 4, {
       rateBasedStatement: {
         limit: IP_FLOOD_LIMIT,
         evaluationWindowSec: WINDOW.toSeconds(),

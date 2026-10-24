@@ -102,6 +102,7 @@ describe('site stack', () => {
     const rules = acl.Properties.Rules;
     expect(rules.map((rule) => rule.Name)).toEqual([
       'PerAccessToken',
+      'PerAccessCookie',
       'PerAnonymousIp',
       'SocketConnectIp',
       'PerIpFlood',
@@ -117,6 +118,9 @@ describe('site stack', () => {
     expect(anonymousRule).toContain('"SearchString":"/api/socket"');
     expect(anonymousRule).toContain('NotStatement');
     expect(anonymousRule).toContain('"SearchString":"/api/schedule/feeds/"');
+    expect(anonymousRule).toContain('"IncludedCookies":["ts_access"]');
+    const cookieRule = JSON.stringify(rules.find((rule) => rule.Name === 'PerAccessCookie')?.Statement);
+    expect(cookieRule).toContain('"Cookie":{"Name":"ts_access"');
     const feedRule = JSON.stringify(rules.find((rule) => rule.Name === 'PerCalendarFeed')?.Statement);
     expect(feedRule).toContain('"UriPath"');
     const floodRule = JSON.stringify(rules.find((rule) => rule.Name === 'PerIpFlood')?.Statement);
