@@ -61,11 +61,26 @@ const rejectGameFieldsOnOtherTypes = (
   }
 };
 
+/**
+ * Meetings and other events need a title. Practices and games are named from
+ * their type, side, and opponent, so the server ignores a title sent for them.
+ *
+ * @param body - A create body.
+ * @param ctx - The Zod issue collector.
+ */
+const requireTitleOnNamedTypes = (
+  body: { eventType: string; title?: string },
+  ctx: z.RefinementCtx,
+): void => {
+  if (body.eventType === 'practice' || body.eventType === 'game') return;
+  if (body.title === undefined) ctx.addIssue({ code: 'custom', message: 'title_required', path: ['title'] });
+};
+
 /** Body for creating a team event. */
 export const createEventBodySchema = z
   .object({
     eventType: eventTypeSchema,
-    title: z.string().min(1).max(200),
+    title: z.string().min(1).max(200).optional(),
     startsAt: z.string().datetime(),
     endsAt: z.string().datetime().optional(),
     location: z.string().max(500).optional(),
@@ -78,7 +93,8 @@ export const createEventBodySchema = z
   })
   .strict()
   .refine(hasPairedCoordinates, { message: 'coordinates_incomplete' })
-  .superRefine(rejectGameFieldsOnOtherTypes);
+  .superRefine(rejectGameFieldsOnOtherTypes)
+  .superRefine(requireTitleOnNamedTypes);
 
 /** Query for expanding events into a visible date window. */
 export const scheduleWindowQuerySchema = z.object({

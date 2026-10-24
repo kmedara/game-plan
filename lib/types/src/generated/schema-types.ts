@@ -279,7 +279,7 @@ export type CreateChargeBody = {
 
 export type CreateEventBody = {
   eventType: 'practice' | 'game' | 'meeting' | 'other';
-  title: string;
+  title?: string;
   startsAt: string;
   endsAt?: string;
   location?: string;
