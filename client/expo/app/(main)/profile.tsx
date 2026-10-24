@@ -1,6 +1,6 @@
 /**
  * Profile photo, phone, notifications, reminder times, calendar sync, emergency info, dues link,
- * positions, theme note, account deletion, and sign-out.
+ * positions, theme note, and sign-out.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -10,9 +10,8 @@ import Plus from 'lucide-react-native/icons/plus';
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { positionsWithinLimit } from '@gameplan/rules';
+import { positionsWithinLimit, toE164Phone } from '@gameplan/rules';
 import { config } from '@/src/config';
-import { DeleteAccountSection } from '@/src/delete-account';
 import { errorMessageKey, queryError } from '@/src/errors';
 import { PROFILE_PHOTO_MAX_DIMENSION, pickAndUploadImage, useDownloadUrl } from '@/src/media';
 import { ReminderSettings } from '@/src/reminder-settings';
@@ -25,7 +24,6 @@ import { meQuery, updateProfileMutation } from '@/src/queries/profile';
 import { RefreshableScroll } from '@/src/pull-refresh';
 import { setPositionsMutation } from '@/src/queries/teams';
 import { clearPersistedCache } from '@/src/query-client';
-import { toE164Phone } from '@/src/phone';
 import { useApp } from '@/src/state';
 import { Button, ErrorText, Field, ProfilePhoto, SubmitButton } from '@/src/ui';
 
@@ -131,13 +129,6 @@ export default function ProfileScreen() {
     if (Platform.OS !== 'web') router.replace('/login');
   };
 
-  // The server already ended the session, so there is no hosted sign-out to visit.
-  const leaveDeletedAccount = async (): Promise<void> => {
-    live.disconnect();
-    await clearPersistedCache(queryClient);
-    router.replace('/login');
-  };
-
   return (
     <View className="flex-1">
     <RefreshableScroll className="flex-1 px-4 pt-4">
@@ -219,10 +210,6 @@ export default function ProfileScreen() {
           </View>
         );
       })}
-      <View className="mt-4">
-        <Button label={t('auth.privacy')} tone="secondary" onPress={() => router.push('/privacy')} />
-      </View>
-      <DeleteAccountSection onDeleted={leaveDeletedAccount} />
     </RefreshableScroll>
     <View className="px-4 pb-2">
       <Button label={t('profile.signOut')} onPress={() => void logout()} tone="danger" />

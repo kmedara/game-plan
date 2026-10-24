@@ -1,10 +1,10 @@
 /**
- * Deleting an account takes a second tap, and a refusal names what to hand over.
+ * Deleting an account says what goes first, and a refusal names what to hand over.
  */
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { AccountDeletionBlocked } from './api';
-import { DeleteAccountSection } from './delete-account';
+import { DeleteAccountForm } from './delete-account';
 
 const mockDeleteAccount = jest.fn();
 
@@ -24,14 +24,13 @@ jest.mock('./state', () => ({
 describe('delete account', () => {
   beforeEach(() => mockDeleteAccount.mockReset());
 
-  it('asks again before deleting, then leaves the app', async () => {
+  it('says what goes, deletes on confirm, then leaves the app', async () => {
     mockDeleteAccount.mockResolvedValue(undefined);
     const onDeleted = jest.fn(async () => undefined);
-    render(<DeleteAccountSection onDeleted={onDeleted} />);
+    render(<DeleteAccountForm onDeleted={onDeleted} />);
 
-    fireEvent.press(screen.getByText('account.delete'));
-    expect(mockDeleteAccount).not.toHaveBeenCalled();
     expect(screen.getByText('account.deleteRemoves')).toBeTruthy();
+    expect(mockDeleteAccount).not.toHaveBeenCalled();
 
     fireEvent.press(screen.getByText('account.deleteConfirm'));
     await waitFor(() => expect(onDeleted).toHaveBeenCalled());
@@ -40,9 +39,8 @@ describe('delete account', () => {
   it('lists the organization and team to hand over', async () => {
     mockDeleteAccount.mockRejectedValue(new AccountDeletionBlocked(['Metro FC'], ['Rockets']));
     const onDeleted = jest.fn(async () => undefined);
-    render(<DeleteAccountSection onDeleted={onDeleted} />);
+    render(<DeleteAccountForm onDeleted={onDeleted} />);
 
-    fireEvent.press(screen.getByText('account.delete'));
     fireEvent.press(screen.getByText('account.deleteConfirm'));
 
     expect(await screen.findByText('account.blockedOrg:Metro FC')).toBeTruthy();

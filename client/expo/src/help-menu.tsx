@@ -1,15 +1,18 @@
 /**
- * Header help button. Opens a short menu for the privacy policy and a support form.
+ * Header help button. Opens a short menu for the privacy policy, a support form, and account deletion.
  */
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import CircleQuestionMark from 'lucide-react-native/icons/circle-question-mark';
 import { useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { config } from './config';
+import { DeleteAccountForm } from './delete-account';
 import { errorCode } from './errors';
 import { openLink } from './open-link';
+import { clearPersistedCache } from './query-client';
 import { Sheet } from './sheet';
 import { useApp } from './state';
 import { Button, Field, SubmitButton } from './ui';
@@ -66,8 +69,18 @@ const SupportForm = ({ onDone }: { onDone: () => void }) => {
 export const HelpButton = ({ color }: { color: string }) => {
   const { t } = useTranslation();
   const router = useRouter();
+  const { live } = useApp();
+  const queryClient = useQueryClient();
   const [menuOpen, setMenuOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  // The server already ended the session, so there is no hosted sign-out to visit.
+  const leaveDeletedAccount = async (): Promise<void> => {
+    live.disconnect();
+    await clearPersistedCache(queryClient);
+    router.replace('/login');
+  };
 
   return (
     <>
@@ -97,6 +110,14 @@ export const HelpButton = ({ color }: { color: string }) => {
                 setSupportOpen(true);
               }}
             />
+            <Button
+              label={t('account.delete')}
+              tone="danger"
+              onPress={() => {
+                setMenuOpen(false);
+                setDeleteOpen(true);
+              }}
+            />
             <Button label={t('common.cancel')} tone="secondary" onPress={() => setMenuOpen(false)} />
           </View>
         </View>
@@ -110,6 +131,16 @@ export const HelpButton = ({ color }: { color: string }) => {
           onClose={() => setSupportOpen(false)}
         >
           <SupportForm onDone={() => setSupportOpen(false)} />
+        </Sheet>
+      ) : null}
+      {deleteOpen ? (
+        <Sheet
+          visible
+          title={t('account.deleteTitle')}
+          closeLabel={t('common.cancel')}
+          onClose={() => setDeleteOpen(false)}
+        >
+          <DeleteAccountForm onDeleted={leaveDeletedAccount} />
         </Sheet>
       ) : null}
     </>
