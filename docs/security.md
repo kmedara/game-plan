@@ -31,18 +31,19 @@ These endpoints are **not** behind CloudFront OAC; they rely on their own verifi
 
 ### Rate limits (WAF)
 
-WAF attaches to `/api/*` only. Six rules, five-minute windows, `429` with `{"error":"rate_limited"}`. Pay-as-you-go WAF is used so rules can key on headers.
+WAF attaches to `/api/*` only. Seven rules, five-minute windows, `429` with `{"error":"rate_limited"}`. Pay-as-you-go WAF is used so rules can key on headers and cookies.
 
 | Rule | Key | Limit | Purpose |
 | --- | --- | --- | --- |
-| `PerAccessToken` | `Authorization` | 600 | Signed-in fairness |
-| `PerAnonymousIp` | IP, no token | 100 | Signup / open identity abuse |
+| `PerAccessToken` | `Authorization` | 600 | Signed-in fairness (native) |
+| `PerAccessCookie` | `ts_access` cookie | 600 | Signed-in fairness (website) |
+| `PerAnonymousIp` | IP, no header or cookie token | 100 | Signup / open identity abuse |
 | `SocketConnectIp` | IP, `/api/socket` | 1000 | Connect floods |
 | `PerIpFlood` | IP | 4000 | Random bearer per request |
 | `PerCalendarFeed` | Path `/api/schedule/feeds/` | 30 | Leaked feed link |
 | `CalendarFeedIp` | IP, feeds path | 20000 | Google/Outlook fetchers |
 
-The token rule uses the **raw** `Authorization` header (including invalid tokens). A verified-user limit would need to run inside Lambda.
+The token rules use the **raw** `Authorization` header or `ts_access` cookie (including invalid tokens). A verified-user limit would need to run inside Lambda.
 
 Implementation: `infrastructure/lib/api-edge.ts`.
 
@@ -58,6 +59,8 @@ The app never calls Cognito’s token endpoint directly. The **`identity`** area
 - **Website:** Script never sees a token. Identity returns no tokens in JSON for the website; it sets HttpOnly cookies instead (`Secure` in production):
   - `ts_access` — access token, `SameSite=Strict`, path `/api`, lifetime of the token. `authorizationOf` (`functions/lib/http.ts`) uses it when no `Bearer` header is sent, and only when `Sec-Fetch-Site` is `same-origin` or absent (`same-site` also allowed outside production for the localhost ports).
   - `ts_refresh` — refresh token, `SameSite=Lax`, path `/api/identity`.
+  - `POST /identity/refresh` returns tokens in JSON only when the refresh token came in the body. A cookie refresh never does, even with `X-Refresh-Delivery: body`.
+  - Logout, through `POST /identity/logout` or `GET /identity/oauth/logout`, revokes the refresh token and expires both cookies.
   - Injected script can still make calls from the open tab, but cannot take a token elsewhere.
 - **Native:** Sends `X-Refresh-Delivery: body` and gets both tokens in JSON; access token in memory, refresh in Expo SecureStore; OAuth completes via short-lived `gameplan://auth?code=…` handoff (conditional delete in DynamoDB).
 - **One refresh in flight:** Shared `POST /identity/refresh` across the shell and `401` recovery.
@@ -86,9 +89,9 @@ Enforced in the **`route()` pipeline** before handlers (`functions/lib/guards.ts
 
 - **Team access:** `requireMembership`, `requirePermission` load the member row and permission matrix from DynamoDB.
 - **Plans:** `requireEntitlement`, `underLimit` → `plan_required` / `plan_limit_reached` → HTTP `402`.
-- **Minors (`lib/rules`):** Cannot create a team, be `team_admin`, or hold `manage_permissions`. Chat limited to shared teammates and linked guardians. Directory search returns **adults only**, exact email match.
+- **Minors (`lib/rules`):** Cannot create a team, be `team_admin`, or hold `manage_permissions`. Chat limited to shared teammates and linked guardians. User search (`GET /chat/users/search?q=`) matches the start of a first, last, or display name and covers **only people who share a team with the caller**, the same people a roster already shows; it returns no phone or birthday. There is no search by email.
 - **Medical:** `view_medical_info` for staff reads; audit rows on team partition; not persisted on device ([`ARCHITECTURE.md` — Emergency and medical info](ARCHITECTURE.md#emergency-and-medical-info)).
-- **Media downloads:** Own uploads by key prefix; otherwise require membership on the chat, team, or profile context.
+- **Media downloads:** Own uploads by key prefix; otherwise require membership on the chat, team, or profile context. A chat attachment is found by its `ATTACH#<key>` index row on the chat, written when the message is sent; messages from before that index are found by scanning the chat.
 
 Validation uses Zod at the route edge — malformed input never reaches business logic.
 
