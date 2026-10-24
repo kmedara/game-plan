@@ -9,6 +9,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@gameplan/types": "*"
+    "@gameplan/types": "*",
+    "libphonenumber-js": "^1.13.15"
   }
 }

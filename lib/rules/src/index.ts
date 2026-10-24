@@ -18,6 +18,7 @@ import type {
   UserSearchPolicy,
 } from '@gameplan/types';
 import { TEAM_ROLES } from '@gameplan/types';
+import { parsePhoneNumberFromString } from 'libphonenumber-js/min';
 
 /** Age at which an account is treated as an adult. */
 const ADULT_AGE_YEARS = 18;
@@ -412,6 +413,33 @@ export const matchesUserSearchPolicy = (
   policy: UserSearchPolicy = V1_USER_SEARCH_POLICY,
 ): boolean => !policy.adultsOnly || accountKind === 'adult';
 
+/** Lowercases a name and collapses its spaces so words split cleanly. */
+const normalizeName = (value: string): string => value.trim().toLowerCase().replace(/\s+/g, ' ');
+
+/**
+ * Returns whether a search query matches a person's name.
+ *
+ * Case is ignored. The query must start a word of the display name or of the
+ * first and last name, so `ada`, `love`, and `ada lo` all find Ada Lovelace.
+ * An empty query matches everyone.
+ *
+ * @param query - What the searcher typed.
+ * @param person - The display name, plus the first and last name when known.
+ * @returns `true` when the person should be offered.
+ */
+export const matchesPersonName = (
+  query: string,
+  person: { displayName?: string; firstName?: string; lastName?: string },
+): boolean => {
+  const needle = normalizeName(query);
+  if (needle.length === 0) return true;
+  const fullName = [person.firstName, person.lastName].filter((part) => part !== undefined).join(' ');
+  return [person.displayName ?? '', fullName].some((name) => {
+    const words = normalizeName(name).split(' ');
+    return words.some((_, index) => words.slice(index).join(' ').startsWith(needle));
+  });
+};
+
 /**
  * Counts positions after case-insensitive duplicates are collapsed.
  *
@@ -718,4 +746,20 @@ export const isSafeLink = (url: string, schemes: readonly string[] = SAFE_LINK_S
   } catch {
     return false;
   }
+};
+
+/**
+ * Parses a contact phone into E.164.
+ *
+ * Numbers without a leading `+` are read as US numbers.
+ *
+ * @param value - The raw phone field.
+ * @returns The E.164 number, or undefined when it is not a valid phone.
+ */
+export const toE164Phone = (value: string): string | undefined => {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  const parsed = parsePhoneNumberFromString(trimmed, trimmed.startsWith('+') ? undefined : 'US');
+  if (parsed === undefined || !parsed.isValid()) return undefined;
+  return parsed.number;
 };

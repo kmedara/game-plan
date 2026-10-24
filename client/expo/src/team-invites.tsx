@@ -11,7 +11,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { callerCanGrant } from '@gameplan/rules';
+import { callerCanGrant, toE164Phone } from '@gameplan/rules';
 import { TEAM_ROLES, type TeamInvite, type TeamRole } from '@gameplan/types';
 import { createInviteMutation, deleteInviteMutation, invitesQuery, sendInviteMutation } from '@/src/queries/teams';
 import {
@@ -26,7 +26,6 @@ import {
 import { config } from '@/src/config';
 import { errorCode, errorMessageKey } from '@/src/errors';
 import { openLink } from '@/src/open-link';
-import { toE164Phone } from '@/src/phone';
 import { roleLabel } from '@/src/roles';
 import { RolePicker } from '@/src/role-picker';
 import { useApp } from '@/src/state';
