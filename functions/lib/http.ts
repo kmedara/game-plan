@@ -11,6 +11,7 @@ import type {
   APIGatewayProxyWebsocketEventV2,
   SQSEvent,
 } from "aws-lambda";
+import { ACCESS_COOKIE } from "./auth/refresh-cookie.js";
 
 /** Subset of `requestContext` used to tell HTTP events apart from WebSocket events. */
 type RequestContext = {
@@ -280,18 +281,46 @@ export const readCookie = (
 export const VIEWER_AUTHORIZATION_HEADER = "x-viewer-authorization";
 
 /**
+ * Returns whether a browser request may use the access cookie.
+ *
+ * `SameSite=Strict` already keeps the cookie off cross-site requests. This
+ * also refuses other origins on the same site, such as a sibling subdomain.
+ * Browsers set `Sec-Fetch-Site` themselves and script cannot change it. A
+ * request without it is not from a current browser, so a page could not have
+ * forged it. Outside production the website and the API run on different
+ * localhost ports, which is `same-site`.
+ *
+ * @param event - The HTTP event.
+ * @returns `true` when the access cookie may stand in for `Authorization`.
+ */
+const cookieAllowed = (event: APIGatewayProxyEventV2): boolean => {
+  const site = headerOf(event, "sec-fetch-site");
+  if (site === undefined || site === "same-origin") return true;
+  return site === "same-site" && process.env.NODE_ENV !== "production";
+};
+
+/**
  * Reads the caller's `Authorization` value.
  *
- * Behind CloudFront it is in {@link VIEWER_AUTHORIZATION_HEADER}. The local
- * server forwards the original header.
+ * Behind CloudFront it is in {@link VIEWER_AUTHORIZATION_HEADER}, and
+ * `Authorization` holds the origin access control signature, which is not a
+ * bearer value. The local server forwards the original header. The website
+ * sends no header; its access token is in the HttpOnly {@link ACCESS_COOKIE}.
  *
  * @param event - The HTTP event.
  * @returns The header value, or `undefined` when absent.
  */
 export const authorizationOf = (
   event: APIGatewayProxyEventV2,
-): string | undefined =>
-  headerOf(event, VIEWER_AUTHORIZATION_HEADER) ?? headerOf(event, "authorization");
+): string | undefined => {
+  const viewer = headerOf(event, VIEWER_AUTHORIZATION_HEADER);
+  if (viewer !== undefined) return viewer;
+  const header = headerOf(event, "authorization");
+  if (header?.startsWith("Bearer ") === true) return header;
+  const token = readCookie(event, ACCESS_COOKIE);
+  if (token === undefined || token.length === 0 || !cookieAllowed(event)) return undefined;
+  return `Bearer ${token}`;
+};
 
 /**
  * Reads a case-insensitive request header value.

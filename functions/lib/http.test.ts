@@ -3,7 +3,7 @@
  */
 
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   badRequest,
   binary,
@@ -174,6 +174,33 @@ describe('http helpers', () => {
       'Bearer local',
     );
     expect(authorizationOf(httpEvent())).toBeUndefined();
+  });
+
+  describe('access cookie', () => {
+    afterEach(() => {
+      delete process.env.NODE_ENV;
+    });
+
+    const cookieEvent = (headers: Record<string, string> = {}) =>
+      httpEvent({ cookies: ['ts_access=abc'], headers });
+
+    it('stands in for a missing bearer header', () => {
+      expect(authorizationOf(cookieEvent())).toBe('Bearer abc');
+      expect(authorizationOf(cookieEvent({ 'sec-fetch-site': 'same-origin' }))).toBe('Bearer abc');
+    });
+
+    it('is read past the CloudFront signature but never over a bearer header', () => {
+      expect(authorizationOf(cookieEvent({ authorization: 'AWS4-HMAC-SHA256 sig' }))).toBe('Bearer abc');
+      expect(authorizationOf(cookieEvent({ authorization: 'Bearer header' }))).toBe('Bearer header');
+    });
+
+    it('is refused from another origin', () => {
+      expect(authorizationOf(cookieEvent({ 'sec-fetch-site': 'cross-site' }))).toBeUndefined();
+      expect(authorizationOf(cookieEvent({ 'sec-fetch-site': 'none' }))).toBeUndefined();
+      expect(authorizationOf(cookieEvent({ 'sec-fetch-site': 'same-site' }))).toBe('Bearer abc');
+      process.env.NODE_ENV = 'production';
+      expect(authorizationOf(cookieEvent({ 'sec-fetch-site': 'same-site' }))).toBeUndefined();
+    });
   });
 
   it('answers health checks for matching paths', () => {

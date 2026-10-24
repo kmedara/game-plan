@@ -3,7 +3,7 @@
  */
 
 import type { APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
-import { refreshSetCookie } from '../../../lib/auth/index.js';
+import { accessSetCookie, refreshSetCookie } from '../../../lib/auth/index.js';
 import type { SessionTokens, UserProfile } from '@gameplan/types';
 import {
   badRequest,
@@ -17,13 +17,16 @@ import {
 import { withMappedErrors } from '../../../lib/pipeline.js';
 
 /**
- * Builds a session JSON body, optionally including the refresh token.
+ * Builds a session JSON body.
+ *
+ * Only the Expo app gets the tokens in JSON. The website gets them as HttpOnly
+ * cookies, so script on the page, including injected script, never reads them.
  *
  * @param accessToken - The access JWT.
  * @param expiresIn - Access-token lifetime in seconds.
  * @param user - The public profile.
  * @param refreshToken - The refresh token.
- * @param includeRefreshInBody - When `true`, add `refreshToken` to the JSON.
+ * @param bodyDelivery - When `true` (native), add both tokens to the JSON.
  * @returns The session response body.
  */
 const sessionBody = (
@@ -31,23 +34,24 @@ const sessionBody = (
   expiresIn: number,
   user: UserProfile,
   refreshToken: string,
-  includeRefreshInBody: boolean,
+  bodyDelivery: boolean,
 ): SessionTokens => ({
-  accessToken,
   expiresIn,
   user,
-  ...(includeRefreshInBody ? { refreshToken } : {}),
+  ...(bodyDelivery ? { accessToken, refreshToken } : {}),
 });
 
 /**
- * Returns a JSON session response and sets the refresh cookie.
+ * Returns a JSON session response and sets the session cookies.
+ *
+ * The refresh cookie is always set. The website also gets the access cookie.
  *
  * @param statusCode - HTTP status for the response.
  * @param accessToken - The access JWT.
  * @param expiresIn - Access-token lifetime in seconds.
  * @param user - The public profile.
  * @param refreshToken - The refresh token for the cookie (and optional body).
- * @param includeRefreshInBody - When `true`, include `refreshToken` in JSON.
+ * @param bodyDelivery - When `true` (native), return both tokens in JSON instead of an access cookie.
  * @returns A structured proxy result with `Set-Cookie`.
  */
 export const sessionResponse = (
@@ -56,15 +60,12 @@ export const sessionResponse = (
   expiresIn: number,
   user: UserProfile,
   refreshToken: string,
-  includeRefreshInBody: boolean,
+  bodyDelivery: boolean,
 ): APIGatewayProxyStructuredResultV2 =>
-  withCookies(
-    json(
-      statusCode,
-      sessionBody(accessToken, expiresIn, user, refreshToken, includeRefreshInBody),
-    ),
-    refreshSetCookie(refreshToken),
-  );
+  withCookies(json(statusCode, sessionBody(accessToken, expiresIn, user, refreshToken, bodyDelivery)), [
+    ...refreshSetCookie(refreshToken),
+    ...(bodyDelivery ? [] : [accessSetCookie(accessToken, expiresIn)]),
+  ]);
 
 /**
  * Maps provider and domain errors to HTTP responses.

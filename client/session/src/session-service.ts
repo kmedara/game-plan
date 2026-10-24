@@ -1,9 +1,10 @@
 /**
  * Session client for the identity Lambda.
  *
- * Holds the access token in memory. Website sessions refresh via the HttpOnly
- * cookie (`credentials: 'include'`). Expo sessions store the refresh token in
- * secure storage and send it in the refresh body.
+ * Website sessions never see a token: identity sets HttpOnly access and
+ * refresh cookies, and every call sends them (`credentials: 'include'`). Expo
+ * sessions hold the access token in memory, store the refresh token in secure
+ * storage, and send it in the refresh body.
  */
 
 import { withContentHash } from './content-hash.js';
@@ -83,11 +84,14 @@ const throwHttpError = async (response: Response): Promise<never> => {
 };
 
 /**
- * In-memory access-token session that talks to the identity Lambda.
+ * Session that talks to the identity Lambda.
  */
 export class SessionService {
+  /** Whether a session was applied and not logged out since. */
+  private signedIn = false;
+  /** Native only; the website's token is in an HttpOnly cookie. */
   private accessToken: string | undefined;
-  /** Epoch ms when {@link accessToken} expires. Absent until a session is applied. */
+  /** Epoch ms when the access token expires. Absent until a session is applied. */
   private accessExpiresAt: number | undefined;
   private user: UserProfile | undefined;
   /** Shared by overlapping refresh() calls so a 401 stampede hits identity once. */
@@ -107,7 +111,7 @@ export class SessionService {
     this.fetchImpl = withContentHash(options.fetch ?? fetch.bind(globalThis));
   }
 
-  /** Returns the in-memory access token, if any. */
+  /** Returns the in-memory access token. Always `undefined` on the website. */
   getAccessToken(): string | undefined {
     return this.accessToken;
   }
@@ -126,22 +130,22 @@ export class SessionService {
     this.user = user;
   }
 
-  /** Returns whether an access token is currently held. */
+  /** Returns whether a session is currently held. */
   isAuthenticated(): boolean {
-    return this.accessToken !== undefined;
+    return this.signedIn;
   }
 
   /**
    * Returns whether the next product request should refresh first.
    *
-   * True when an access token is held and it expires within
+   * True when a session is held and its access token expires within
    * {@link ACCESS_REFRESH_LEEWAY_MS}. Missing expiry is treated as not due, so
    * a bad payload cannot force a refresh on every call.
    *
    * @returns `true` when {@link refresh} should run before the next API call.
    */
   needsAccessRefresh(): boolean {
-    if (this.accessToken === undefined || this.accessExpiresAt === undefined) return false;
+    if (!this.signedIn || this.accessExpiresAt === undefined) return false;
     return this.accessExpiresAt - Date.now() <= ACCESS_REFRESH_LEEWAY_MS;
   }
 
@@ -262,6 +266,7 @@ export class SessionService {
         body: JSON.stringify(refreshToken !== undefined ? { refreshToken } : {}),
       });
     } finally {
+      this.signedIn = false;
       this.accessToken = undefined;
       this.accessExpiresAt = undefined;
       this.user = undefined;
@@ -270,12 +275,12 @@ export class SessionService {
   }
 
   /**
-   * Loads the current profile with the in-memory access token.
+   * Loads the current profile.
    *
    * @returns The profile from `GET /me`.
    */
   async me(): Promise<UserProfile> {
-    if (this.accessToken === undefined) throw new Error('unauthorized');
+    if (!this.signedIn) throw new Error('unauthorized');
     const response = await this.fetchImpl(`${this.baseUrl}/me`, {
       method: 'GET',
       credentials: this.mode === 'web' ? 'include' : 'omit',
@@ -299,7 +304,8 @@ export class SessionService {
   /**
    * Authorization header value for other product API calls.
    *
-   * @returns `Bearer <token>`, or `undefined` when signed out.
+   * @returns `Bearer <token>`, or `undefined` when signed out or on the website,
+   *   where the access cookie goes with the request instead.
    */
   authorizationHeader(): string | undefined {
     return this.accessToken === undefined ? undefined : `Bearer ${this.accessToken}`;
@@ -329,12 +335,16 @@ export class SessionService {
   }
 
   /**
-   * Stores the access token in memory and the refresh token when native.
+   * Records the session, and stores both tokens when native.
    *
    * @param tokens - Tokens returned by identity.
    */
   private async applySession(tokens: SessionTokens): Promise<void> {
-    this.accessToken = tokens.accessToken;
+    if (this.mode === 'native' && tokens.accessToken === undefined) {
+      throw new Error('missing_access_token');
+    }
+    this.signedIn = true;
+    this.accessToken = this.mode === 'native' ? tokens.accessToken : undefined;
     this.accessExpiresAt =
       typeof tokens.expiresIn === 'number' && tokens.expiresIn > 0
         ? Date.now() + tokens.expiresIn * 1000

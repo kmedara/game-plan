@@ -55,8 +55,11 @@ The app never calls Cognito’s token endpoint directly. The **`identity`** area
 ### Tokens and refresh
 
 - **Access token:** Verified on protected routes with `aws-jwt-verify` (signature, issuer, client id, `token_use=access`). Missing Cognito configuration rejects every token.
-- **Website:** Access token in **memory** only (not `localStorage`). Refresh in HttpOnly cookie `ts_refresh` (`Secure` in production, `SameSite=Lax`, path `/api/identity`).
-- **Native:** Refresh in Expo SecureStore; OAuth completes via short-lived `gameplan://auth?code=…` handoff (conditional delete in DynamoDB).
+- **Website:** Script never sees a token. Identity returns no tokens in JSON for the website; it sets HttpOnly cookies instead (`Secure` in production):
+  - `ts_access` — access token, `SameSite=Strict`, path `/api`, lifetime of the token. `authorizationOf` (`functions/lib/http.ts`) uses it when no `Bearer` header is sent, and only when `Sec-Fetch-Site` is `same-origin` or absent (`same-site` also allowed outside production for the localhost ports).
+  - `ts_refresh` — refresh token, `SameSite=Lax`, path `/api/identity`.
+  - Injected script can still make calls from the open tab, but cannot take a token elsewhere.
+- **Native:** Sends `X-Refresh-Delivery: body` and gets both tokens in JSON; access token in memory, refresh in Expo SecureStore; OAuth completes via short-lived `gameplan://auth?code=…` handoff (conditional delete in DynamoDB).
 - **One refresh in flight:** Shared `POST /identity/refresh` across the shell and `401` recovery.
 - **Local dev only:** `AUTH_PROVIDER=local` and `LOCAL_JWT_SECRET` — **refused** when `NODE_ENV=production`.
 
@@ -94,7 +97,8 @@ Validation uses Zod at the route edge — malformed input never reaches business
 On the **website** CloudFront behavior (`infrastructure/lib/website.ts`):
 
 - **TLS** 1.2+; HTTP → HTTPS. **HSTS** (one year, subdomains, preload), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, strict referrer policy.
-- **Content-Security-Policy:** Scripts from this origin and Google Maps only — no `'unsafe-inline'` or `'unsafe-eval'` for scripts. `connect-src` includes this origin (`wss:`), media bucket origins, and Maps. `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`. **Styles** allow `'unsafe-inline'` (react-native-web). Access token in page memory remains XSS-sensitive for scripts.
+- **Content-Security-Policy:** Scripts from this origin and Google Maps only — no `'unsafe-inline'` or `'unsafe-eval'` for scripts. `connect-src` includes this origin (`wss:`), media bucket origins, and Maps. `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`. **Styles** allow `'unsafe-inline'` (react-native-web). Violations go to `/api/csp-report` (`report-uri` and `report-to`, with `Reporting-Endpoints`) and are logged.
+- **Trusted Types:** `require-trusted-types-for 'script'` is sent as `Content-Security-Policy-Report-Only`. Enforce it once the reports show no sinks the app depends on (the Metro bundle and Maps loader set `script.src`).
 - **Rendering:** React text nodes only — no `dangerouslySetInnerHTML`, `innerHTML`, or `eval` for user content.
 - **Uploaded media** at `/<MEDIA_CDN_KEY_PREFIX>/*`: separate response policy with `Content-Security-Policy: default-src 'none'; sandbox`, `nosniff`, `no-referrer` so HTML/SVG uploads cannot script against the app origin.
 

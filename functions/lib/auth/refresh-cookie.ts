@@ -19,6 +19,18 @@ export const SESSION_COOKIE_PATH = '/api/identity';
 /** Previous cookie path. Responses expire it so browsers drop the old cookie. */
 const LEGACY_SESSION_COOKIE_PATH = '/identity';
 
+/**
+ * Cookie that carries the website access token.
+ *
+ * The website never sees the access JWT: identity sets it here and
+ * `authorizationOf` in `functions/lib/http.ts` reads it when no
+ * `Authorization` header is sent.
+ */
+export const ACCESS_COOKIE = 'ts_access';
+
+/** Every area is under `/api`, so the access cookie goes to all of them. */
+export const ACCESS_COOKIE_PATH = '/api';
+
 /** Header that asks identity to also return the refresh token in JSON. */
 export const REFRESH_DELIVERY_HEADER = 'x-refresh-delivery';
 
@@ -40,10 +52,16 @@ export const wantsBodyRefreshToken = (headerValue?: string): boolean =>
  * @param assignment - `name=value`, already encoded.
  * @param path - Cookie path.
  * @param maxAge - Lifetime in seconds. Zero expires the cookie.
+ * @param sameSite - `Lax` by default; the access cookie uses `Strict`.
  * @returns A full cookie attribute string.
  */
-const sessionCookie = (assignment: string, path: string, maxAge: number): string => {
-  const parts = [assignment, `Path=${path}`, 'HttpOnly', 'SameSite=Lax', `Max-Age=${maxAge}`];
+const sessionCookie = (
+  assignment: string,
+  path: string,
+  maxAge: number,
+  sameSite: 'Lax' | 'Strict' = 'Lax',
+): string => {
+  const parts = [assignment, `Path=${path}`, 'HttpOnly', `SameSite=${sameSite}`, `Max-Age=${maxAge}`];
   if (process.env.NODE_ENV === 'production') parts.push('Secure');
   return parts.join('; ');
 };
@@ -76,3 +94,24 @@ export const refreshSetCookie = (refreshToken: string): string[] =>
  * @returns Expired cookies for the live path and the old path.
  */
 export const clearRefreshSetCookie = (): string[] => sessionCookies(REFRESH_COOKIE, '', 0);
+
+/**
+ * Builds the `Set-Cookie` value that stores the website access token.
+ *
+ * `SameSite=Strict` keeps the cookie off every cross-site request, including
+ * top-level navigations, so another site cannot make an authenticated call.
+ *
+ * @param accessToken - The Cognito or local access JWT.
+ * @param maxAge - Lifetime in seconds, the token's own `expiresIn`.
+ * @returns The cookie attribute string.
+ */
+export const accessSetCookie = (accessToken: string, maxAge: number): string =>
+  sessionCookie(`${ACCESS_COOKIE}=${encodeURIComponent(accessToken)}`, ACCESS_COOKIE_PATH, maxAge, 'Strict');
+
+/**
+ * Builds the `Set-Cookie` value that clears the access cookie.
+ *
+ * @returns An expired access cookie.
+ */
+export const clearAccessSetCookie = (): string =>
+  sessionCookie(`${ACCESS_COOKIE}=`, ACCESS_COOKIE_PATH, 0, 'Strict');

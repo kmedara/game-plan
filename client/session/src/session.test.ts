@@ -16,7 +16,7 @@ describe('WebRefreshStore', () => {
 });
 
 describe('SessionService', () => {
-  it('keeps access token in memory and uses cookies on web', async () => {
+  it('holds no token on web and relies on the session cookies', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith('/login')) {
@@ -24,7 +24,6 @@ describe('SessionService', () => {
         expect((init?.headers as Record<string, string>)['x-refresh-delivery']).toBeUndefined();
         return new Response(
           JSON.stringify({
-            accessToken: 'access-1',
             expiresIn: 3600,
             user: {
               userId: 'u1',
@@ -37,7 +36,8 @@ describe('SessionService', () => {
         );
       }
       if (url.endsWith('/me')) {
-        expect((init?.headers as Record<string, string>).authorization).toBe('Bearer access-1');
+        expect(init?.credentials).toBe('include');
+        expect((init?.headers as Record<string, string>).authorization).toBeUndefined();
         return new Response(
           JSON.stringify({
             userId: 'u1',
@@ -53,7 +53,6 @@ describe('SessionService', () => {
         expect(JSON.parse(String(init?.body))).toEqual({});
         return new Response(
           JSON.stringify({
-            accessToken: 'access-2',
             expiresIn: 3600,
             user: {
               userId: 'u1',
@@ -76,12 +75,36 @@ describe('SessionService', () => {
     });
 
     await session.login({ email: 'a@example.com', password: 'Password1' });
-    expect(session.getAccessToken()).toBe('access-1');
+    expect(session.isAuthenticated()).toBe(true);
+    expect(session.getAccessToken()).toBeUndefined();
     expect(session.needsAccessRefresh()).toBe(false);
-    expect(session.authorizationHeader()).toBe('Bearer access-1');
+    expect(session.authorizationHeader()).toBeUndefined();
     await session.me();
     await session.refresh();
-    expect(session.getAccessToken()).toBe('access-2');
+    expect(session.getAccessToken()).toBeUndefined();
+    expect(session.isAuthenticated()).toBe(true);
+  });
+
+  it('ignores an access token a web response still carries', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          accessToken: 'stray',
+          expiresIn: 3600,
+          user: { userId: 'u1', email: 'a@example.com', displayName: 'Ada', accountKind: 'adult' },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    const session = new SessionService({
+      baseUrl: 'http://127.0.0.1:3000/identity',
+      refreshStore: new WebRefreshStore(),
+      mode: 'web',
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+    await session.refresh();
+    expect(session.getAccessToken()).toBeUndefined();
+    expect(session.authorizationHeader()).toBeUndefined();
   });
 
   it('stores refresh token for native and sends it on refresh', async () => {
@@ -188,7 +211,7 @@ describe('SessionService', () => {
       expect.objectContaining({ accessToken: 'access-shared' }),
       expect.objectContaining({ accessToken: 'access-shared' }),
     ]);
-    expect(session.getAccessToken()).toBe('access-shared');
+    expect(session.isAuthenticated()).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     fetchMock.mockResolvedValueOnce(
@@ -264,13 +287,13 @@ describe('SessionService', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith('/login')) {
-        return new Response(JSON.stringify({ accessToken: 'access-1', expiresIn: 3600, user }), {
+        return new Response(JSON.stringify({ expiresIn: 3600, user }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
       }
       if (url.endsWith('/refresh')) {
-        return new Response(JSON.stringify({ accessToken: 'access-2', expiresIn: 3600, user }), {
+        return new Response(JSON.stringify({ expiresIn: 3600, user }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -294,7 +317,6 @@ describe('SessionService', () => {
       vi.setSystemTime(new Date(Date.now() + 1));
       expect(session.needsAccessRefresh()).toBe(true);
       await session.refresh();
-      expect(session.getAccessToken()).toBe('access-2');
       expect(session.needsAccessRefresh()).toBe(false);
     } finally {
       vi.useRealTimers();

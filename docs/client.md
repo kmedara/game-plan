@@ -25,8 +25,8 @@ Dev: `npm run client:start`. Production web export: `npm run client:build`. Stor
 
 Session behavior is shared across web and native (`client/session`):
 
-- **Access token** stays in memory on the website (not `localStorage`).
-- **Website refresh** uses an HttpOnly cookie on `/api/identity`; **native** uses SecureStore and `X-Refresh-Delivery: body`, with OAuth completing via `gameplan://auth`.
+- **Website** holds no token: identity sets HttpOnly `ts_access` (path `/api`) and `ts_refresh` (path `/api/identity`) cookies, and calls send them with `credentials: 'include'`. `SessionService` only tracks that a session exists and when it expires.
+- **Native** gets both tokens in JSON and sends `Authorization: Bearer`. It keeps the refresh token in SecureStore and sends `X-Refresh-Delivery: body`; OAuth completes via `gameplan://auth`.
 - **One refresh in flight** — `SessionService.refresh()` dedupes concurrent `POST /identity/refresh` calls; TanStack does not retry `unauthorized`.
 - **Writes through CloudFront** send `x-amz-content-sha256` (`withContentHash`); React Native has no Web Crypto digest, so SHA-256 is implemented in TypeScript.
 

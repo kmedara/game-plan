@@ -40,6 +40,9 @@ export {
 } from "./oauth.js";
 
 export {
+  ACCESS_COOKIE,
+  accessSetCookie,
+  clearAccessSetCookie,
   clearRefreshSetCookie,
   REFRESH_COOKIE,
   REFRESH_DELIVERY_HEADER,

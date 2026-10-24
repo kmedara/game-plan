@@ -4,6 +4,9 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  ACCESS_COOKIE,
+  accessSetCookie,
+  clearAccessSetCookie,
   clearRefreshSetCookie,
   REFRESH_COOKIE,
   refreshSetCookie,
@@ -35,6 +38,13 @@ describe('refresh cookie helpers', () => {
     ]);
   });
 
+  it('sets a Strict access cookie on /api for the token lifetime', () => {
+    expect(accessSetCookie('a.b c', 3600)).toBe(
+      `${ACCESS_COOKIE}=a.b%20c; Path=/api; HttpOnly; SameSite=Strict; Max-Age=3600`,
+    );
+    expect(clearAccessSetCookie()).toBe(`${ACCESS_COOKIE}=; Path=/api; HttpOnly; SameSite=Strict; Max-Age=0`);
+  });
+
   it('adds Secure in production', () => {
     process.env.NODE_ENV = 'production';
     const set = refreshSetCookie('prod-token');
@@ -44,5 +54,6 @@ describe('refresh cookie helpers', () => {
     const cleared = clearRefreshSetCookie();
     expect(cleared.every((cookie) => cookie.includes('SameSite=Lax'))).toBe(true);
     expect(cleared.every((cookie) => cookie.includes('Secure'))).toBe(true);
+    expect(accessSetCookie('t', 60)).toContain('Secure');
   });
 });

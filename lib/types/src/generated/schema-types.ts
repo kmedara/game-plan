@@ -1292,7 +1292,7 @@ export type SentInvite = {
 }
 
 export type SessionTokens = {
-  accessToken: string;
+  accessToken?: string;
   expiresIn: number;
   user: {
     userId: string;

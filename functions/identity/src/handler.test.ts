@@ -10,7 +10,7 @@ import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IdentityProvider, IdentityTokens, UserProfileItem } from '../../lib/auth/identity-provider.js';
 import { issueLocalTokens } from '../../lib/auth/local-jwt.js';
-import { REFRESH_COOKIE } from '../../lib/auth/refresh-cookie.js';
+import { ACCESS_COOKIE, REFRESH_COOKIE } from '../../lib/auth/refresh-cookie.js';
 import { resetIdentityProvider, setIdentityProvider } from '../../lib/auth/provider.js';
 
 const profiles = new Map<string, UserProfileItem>();
@@ -172,10 +172,11 @@ describe('identity handler (in-memory)', () => {
     );
     expect(registered.statusCode).toBe(201);
     const session = JSON.parse(registered.body ?? '') as {
-      accessToken: string;
+      accessToken?: string;
       user: { email: string; accountKind: string; displayName: string };
       refreshToken?: string;
     };
+    expect(session.accessToken).toBeUndefined();
     expect(session.refreshToken).toBeUndefined();
     expect(session.user).toMatchObject({
       email,
@@ -185,13 +186,24 @@ describe('identity handler (in-memory)', () => {
 
     const refreshFromCookie = cookieValue(registered.cookies, REFRESH_COOKIE);
     expect(refreshFromCookie).toBeTruthy();
+    const accessFromCookie = cookieValue(registered.cookies, ACCESS_COOKIE);
+    expect(accessFromCookie).toBeTruthy();
 
     const me = await handler(
       httpEvent('GET', '/identity/me', {
-        headers: { authorization: `Bearer ${session.accessToken}` },
+        cookies: [`${ACCESS_COOKIE}=${encodeURIComponent(accessFromCookie!)}`],
+        headers: { 'sec-fetch-site': 'same-origin' },
       }),
     );
     expect(me.statusCode).toBe(200);
+
+    const crossOrigin = await handler(
+      httpEvent('GET', '/identity/me', {
+        cookies: [`${ACCESS_COOKIE}=${encodeURIComponent(accessFromCookie!)}`],
+        headers: { 'sec-fetch-site': 'cross-site' },
+      }),
+    );
+    expect(crossOrigin.statusCode).toBe(401);
     expect(JSON.parse(me.body ?? '')).toMatchObject({ email, displayName: 'Ada Player' });
 
     const cookieRefresh = await handler(
@@ -201,6 +213,8 @@ describe('identity handler (in-memory)', () => {
       }),
     );
     expect(cookieRefresh.statusCode).toBe(200);
+    expect(JSON.parse(cookieRefresh.body ?? '')).not.toHaveProperty('accessToken');
+    expect(cookieValue(cookieRefresh.cookies, ACCESS_COOKIE)).toBeTruthy();
 
     const native = await handler(
       httpEvent('POST', '/identity/register', {
@@ -214,8 +228,10 @@ describe('identity handler (in-memory)', () => {
       }),
     );
     expect(native.statusCode).toBe(201);
-    const nativeSession = JSON.parse(native.body ?? '') as { refreshToken: string };
+    const nativeSession = JSON.parse(native.body ?? '') as { accessToken: string; refreshToken: string };
     expect(nativeSession.refreshToken.length).toBeGreaterThan(10);
+    expect(nativeSession.accessToken.length).toBeGreaterThan(10);
+    expect(cookieValue(native.cookies, ACCESS_COOKIE)).toBeUndefined();
 
     const bodyRefresh = await handler(
       httpEvent('POST', '/identity/refresh', {
@@ -239,6 +255,11 @@ describe('identity handler (in-memory)', () => {
     expect(
       loggedOut.cookies?.some(
         (c: string) => c.startsWith(`${REFRESH_COOKIE}=`) && c.includes('Max-Age=0'),
+      ),
+    ).toBe(true);
+    expect(
+      loggedOut.cookies?.some(
+        (c: string) => c.startsWith(`${ACCESS_COOKIE}=`) && c.includes('Max-Age=0'),
       ),
     ).toBe(true);
   });
@@ -301,9 +322,9 @@ describe('identity handler (in-memory)', () => {
         },
       }),
     );
-    const session = JSON.parse(registered.body ?? '') as {
-      accessToken: string;
-      user: { userId: string };
+    const session = {
+      ...(JSON.parse(registered.body ?? '') as { user: { userId: string } }),
+      accessToken: cookieValue(registered.cookies, ACCESS_COOKIE)!,
     };
     const photoKey = `uploads/${session.user.userId}/photo`;
 
@@ -365,9 +386,9 @@ describe('identity handler (in-memory)', () => {
         },
       }),
     );
-    const session = JSON.parse(registered.body ?? '') as {
-      accessToken: string;
-      user: { userId: string };
+    const session = {
+      ...(JSON.parse(registered.body ?? '') as { user: { userId: string } }),
+      accessToken: cookieValue(registered.cookies, ACCESS_COOKIE)!,
     };
 
     const missing = await handler(httpEvent('POST', '/identity/socket-ticket'));

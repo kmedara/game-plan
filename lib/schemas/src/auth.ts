@@ -146,8 +146,14 @@ export const oauthExchangeResponseSchema = z.object({
   next: oauthNextSchema,
 });
 
+/**
+ * Session body from register, login, and refresh.
+ *
+ * The tokens are present only for the Expo app (`x-refresh-delivery: body`).
+ * The website gets them as HttpOnly cookies instead.
+ */
 export const sessionTokensSchema = z.object({
-  accessToken: z.string().min(1),
+  accessToken: z.string().min(1).optional(),
   expiresIn: z.number().int().min(1),
   user: userProfileSchema,
   refreshToken: z.string().min(1).optional(),

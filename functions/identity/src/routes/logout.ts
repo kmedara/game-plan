@@ -3,6 +3,7 @@
  */
 
 import {
+  clearAccessSetCookie,
   clearRefreshSetCookie,
   getIdentityProvider,
   REFRESH_COOKIE,
@@ -14,7 +15,7 @@ import { route } from '../../../lib/pipeline.js';
  * Handles `POST /identity/logout`.
  *
  * @param event - The HTTP API event.
- * @returns A cleared-cookie response.
+ * @returns A response that clears the access and refresh cookies.
  */
 export const handleLogout = route('POST', '/identity/logout', async ({ event }) => {
   const body = parseJsonBody(event) ?? {};
@@ -32,5 +33,5 @@ export const handleLogout = route('POST', '/identity/logout', async ({ event }) 
     // Best-effort revoke.
   }
 
-  return withCookies({ statusCode: 204 }, clearRefreshSetCookie());
+  return withCookies({ statusCode: 204 }, [...clearRefreshSetCookie(), clearAccessSetCookie()]);
 });
