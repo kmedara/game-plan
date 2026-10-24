@@ -191,8 +191,6 @@ export default function ScheduleScreen() {
             zone={zone}
             teamColor={brandColors(eventTeam?.theme).primary}
             teamName={singleTeam ? undefined : eventTeam?.name}
-            logoKey={singleTeam ? undefined : eventTeam?.theme?.logoKey}
-            logoName={eventTeam?.name}
             userId={api.user?.userId}
             canManage={manageable.some((team) => team.teamId === item.teamId)}
             canDelete={manageable.some((team) => team.teamId === item.teamId) && item.fixtureId === undefined}

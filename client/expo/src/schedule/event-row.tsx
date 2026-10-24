@@ -4,13 +4,11 @@
  */
 
 import Pencil from 'lucide-react-native/icons/pencil';
-import { Image } from 'expo-image';
 import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { RsvpStatus } from '@gameplan/types';
 import type { TeamOccurrence } from '@/src/athlete-schedule';
 import { appLocale } from '@/src/i18n';
-import { useDownloadUrl } from '@/src/media';
 import { clockLabel } from '@/src/schedule-calendar';
 import { TrashIcon } from '@/src/team-media';
 import { EVENT_TYPE_COLORS } from '@/src/theme';
@@ -22,8 +20,6 @@ export const EventRow = ({
   zone,
   teamColor,
   teamName,
-  logoKey,
-  logoName,
   userId,
   canManage,
   canDelete,
@@ -36,8 +32,6 @@ export const EventRow = ({
   zone: string;
   teamColor: string;
   teamName: string | undefined;
-  logoKey: string | undefined;
-  logoName: string | undefined;
   userId: string | undefined;
   canManage: boolean;
   canDelete: boolean;
@@ -48,16 +42,15 @@ export const EventRow = ({
 }) => {
   const { t } = useTranslation();
   const hour12 = useHour12();
-  const logoUrl = useDownloadUrl(logoKey, { teamId: item.teamId });
   const mine = item.rsvps.find((rsvp) => rsvp.userId === userId)?.status;
-  const showLogo = logoKey !== undefined;
+  const titlePad = canManage ? 'pr-16' : '';
   return (
     <View
       className="mb-3 rounded-xl bg-inset p-3"
       style={{ borderLeftWidth: 4, borderLeftColor: teamColor }}
     >
       <Pressable accessibilityRole="button" onPress={onView}>
-        <View className={showLogo ? 'pr-24' : canManage ? 'pr-16' : ''}>
+        <View className={titlePad}>
           <Text className="text-lg font-semibold text-ink">{eventLabel(t, item)}</Text>
           {teamName !== undefined ? <Text className="text-base text-muted">{teamName}</Text> : null}
           <View className="flex-row items-center">
@@ -68,33 +61,11 @@ export const EventRow = ({
             <Text className="text-base text-muted"> · {clockLabel(item.startsAt, zone, appLocale, hour12)}</Text>
           </View>
         </View>
-        {item.location !== undefined || showLogo ? (
-          <View style={{ overflow: 'visible' }}>
-            {item.location !== undefined ? (
-              <Text className={`text-base text-link${showLogo ? ' pr-24' : ''}`}>{item.location}</Text>
-            ) : (
-              <View className="h-5" />
-            )}
-            {showLogo ? (
-              <View
-                className="absolute right-0 h-20 w-20 items-center justify-center"
-                style={{ top: '50%', marginTop: -40 }}
-                pointerEvents="none"
-              >
-                {logoUrl !== undefined ? (
-                  <Image
-                    source={{ uri: logoUrl }}
-                    accessibilityLabel={logoName ?? t('teamAdmin.teamLogo')}
-                    contentFit="contain"
-                    style={{ width: 80, height: 80 }}
-                  />
-                ) : null}
-              </View>
-            ) : null}
-          </View>
+        {item.location !== undefined ? (
+          <Text className={`text-base text-link${titlePad ? ` ${titlePad}` : ''}`}>{item.location}</Text>
         ) : null}
       </Pressable>
-      <View className={showLogo ? 'pr-24' : ''}>
+      <View>
         <RsvpChoices mine={mine} onRsvp={onRsvp} />
       </View>
       {canManage ? (
