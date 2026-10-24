@@ -3,7 +3,7 @@
  *
  * Own uploads are allowed from the key prefix. A profile photo needs the
  * subject user id and a shared team. A chat attachment needs the chat id,
- * membership, and the key on a message in that chat. A team logo needs
+ * membership, and the chat's index row for the key. A team logo needs
  * membership and the key stored on that team's theme.
  */
 
@@ -11,8 +11,8 @@ import { getProfile } from '../../lib/auth/index.js';
 import { isOwnedUploadKey } from '../../lib/upload-keys.js';
 import type { PresignDownloadQuery } from '@gameplan/types';
 import {
-  MESSAGE_SK_PREFIX,
   USER_TEAM_SK_PREFIX,
+  chatAttachmentSk,
   chatMemberSk,
   chatPk,
   getItem,
@@ -67,22 +67,17 @@ const sharesTeam = async (leftUserId: string, rightUserId: string): Promise<bool
 };
 
 /**
- * Returns whether a chat message lists the object key as an attachment.
+ * Returns whether a message in the chat has the object key as an attachment.
+ *
+ * Sending a message writes one index row per attachment, so this is one read.
+ * `npm run backfill:chat-attachments` wrote the rows for older messages.
  *
  * @param chatId - The chat id.
  * @param objectKey - The media object key.
- * @returns `true` when a message in that chat stores the key.
+ * @returns `true` when the chat's index has the key.
  */
-const chatHasAttachment = async (chatId: string, objectKey: string): Promise<boolean> => {
-  const messages = await queryBySkPrefix<{ attachmentKeys?: unknown }>(
-    chatPk(chatId),
-    MESSAGE_SK_PREFIX,
-  );
-  return messages.some(
-    (message) =>
-      Array.isArray(message.attachmentKeys) && message.attachmentKeys.includes(objectKey),
-  );
-};
+const chatHasAttachment = async (chatId: string, objectKey: string): Promise<boolean> =>
+  (await getItem(chatPk(chatId), chatAttachmentSk(objectKey))) !== undefined;
 
 /**
  * Ensures the caller may download the object key.

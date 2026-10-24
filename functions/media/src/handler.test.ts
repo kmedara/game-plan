@@ -12,9 +12,9 @@ import { issueLocalTokens } from '../../lib/auth/local-jwt.js';
 import {
   TABLE_PK,
   TABLE_SK,
+  chatAttachmentSk,
   chatMemberSk,
   chatPk,
-  messageSk,
   profileSk,
   teamMetaSk,
   teamPk,
@@ -322,10 +322,12 @@ describe('media handler', () => {
       [TABLE_SK]: chatMemberSk(caller),
       userId: caller,
     });
-    store.set(itemKey(chatPk(chatId), messageSk('2026-01-01T00:00:00.000Z', 'm1')), {
+    store.set(itemKey(chatPk(chatId), chatAttachmentSk(otherKey)), {
       [TABLE_PK]: chatPk(chatId),
-      [TABLE_SK]: messageSk('2026-01-01T00:00:00.000Z', 'm1'),
-      attachmentKeys: [otherKey],
+      [TABLE_SK]: chatAttachmentSk(otherKey),
+      chatId,
+      messageId: 'm1',
+      objectKey: otherKey,
     });
     const fromChat = await handler(
       httpEvent('GET', '/media/presign-download', {

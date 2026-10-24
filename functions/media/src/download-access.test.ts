@@ -7,6 +7,7 @@ import { memoryTable } from '../../lib/dynamo/memory-table.js';
 import {
   TABLE_PK,
   TABLE_SK,
+  chatAttachmentSk,
   chatMemberSk,
   chatPk,
   messageSk,
@@ -50,14 +51,19 @@ describe('assertCanDownload', () => {
     await expect(assertCanDownload('a', 'uploads/b/photo', {})).rejects.toThrow('forbidden');
   });
 
-  it('needs chat membership and the key on a message in that chat', async () => {
+  it('needs chat membership and the chat index row for the key', async () => {
     const key = 'uploads/b/pic';
     await expect(assertCanDownload('a', key, { chatId: 'c1' })).rejects.toThrow('forbidden');
     row(chatPk('c1'), chatMemberSk('a'));
     await expect(assertCanDownload('a', key, { chatId: 'c1' })).rejects.toThrow('forbidden');
-    row(chatPk('c1'), messageSk('2026-01-01T00:00:00.000Z', 'm1'), { attachmentKeys: 'not-a-list' });
+    // Only the index counts; the backfill wrote it for messages from before it existed.
     row(chatPk('c1'), messageSk('2026-01-02T00:00:00.000Z', 'm2'), { attachmentKeys: [key] });
+    await expect(assertCanDownload('a', key, { chatId: 'c1' })).rejects.toThrow('forbidden');
+    row(chatPk('c1'), chatAttachmentSk(key), { messageId: 'm2', objectKey: key });
     await expect(assertCanDownload('a', key, { chatId: 'c1' })).resolves.toBeUndefined();
+    // The index is per chat: the same key is not readable through another chat.
+    row(chatPk('c2'), chatMemberSk('a'));
+    await expect(assertCanDownload('a', key, { chatId: 'c2' })).rejects.toThrow('forbidden');
   });
 
   it('shows a profile photo to its owner and to teammates only', async () => {
