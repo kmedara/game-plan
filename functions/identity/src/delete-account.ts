@@ -16,10 +16,10 @@
  * else is still on the roster or the team pays for its own plan.
  */
 
-import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { effectivePlanTier, rolesFromMembership } from '@gameplan/rules';
 import { getIdentityProvider } from '../../lib/auth/index.js';
 import { refreshChatMemberNames } from '../../lib/chat-member-names.js';
+import { deleteMediaObject } from '../../lib/media-objects.js';
 import {
   TABLE_SK,
   TEAM_MEMBER_SK_PREFIX,
@@ -123,20 +123,6 @@ export const deletionBlockers = async (userId: string): Promise<DeletionBlockers
 export const isBlocked = (blockers: DeletionBlockers): boolean =>
   blockers.ownedOrgs.length > 0 || blockers.soleAdminTeams.length > 0;
 
-let s3: S3Client | undefined;
-
-/**
- * Deletes the profile photo. Other uploads stay: they are team logos and chat files.
- *
- * @param key - The photo's object key.
- */
-const deletePhoto = async (key: string): Promise<void> => {
-  const bucket = process.env.MEDIA_BUCKET;
-  if (bucket === undefined || bucket === '') return;
-  s3 ??= new S3Client({});
-  await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
-};
-
 /**
  * Deletes the account. Call {@link deletionBlockers} first.
  *
@@ -188,7 +174,8 @@ export const deleteAccount = async (userId: string): Promise<void> => {
   if (feed?.token !== undefined) await deleteItem(feedPk(feed.token), feedMetaSk());
 
   const photoKey = rows.find((row) => row[TABLE_SK] === 'PROFILE')?.photoKey;
-  if (photoKey !== undefined) await deletePhoto(photoKey);
+  // Other uploads stay: they are team logos and chat files.
+  if (photoKey !== undefined) await deleteMediaObject(photoKey);
 
   for (const row of rows) await deleteItem(pk, row[TABLE_SK]);
 

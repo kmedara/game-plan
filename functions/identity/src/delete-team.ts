@@ -9,7 +9,7 @@
  * is gone. Uploaded chat files stay in the bucket under their uploader's prefix.
  */
 
-import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { deleteMediaObject } from '../../lib/media-objects.js';
 import { effectivePlanTier } from '@gameplan/rules';
 import {
   TABLE_SK,
@@ -60,15 +60,6 @@ export const isLeftEmpty = async (teamId: string, userId: string): Promise<boole
   return effectivePlanTier(await loadTeamPlan(teamId)) === 'free';
 };
 
-let s3: S3Client | undefined;
-
-const deleteUpload = async (key: string): Promise<void> => {
-  const bucket = process.env.MEDIA_BUCKET;
-  if (bucket === undefined || bucket === '') return;
-  s3 ??= new S3Client({});
-  await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
-};
-
 /** Deletes every row of a chat: members and messages. */
 const deleteChat = async (chatId: string): Promise<void> => {
   const pk = chatPk(chatId);
@@ -108,7 +99,7 @@ export const deleteTeam = async (teamId: string, chatIds: readonly string[]): Pr
   }
 
   const logoKey = meta?.theme?.logoKey;
-  if (logoKey !== undefined) await deleteUpload(logoKey);
+  if (logoKey !== undefined) await deleteMediaObject(logoKey);
 
   for (const row of rows) await deleteItem(pk, row[TABLE_SK]);
 };
