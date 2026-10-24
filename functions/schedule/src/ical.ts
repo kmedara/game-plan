@@ -7,6 +7,7 @@
  * simply changes in the next fetch.
  */
 
+import { eventTitle } from '@gameplan/rules';
 import type { ScheduleOccurrence } from '@gameplan/types';
 
 /** One occurrence and the team it belongs to. */
@@ -61,16 +62,12 @@ export const icalDate = (iso: string): string =>
   new Date(iso).toISOString().replace(/[-:]/gu, '').replace(/\.\d{3}/u, '');
 
 /**
- * The summary line: team name, title, and the opponent for a game.
+ * The summary line: team name, then the event's name (a game's side and opponent).
  *
  * @param item - The occurrence.
  * @returns Plain text.
  */
-const summaryOf = (item: FeedOccurrence): string => {
-  const opponent =
-    item.opponentName === undefined ? '' : ` ${item.side === 'away' ? '@' : 'vs'} ${item.opponentName}`;
-  return `${item.teamName}: ${item.title}${opponent}`;
-};
+const summaryOf = (item: FeedOccurrence): string => `${item.teamName}: ${eventTitle(item)}`;
 
 /**
  * Builds the feed body.

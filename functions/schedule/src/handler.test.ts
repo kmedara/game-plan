@@ -197,7 +197,7 @@ describe('schedule handler (in-memory)', () => {
     expect(event).toMatchObject({
       teamId,
       eventType: 'practice',
-      title: 'Wednesday practice',
+      title: 'Practice',
       location: 'Field 2',
     });
     const eventId = event.eventId as string;
@@ -394,10 +394,10 @@ describe('schedule handler (in-memory)', () => {
       );
 
     // The edit form sends null opponent and side for anything that is not a game.
-    const practiceId = await create({ eventType: 'practice', title: 'Practice' });
-    const edited = await patch(practiceId, { title: 'Evening practice', opponentName: null, side: null });
+    const practiceId = await create({ eventType: 'practice' });
+    const edited = await patch(practiceId, { notes: 'Bring cones', opponentName: null, side: null });
     expect(edited.statusCode).toBe(200);
-    expect(bodyOf(edited).title).toBe('Evening practice');
+    expect(bodyOf(edited)).toMatchObject({ title: 'Practice', notes: 'Bring cones' });
 
     const gameId = await create({ eventType: 'game', title: 'Game', opponentName: 'Owls', side: 'home' });
     const switched = await patch(gameId, { eventType: 'practice', opponentName: null, side: null });
@@ -409,6 +409,25 @@ describe('schedule handler (in-memory)', () => {
     const refused = await patch(practiceId, { opponentName: 'Owls' });
     expect(refused.statusCode).toBe(400);
     expect(JSON.stringify(bodyOf(refused))).toContain('not_a_game');
+  });
+
+  it('names practices and games from their fields and requires a title on meetings', async () => {
+    const admin = authFor();
+    const teamId = seedTeam({ userId: admin.userId, role: 'team_admin' });
+    const post = (body: Record<string, unknown>) =>
+      handler(
+        httpEvent('POST', `/schedule/teams/${teamId}/events`, {
+          headers: { authorization: admin.authorization },
+          body: { startsAt: '2026-09-20T15:00:00.000Z', ...body },
+        }),
+      );
+
+    expect(bodyOf(await post({ eventType: 'practice', title: 'Ignored' })).title).toBe('Practice');
+    expect(bodyOf(await post({ eventType: 'game', opponentName: 'Owls', side: 'away' })).title).toBe('Away vs Owls');
+    expect(bodyOf(await post({ eventType: 'meeting', title: 'Parents night' })).title).toBe('Parents night');
+    const untitled = await post({ eventType: 'meeting' });
+    expect(untitled.statusCode).toBe(400);
+    expect(JSON.stringify(bodyOf(untitled))).toContain('title_required');
   });
 
   it('creates a game, updates it, and rejects manage_events for a coach without the grant', async () => {
@@ -428,7 +447,8 @@ describe('schedule handler (in-memory)', () => {
         headers: { authorization: admin.authorization },
         body: {
           eventType: 'game',
-          title: 'Home opener',
+          opponentName: 'Owls',
+          side: 'home',
           startsAt: '2026-09-12T15:00:00.000Z',
           location: 'Main stadium',
         },
@@ -440,12 +460,12 @@ describe('schedule handler (in-memory)', () => {
     const updated = await handler(
       httpEvent('PATCH', `/schedule/teams/${teamId}/events/${eventId}`, {
         headers: { authorization: admin.authorization },
-        body: { title: 'Home opener (rescheduled)', startsAt: '2026-09-13T15:00:00.000Z' },
+        body: { opponentName: 'Bears', startsAt: '2026-09-13T15:00:00.000Z' },
       }),
     );
     expect(updated.statusCode).toBe(200);
     expect(bodyOf(updated)).toMatchObject({
-      title: 'Home opener (rescheduled)',
+      title: 'Home vs Bears',
       startsAt: '2026-09-13T15:00:00.000Z',
     });
 
@@ -668,8 +688,8 @@ describe('schedule handler (in-memory)', () => {
       httpEvent('POST', `/schedule/teams/${teamId}/events`, {
         headers: { authorization: admin.authorization },
         body: {
-          eventType: 'practice',
-          title: 'Practice',
+          eventType: 'meeting',
+          title: 'Meeting',
           startsAt: '2026-09-02T17:00:00.000Z',
           recurrence: { frequency: 'WEEKLY', interval: 1, byWeekDay: ['WE'] },
         },
@@ -700,14 +720,14 @@ describe('schedule handler (in-memory)', () => {
         headers: { authorization: admin.authorization },
         body: {
           occurrenceStartsAt: '2026-09-16T17:00:00.000Z',
-          title: 'Late practice',
+          title: 'Late meeting',
           startsAt: '2026-09-16T20:00:00.000Z',
         },
       }),
     );
     expect(saved.statusCode).toBe(200);
     const rows = await list();
-    expect(rows.some((row) => row.title === 'Late practice' && row.startsAt === '2026-09-16T20:00:00.000Z')).toBe(
+    expect(rows.some((row) => row.title === 'Late meeting' && row.startsAt === '2026-09-16T20:00:00.000Z')).toBe(
       true,
     );
 

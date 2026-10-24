@@ -356,13 +356,11 @@ export const acceptFixture = async (input: {
 
   let inviteeEventId = input.body.eventId;
   if (inviteeEventId === undefined) {
-    const title = (inviteeSide === 'home' ? `vs ${proposer.name}` : `at ${proposer.name}`).slice(0, 200);
     const created = await createEvent({
       teamId: current.inviteeTeamId,
       userId: input.userId,
       body: {
         eventType: 'game',
-        title,
         startsAt: facts.startsAt,
         ...(facts.endsAt !== undefined ? { endsAt: facts.endsAt } : {}),
         ...(facts.location !== undefined ? { location: facts.location } : {}),

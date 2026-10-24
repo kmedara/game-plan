@@ -4,6 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { CreateEventBody, ExceptionEventBody, UpdateEventBody } from '@gameplan/schemas';
+import { eventTitle } from '@gameplan/rules';
 import type {
   CarpoolResponse,
   EventResponse,
@@ -237,7 +238,12 @@ export const createEvent = async (input: {
     eventId,
     teamId: input.teamId,
     eventType: input.body.eventType,
-    title: input.body.title,
+    title: eventTitle({
+      eventType: input.body.eventType,
+      title: input.body.title,
+      opponentName: input.body.eventType === 'game' ? input.body.opponentName : undefined,
+      side: input.body.eventType === 'game' ? input.body.side : undefined,
+    }),
     startsAt: new Date(input.body.startsAt).toISOString(),
     ...(input.body.endsAt !== undefined
       ? { endsAt: new Date(input.body.endsAt).toISOString() }
@@ -385,7 +391,12 @@ export const updateEvent = async (input: {
   const item: EventItem = {
     ...existing,
     eventType: nextType,
-    title: input.body.title ?? existing.title,
+    title: eventTitle({
+      eventType: nextType,
+      title: input.body.title ?? existing.title,
+      opponentName: nextOpponent,
+      side: nextSide,
+    }),
     startsAt: nextStartsAt,
     ...(nextEndsAt !== undefined ? { endsAt: nextEndsAt } : {}),
     ...(nextLocation !== undefined ? { location: nextLocation } : {}),
@@ -480,6 +491,7 @@ export const writeEventFacts = async (
     ...(facts.side !== undefined ? { side: facts.side } : {}),
     ...(facts.fixtureId !== undefined ? { fixtureId: facts.fixtureId } : {}),
   };
+  item.title = eventTitle(item);
   if (facts.endsAt !== undefined) item.endsAt = new Date(facts.endsAt).toISOString();
   else delete item.endsAt;
   if (facts.location !== undefined) item.location = facts.location;
@@ -722,6 +734,10 @@ export const saveOccurrenceException = async (input: {
     throw new Error('invalid_ends_at');
   }
 
+  const nextType = patch.eventType ?? series.eventType;
+  const nextOpponent = patch.opponentName === null ? undefined : (patch.opponentName ?? series.opponentName);
+  const nextSide = patch.side === null ? undefined : (patch.side ?? series.side);
+
   const events = await listEventItems(input.teamId);
   const existing = events.find(
     (event) => event.seriesEventId === series.eventId && event.originalStartsAt === occurrenceIso,
@@ -738,7 +754,7 @@ export const saveOccurrenceException = async (input: {
     teamId: input.teamId,
     userId: input.userId,
     body: {
-      eventType: patch.eventType ?? series.eventType,
+      eventType: nextType,
       title: patch.title ?? series.title,
       startsAt: nextStartsAt,
       ...(patch.endsAt === null
@@ -769,6 +785,9 @@ export const saveOccurrenceException = async (input: {
           : series.latitude !== undefined && series.longitude !== undefined
             ? { latitude: series.latitude, longitude: series.longitude }
             : {}),
+      // The date keeps the series opponent and side unless the patch changes them.
+      ...(nextType === 'game' && nextOpponent !== undefined ? { opponentName: nextOpponent } : {}),
+      ...(nextType === 'game' && nextSide !== undefined ? { side: nextSide } : {}),
     },
   });
 

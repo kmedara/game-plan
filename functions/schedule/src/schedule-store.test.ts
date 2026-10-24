@@ -122,7 +122,7 @@ describe('createEvent', () => {
 });
 
 describe('updateEvent', () => {
-  it('locks every shared fact on a linked game but still allows a rename', async () => {
+  it('locks every shared fact on a linked game and keeps its derived name', async () => {
     event('linked', { fixtureId: 'f1' });
     const locked = [
       { startsAt: WEEK_LATER },
@@ -138,7 +138,7 @@ describe('updateEvent', () => {
     for (const body of locked) {
       await expect(updateEvent({ teamId: TEAM, eventId: 'linked', body })).rejects.toThrow('fixture_locked');
     }
-    expect((await updateEvent({ teamId: TEAM, eventId: 'linked', body: { title: 'Derby' } })).title).toBe('Derby');
+    expect((await updateEvent({ teamId: TEAM, eventId: 'linked', body: { title: 'Derby' } })).title).toBe('Game');
   });
 
   it('refuses an opponent or side on anything but a game', async () => {
@@ -194,7 +194,8 @@ describe('updateEvent', () => {
         title: 'New title',
       },
     });
-    expect(stored('g1')?.title).toBe('New title');
+    // A game is named from its side and opponent, so a sent title is ignored.
+    expect(stored('g1')?.title).toBe('Game');
     for (const field of ['notes', 'opponentName', 'side', 'endsAt', 'location', 'latitude', 'longitude', 'recurrence']) {
       expect(stored('g1')).not.toHaveProperty(field);
     }
@@ -220,12 +221,12 @@ describe('updateEvent', () => {
 
 describe('move notices', () => {
   it('tells the team only when the time or place changes', async () => {
-    event('g1', { location: 'Field 1' });
-    await updateEvent({ teamId: TEAM, eventId: 'g1', body: { title: 'Renamed game' } });
+    event('g1', { eventType: 'meeting', title: 'Meeting', location: 'Field 1' });
+    await updateEvent({ teamId: TEAM, eventId: 'g1', body: { title: 'Renamed meeting' } });
     expect(fanoutJobs.some((job) => job.type === 'event_moved')).toBe(false);
     await updateEvent({ teamId: TEAM, eventId: 'g1', body: { location: 'Field 2' } });
     expect(fanoutJobs).toContainEqual(
-      expect.objectContaining({ type: 'event_moved', change: 'location', title: 'Renamed game' }),
+      expect.objectContaining({ type: 'event_moved', change: 'location', title: 'Renamed meeting' }),
     );
   });
 });
@@ -278,6 +279,7 @@ describe('single dates of a series', () => {
 
   it('inherits or clears the series venue on a one-date edit', async () => {
     event('series', {
+      eventType: 'meeting',
       recurrence: weekly,
       endsAt: END,
       location: 'Field',
@@ -355,8 +357,8 @@ describe('series lifecycle', () => {
       teamId: TEAM,
       userId: 'admin',
       body: {
-        eventType: 'practice',
-        title: 'Practice',
+        eventType: 'meeting',
+        title: 'Meeting',
         startsAt: '2026-09-02T17:00:00.000Z',
         endsAt: '2026-09-02T18:00:00.000Z',
         recurrence: { ...weekly, byWeekDay: ['WE'] },
@@ -374,10 +376,10 @@ describe('series lifecycle', () => {
       teamId: TEAM,
       userId: 'admin',
       eventId: created.eventId,
-      body: { occurrenceStartsAt: '2026-09-16T17:00:00.000Z', title: 'Moved practice', startsAt: '2026-09-16T19:00:00.000Z' },
+      body: { occurrenceStartsAt: '2026-09-16T17:00:00.000Z', title: 'Moved meeting', startsAt: '2026-09-16T19:00:00.000Z' },
     });
     expect((await starts()).find((row) => row.eventId === exception.eventId)).toMatchObject({
-      title: 'Moved practice',
+      title: 'Moved meeting',
       startsAt: '2026-09-16T19:00:00.000Z',
       recurring: true,
       seriesEventId: created.eventId,
@@ -385,10 +387,10 @@ describe('series lifecycle', () => {
     });
     expect((await starts()).some((row) => row.startsAt === '2026-09-16T17:00:00.000Z')).toBe(false);
 
-    await updateEvent({ teamId: TEAM, eventId: created.eventId, body: { title: 'Team practice' } });
+    await updateEvent({ teamId: TEAM, eventId: created.eventId, body: { title: 'Team meeting' } });
     const series = await starts();
-    expect(series.find((row) => row.eventId === created.eventId)?.title).toBe('Team practice');
-    expect(series.find((row) => row.eventId === exception.eventId)?.title).toBe('Moved practice');
+    expect(series.find((row) => row.eventId === created.eventId)?.title).toBe('Team meeting');
+    expect(series.find((row) => row.eventId === exception.eventId)?.title).toBe('Moved meeting');
 
     await deleteEvent(TEAM, exception.eventId);
     expect(await starts()).toEqual([]);

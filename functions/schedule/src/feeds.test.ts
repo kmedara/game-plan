@@ -84,7 +84,7 @@ describe('iCalendar text', () => {
     });
     expect(body).toContain('UID:t1-e1-20261021T020000Z@gameplan');
     expect(body).toContain('DTSTART:20261021T020000Z\r\nDTEND:20261021T030000Z');
-    expect(body).toContain('SUMMARY:Hawks: League game @ Owls');
+    expect(body).toContain('SUMMARY:Hawks: Away vs Owls');
     expect(body.endsWith('END:VCALENDAR\r\n')).toBe(true);
   });
 });
@@ -99,7 +99,7 @@ describe('calendar feed routes', () => {
     memoryTable.put({ [TABLE_PK]: userPk('parent'), [TABLE_SK]: childSk('kid'), minorId: 'kid', adultId: 'parent' });
     const now = Date.now();
     const inDays = (days: number) => new Date(now + days * 24 * 60 * 60 * 1000).toISOString();
-    seedEvent('hawks', { title: 'Hawks practice', startsAt: inDays(3), exdates: [] });
+    seedEvent('hawks', { title: 'Hawks practice', eventType: 'practice', startsAt: inDays(3), exdates: [] });
     seedEvent('owls', { title: 'Owls game', eventType: 'game', startsAt: inDays(5), location: 'Field 2' });
     seedEvent('other', { title: 'Not mine', startsAt: inDays(4) });
     const cancelled = inDays(6);
@@ -116,8 +116,8 @@ describe('calendar feed routes', () => {
     expect(feed.statusCode).toBe(200);
     expect(feed.headers?.['content-type']).toContain('text/calendar');
     const body = String(feed.body);
-    expect(body).toContain('SUMMARY:Hawks: Hawks practice');
-    expect(body).toContain('SUMMARY:Owls: Owls game');
+    expect(body).toContain('SUMMARY:Hawks: Practice');
+    expect(body).toContain('SUMMARY:Owls: Game');
     expect(body).toContain('LOCATION:Field 2');
     expect(body).not.toContain('Not mine');
     expect(body).not.toContain('Cancelled scrimmage');

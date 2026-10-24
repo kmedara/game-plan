@@ -176,7 +176,7 @@ describe('acceptFixture', () => {
     expect(linked).not.toHaveProperty('location');
     expect(linked).not.toHaveProperty('latitude');
     const awayGame = event('owls', linked.awayEventId ?? '');
-    expect(awayGame).toMatchObject({ title: 'at Hawks', side: 'away', fixtureId: proposed.fixtureId });
+    expect(awayGame).toMatchObject({ title: 'Away vs Hawks', side: 'away', fixtureId: proposed.fixtureId });
     expect(memoryTable.get(chatPk(linked.chatId ?? ''), chatMetaSk())?.name).toBe('Hawks vs Owls');
     expect(memoryTable.get(teamPk('owls'), fixtureInviteSk(proposed.fixtureId))).toBeUndefined();
     await expect(
@@ -192,7 +192,7 @@ describe('acceptFixture', () => {
       body: { startsAt: START, endsAt: END, location: 'Owl Park', latitude: 1, longitude: 2 },
     });
     expect(event('owls', linked.homeEventId ?? '')).toMatchObject({
-      title: 'vs Hawks',
+      title: 'Home vs Hawks',
       endsAt: END,
       location: 'Owl Park',
       latitude: 1,
