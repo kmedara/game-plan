@@ -2,7 +2,8 @@
  * Local HS256 JWT helpers for laptop identity without Amazon Cognito.
  */
 
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
+import { safeEqual } from '../safe-equal.js';
 
 /** Default access-token lifetime (one hour). */
 export const LOCAL_ACCESS_TTL_SECONDS = 60 * 60;
@@ -74,14 +75,7 @@ export const verifyLocalJwt = (token: string): LocalJwtClaims => {
 
   const data = `${header}.${payload}`;
   const expected = createHmac('sha256', localJwtSecret()).update(data).digest('base64url');
-  const expectedBuf = Buffer.from(expected);
-  const actualBuf = Buffer.from(signature);
-  if (
-    expectedBuf.length !== actualBuf.length ||
-    !timingSafeEqual(expectedBuf, actualBuf)
-  ) {
-    throw new Error('invalid_token');
-  }
+  if (!safeEqual(expected, signature)) throw new Error('invalid_token');
 
   let claims: LocalJwtClaims;
   try {

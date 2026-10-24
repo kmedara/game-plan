@@ -11,12 +11,12 @@
  * The expected value is read from Parameter Store, not the environment.
  */
 
-import { timingSafeEqual } from 'node:crypto';
 import type {
   APIGatewayAuthorizerResult,
   APIGatewayRequestAuthorizerEvent,
 } from 'aws-lambda';
 import { readSecret } from '../../lib/parameters.js';
+import { safeEqual } from '../../lib/safe-equal.js';
 import { redeemSocketTicket } from '../../lib/socket-ticket.js';
 
 /**
@@ -40,10 +40,7 @@ const cameThroughCloudFront = async (
   const received = Object.entries(headers ?? {}).find(
     ([name]) => name.toLowerCase() === ORIGIN_VERIFY_HEADER,
   )?.[1];
-  if (typeof received !== 'string') return false;
-  const expectedBuf = Buffer.from(expected);
-  const receivedBuf = Buffer.from(received);
-  return expectedBuf.length === receivedBuf.length && timingSafeEqual(expectedBuf, receivedBuf);
+  return typeof received === 'string' && safeEqual(expected, received);
 };
 
 /**
