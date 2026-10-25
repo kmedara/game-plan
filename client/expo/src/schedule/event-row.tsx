@@ -1,6 +1,8 @@
 /**
  * One occurrence on the selected day. The left stripe is the team's color; the
- * dot and type label use the fixed event-type palette.
+ * dot and type label use the fixed event-type palette. The name line is left
+ * out for events without one, and the team name trails the time so it is the
+ * part cut short on narrow screens.
  */
 
 import Pencil from 'lucide-react-native/icons/pencil';
@@ -11,8 +13,8 @@ import type { TeamOccurrence } from '@/src/athlete-schedule';
 import { appLocale } from '@/src/i18n';
 import { clockLabel } from '@/src/schedule-calendar';
 import { TrashIcon } from '@/src/team-media';
-import { EVENT_TYPE_COLORS } from '@/src/theme';
 import { eventLabel } from './event-label';
+import { EventMeta } from './event-meta';
 import { ICON, RsvpChoices, useHour12 } from './rsvp';
 
 export const EventRow = ({
@@ -44,6 +46,10 @@ export const EventRow = ({
   const hour12 = useHour12();
   const mine = item.rsvps.find((rsvp) => rsvp.userId === userId)?.status;
   const titlePad = canManage ? 'pr-16' : '';
+  const typeLabel = t(`eventType.${item.eventType}`);
+  // Practices and bare games have no name of their own, so the type line says it all.
+  const label = eventLabel(t, item);
+  const title = label === typeLabel ? undefined : label;
   return (
     <View
       className="mb-3 rounded-xl bg-inset p-3"
@@ -51,15 +57,12 @@ export const EventRow = ({
     >
       <Pressable accessibilityRole="button" onPress={onView}>
         <View className={titlePad}>
-          <Text className="text-lg font-semibold text-ink">{eventLabel(t, item)}</Text>
-          {teamName !== undefined ? <Text className="text-base text-muted">{teamName}</Text> : null}
-          <View className="flex-row items-center">
-            <View className="mr-1.5 h-2 w-2 rounded-full" style={{ backgroundColor: EVENT_TYPE_COLORS[item.eventType] }} />
-            <Text className="text-base font-semibold" style={{ color: EVENT_TYPE_COLORS[item.eventType] }}>
-              {t(`eventType.${item.eventType}`)}
-            </Text>
-            <Text className="text-base text-muted"> · {clockLabel(item.startsAt, zone, appLocale, hour12)}</Text>
-          </View>
+          {title !== undefined ? <Text className="text-lg font-semibold text-ink">{title}</Text> : null}
+          <EventMeta
+            eventType={item.eventType}
+            time={clockLabel(item.startsAt, zone, appLocale, hour12)}
+            teamName={teamName}
+          />
         </View>
         {item.location !== undefined ? (
           <Text className={`text-base text-link${titlePad ? ` ${titlePad}` : ''}`}>{item.location}</Text>

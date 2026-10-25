@@ -5,7 +5,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { EVENT_TYPE_COLORS } from '@/src/theme';
 import { useTranslation } from 'react-i18next';
 import { rolesFromMembership } from '@gameplan/rules';
 import { RSVP_STATUSES, type Fixture, type RsvpStatus, type ScheduleOccurrence } from '@gameplan/types';
@@ -21,6 +20,7 @@ import { timeZoneLabel } from '@/src/time-zones';
 import { ErrorText } from '@/src/ui';
 import { AttendanceRow } from './attendance-row';
 import { CarpoolSection } from './carpool-section';
+import { EventMeta } from './event-meta';
 import { SignupsSection } from './signups-section';
 import { LineupEditor } from './lineup-editor';
 import { RsvpChoices, rsvpLabelKey, useHour12 } from './rsvp';
@@ -71,14 +71,7 @@ export const EventDetail = ({
   };
   return (
     <View>
-      {teamName !== undefined ? <Text className="mb-1 text-lg font-semibold text-ink">{teamName}</Text> : null}
-      <View className="flex-row items-center">
-        <View className="mr-1.5 h-2 w-2 rounded-full" style={{ backgroundColor: EVENT_TYPE_COLORS[item.eventType] }} />
-        <Text className="text-base font-semibold" style={{ color: EVENT_TYPE_COLORS[item.eventType] }}>
-          {t(`eventType.${item.eventType}`)}
-        </Text>
-        <Text className="text-base text-muted"> · {clockLabel(item.startsAt, zone, appLocale, hour12)}</Text>
-      </View>
+      <EventMeta eventType={item.eventType} time={clockLabel(item.startsAt, zone, appLocale, hour12)} teamName={teamName} />
       <Text className="text-base text-muted">{timeZoneLabel(zone, new Date(item.startsAt))}</Text>
       {item.location !== undefined ? (
         <Pressable className="mt-2" onPress={openMaps}>

@@ -47,11 +47,12 @@ const titles: Record<string, string> = {
   '/invite': 'title.invite',
 };
 
-/** One level up. A member or the payments page returns to that team; dues return to the profile. */
+/** One level up. A member or the payments page returns to that team; dues return to the profile, orgs to teams. */
 const parentPath = (pathname: string): string => {
   const teamPage = /^\/teams\/([^/]+)\/(members\/[^/]+|payments|plans)$/.exec(pathname);
   if (teamPage !== null) return `/teams/${teamPage[1]}`;
-  if (pathname === '/dues' || pathname === '/orgs') return '/profile';
+  if (pathname === '/dues') return '/profile';
+  if (pathname === '/orgs') return '/teams';
   if (pathname.startsWith('/orgs/')) return '/orgs';
   return Object.keys(titles).find((path) => pathname.startsWith(`${path}/`)) ?? '/teams';
 };
@@ -127,15 +128,32 @@ export default function MainLayout() {
     return <Redirect href="/complete-profile" />;
   }
 
-  const nested = !Object.prototype.hasOwnProperty.call(titles, pathname);
+  // With one team, that team's page stands in for the list: the tab opens it, it carries join and create,
+  // and pages that would go back to the list go back to it.
+  const onlyTeam = teams.length === 1 ? teams[0] : undefined;
+  const onlyTeamPath = onlyTeam !== undefined ? `/teams/${onlyTeam.teamId}` : undefined;
+  const nested = !Object.prototype.hasOwnProperty.call(titles, pathname) && pathname !== onlyTeamPath;
+  const backPath = (): string => {
+    const parent = parentPath(pathname);
+    return parent === '/teams' && onlyTeamPath !== undefined ? onlyTeamPath : parent;
+  };
   const canCreateChannel = channelTeams.length > 0;
-  const onTeams = pathname === '/teams';
+  const onTeams = pathname === '/teams' || pathname === onlyTeamPath;
   const showCreate = api.user === undefined || canCreateTeam(api.user.accountKind);
   const openTeamAction = (action: 'join' | 'create'): void => {
     router.push({ pathname: '/teams', params: { action } });
   };
   const openChatAction = (action: 'private' | 'channel'): void => {
     router.push({ pathname: '/chats', params: { action } });
+  };
+
+  const openTab = (href: keyof typeof tabIcons): void => {
+    if (href !== '/teams' || onlyTeam === undefined || onlyTeamPath === undefined) {
+      router.push(href);
+      return;
+    }
+    selectTeam(onlyTeam.teamId);
+    router.push(onlyTeamPath);
   };
 
   // Schedule and chats follow the restored team list, which survives a refresh.
@@ -146,7 +164,7 @@ export default function MainLayout() {
           { href: '/chats' as const, label: t('nav.chats') },
         ]
       : []),
-    { href: '/teams' as const, label: t('nav.teams') },
+    { href: '/teams' as const, label: onlyTeam !== undefined ? t('nav.team') : t('nav.teams') },
     { href: '/profile' as const, label: t('nav.profile') },
   ];
 
@@ -162,7 +180,7 @@ export default function MainLayout() {
         {nested ? (
           <Pressable
             className="absolute bottom-0 left-2 top-0 w-11 items-center justify-center"
-            onPress={() => router.replace(parentPath(pathname))}
+            onPress={() => router.replace(backPath())}
             accessibilityRole="button"
           >
             <ChevronLeft color={brand.onPrimary} size={24} strokeWidth={2} />
@@ -214,7 +232,7 @@ export default function MainLayout() {
           const active = pathname.startsWith(tab.href);
           const color = active ? brand.primary : colors.muted;
           return (
-            <Pressable key={tab.href} className="flex-1 items-center" onPress={() => router.push(tab.href)}>
+            <Pressable key={tab.href} className="flex-1 items-center" onPress={() => openTab(tab.href)}>
               <Icon color={color} size={24} strokeWidth={2} />
               <Text className={active ? 'font-bold' : 'text-muted'} style={active ? { color } : undefined}>
                 {tab.label}

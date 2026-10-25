@@ -1,5 +1,6 @@
 /**
- * Team admin: settings, plan, payments link, roster, join requests, invites, and permissions.
+ * Team admin: settings, roster, plan, payments link, organizations link (when it is the only team), join requests,
+ * invites, and permissions.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -35,7 +36,7 @@ export default function TeamAdminScreen() {
   const { t } = useTranslation();
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
   const router = useRouter();
-  const { api, setPreviewTheme } = useApp();
+  const { api, teams, setPreviewTheme } = useApp();
   const queryClient = useQueryClient();
   const id = teamId ?? '';
   useBrandTeam(id.length > 0 ? id : undefined);
@@ -223,6 +224,7 @@ export default function TeamAdminScreen() {
               />
             </>
           ) : null}
+          <TeamRoster teamId={id} members={members} onError={setError} />
           <TeamPlanSection teamId={id} plan={teamLoaded.data?.plan} canManage={can('manage_billing')} />
           <TeamOrgSection teamId={id} canManage={can('manage_billing')} />
           {can('manage_payments') ? (
@@ -232,24 +234,30 @@ export default function TeamAdminScreen() {
               onPress={() => router.push({ pathname: '/teams/[teamId]/payments', params: { teamId: id } })}
             />
           ) : null}
-          <TeamRoster teamId={id} members={members} />
+          {teams.length === 1 && api.user?.accountKind === 'adult' ? (
+            <View className="mt-2">
+              <Button label={t('orgs.title')} tone="secondary" onPress={() => router.push('/orgs')} />
+            </View>
+          ) : null}
           {can('approve_join_requests') ? (
             <JoinRequests teamId={id} roles={roleRows} callerRole={callerRole} onError={setError} />
           ) : null}
           {can('invite_members') ? (
             <TeamInvites teamId={id} teamName={draft.name} callerRole={callerRole} onError={setError} />
           ) : null}
-          <TeamPermissions
-            teamId={id}
-            roles={roleRows}
-            setRoles={(update) =>
-              setRoles((current) => {
-                const rows = current ?? savedRoles;
-                return typeof update === 'function' ? update(rows) : update;
-              })
-            }
-            members={members}
-          />
+          {canWithRoles(callerRoles, permissionMatrix(savedRoles), 'manage_permissions') ? (
+            <TeamPermissions
+              teamId={id}
+              roles={roleRows}
+              setRoles={(update) =>
+                setRoles((current) => {
+                  const rows = current ?? savedRoles;
+                  return typeof update === 'function' ? update(rows) : update;
+                })
+              }
+              members={members}
+            />
+          ) : null}
         </>
       ) : null}
     </RefreshableScroll>

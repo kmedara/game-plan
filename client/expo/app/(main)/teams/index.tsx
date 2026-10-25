@@ -1,5 +1,5 @@
 /**
- * Team list, directory join, invite code, and create.
+ * Team list, organizations link, directory join, invite code, and create.
  */
 
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -78,6 +78,11 @@ export default function TeamsScreen() {
           <Text className="text-muted">{team.timeZone}</Text>
         </Pressable>
       ))}
+      {api.user?.accountKind === 'adult' ? (
+        <View className="mb-4 mt-2">
+          <Button label={t('orgs.title')} tone="secondary" onPress={() => router.push('/orgs')} />
+        </View>
+      ) : null}
       {mode === 'join' ? (
         <View className="mb-6">
           <TeamSearchField label={t('teams.searchByName')} onSelect={(hit) => void requestJoin(hit)} />

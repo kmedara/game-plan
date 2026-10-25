@@ -1,6 +1,6 @@
 /**
- * Profile photo, phone, notifications, reminder times, calendar sync, emergency info, dues link,
- * positions, theme note, and sign-out.
+ * Profile photo, phone, positions, notifications, reminder times, calendar sync, emergency info,
+ * dues link, theme note, and sign-out.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,7 +25,7 @@ import { RefreshableScroll } from '@/src/pull-refresh';
 import { setPositionsMutation } from '@/src/queries/teams';
 import { clearPersistedCache } from '@/src/query-client';
 import { useApp } from '@/src/state';
-import { Button, ErrorText, Field, ProfilePhoto, SubmitButton } from '@/src/ui';
+import { Button, ErrorText, Field, ProfilePhoto } from '@/src/ui';
 
 export default function ProfileScreen() {
   const { t } = useTranslation();
@@ -41,6 +41,7 @@ export default function ProfileScreen() {
   const photoUrl = useDownloadUrl(profile?.photoKey);
   const [phone, setPhone] = useState(api.user?.phoneNumber ?? '');
   const [phoneReady, setPhoneReady] = useState(false);
+  const phoneChanged = phone.trim() !== (profile?.phoneNumber ?? '');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | undefined>();
   const [notifications, setNotifications] = useState<PushStatus | undefined>();
@@ -74,17 +75,20 @@ export default function ProfileScreen() {
     }
   };
 
-  const savePhone = async (): Promise<boolean | void> => {
+  const savePhone = async (): Promise<void> => {
     const trimmed = phone.trim();
-    if (trimmed.length === 0) {
-      await saveProfile.mutateAsync({ phoneNumber: null });
-      setPhone('');
+    const e164 = trimmed.length === 0 ? null : toE164Phone(trimmed);
+    if (e164 === undefined) {
+      setError(t('errors.profile.badPhone'));
       return;
     }
-    const e164 = toE164Phone(trimmed);
-    if (e164 === undefined) throw new Error('bad_phone');
-    await saveProfile.mutateAsync({ phoneNumber: e164 });
-    setPhone(e164);
+    try {
+      setError(undefined);
+      await saveProfile.mutateAsync({ phoneNumber: e164 });
+      setPhone(e164 ?? '');
+    } catch (err) {
+      setError(t(errorMessageKey(err, 'errors.profile.savePhoneFailed')));
+    }
   };
 
   const savePositions = async (teamId: string, next: readonly string[]): Promise<boolean> => {
@@ -146,32 +150,13 @@ export default function ProfileScreen() {
       </View>
       <Text className="mb-1 text-2xl font-bold text-ink">{profile?.displayName}</Text>
       <Text className="mb-4 text-muted">{profile?.email}</Text>
-      <Field label={t('profile.phoneNumber')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-      <SubmitButton
-        label={t('profile.savePhone')}
-        onPress={savePhone}
-        message={(err) =>
-          t(errorMessageKey(err, 'errors.profile.savePhoneFailed', { bad_phone: 'errors.profile.badPhone' }))
-        }
+      <Field
+        label={t('profile.phoneNumber')}
+        value={phone}
+        onChangeText={setPhone}
+        keyboardType="phone-pad"
+        onSave={phoneChanged ? savePhone : undefined}
       />
-      <NotificationSettings status={notifications} onEnable={async () => setNotifications(await registerPush(api))} />
-      <ReminderSettings />
-      <CalendarSync />
-      <EmergencyInfoSection />
-      {(dues.data?.length ?? 0) > 0 ? (
-        <View className="mt-2">
-          <Button
-            label={duesToPay > 0 ? t('dues.openOwed', { count: duesToPay }) : t('dues.open')}
-            tone="secondary"
-            onPress={() => router.push('/dues')}
-          />
-        </View>
-      ) : null}
-      {profile?.accountKind === 'adult' ? (
-        <View className="mt-2">
-          <Button label={t('orgs.title')} tone="secondary" onPress={() => router.push('/orgs')} />
-        </View>
-      ) : null}
       <Text className="mb-2 mt-4 text-lg font-semibold text-ink">{t('profile.positions')}</Text>
       {teams.map((team) => {
         const positions = team.positions ?? [];
@@ -210,6 +195,19 @@ export default function ProfileScreen() {
           </View>
         );
       })}
+      <NotificationSettings status={notifications} onEnable={async () => setNotifications(await registerPush(api))} />
+      <ReminderSettings />
+      <CalendarSync />
+      <EmergencyInfoSection />
+      {(dues.data?.length ?? 0) > 0 ? (
+        <View className="mt-2">
+          <Button
+            label={duesToPay > 0 ? t('dues.openOwed', { count: duesToPay }) : t('dues.open')}
+            tone="secondary"
+            onPress={() => router.push('/dues')}
+          />
+        </View>
+      ) : null}
     </RefreshableScroll>
     <View className="px-4 pb-2">
       <Button label={t('profile.signOut')} onPress={() => void logout()} tone="danger" />
