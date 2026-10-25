@@ -50,6 +50,8 @@ export const mapScheduleError = areaErrors((error) => {
       return badRequest(error.message);
     case "sport_mismatch":
     case "event_changed":
+    case "lineup_changed":
+    case "carpool_busy":
       return conflict(error.message);
     default:
       return undefined;

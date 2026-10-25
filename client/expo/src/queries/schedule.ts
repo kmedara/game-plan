@@ -62,8 +62,8 @@ export const lineupQuery = (
 ) =>
   queryOptions({
     queryKey: queryKeys.lineup(teamId, eventId, occurrenceStartsAt),
-    queryFn: async () =>
-      (await api.getLineup(teamId, { eventId, occurrenceStartsAt })).slots,
+    // The version comes along so a save can say which lineup it replaces.
+    queryFn: () => api.getLineup(teamId, { eventId, occurrenceStartsAt }),
   });
 
 export const carpoolQuery = (
@@ -220,10 +220,7 @@ export const lineupMutation = (api: Pick<ApiClient, 'putLineup'>, queryClient: Q
     gcTime: PERSIST_MAX_AGE_MS,
     mutationFn: ({ teamId, body }: { teamId: string; body: LineupBody }) => api.putLineup(teamId, body),
     onSuccess: (saved, { teamId }) => {
-      queryClient.setQueryData(
-        queryKeys.lineup(teamId, saved.eventId, saved.occurrenceStartsAt),
-        saved.slots,
-      );
+      queryClient.setQueryData(queryKeys.lineup(teamId, saved.eventId, saved.occurrenceStartsAt), saved);
     },
   });
 

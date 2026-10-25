@@ -97,41 +97,49 @@ const ensureChat = async (chatId: string, memberIds: readonly string[]): Promise
 };
 
 /**
- * Opens, joins, or closes the chat for each car whose riders changed.
+ * Gives each car with riders its chat id, and takes it off an empty car.
+ *
+ * A car keeps the chat it already had; the first rider gets a new id. This
+ * only decides the ids, so they can be stored with the offers before any chat
+ * is touched; {@link syncCarpoolChats} then makes the chats match.
+ *
+ * @param previous - Offers as stored before this write.
+ * @param next - Offers after this write.
+ * @returns The next offers with chat ids kept, added, or cleared.
+ */
+export const withCarpoolChatIds = (
+  previous: readonly StoredCarpoolOffer[],
+  next: readonly StoredCarpoolOffer[],
+): StoredCarpoolOffer[] =>
+  next.map((offer) => {
+    const { chatId, ...rest } = offer;
+    if (offer.riderIds.length === 0) return rest;
+    const before = previous.find((row) => row.userId === offer.userId);
+    return { ...rest, chatId: chatId ?? before?.chatId ?? randomUUID() };
+  });
+
+/**
+ * Opens, joins, or closes the chat for each car, to match offers that were stored.
  *
  * A car with at least one rider has one chat. The first rider creates it with
- * the driver. A later rider is added to that same chat. A rider who leaves, or
- * the last rider, is removed, and an empty car's chat is deleted.
+ * the driver. A later rider is added to that same chat. A rider who leaves is
+ * removed, and the chat of a car that emptied or was withdrawn is deleted.
  *
- * @param previous - Offers before this write.
- * @param next - Offers after this write, still carrying any chat id they had.
- * @returns The next offers with chat ids kept or cleared.
+ * Call this only after the offers are stored, so a write that lost a race
+ * leaves no chat or member behind.
+ *
+ * @param previous - Offers as stored before the write.
+ * @param stored - Offers as stored by the write, from {@link withCarpoolChatIds}.
  */
 export const syncCarpoolChats = async (
   previous: readonly StoredCarpoolOffer[],
-  next: readonly StoredCarpoolOffer[],
-): Promise<StoredCarpoolOffer[]> => {
-  const driverIds = new Set([
-    ...previous.map((offer) => offer.userId),
-    ...next.map((offer) => offer.userId),
-  ]);
-  const result = next.map((offer) => ({ ...offer }));
-  for (const driverId of driverIds) {
-    const before = previous.find((offer) => offer.userId === driverId);
-    const afterIndex = result.findIndex((offer) => offer.userId === driverId);
-    const after = afterIndex === -1 ? undefined : result[afterIndex];
-    const riders = after?.riderIds ?? [];
-    if (after === undefined || riders.length === 0) {
-      if (before?.chatId !== undefined) await dissolveChat(before.chatId);
-      if (after !== undefined) {
-        const { chatId: _chatId, ...rest } = after;
-        result[afterIndex] = rest;
-      }
-      continue;
-    }
-    const chatId = before?.chatId ?? randomUUID();
-    await ensureChat(chatId, await chatMemberIds(driverId, riders));
-    result[afterIndex] = { ...after, chatId };
+  stored: readonly StoredCarpoolOffer[],
+): Promise<void> => {
+  const kept = new Set(stored.flatMap((offer) => (offer.chatId !== undefined ? [offer.chatId] : [])));
+  for (const offer of previous) {
+    if (offer.chatId !== undefined && !kept.has(offer.chatId)) await dissolveChat(offer.chatId);
   }
-  return result;
+  for (const offer of stored) {
+    if (offer.chatId !== undefined) await ensureChat(offer.chatId, await chatMemberIds(offer.userId, offer.riderIds));
+  }
 };

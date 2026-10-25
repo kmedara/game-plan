@@ -667,6 +667,7 @@ export type LineupBody = {
     userId: string;
     position: string;
   }[];
+  version?: number;
 }
 
 export type LineupQuery = {
@@ -682,6 +683,7 @@ export type LineupResponse = {
     userId: string;
     position: string;
   }[];
+  version?: number;
 }
 
 export type LineupSlot = {

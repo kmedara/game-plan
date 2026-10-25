@@ -235,12 +235,19 @@ export const lineupQuerySchema = z
   })
   .strict();
 
-/** Body for replacing a game lineup. */
+/**
+ * Body for replacing a game lineup.
+ *
+ * `version` is the one the editor loaded, omitted when it loaded no lineup or
+ * one saved before versions. A save based on an older lineup is refused with
+ * `lineup_changed` instead of replacing someone else's.
+ */
 export const lineupBodySchema = z
   .object({
     eventId: z.string().min(1),
     occurrenceStartsAt: z.string().datetime(),
     slots: z.array(lineupSlotSchema).max(30),
+    version: z.number().int().min(1).optional(),
   })
   .strict()
   .superRefine((body, ctx) => {
@@ -256,6 +263,8 @@ export const lineupResponseSchema = z
     eventId: z.string().min(1),
     occurrenceStartsAt: z.string().min(1),
     slots: z.array(lineupSlotSchema),
+    /** Send this back when saving. Omitted when nothing is stored, or for a lineup saved before versions. */
+    version: z.number().int().min(1).optional(),
   })
   .strict();
 

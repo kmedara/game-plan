@@ -61,6 +61,7 @@ export const handlePutLineup = route(
       eventId: body.eventId,
       occurrenceStartsAt: body.occurrenceStartsAt,
       slots: body.slots,
+      version: body.version,
     });
     return json(200, lineup);
   },

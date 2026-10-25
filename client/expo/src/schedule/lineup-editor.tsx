@@ -6,8 +6,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import type { ScheduleOccurrence, TeamMember } from '@gameplan/types';
-import { errorMessageKey, queryError } from '@/src/errors';
+import type { LineupSlot, ScheduleOccurrence, TeamMember } from '@gameplan/types';
+import { errorCode, errorMessageKey, queryError } from '@/src/errors';
 import { lineupMutation, lineupQuery } from '@/src/queries/schedule';
 import { useApp } from '@/src/state';
 import { Button, ErrorText, Field, SubmitButton } from '@/src/ui';
@@ -30,8 +30,8 @@ export const LineupEditor = ({
   const queryClient = useQueryClient();
   const lineup = useQuery(lineupQuery(api, teamId, item.eventId, item.startsAt));
   const saveLineup = useMutation(lineupMutation(api, queryClient));
-  const [slots, setSlots] = useState<typeof lineup.data>(undefined);
-  const shownSlots = slots ?? lineup.data ?? [];
+  const [slots, setSlots] = useState<LineupSlot[] | undefined>(undefined);
+  const shownSlots = slots ?? lineup.data?.slots ?? [];
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [notice, setNotice] = useState<string | undefined>();
@@ -53,18 +53,29 @@ export const LineupEditor = ({
     setSlots(copy);
   };
 
-  const save = async (): Promise<void> => {
+  const save = async (): Promise<boolean | void> => {
     setError(undefined);
-    const saved = await saveLineup.mutateAsync({
-      teamId,
-      body: {
-        eventId: item.eventId,
-        occurrenceStartsAt: item.startsAt,
-        slots: shownSlots,
-      },
-    });
-    setSlots(saved.slots);
-    setNotice(t('schedule.lineupSaved'));
+    try {
+      const saved = await saveLineup.mutateAsync({
+        teamId,
+        body: {
+          eventId: item.eventId,
+          occurrenceStartsAt: item.startsAt,
+          slots: shownSlots,
+          ...(lineup.data?.version !== undefined ? { version: lineup.data.version } : {}),
+        },
+      });
+      setSlots(saved.slots);
+      setNotice(t('schedule.lineupSaved'));
+    } catch (err) {
+      if (errorCode(err) !== 'lineup_changed') throw err;
+      // Someone else saved first. Show their lineup rather than overwrite it.
+      setSlots(undefined);
+      await lineup.refetch();
+      setNotice(undefined);
+      setError(t('errors.event.lineupChanged'));
+      return false;
+    }
   };
 
   const copyPrevious = async (): Promise<void> => {

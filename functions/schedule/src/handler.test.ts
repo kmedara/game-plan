@@ -796,6 +796,30 @@ describe('schedule handler (in-memory)', () => {
       }),
     );
     expect(bodyOf(loaded).slots).toEqual([{ userId: player.userId, position: 'Fly-half' }]);
+    expect(bodyOf(loaded).version).toBe(1);
+
+    const stale = await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/lineup`, {
+        headers: { authorization: admin.authorization },
+        body: { eventId, occurrenceStartsAt: first, slots: [] },
+      }),
+    );
+    expect(stale.statusCode).toBe(409);
+    expect(bodyOf(stale).error).toBe('lineup_changed');
+
+    const resaved = await handler(
+      httpEvent('PUT', `/schedule/teams/${teamId}/lineup`, {
+        headers: { authorization: admin.authorization },
+        body: {
+          eventId,
+          occurrenceStartsAt: first,
+          slots: [{ userId: player.userId, position: 'Fly-half' }],
+          version: 1,
+        },
+      }),
+    );
+    expect(resaved.statusCode).toBe(200);
+    expect(bodyOf(resaved).version).toBe(2);
 
     const previous = await handler(
       httpEvent('GET', `/schedule/teams/${teamId}/lineup`, {

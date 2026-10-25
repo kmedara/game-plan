@@ -29,7 +29,12 @@ import { enqueueFanout } from '../../lib/fanout-enqueue.js';
 import { dropEventFixtureId } from '../../lib/fixture-release.js';
 import { listTeamMemberIds } from '../../lib/team-roster.js';
 import { deleteRemindersForEvent, syncReminders } from './reminders.js';
-import { publicCarpoolOffer, syncCarpoolChats, type StoredCarpoolOffer } from './carpool-chat.js';
+import {
+  publicCarpoolOffer,
+  syncCarpoolChats,
+  withCarpoolChatIds,
+  type StoredCarpoolOffer,
+} from './carpool-chat.js';
 import {
   EVENT_SK_PREFIX,
   LINEUP_SK_PREFIX,
@@ -1018,6 +1023,8 @@ type LineupItem = {
   teamId: string;
   occurrenceStartsAt: string;
   slots: LineupSlot[];
+  /** Bumped on every save. Missing on lineups saved before versions. */
+  version?: number;
 };
 
 /**
@@ -1060,6 +1067,7 @@ export const getLineup = async (input: {
     eventId: input.eventId,
     occurrenceStartsAt: occurrenceIso,
     slots: item?.slots ?? [],
+    ...(item?.version !== undefined ? { version: item.version } : {}),
   };
 };
 
@@ -1110,14 +1118,20 @@ export const getPreviousLineup = async (input: {
 /**
  * Replaces the lineup for one game occurrence.
  *
- * @param input - Team, event, occurrence, and the full slot list.
+ * The editor sends the whole list it was looking at, so a save is only
+ * accepted when it was based on the lineup as currently stored.
+ *
+ * @param input - Team, event, occurrence, the full slot list, and the version
+ *   the editor loaded (`undefined` when it loaded none, or one saved before versions).
  * @returns The stored lineup.
+ * @throws `lineup_changed` when someone else saved since the editor loaded it.
  */
 export const putLineup = async (input: {
   teamId: string;
   eventId: string;
   occurrenceStartsAt: string;
   slots: LineupSlot[];
+  version?: number;
 }): Promise<LineupResponse> => {
   await requireTeam(input.teamId);
   const { occurrenceIso } = await requireGameOccurrence(
@@ -1129,19 +1143,43 @@ export const putLineup = async (input: {
   if (input.slots.some((slot) => !memberIds.has(slot.userId))) {
     throw new Error('lineup_member_not_found');
   }
-  const item: LineupItem & { PK: string; SK: string } = {
-    [TABLE_PK]: teamPk(input.teamId),
-    [TABLE_SK]: lineupSk(occurrenceIso, input.eventId),
-    eventId: input.eventId,
-    teamId: input.teamId,
-    occurrenceStartsAt: occurrenceIso,
-    slots: input.slots,
-  };
-  await putItem(item);
+  const pk = teamPk(input.teamId);
+  const sk = lineupSk(occurrenceIso, input.eventId);
+  const current = await getItem<LineupItem>(pk, sk);
+  if (current?.version !== input.version) throw new Error('lineup_changed');
+
+  let version: number;
+  try {
+    if (current === undefined) {
+      // Two first saves at once: only one creates the row.
+      await putItem(
+        {
+          [TABLE_PK]: pk,
+          [TABLE_SK]: sk,
+          eventId: input.eventId,
+          teamId: input.teamId,
+          occurrenceStartsAt: occurrenceIso,
+          slots: input.slots,
+          version: 1,
+        } satisfies LineupItem & { PK: string; SK: string },
+        { conditionExpression: 'attribute_not_exists(#pk)', expressionAttributeNames: { '#pk': TABLE_PK } },
+      );
+      version = 1;
+    } else {
+      const stored = await updateFields<LineupItem>(pk, sk, { slots: input.slots }, {
+        version: { read: current.version },
+      });
+      version = stored.version ?? 1;
+    }
+  } catch (error) {
+    if (isConditionFailure(error)) throw new Error('lineup_changed');
+    throw error;
+  }
   return {
     eventId: input.eventId,
     occurrenceStartsAt: occurrenceIso,
     slots: input.slots,
+    version,
   };
 };
 
@@ -1150,7 +1188,69 @@ type CarpoolItem = {
   eventId: string;
   teamId: string;
   occurrenceStartsAt: string;
+  /** Empty once every driver withdraws; the row stays so its version keeps counting. */
   offers: StoredCarpoolOffer[];
+  /** Bumped on every write. Missing on rows written before versions. */
+  version?: number;
+};
+
+/** Tries before a carpool change gives up because others keep writing the same date. */
+const CARPOOL_WRITE_ATTEMPTS = 5;
+
+/**
+ * Applies one change to the rides for a date, retrying when another write
+ * landed first.
+ *
+ * Every driver and rider for the date shares one row. `change` receives the
+ * offers as stored right now and returns the next list, or throws a domain
+ * error such as `carpool_full`. After a lost race it runs again on a fresh
+ * read, so a claim is always checked against the seats really left. Chats
+ * change only once the row is written.
+ *
+ * @param teamId - The team id.
+ * @param eventId - The event id.
+ * @param occurrenceIso - The occurrence instant.
+ * @param change - Works out the next offers from the current ones.
+ * @returns The offers as stored.
+ * @throws `carpool_busy` when every attempt lost a race.
+ */
+const changeCarpool = async (
+  teamId: string,
+  eventId: string,
+  occurrenceIso: string,
+  change: (offers: readonly StoredCarpoolOffer[]) => StoredCarpoolOffer[],
+): Promise<CarpoolResponse> => {
+  const pk = teamPk(teamId);
+  const sk = carpoolSk(occurrenceIso, eventId);
+  for (let attempt = 0; attempt < CARPOOL_WRITE_ATTEMPTS; attempt += 1) {
+    const item = await getItem<CarpoolItem>(pk, sk);
+    const previous = item?.offers ?? [];
+    const offers = withCarpoolChatIds(previous, change(previous));
+    try {
+      if (item !== undefined) {
+        await updateFields(pk, sk, { offers }, { version: { read: item.version } });
+      } else if (offers.length > 0) {
+        await putItem(
+          {
+            [TABLE_PK]: pk,
+            [TABLE_SK]: sk,
+            eventId,
+            teamId,
+            occurrenceStartsAt: occurrenceIso,
+            offers,
+            version: 1,
+          } satisfies CarpoolItem & { PK: string; SK: string },
+          { conditionExpression: 'attribute_not_exists(#pk)', expressionAttributeNames: { '#pk': TABLE_PK } },
+        );
+      }
+    } catch (error) {
+      if (isConditionFailure(error)) continue;
+      throw error;
+    }
+    await syncCarpoolChats(previous, offers);
+    return { eventId, occurrenceStartsAt: occurrenceIso, offers: offers.map(publicCarpoolOffer) };
+  }
+  throw new Error('carpool_busy');
 };
 
 /**
@@ -1171,30 +1271,6 @@ export const requireOccurrence = async (
 };
 
 const memberIdsOf = async (teamId: string): Promise<Set<string>> => new Set(await listTeamMemberIds(teamId));
-
-const writeCarpool = async (
-  teamId: string,
-  eventId: string,
-  occurrenceIso: string,
-  previous: readonly StoredCarpoolOffer[],
-  next: readonly StoredCarpoolOffer[],
-): Promise<CarpoolResponse> => {
-  const offers = await syncCarpoolChats(previous, next);
-  if (offers.length === 0) {
-    await deleteItem(teamPk(teamId), carpoolSk(occurrenceIso, eventId));
-  } else {
-    const item: CarpoolItem & { PK: string; SK: string } = {
-      [TABLE_PK]: teamPk(teamId),
-      [TABLE_SK]: carpoolSk(occurrenceIso, eventId),
-      eventId,
-      teamId,
-      occurrenceStartsAt: occurrenceIso,
-      offers,
-    };
-    await putItem(item);
-  }
-  return { eventId, occurrenceStartsAt: occurrenceIso, offers: offers.map(publicCarpoolOffer) };
-};
 
 /**
  * Reads rides for one occurrence. A missing row is an empty list.
@@ -1234,17 +1310,22 @@ export const putCarpoolOffer = async (input: {
   const occurrenceIso = await requireOccurrence(input.teamId, input.eventId, input.occurrenceStartsAt);
   const members = await memberIdsOf(input.teamId);
   if (!members.has(input.userId)) throw new Error('carpool_member_not_found');
-  const item = await getItem<CarpoolItem>(teamPk(input.teamId), carpoolSk(occurrenceIso, input.eventId));
-  const previous = item?.offers ?? [];
-  const others = previous.filter((offer) => offer.userId !== input.userId);
-  if (input.seats === 0) return writeCarpool(input.teamId, input.eventId, occurrenceIso, previous, others);
-  const current = previous.find((offer) => offer.userId === input.userId);
-  const riders = (current?.riderIds ?? []).filter((riderId) => riderId !== input.userId).slice(0, input.seats);
-  if (riders.some((riderId) => !members.has(riderId))) throw new Error('carpool_member_not_found');
-  return writeCarpool(input.teamId, input.eventId, occurrenceIso, previous, [
-    ...others,
-    { userId: input.userId, seats: input.seats, riderIds: riders, ...(current?.chatId !== undefined ? { chatId: current.chatId } : {}) },
-  ]);
+  return changeCarpool(input.teamId, input.eventId, occurrenceIso, (previous) => {
+    const others = previous.filter((offer) => offer.userId !== input.userId);
+    if (input.seats === 0) return others;
+    const current = previous.find((offer) => offer.userId === input.userId);
+    const riders = (current?.riderIds ?? []).filter((riderId) => riderId !== input.userId).slice(0, input.seats);
+    if (riders.some((riderId) => !members.has(riderId))) throw new Error('carpool_member_not_found');
+    return [
+      ...others,
+      {
+        userId: input.userId,
+        seats: input.seats,
+        riderIds: riders,
+        ...(current?.chatId !== undefined ? { chatId: current.chatId } : {}),
+      },
+    ];
+  });
 };
 
 /**
@@ -1268,16 +1349,15 @@ export const claimCarpool = async (input: {
   if (!members.has(input.userId) || !members.has(input.driverUserId)) {
     throw new Error('carpool_member_not_found');
   }
-  const item = await getItem<CarpoolItem>(teamPk(input.teamId), carpoolSk(occurrenceIso, input.eventId));
-  const previous = item?.offers ?? [];
-  const offer = previous.find((row) => row.userId === input.driverUserId);
-  if (offer === undefined) throw new Error('carpool_offer_not_found');
-  const leaving = offer.riderIds.includes(input.userId);
-  if (!leaving && offer.riderIds.length >= offer.seats) throw new Error('carpool_full');
-  const offers = previous.map((row) => {
-    const without = row.riderIds.filter((riderId) => riderId !== input.userId);
-    if (row.userId !== input.driverUserId) return { ...row, riderIds: without };
-    return { ...row, riderIds: leaving ? without : [...without, input.userId] };
+  return changeCarpool(input.teamId, input.eventId, occurrenceIso, (previous) => {
+    const offer = previous.find((row) => row.userId === input.driverUserId);
+    if (offer === undefined) throw new Error('carpool_offer_not_found');
+    const leaving = offer.riderIds.includes(input.userId);
+    if (!leaving && offer.riderIds.length >= offer.seats) throw new Error('carpool_full');
+    return previous.map((row) => {
+      const without = row.riderIds.filter((riderId) => riderId !== input.userId);
+      if (row.userId !== input.driverUserId) return { ...row, riderIds: without };
+      return { ...row, riderIds: leaving ? without : [...without, input.userId] };
+    });
   });
-  return writeCarpool(input.teamId, input.eventId, occurrenceIso, previous, offers);
 };

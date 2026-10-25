@@ -5,7 +5,16 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { memoryTable } from '../../lib/dynamo/memory-table.js';
-import { TABLE_PK, TABLE_SK, carpoolSk, eventSk, teamMemberSk, teamMetaSk, teamPk } from '../../lib/dynamo/keys.js';
+import {
+  TABLE_PK,
+  TABLE_SK,
+  carpoolSk,
+  eventSk,
+  lineupSk,
+  teamMemberSk,
+  teamMetaSk,
+  teamPk,
+} from '../../lib/dynamo/keys.js';
 
 const { fanoutJobs } = vi.hoisted(() => ({ fanoutJobs: [] as Array<Record<string, unknown>> }));
 
@@ -491,6 +500,40 @@ describe('lineups', () => {
     await putLineup({ teamId: TEAM, eventId: 'series', occurrenceStartsAt: START, slots: [{ userId: 'ann', position: 'GK' }] });
     const previous = await getPreviousLineup({ teamId: TEAM, eventId: 'series', occurrenceStartsAt: WEEK_LATER });
     expect(previous).toMatchObject({ occurrenceStartsAt: START, slots: [{ userId: 'ann', position: 'GK' }] });
+    // A copy belongs to another date, so it carries no version to save with.
+    expect(previous).not.toHaveProperty('version');
+  });
+
+  it('refuses a save based on a lineup someone else has since replaced', async () => {
+    event('g1');
+    const game = { teamId: TEAM, eventId: 'g1', occurrenceStartsAt: START };
+    const first = await putLineup({ ...game, slots: [{ userId: 'ann', position: 'GK' }] });
+    expect(first.version).toBe(1);
+    await expect(putLineup({ ...game, slots: [] })).rejects.toThrow('lineup_changed');
+    await expect(putLineup({ ...game, slots: [], version: 7 })).rejects.toThrow('lineup_changed');
+
+    const second = await putLineup({ ...game, slots: [{ userId: 'ben', position: 'GK' }], version: 1 });
+    expect(second.version).toBe(2);
+    await expect(putLineup({ ...game, slots: [], version: 1 })).rejects.toThrow('lineup_changed');
+    expect((await getLineup(game)).slots).toEqual([{ userId: 'ben', position: 'GK' }]);
+  });
+
+  it('lets only one of two coaches who loaded the same lineup save it', async () => {
+    event('g1');
+    const game = { teamId: TEAM, eventId: 'g1', occurrenceStartsAt: START };
+    const results = await Promise.allSettled([
+      putLineup({ ...game, slots: [{ userId: 'ann', position: 'GK' }] }),
+      putLineup({ ...game, slots: [{ userId: 'ben', position: 'GK' }] }),
+    ]);
+    expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
+  });
+
+  it('accepts the first save over a lineup stored before versions, then versions it', async () => {
+    event('g1');
+    const game = { teamId: TEAM, eventId: 'g1', occurrenceStartsAt: START };
+    put(lineupSk(START, 'g1'), { eventId: 'g1', teamId: TEAM, occurrenceStartsAt: START, slots: [] });
+    expect(await getLineup(game)).not.toHaveProperty('version');
+    expect((await putLineup({ ...game, slots: [{ userId: 'ann', position: 'GK' }] })).version).toBe(1);
   });
 });
 
@@ -511,8 +554,57 @@ describe('carpools', () => {
     await claimCarpool({ ...ride, driverUserId: 'ann', userId: 'cal' });
     const fewer = await putCarpoolOffer({ ...ride, seats: 1, userId: 'ann' });
     expect(fewer.offers).toEqual([{ userId: 'ann', seats: 1, riderIds: ['ben'] }]);
-    await putCarpoolOffer({ ...ride, seats: 0, userId: 'ann' });
-    expect(memoryTable.get(teamPk(TEAM), carpoolSk(START, 'g1'))).toBeUndefined();
+    const none = await putCarpoolOffer({ ...ride, seats: 0, userId: 'ann' });
+    expect(none.offers).toEqual([]);
+    // The emptied row stays so its version keeps counting.
+    expect(memoryTable.get(teamPk(TEAM), carpoolSk(START, 'g1'))).toMatchObject({ offers: [] });
+    expect((await getCarpool(ride)).offers).toEqual([]);
+  });
+
+  it('gives the last seat to exactly one of two riders claiming it at once', async () => {
+    await putCarpoolOffer({ ...ride, seats: 1, userId: 'ann' });
+    const results = await Promise.allSettled([
+      claimCarpool({ ...ride, driverUserId: 'ann', userId: 'ben' }),
+      claimCarpool({ ...ride, driverUserId: 'ann', userId: 'cal' }),
+    ]);
+    expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
+    const refused = results.find((result) => result.status === 'rejected');
+    expect(refused?.status === 'rejected' && refused.reason).toEqual(new Error('carpool_full'));
+    const [car] = (await getCarpool(ride)).offers;
+    expect(car?.riderIds).toHaveLength(1);
+  });
+
+  it('keeps both riders and both drivers when they act at once', async () => {
+    await putCarpoolOffer({ ...ride, seats: 3, userId: 'ann' });
+    await Promise.all([
+      claimCarpool({ ...ride, driverUserId: 'ann', userId: 'ben' }),
+      claimCarpool({ ...ride, driverUserId: 'ann', userId: 'cal' }),
+      putCarpoolOffer({ ...ride, seats: 2, userId: 'admin' }),
+    ]);
+    const offers = (await getCarpool(ride)).offers;
+    expect(offers.find((offer) => offer.userId === 'ann')?.riderIds.sort()).toEqual(['ben', 'cal']);
+    expect(offers.find((offer) => offer.userId === 'admin')).toMatchObject({ seats: 2, riderIds: [] });
+  });
+
+  it('opens one chat per car and only for writes that were stored', async () => {
+    await putCarpoolOffer({ ...ride, seats: 1, userId: 'ann' });
+    await Promise.allSettled([
+      claimCarpool({ ...ride, driverUserId: 'ann', userId: 'ben' }),
+      claimCarpool({ ...ride, driverUserId: 'ann', userId: 'cal' }),
+    ]);
+    const row = memoryTable.get(teamPk(TEAM), carpoolSk(START, 'g1')) as {
+      offers: Array<{ chatId?: string; riderIds: string[] }>;
+    };
+    const chatId = row.offers[0]?.chatId;
+    expect(chatId).toEqual(expect.any(String));
+    const chatRows = [...memoryTable.store.values()].filter(
+      (stored) => typeof stored.PK === 'string' && stored.PK.startsWith('CHAT#') && stored.SK === 'META',
+    );
+    expect(chatRows.map((stored) => stored.chatId)).toEqual([chatId]);
+    const memberIds = [...memoryTable.store.values()]
+      .filter((stored) => stored.PK === `CHAT#${chatId}` && String(stored.SK).startsWith('MEMBER#'))
+      .map((stored) => stored.userId);
+    expect(memberIds.sort()).toEqual(['ann', ...row.offers[0]!.riderIds].sort());
   });
 
   it('refuses a rider who has left the team', async () => {
