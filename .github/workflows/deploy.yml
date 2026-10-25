@@ -124,3 +124,15 @@ jobs:
             fi
             aws cloudfront create-invalidation --distribution-id "${SITE_DISTRIBUTION_ID}" --paths "/*"
           } 2>&1 | awk -f .github/scripts/redact-aws-log.awk
+
+  # A release also ships the store apps, once Terraform has refreshed the EAS
+  # variables above. Staging builds are started by hand from "App builds".
+  apps:
+    needs: deploy
+    if: github.event_name == 'release'
+    uses: ./.github/workflows/eas-build.yml
+    with:
+      environment: production
+      platform: all
+      submit: true
+    secrets: inherit

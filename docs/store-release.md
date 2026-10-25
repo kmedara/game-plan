@@ -59,7 +59,21 @@ The custom-scheme links `gameplan://auth`, `gameplan://billing`, and `gameplan:/
 
 ## Build and submit
 
-From `client/expo`:
+Builds run on Expo's servers. GitHub only starts them:
+
+- **Publishing a GitHub release** deploys production, then builds both apps and submits them (TestFlight, and a draft on the Play internal track).
+- **Actions → App builds** starts a build by hand: `staging` uses the `preview` profile, `production` the `production` profile, and **Submit** works for production only. Run **Deploy** for the environment first, so the build gets the current EAS variables.
+
+The run summary links each build. Both workflows use `<prefix>/expo-token`, and the deploy role needs `ssm:GetParameter` on it.
+
+Before a workflow can build or submit without anyone at the keyboard:
+
+1. **First build of each platform by hand**, so EAS creates the Android keystore and, after an Apple sign-in, the iOS certificates.
+2. **iOS submit:** add an App Store Connect API key with `npx eas-cli credentials` → iOS, and set `ascAppId` (App Store Connect → the app → App Information → Apple ID) under `submit.production.ios` in `client/expo/eas.json`.
+3. **Android submit:** upload the first app bundle in Play Console yourself (Google's API cannot create an app's first release), then add a Google service account key with Play access with `npx eas-cli credentials` → Android.
+4. **iOS preview builds** are ad hoc: a phone added with `npx eas-cli device:create` gets the app only after the next build.
+
+By hand, from `client/expo`:
 
 ```sh
 # Install on test phones (staging API)
