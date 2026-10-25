@@ -54,8 +54,8 @@ These suffixes are loaded into the deploy job when listed in `PARAMETER_ENV` ([`
 | `google-client-id` / `google-client-secret` | `GOOGLE_*` | Cognito Google IdP (all fields required to enable) |
 | `facebook-app-id` / `facebook-app-secret` | `FACEBOOK_*` | Cognito Facebook IdP |
 | `apple-client-id` / `apple-team-id` / `apple-key-id` / `apple-private-key` | `APPLE_*` | Cognito Apple IdP |
-| `google-maps-api-key` | `GOOGLE_MAPS_API_KEY` | `places` Lambda (server geocoding) |
-| `google-maps-browser-api-key` | `GOOGLE_MAPS_BROWSER_API_KEY` | Expo web/native maps (EAS via Terraform) |
+| `google-maps-api-key` | `GOOGLE_MAPS_API_KEY` | `places` Lambda (server geocoding); set by [terraform-google](../infrastructure/terraform-google/README.md) |
+| `google-maps-browser-api-key` | `GOOGLE_MAPS_BROWSER_API_KEY` | Expo web/native maps (EAS via Terraform); set by [terraform-google](../infrastructure/terraform-google/README.md) |
 | `vapid-public-key` / `vapid-private-key` / `vapid-subject` | `VAPID_*` | Web Push (private key also at runtime via SSM name) |
 | `media-signing-public-key` | `MEDIA_SIGNING_PUBLIC_KEY` | Enables signed `/uploads/*` CDN behavior when set |
 | `support-email` | `SUPPORT_EMAIL` | Privacy page (`EXPO_PUBLIC_SUPPORT_EMAIL` in builds) |
@@ -77,7 +77,7 @@ Set by hand or by Terraform; not necessarily in the deploy job env:
 | `stripe-webhook-secret` | **Terraform** | Connect webhook verify |
 | `stripe-billing-webhook-secret` | **Terraform** | Billing webhook verify |
 | `expo-token` | Hand | Terraform → EAS ([terraform README](../infrastructure/terraform/README.md)) |
-| `google-maps-android-api-key` | Hand | Terraform → EAS Android maps |
+| `google-maps-android-api-key` | **Terraform** ([terraform-google](../infrastructure/terraform-google/README.md)) | Terraform → EAS Android maps |
 | `ios-web-upgrade` | Hand | Terraform → `EXPO_PUBLIC_IOS_WEB_UPGRADE` ([store-release.md](store-release.md)) |
 | `socket-origin-verify` | Hand | CloudFront custom header + socket authorizer (plain String; literal at deploy) |
 | `media-signing-private-key` | Hand | `media` Lambda presigns |

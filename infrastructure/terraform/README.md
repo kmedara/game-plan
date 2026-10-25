@@ -19,8 +19,8 @@ The deploy workflow applies this right after `cdk deploy`, since the webhook URL
 | Expo token | Parameter Store `<prefix>/expo-token` (expo.dev → Access tokens; a robot token works) |
 | State bucket | `TerraformStateBucketName` output of the `GamePlanPlatform` stack (CDK creates it: versioned, private, retained on stack delete) |
 | Website host | Parameter Store `<prefix>/hosted-zone-name` (already set for CDK) |
-| Browser Maps key | Parameter Store `<prefix>/google-maps-browser-api-key` (already set for CDK) |
-| Android Maps key | Parameter Store `<prefix>/google-maps-android-api-key`, optional |
+| Browser Maps key | Parameter Store `<prefix>/google-maps-browser-api-key`, written by [`terraform-google`](../terraform-google/README.md) |
+| Android Maps key | Parameter Store `<prefix>/google-maps-android-api-key`, written by [`terraform-google`](../terraform-google/README.md); optional |
 | iOS upgrade link | Parameter Store `<prefix>/ios-web-upgrade`, `true` to turn on; unset is off |
 
 Terraform reads the Parameter Store values itself, so a change there reaches EAS on the next deploy.

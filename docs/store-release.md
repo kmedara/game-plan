@@ -28,6 +28,8 @@ The custom-scheme links `gameplan://auth`, `gameplan://billing`, and `gameplan:/
    | `EXPO_PUBLIC_SUPPORT_EMAIL` | The address on the privacy page, from `<prefix>/support-email`. The website build reads the same parameter. Unset leaves the contact line off the page. | Plain text |
 
    The link host comes from `EXPO_PUBLIC_API_BASE_URL`, so there is no separate host setting. `npm run client:start` and the website build do not read these.
+
+   The Maps keys come from [`infrastructure/terraform-google`](../infrastructure/terraform-google/README.md). After the first build, add the **SHA-1** of the Play app signing and upload keys to its `android_cert_sha1`, apply it, and deploy; until then the Android build has no map.
 3. **Signing.** Run the first build from `client/expo` and let EAS create and keep the credentials:
 
    ```sh
@@ -53,7 +55,7 @@ The custom-scheme links `gameplan://auth`, `gameplan://billing`, and `gameplan:/
    | `apple-team-id` | The Apple developer Team ID |
    | `apple-key-id`, `apple-private-key` | A Sign in with Apple key and its `.p8` contents. Use a String parameter: the loader reads with decryption off, so a SecureString would arrive still encrypted. |
 
-   `<cognito-domain>` is the `HostedUiDomain` stack output. The login screen asks `GET /api/identity/oauth/providers` and shows a button for each provider the pool has, so nothing changes in the app when a provider is added.
+   Create the Google client and its consent screen in the Cloud Console, and set the consent screen to *In production*; Google has no API for either, so Terraform cannot. `<cognito-domain>` is the `HostedUiDomain` stack output. The login screen asks `GET /api/identity/oauth/providers` and shows a button for each provider the pool has, so nothing changes in the app when a provider is added.
 
 ## Build and submit
 
