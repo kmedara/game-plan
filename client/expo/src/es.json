@@ -65,7 +65,7 @@
   },
   "completeProfile": {
     "title": "Completa tu perfil",
-    "hint": "Entra al juego.",
+    "hint": "¡Entra al juego!",
     "firstName": "Nombre",
     "lastName": "Apellido",
     "birthday": "Fecha de nacimiento",
@@ -267,6 +267,7 @@
     "position": "Posición",
     "moveUp": "Subir",
     "moveDown": "Bajar",
+    "reorder": "Arrastra para reordenar a {{name}}",
     "removeFromLineup": "Quitar",
     "addToLineup": "Agregar jugador",
     "copyPrevious": "Copiar de la anterior",

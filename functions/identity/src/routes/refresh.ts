@@ -42,7 +42,7 @@ export const handleRefresh = route(
     const profile = await getProfile(tokens.userId);
     const user =
       profile === undefined
-        ? pendingProfile(tokens.userId, tokens.email, undefined)
+        ? pendingProfile(tokens.userId, tokens.email)
         : toUserProfile(profile);
     return sessionResponse(
       200,

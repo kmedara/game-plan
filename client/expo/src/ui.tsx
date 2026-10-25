@@ -50,6 +50,7 @@ export const Field = ({
   multiline,
   keyboardType,
   onSave,
+  hideLabel,
 }: {
   label: string;
   value: string;
@@ -59,9 +60,11 @@ export const Field = ({
   keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'decimal-pad';
   /** Shown inside the field when the caller has something to store. */
   onSave?: () => void | Promise<void>;
+  /** Leaves the label off screen. It still names the field for screen readers. */
+  hideLabel?: boolean;
 }) => (
   <View className="mb-3">
-    <Text className="mb-1 text-base text-muted">{label}</Text>
+    {hideLabel === true ? null : <Text className="mb-1 text-base text-muted">{label}</Text>}
     <View className={`flex-row rounded-xl border border-line bg-inset${multiline === true ? ' items-end' : ' items-center'}`}>
       <TextInput
         className={`min-w-0 flex-1 px-3 py-2 text-base text-ink${multiline === true ? ' min-h-24' : ''}`}

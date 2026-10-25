@@ -78,8 +78,20 @@ export default function CompleteProfileScreen() {
         <Text className="mb-1 text-sm font-semibold uppercase tracking-widest text-field">GamePlan</Text>
         <Text className="mb-2 text-2xl font-bold text-ink">{t('completeProfile.title')}</Text>
         <Text className="mb-4 text-muted">{t('completeProfile.hint')}</Text>
-        <Field label={t('completeProfile.firstName')} value={firstName} onChangeText={setFirstName} />
-        <Field label={t('completeProfile.lastName')} value={lastName} onChangeText={setLastName} />
+        <Field
+          label={t('completeProfile.firstName')}
+          placeholder={t('completeProfile.firstName')}
+          hideLabel
+          value={firstName}
+          onChangeText={setFirstName}
+        />
+        <Field
+          label={t('completeProfile.lastName')}
+          placeholder={t('completeProfile.lastName')}
+          hideLabel
+          value={lastName}
+          onChangeText={setLastName}
+        />
         {hasBirthday ? null : (
           <BirthdayField label={t('completeProfile.birthday')} value={birthday} onChange={setBirthday} />
         )}

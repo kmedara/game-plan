@@ -65,7 +65,7 @@
   },
   "completeProfile": {
     "title": "Finish your profile",
-    "hint": "Get in the game.",
+    "hint": "Get in the game!",
     "firstName": "First name",
     "lastName": "Last name",
     "birthday": "Birthday",
@@ -267,6 +267,7 @@
     "position": "Position",
     "moveUp": "Up",
     "moveDown": "Down",
+    "reorder": "Drag to reorder {{name}}",
     "removeFromLineup": "Remove",
     "addToLineup": "Add player",
     "copyPrevious": "Copy from previous",

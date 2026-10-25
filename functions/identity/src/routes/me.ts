@@ -19,7 +19,7 @@ export const handleMe = route('GET', '/identity/me', async ({ event }) => {
     const auth = await verifyAuthHeader(authorizationOf(event));
     const profile = await getProfile(auth.userId);
     if (profile === undefined) {
-      return json(200, pendingProfile(auth.userId, auth.email, undefined));
+      return json(200, pendingProfile(auth.userId, auth.email));
     }
     return json(200, toUserProfile(profile));
   } catch (error) {

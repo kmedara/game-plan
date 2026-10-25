@@ -230,19 +230,17 @@ export const handleOAuthLogout = route("GET", "/identity/oauth/logout", async ({
 /**
  * Builds a pending-profile payload for authenticated callers without a birthday.
  *
+ * The display name is one word, as for a new profile in the callback, so the
+ * profile form does not split it into a first and last name.
+ *
  * @param userId - Cognito `sub`.
  * @param email - Email from the token when present.
- * @param displayName - Display name hint from the token when present.
  * @returns A profile-shaped object marked incomplete.
  */
-export const pendingProfile = (
-  userId: string,
-  email: string | undefined,
-  displayName: string | undefined,
-): UserProfile => ({
+export const pendingProfile = (userId: string, email: string | undefined): UserProfile => ({
   userId,
   email: email ?? `${userId}@users.local`,
-  displayName: displayName ?? "New user",
+  displayName: email?.split("@")[0] || "Player",
   accountKind: "adult",
   needsProfileCompletion: true,
 });

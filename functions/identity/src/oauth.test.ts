@@ -212,11 +212,12 @@ describe('identity oauth and session edges', () => {
     expect(mapError(new Error('profile_not_found'))?.statusCode).toBe(404);
     expect(mapError(new Error('cognito_not_configured'))?.statusCode).toBe(503);
     expect(mapError(new Error('unknown_thing'))).toBeUndefined();
-    expect(pendingProfile('u1', undefined, undefined)).toMatchObject({
+    expect(pendingProfile('u1', undefined)).toMatchObject({
       email: 'u1@users.local',
-      displayName: 'New user',
+      displayName: 'Player',
       needsProfileCompletion: true,
     });
+    expect(pendingProfile('u1', 'sam.lowe@example.com').displayName).toBe('sam.lowe');
   });
 
   it('redirects oauth login to Cognito Hosted UI with handshake cookies', async () => {

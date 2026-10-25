@@ -43,7 +43,6 @@ export const BirthdayField = ({
       <View className="flex-row gap-2">
         {order.map((part) => (
           <View key={part} className={part === 'year' ? 'flex-1' : 'w-20'}>
-            <Text className="mb-1 text-xs text-muted">{t(`completeProfile.${part}`)}</Text>
             <TextInput
               ref={(node) => {
                 inputs.current[part] = node;
@@ -51,6 +50,7 @@ export const BirthdayField = ({
               className="rounded-xl border border-line bg-inset px-3 py-2 text-base text-ink"
               value={parts[part]}
               onChangeText={(next) => edit(part, next)}
+              accessibilityLabel={t(`completeProfile.${part}`)}
               placeholder={part === 'year' ? 'YYYY' : part === 'month' ? 'MM' : 'DD'}
               inputMode="numeric"
               maxLength={part === 'year' ? 4 : 2}
