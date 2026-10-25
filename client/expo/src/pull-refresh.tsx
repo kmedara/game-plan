@@ -111,6 +111,18 @@ const scrollElement = (node: unknown): HTMLElement | null => {
 const htmlElement = (node: unknown): HTMLElement | null =>
   typeof HTMLElement !== 'undefined' && node instanceof HTMLElement ? node : null;
 
+/** Marks a web element whose touches belong to it, such as a drag handle, never to a pull. */
+const NO_PULL = 'data-no-pull';
+
+/**
+ * Keeps a pull from starting on this element, so dragging it down does not refresh the screen.
+ *
+ * @param node - A view ref. Only a web element is marked.
+ */
+export const noPull = (node: unknown): void => {
+  htmlElement(node)?.setAttribute(NO_PULL, '');
+};
+
 const contained: ViewStyle | undefined =
   Platform.OS === 'web' ? ({ overscrollBehaviorY: 'contain' } as ViewStyle) : undefined;
 
@@ -188,7 +200,8 @@ const usePullRefresh = () => {
     let pullDistance = 0;
     const onStart = (event: TouchEvent): void => {
       const touch = event.touches[0];
-      if (touch === undefined || node === null || node.scrollTop > 0) {
+      const owned = event.target instanceof Element && event.target.closest(`[${NO_PULL}]`) !== null;
+      if (touch === undefined || node === null || node.scrollTop > 0 || owned) {
         tracking = false;
         return;
       }
