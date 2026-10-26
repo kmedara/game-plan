@@ -25,8 +25,99 @@ export type AcceptFixtureBody = {
 
 export type AccountKind = 'adult' | 'minor';
 
+export type AddAlbumItemBody = {
+  objectKey: string;
+  durationSeconds?: number;
+  width?: number;
+  height?: number;
+}
+
 export type AddOrgAdminBody = {
   email: string;
+}
+
+export type AlbumContentType =
+  | 'image/jpeg'
+  | 'image/png'
+  | 'image/webp'
+  | 'image/gif'
+  | 'image/avif'
+  | 'video/mp4'
+  | 'video/quicktime'
+  | 'video/webm';
+
+export type AlbumItemKind = 'photo' | 'video';
+
+export type AlbumItem = {
+  itemId: string;
+  teamId: string;
+  objectKey: string;
+  kind: 'photo' | 'video';
+  contentType:
+    | 'image/jpeg'
+    | 'image/png'
+    | 'image/webp'
+    | 'image/gif'
+    | 'image/avif'
+    | 'video/mp4'
+    | 'video/quicktime'
+    | 'video/webm';
+  bytes: number;
+  durationSeconds?: number;
+  width?: number;
+  height?: number;
+  uploadedBy: string;
+  createdAt: string;
+}
+
+export type AlbumListQuery = {
+  cursor?: string;
+}
+
+export type AlbumPage = {
+  teamId: string;
+  items: {
+    itemId: string;
+    teamId: string;
+    objectKey: string;
+    kind: 'photo' | 'video';
+    contentType:
+      | 'image/jpeg'
+      | 'image/png'
+      | 'image/webp'
+      | 'image/gif'
+      | 'image/avif'
+      | 'video/mp4'
+      | 'video/quicktime'
+      | 'video/webm';
+    bytes: number;
+    durationSeconds?: number;
+    width?: number;
+    height?: number;
+    uploadedBy: string;
+    createdAt: string;
+  }[];
+  usedBytes: number;
+  cursor?: string;
+}
+
+export type AlbumUploadBody = {
+  contentType:
+    | 'image/jpeg'
+    | 'image/png'
+    | 'image/webp'
+    | 'image/gif'
+    | 'image/avif'
+    | 'video/mp4'
+    | 'video/quicktime'
+    | 'video/webm';
+  contentLength: number;
+  durationSeconds?: number;
+}
+
+export type AlbumUploadResponse = {
+  uploadUrl: string;
+  objectKey: string;
 }
 
 export type ApprovedJoinRequest = {
@@ -339,6 +430,32 @@ export type CreateTeamChannelBody = {
   name: string;
 }
 
+export type CreateWaiverBody = {
+  title: string;
+  body: string;
+  /**
+   * @minItems 1
+   * @maxItems 4
+   */
+  audience?: ['team_admin' | 'coach' | 'player' | 'parent', ...('team_admin' | 'coach' | 'player' | 'parent')[]];
+  dueDate?: string;
+}
+
+export type CreateWaiverFromTemplateBody = {
+  templateId: string;
+  dueDate?: string;
+}
+
+export type CreateWaiverTemplateBody = {
+  title: string;
+  body: string;
+  /**
+   * @minItems 1
+   * @maxItems 4
+   */
+  audience?: ['team_admin' | 'coach' | 'player' | 'parent', ...('team_admin' | 'coach' | 'player' | 'parent')[]];
+}
+
 export type DevicePlatform = 'ios' | 'android' | 'web';
 
 export type DeviceRegistration = {
@@ -537,6 +654,19 @@ export type FanoutJob =
       title: string;
       amountCents: number;
       currency: 'usd' | 'cad' | 'eur' | 'gbp' | 'aud';
+      dueDate: string;
+      kind: 'upcoming' | 'due' | 'overdue';
+      /**
+       * @minItems 1
+       */
+      userIds: [string, ...string[]];
+      attempt?: number;
+    }
+  | {
+      type: 'waiver_reminder';
+      teamId: string;
+      waiverId: string;
+      title: string;
       dueDate: string;
       kind: 'upcoming' | 'due' | 'overdue';
       /**
@@ -877,6 +1007,38 @@ export type MyDues = {
   }[];
 }
 
+export type MyWaiver = {
+  teamId: string;
+  teamName?: string;
+  waiverId: string;
+  memberId: string;
+  memberName?: string;
+  title: string;
+  body: string;
+  version: number;
+  dueDate?: string;
+  status: 'signed' | 'outdated' | 'missing';
+  signedAt?: string;
+  canSign: boolean;
+}
+
+export type MyWaivers = {
+  waivers: {
+    teamId: string;
+    teamName?: string;
+    waiverId: string;
+    memberId: string;
+    memberName?: string;
+    title: string;
+    body: string;
+    version: number;
+    dueDate?: string;
+    status: 'signed' | 'outdated' | 'missing';
+    signedAt?: string;
+    canSign: boolean;
+  }[];
+}
+
 export type OauthExchangeBody = {
   code: string;
 }
@@ -1135,6 +1297,10 @@ export type PutSignupsBody = {
   }[];
 }
 
+export type RecordPaperWaiverBody = {
+  signerName: string;
+}
+
 export type RecurrenceRule = {
   frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
   interval?: number;
@@ -1176,6 +1342,7 @@ export type RolePermissionsResponse = {
       | 'manage_events'
       | 'create_team_channels'
       | 'manage_payments'
+      | 'manage_waivers'
       | 'manage_billing'
       | 'view_medical_info'
     )[];
@@ -1193,6 +1360,7 @@ export type RolePermissions = {
     | 'manage_events'
     | 'create_team_channels'
     | 'manage_payments'
+    | 'manage_waivers'
     | 'manage_billing'
     | 'view_medical_info'
   )[];
@@ -1358,6 +1526,12 @@ export type SignupsResponse = {
       claimedBy: string;
     }[];
   }[];
+}
+
+export type SignWaiverBody = {
+  version: number;
+  signerName: string;
+  agree: true;
 }
 
 export type SocialProvider = 'apple' | 'google' | 'facebook';
@@ -1562,6 +1736,7 @@ export type TeamPermission =
   | 'manage_events'
   | 'create_team_channels'
   | 'manage_payments'
+  | 'manage_waivers'
   | 'manage_billing'
   | 'view_medical_info';
 
@@ -1685,6 +1860,7 @@ export type UpdateRolePermissionsBody = {
         | 'manage_events'
         | 'create_team_channels'
         | 'manage_payments'
+        | 'manage_waivers'
         | 'manage_billing'
         | 'view_medical_info'
       )[];
@@ -1700,6 +1876,7 @@ export type UpdateRolePermissionsBody = {
         | 'manage_events'
         | 'create_team_channels'
         | 'manage_payments'
+        | 'manage_waivers'
         | 'manage_billing'
         | 'view_medical_info'
       )[];
@@ -1731,6 +1908,28 @@ export type UpdateTeamTheme = {
   chatBackgroundOverlay?: ('dark' | 'light' | 'none') | null;
 }
 
+export type UpdateWaiverBody = {
+  title?: string;
+  body?: string;
+  /**
+   * @minItems 1
+   * @maxItems 4
+   */
+  audience?: ['team_admin' | 'coach' | 'player' | 'parent', ...('team_admin' | 'coach' | 'player' | 'parent')[]];
+  dueDate?: string | null;
+  archived?: boolean;
+}
+
+export type UpdateWaiverTemplateBody = {
+  title?: string;
+  body?: string;
+  /**
+   * @minItems 1
+   * @maxItems 4
+   */
+  audience?: ['team_admin' | 'coach' | 'player' | 'parent', ...('team_admin' | 'coach' | 'player' | 'parent')[]];
+}
+
 export type UploadImageType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' | 'image/avif';
 
 export type UserProfile = {
@@ -1748,6 +1947,169 @@ export type UserProfile = {
 
 export type UserSearchPolicy = {
   adultsOnly: boolean;
+}
+
+export type WaiverDetail = {
+  waiver: {
+    teamId: string;
+    waiverId: string;
+    title: string;
+    body: string;
+    version: number;
+    /**
+     * @minItems 1
+     */
+    audience: ['team_admin' | 'coach' | 'player' | 'parent', ...('team_admin' | 'coach' | 'player' | 'parent')[]];
+    dueDate?: string;
+    archived: boolean;
+    orgId?: string;
+    templateId?: string;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+    totals: {
+      members: number;
+      signed: number;
+      missing: number;
+    };
+  };
+  members: {
+    memberId: string;
+    memberName?: string;
+    accountKind?: 'adult' | 'minor';
+    status: 'signed' | 'outdated' | 'missing';
+    signedVersion?: number;
+    signedAt?: string;
+    signerName?: string;
+    method?: 'electronic' | 'paper';
+    canSignInApp: boolean;
+  }[];
+}
+
+export type WaiverList = {
+  teamId: string;
+  waivers: {
+    teamId: string;
+    waiverId: string;
+    title: string;
+    body: string;
+    version: number;
+    /**
+     * @minItems 1
+     */
+    audience: ['team_admin' | 'coach' | 'player' | 'parent', ...('team_admin' | 'coach' | 'player' | 'parent')[]];
+    dueDate?: string;
+    archived: boolean;
+    orgId?: string;
+    templateId?: string;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+    totals: {
+      members: number;
+      signed: number;
+      missing: number;
+    };
+  }[];
+}
+
+export type WaiverMember = {
+  memberId: string;
+  memberName?: string;
+  accountKind?: 'adult' | 'minor';
+  status: 'signed' | 'outdated' | 'missing';
+  signedVersion?: number;
+  signedAt?: string;
+  signerName?: string;
+  method?: 'electronic' | 'paper';
+  canSignInApp: boolean;
+}
+
+export type WaiverMemberStatus = 'signed' | 'outdated' | 'missing';
+
+export type WaiverPdfLink = {
+  ticket: string;
+  expiresIn: number;
+}
+
+export type Waiver = {
+  teamId: string;
+  waiverId: string;
+  title: string;
+  body: string;
+  version: number;
+  /**
+   * @minItems 1
+   */
+  audience: ['team_admin' | 'coach' | 'player' | 'parent', ...('team_admin' | 'coach' | 'player' | 'parent')[]];
+  dueDate?: string;
+  archived: boolean;
+  orgId?: string;
+  templateId?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  totals: {
+    members: number;
+    signed: number;
+    missing: number;
+  };
+}
+
+export type WaiverSignatureMethod = 'electronic' | 'paper';
+
+export type WaiverSignature = {
+  teamId: string;
+  waiverId: string;
+  memberId: string;
+  version: number;
+  title: string;
+  body: string;
+  textHash: string;
+  method: 'electronic' | 'paper';
+  relationship: 'self' | 'guardian' | 'staff';
+  signerName: string;
+  signedBy: string;
+  signedAt: string;
+}
+
+export type WaiverSignerRelationship = 'self' | 'guardian' | 'staff';
+
+export type WaiverTemplateList = {
+  orgId?: string;
+  templates: {
+    orgId: string;
+    templateId: string;
+    title: string;
+    body: string;
+    /**
+     * @minItems 1
+     */
+    audience: ['team_admin' | 'coach' | 'player' | 'parent', ...('team_admin' | 'coach' | 'player' | 'parent')[]];
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+  }[];
+}
+
+export type WaiverTemplate = {
+  orgId: string;
+  templateId: string;
+  title: string;
+  body: string;
+  /**
+   * @minItems 1
+   */
+  audience: ['team_admin' | 'coach' | 'player' | 'parent', ...('team_admin' | 'coach' | 'player' | 'parent')[]];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type WaiverTotals = {
+  members: number;
+  signed: number;
+  missing: number;
 }
 
 export type WebcalUrl = string;
@@ -1770,16 +2132,24 @@ export const RSVP_STATUSES = ["going", "not_going", "maybe"] as const;
 
 export const TEAM_ROLES = ["team_admin", "coach", "player", "parent"] as const;
 
-export const TEAM_PERMISSIONS = ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels", "manage_payments", "manage_billing", "view_medical_info"] as const;
+export const TEAM_PERMISSIONS = ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels", "manage_payments", "manage_waivers", "manage_billing", "view_medical_info"] as const;
 
 export const DEFAULT_ROLE_PERMISSIONS = {
-  team_admin: ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels", "manage_payments", "manage_billing", "view_medical_info"],
+  team_admin: ["manage_permissions", "manage_team_settings", "invite_members", "approve_join_requests", "assign_roles", "manage_events", "create_team_channels", "manage_payments", "manage_waivers", "manage_billing", "view_medical_info"],
   coach: ["view_medical_info"],
   parent: [],
   player: [],
 } as const;
 
 export const MAX_UPLOAD_BYTES = 15728640;
+
+export const MAX_ALBUM_VIDEO_BYTES = 1073741824;
+
+export const UPLOAD_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"] as const;
+
+export const UPLOAD_VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm"] as const;
+
+export const ALBUM_ITEM_KINDS = ["photo", "video"] as const;
 
 export const CHARGE_CURRENCIES = ["usd", "cad", "eur", "gbp", "aud"] as const;
 
@@ -1822,3 +2192,15 @@ export const ORG_INCLUDED_TEAMS = 5;
 export const MAX_ORG_TEAMS = 200;
 
 export const MAX_ORG_ADMINS = 20;
+
+export const WAIVER_SIGNATURE_METHODS = ["electronic", "paper"] as const;
+
+export const WAIVER_SIGNER_RELATIONSHIPS = ["self", "guardian", "staff"] as const;
+
+export const WAIVER_MEMBER_STATUSES = ["signed", "outdated", "missing"] as const;
+
+export const MAX_WAIVER_BODY_CHARS = 20000;
+
+export const MAX_TEAM_WAIVERS = 50;
+
+export const MAX_ORG_WAIVER_TEMPLATES = 50;

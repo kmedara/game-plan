@@ -308,6 +308,84 @@ export const REMINDER_SK_PREFIX = 'REMINDER#' as const;
 /** Team row holding the paid plan (tier, status, period end). */
 export const planSk = (): string => 'PLAN';
 
+/** Sort key for one photo or video in a team's album. Ids sort oldest first. */
+export const albumItemSk = (itemId: string): string => `ALBUM#${itemId}`;
+
+/** Sort-key prefix for every item in a team's album. */
+export const ALBUM_SK_PREFIX = 'ALBUM#' as const;
+
+/**
+ * Sort key marking an object key as part of the team's album.
+ *
+ * Download checks read this one row, and adding the same upload twice fails on it.
+ */
+export const albumObjectSk = (objectKey: string): string => `ALBUM_OBJECT#${objectKey}`;
+
+/** Team row holding the bytes the album uses, with a version for concurrent adds. */
+export const albumUsageSk = (): string => 'ALBUM_USAGE';
+
+/**
+ * Pads a waiver version so sort-key order is version order.
+ *
+ * @param version - The version number.
+ * @returns Six digits.
+ */
+const waiverVersionPart = (version: number): string => String(version).padStart(6, '0');
+
+/** Sort key for one team waiver at its current version. */
+export const waiverSk = (waiverId: string): string => `WAIVER#${waiverId}`;
+
+/** Sort-key prefix for every waiver on a team. */
+export const WAIVER_SK_PREFIX = 'WAIVER#' as const;
+
+/** Sort key for the text of one waiver version. Written once, never changed. */
+export const waiverTextSk = (waiverId: string, version: number): string =>
+  `WAIVERTEXT#${waiverId}#${waiverVersionPart(version)}`;
+
+/**
+ * Sort key for one signature: one member, one version. Signing a new version
+ * adds a row, so earlier signatures stay on record.
+ */
+export const waiverSignatureSk = (waiverId: string, memberId: UserId, version: number): string =>
+  `WAIVERSIG#${waiverId}#${memberId}#${waiverVersionPart(version)}`;
+
+/** Sort-key prefix for every signature on one waiver, or one member's on it. */
+export const waiverSignatureSkPrefix = (waiverId: string, memberId?: UserId): string =>
+  memberId === undefined ? `WAIVERSIG#${waiverId}#` : `WAIVERSIG#${waiverId}#${memberId}#`;
+
+/** Sort-key prefix for every signature on a team. */
+export const WAIVER_SIGNATURE_SK_PREFIX = 'WAIVERSIG#' as const;
+
+/** Partition that holds dated waiver reminder rows for every team. */
+export const WAIVER_REMINDERS_PK = 'WAIVER_REMINDERS' as const;
+
+/** One waiver reminder, ordered by the calendar date it is due. */
+export const waiverReminderSk = (
+  sendOn: string,
+  teamId: TeamId,
+  waiverId: string,
+  kind: PaymentReminderKind,
+): string => `WAIVREMIND#${sendOn}#${teamId}#${waiverId}#${kind}`;
+
+/** Sort-key prefix for every waiver reminder row. */
+export const WAIVER_REMINDER_SK_PREFIX = 'WAIVREMIND#' as const;
+
+/**
+ * `TICKET#<id>` / `WAIVER_PDF` — a short-lived link to one signed waiver's PDF.
+ *
+ * A different sort key from socket tickets, so neither can stand in for the other.
+ */
+export const waiverPdfTicketSk = (): string => 'WAIVER_PDF';
+
+/** How long a waiver PDF link works, in seconds. Reusable until then, since some browsers fetch a download twice. */
+export const WAIVER_PDF_TICKET_TTL_SECONDS = 300;
+
+/** `ORG#<orgId>` / `WAIVER_TEMPLATE#<templateId>` — a waiver teams in the organization can copy. */
+export const orgWaiverTemplateSk = (templateId: string): string => `WAIVER_TEMPLATE#${templateId}`;
+
+/** Sort-key prefix for every waiver template in an organization. */
+export const ORG_WAIVER_TEMPLATE_SK_PREFIX = 'WAIVER_TEMPLATE#' as const;
+
 /** Row holding the Stripe Billing customer and subscription ids for a team. */
 export const billingSk = (): string => 'BILLING';
 

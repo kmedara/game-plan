@@ -158,6 +158,7 @@ reminderTimer = setInterval(() => {
     import('../../functions/payments/src/reminders.js').then((mod) =>
       mod.runDuePaymentReminders(new Date()),
     ),
+    import('../../functions/teams/src/waiver-reminders.js').then((mod) => mod.runDueWaiverReminders(new Date())),
   ])
     .catch((error: unknown) => {
       console.warn(

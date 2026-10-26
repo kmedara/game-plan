@@ -39,7 +39,7 @@ export const presignDownloadQuerySchema = z.object({
   chatId: z.string().min(1).max(128).optional(),
   /** Profile whose photo key is this object. */
   userId: z.string().min(1).max(128).optional(),
-  /** Team whose theme logo is this object. */
+  /** Team whose theme logo, chat background, or album holds this object. */
   teamId: z.string().min(1).max(128).optional(),
 });
 

@@ -557,6 +557,51 @@ export const payerIdsForDue = (member: DuePayerMember): string[] =>
 export const canPayDue = (payerId: string, member: DuePayerMember): boolean =>
   payerIdsForDue(member).includes(payerId);
 
+/**
+ * Who may sign a waiver for a member. The same people who pay their dues: an
+ * adult signs their own, a minor's is signed by any linked guardian, and a
+ * minor with no guardian has no in-app signer, so staff record a paper form.
+ *
+ * @param member - The member the waiver is for.
+ * @returns User ids allowed to sign, without repeats.
+ */
+export const waiverSignerIds = (member: DuePayerMember): string[] => payerIdsForDue(member);
+
+/**
+ * Returns whether a user may sign a waiver for a member.
+ *
+ * @param signerId - The caller.
+ * @param member - The member the waiver is for.
+ * @returns `true` when the caller is in {@link waiverSignerIds}.
+ */
+export const canSignWaiver = (signerId: string, member: DuePayerMember): boolean =>
+  waiverSignerIds(member).includes(signerId);
+
+/**
+ * Whether a member must sign a waiver: they hold a role the waiver is for.
+ *
+ * @param roles - Roles the member holds on the team.
+ * @param audience - Roles the waiver asks to sign.
+ * @returns `true` when any held role is in the audience.
+ */
+export const mustSignWaiver = (roles: readonly TeamRole[], audience: readonly TeamRole[]): boolean =>
+  roles.some((role) => audience.includes(role));
+
+/**
+ * Where a member stands on a waiver, from the latest version they signed.
+ *
+ * @param currentVersion - The waiver's current version.
+ * @param signedVersion - The latest version the member signed, if any.
+ * @returns `signed` for the current version, `outdated` for an earlier one, otherwise `missing`.
+ */
+export const waiverMemberStatus = (
+  currentVersion: number,
+  signedVersion: number | undefined,
+): 'signed' | 'outdated' | 'missing' => {
+  if (signedVersion === undefined) return 'missing';
+  return signedVersion >= currentVersion ? 'signed' : 'outdated';
+};
+
 /** One gibibyte. */
 const GIB = 1024 * 1024 * 1024;
 
@@ -690,6 +735,49 @@ export const showsAds = (
  */
 export const underLimit = (current: number, limit: number | undefined): boolean =>
   limit === undefined || current < limit;
+
+/** One file someone wants to add to a team album. */
+export type AlbumUpload = {
+  contentType: string;
+  bytes: number;
+  /** A video's length, as the app read it from the file. */
+  durationSeconds?: number;
+};
+
+/** Why an album upload is refused. The plan codes become `402`. */
+export type AlbumUploadProblem = 'plan_required' | 'video_too_large' | 'video_too_long' | 'plan_limit_reached';
+
+/**
+ * Whether an album file is a video.
+ *
+ * @param contentType - The declared or stored type.
+ * @returns `true` for a `video/` type.
+ */
+export const isAlbumVideo = (contentType: string): boolean => contentType.startsWith('video/');
+
+/**
+ * Why a team's plan refuses an album file, if it does.
+ *
+ * Video needs a plan with video, and each clip stays under the plan's size and
+ * length. Every file must fit in the storage the album has left.
+ *
+ * @param limits - The team's plan limits.
+ * @param usedBytes - Bytes the album already holds.
+ * @param upload - The file's type, size, and length.
+ * @returns The problem, or `undefined` when the file may be added.
+ */
+export const albumUploadProblem = (
+  limits: Pick<PlanLimits, 'albumBytes' | 'video' | 'maxVideoBytes' | 'maxVideoSeconds'>,
+  usedBytes: number,
+  upload: AlbumUpload,
+): AlbumUploadProblem | undefined => {
+  if (isAlbumVideo(upload.contentType)) {
+    if (!limits.video) return 'plan_required';
+    if (upload.bytes > limits.maxVideoBytes) return 'video_too_large';
+    if ((upload.durationSeconds ?? Number.POSITIVE_INFINITY) > limits.maxVideoSeconds) return 'video_too_long';
+  }
+  return usedBytes + upload.bytes > limits.albumBytes ? 'plan_limit_reached' : undefined;
+};
 
 /** The fields the emergency-info rules read about the person the record is for. */
 export type MedicalSubject = {

@@ -35,12 +35,20 @@ export const queryKeys = {
   chats: ['chats'] as const,
   messages: (chatId: string) => ['messages', chatId] as const,
   download: (key: string, context: DownloadContext) => ['download', key, context] as const,
+  album: (teamId: string) => ['album', teamId] as const,
   invite: (code: string) => ['invite', code] as const,
   directory: (query: string) => ['directory', query] as const,
   paymentAccount: (teamId: string) => ['paymentAccount', teamId] as const,
   charges: (teamId: string) => ['charges', teamId] as const,
   charge: (teamId: string, chargeId: string) => ['charge', teamId, chargeId] as const,
   myDues: ['myDues'] as const,
+  myWaivers: ['myWaivers'] as const,
+  waivers: (teamId: string) => ['waivers', teamId] as const,
+  waiver: (teamId: string, waiverId: string) => ['waiver', teamId, waiverId] as const,
+  waiverSignature: (teamId: string, waiverId: string, memberId: string) =>
+    ['waiverSignature', teamId, waiverId, memberId] as const,
+  teamWaiverTemplates: (teamId: string) => ['teamWaiverTemplates', teamId] as const,
+  orgWaiverTemplates: (orgId: string) => ['orgWaiverTemplates', orgId] as const,
   teamBilling: (teamId: string) => ['teamBilling', teamId] as const,
   orgs: ['orgs'] as const,
   org: (orgId: string) => ['org', orgId] as const,
@@ -68,7 +76,8 @@ export const PERSISTED_MUTATION_KINDS: ReadonlySet<string> = new Set([
  *
  * Presigned download URLs, directory pages, invite previews, and message history
  * are left out: they expire, page, or are chat content. Payment status is left
- * out too, so nobody sees a stale "unpaid" and pays twice. Medical info is
+ * out too, so nobody sees a stale "unpaid" and pays twice, and so is waiver
+ * status, so nobody is asked to sign what they already signed. Medical info is
  * never written to the device.
  */
 export const PERSISTED_QUERY_KINDS: ReadonlySet<string> = new Set([

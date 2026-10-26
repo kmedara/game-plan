@@ -4,7 +4,7 @@
 
 import * as WebBrowser from 'expo-web-browser';
 import { Linking } from 'react-native';
-import { openAuthSession, openInBrowser, openLink } from './open-link';
+import { openApiPage, openAuthSession, openInBrowser, openLink } from './open-link';
 
 jest.mock('expo-web-browser', () => ({
   openAuthSessionAsync: jest.fn(async () => ({ type: 'cancel' })),
@@ -41,5 +41,13 @@ describe('open-link', () => {
     await expect(openInBrowser('mailto:a@example.com')).rejects.toThrow('unsafe_link');
     expect(() => openAuthSession('http://checkout.example.com', 'gameplan://payments')).toThrow('unsafe_link');
     expect(WebBrowser.openAuthSessionAsync).not.toHaveBeenCalled();
+  });
+
+  it('opens API pages only under the API base, over http when the base is local', async () => {
+    await openApiPage('http://localhost:4200/api/teams/waiver-pdf/t', 'http://localhost:4200/api');
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith('http://localhost:4200/api/teams/waiver-pdf/t');
+    await expect(openApiPage('https://evil.example/api/x', 'https://gameplan.example/api')).rejects.toThrow('unsafe_link');
+    await expect(openApiPage('https://gameplan.example/apix/y', 'https://gameplan.example/api')).rejects.toThrow('unsafe_link');
+    await expect(openApiPage('javascript:alert(1)', 'https://gameplan.example/api')).rejects.toThrow('unsafe_link');
   });
 });

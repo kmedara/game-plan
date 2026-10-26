@@ -1,6 +1,6 @@
 /**
- * Team admin: settings, roster, plan, payments link, organizations link (when it is the only team), join requests,
- * invites, and permissions.
+ * Team admin: settings, album link, roster, plan, payments and waivers links, organizations link (when it is the only team),
+ * join requests, invites, and permissions.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -224,6 +224,13 @@ export default function TeamAdminScreen() {
               />
             </>
           ) : null}
+          <View className="mb-2">
+            <Button
+              label={t('album.open')}
+              tone="secondary"
+              onPress={() => router.push({ pathname: '/teams/[teamId]/album', params: { teamId: id } })}
+            />
+          </View>
           <TeamRoster teamId={id} members={members} onError={setError} />
           <TeamPlanSection teamId={id} plan={teamLoaded.data?.plan} canManage={can('manage_billing')} />
           <TeamOrgSection teamId={id} canManage={can('manage_billing')} />
@@ -232,6 +239,13 @@ export default function TeamAdminScreen() {
               label={t('payments.title')}
               tone="secondary"
               onPress={() => router.push({ pathname: '/teams/[teamId]/payments', params: { teamId: id } })}
+            />
+          ) : null}
+          {can('manage_waivers') ? (
+            <Button
+              label={t('waivers.title')}
+              tone="secondary"
+              onPress={() => router.push({ pathname: '/teams/[teamId]/waivers', params: { teamId: id } })}
             />
           ) : null}
           {teams.length === 1 && api.user?.accountKind === 'adult' ? (

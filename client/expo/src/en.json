@@ -398,6 +398,67 @@
     "guardianPays": "A parent or guardian pays this.",
     "paymentReceived": "Payment received. It can take a moment to show as paid."
   },
+  "waivers": {
+    "title": "Waivers",
+    "open": "Waivers",
+    "openToSign": "Waivers to sign ({{count}})",
+    "allSigned": "You're all signed up.",
+    "history": "Signed",
+    "readAndSign": "Read and sign",
+    "sign": "Sign",
+    "signerName": "Your full legal name",
+    "agree": "I have read this waiver and agree to it.",
+    "agreeForChild": "I have read this waiver and agree to it on behalf of {{name}}, as their parent or guardian.",
+    "legalNote": "Typing your name and tapping Sign is your electronic signature. The team keeps a record of who signed, when, and the exact text.",
+    "forMember": "For {{name}}",
+    "guardianSigns": "A parent or guardian signs this.",
+    "changedSinceSigned": "This waiver changed after it was signed. Please read and sign the new version.",
+    "signedOn": "Signed {{date}}",
+    "signedBy": "Signed by {{name}} on {{date}}",
+    "signedOnPaper": "Paper form signed by {{name}}, recorded {{date}}",
+    "signedCopy": "Signed copy",
+    "viewSigned": "View signed copy",
+    "downloadPdf": "Download PDF",
+    "view": "View",
+    "versionAndHash": "Version {{version}} · record {{hash}}",
+    "status": {
+      "signed": "Signed",
+      "outdated": "Needs new signature",
+      "missing": "Not signed"
+    },
+    "upgrade": "Upgrade to send digital waivers that parents sign on their phone.",
+    "new": "New waiver",
+    "none": "No waivers yet.",
+    "edit": "Edit",
+    "archive": "Archive",
+    "unarchive": "Restore",
+    "archived": "Archived",
+    "signedCount": "{{signed}} of {{members}} signed",
+    "nobodyAsked": "Nobody on the roster holds a role this waiver is for.",
+    "noSignerInApp": "No linked guardian can sign in the app. Collect a paper form.",
+    "recordPaper": "Record paper form",
+    "undoPaper": "Undo paper form",
+    "paperSignerName": "Name signed on the form",
+    "fromTemplate": "Start from your organization's template",
+    "fromTemplateHint": "The team gets its own copy. Later changes to the template do not change it.",
+    "titleField": "Title",
+    "titleHint": "Season liability release",
+    "bodyField": "Waiver text",
+    "resignWarning": "Changing the text makes a new version. Everyone signs again; earlier signatures stay on record.",
+    "audience": "Who signs",
+    "hasDueDate": "Set a due date",
+    "reminderHint": "Anyone who still has to sign gets a reminder 3 days before, on the day, and weekly for a month after.",
+    "legalStaffNote": "Your club is responsible for the wording. Have it reviewed before you send it.",
+    "send": "Send waiver",
+    "templates": "Waiver templates",
+    "templatesHint": "Write a waiver once. Each team copies it from its waivers screen.",
+    "templatesNeedPlan": "Shared waiver templates need the organization plan.",
+    "newTemplate": "New template",
+    "addTemplate": "Add template",
+    "templateEditNote": "Teams that already copied this template keep their copy.",
+    "delete": "Delete",
+    "deleteConfirm": "Tap again to delete"
+  },
   "permissions": {
     "manage_permissions": "Manage permissions",
     "manage_team_settings": "Edit team settings",
@@ -407,6 +468,7 @@
     "manage_events": "Manage events",
     "create_team_channels": "Create team channels",
     "manage_payments": "Manage payments",
+    "manage_waivers": "Manage waivers",
     "manage_billing": "Manage billing",
     "view_medical_info": "View emergency info"
   },
@@ -472,6 +534,28 @@
       "ai1000": "AI coach assistant, 1,000 requests a month"
     },
     "setUpOrganization": "Set up an organization"
+  },
+  "album": {
+    "title": "Album",
+    "open": "Album",
+    "empty": "No photos yet. Add the first ones from your library.",
+    "add": "Add photos",
+    "addWithVideo": "Add photos and videos",
+    "adding": "Adding {{current}} of {{total}}…",
+    "usage": "{{used}} of {{limit}} used",
+    "loadMore": "Show more",
+    "video": "Video",
+    "photo": "Photo",
+    "play": "Play video",
+    "remove": "Delete",
+    "removeConfirm": "Tap again to delete",
+    "removed": "Deleted.",
+    "videoUpgrade": "Upgrade to add videos up to 10 minutes long and get 50 GB of storage.",
+    "storageUpgrade": "The album is full. Upgrade for 50 GB of photos and video.",
+    "someFailed_one": "{{count}} file was not added.",
+    "someFailed_other": "{{count}} files were not added.",
+    "addedCount_one": "Added {{count}} file.",
+    "addedCount_other": "Added {{count}} files."
   },
   "reminders": {
     "title": "Event reminders",
@@ -702,6 +786,22 @@
       "invalidAmount": "Enter an amount such as 45 or 45.50.",
       "noMembers": "Pick at least one member."
     },
+    "waivers": {
+      "changed": "This waiver just changed. Read the new version, then sign.",
+      "alreadySigned": "This waiver is already signed.",
+      "archived": "This waiver is no longer collecting signatures.",
+      "notSigner": "Only the member or their guardian can sign this.",
+      "notAsked": "This waiver is not for that member.",
+      "tooMany": "This team has as many waivers as it can hold. Archive or reuse one.",
+      "tooManyTemplates": "This organization has as many templates as it can hold.",
+      "templateNotFound": "That template is no longer available.",
+      "signedInApp": "This was signed in the app and cannot be removed.",
+      "planRequired": "Digital waivers need a paid plan.",
+      "signFailed": "Could not sign. Try again.",
+      "titleRequired": "Give the waiver a title.",
+      "bodyRequired": "Add the waiver text.",
+      "pdfFailed": "Could not make the PDF. Try again."
+    },
     "billing": {
       "alreadySubscribed": "This team already has a paid plan. Use Manage billing to change it.",
       "managedByOrganization": "This team's plan is managed by its organization.",
@@ -734,6 +834,15 @@
     },
     "account": {
       "deleteFailed": "Could not delete your account. Try again."
+    },
+    "album": {
+      "badType": "That file type can't be added. Use a photo, or an MP4, MOV, or WebM video.",
+      "tooLarge": "That photo is too large.",
+      "uploadFailed": "Could not add that file. Try again.",
+      "planRequired": "Videos need a paid plan.",
+      "storageFull": "The album is out of storage.",
+      "videoTooLarge": "Videos can be up to 1 GB.",
+      "videoTooLong": "Videos can be up to 10 minutes long."
     }
   }
 }

@@ -72,6 +72,18 @@ const PROTECTED: Record<string, RouteCase[]> = {
     { route: 'handleListJoinRequests', method: 'GET', path: '/teams/team-1/join-requests' },
     { route: 'handleApproveJoinRequest', method: 'POST', path: '/teams/team-1/join-requests/req-1/approve' },
     { route: 'handleRejectJoinRequest', method: 'POST', path: '/teams/team-1/join-requests/req-1/reject' },
+    { route: 'handleListMyWaivers', method: 'GET', path: '/teams/me/waivers' },
+    { route: 'handleListWaivers', method: 'GET', path: '/teams/team-1/waivers' },
+    { route: 'handleCreateWaiver', method: 'POST', path: '/teams/team-1/waivers' },
+    { route: 'handleListTeamWaiverTemplates', method: 'GET', path: '/teams/team-1/waiver-templates' },
+    { route: 'handleCreateWaiverFromTemplate', method: 'POST', path: '/teams/team-1/waivers/from-template' },
+    { route: 'handleGetWaiver', method: 'GET', path: '/teams/team-1/waivers/w-1' },
+    { route: 'handleUpdateWaiver', method: 'PATCH', path: '/teams/team-1/waivers/w-1' },
+    { route: 'handleSignWaiver', method: 'POST', path: '/teams/team-1/waivers/w-1/signatures/user-2' },
+    { route: 'handleGetSignature', method: 'GET', path: '/teams/team-1/waivers/w-1/signatures/user-2' },
+    { route: 'handleCreateWaiverPdfLink', method: 'POST', path: '/teams/team-1/waivers/w-1/signatures/user-2/pdf-link' },
+    { route: 'handleRecordPaperWaiver', method: 'PUT', path: '/teams/team-1/waivers/w-1/signatures/user-2/paper' },
+    { route: 'handleRemovePaperWaiver', method: 'DELETE', path: '/teams/team-1/waivers/w-1/signatures/user-2/paper' },
   ],
   schedule: [
     { route: 'handleGetFeed', method: 'GET', path: '/schedule/feed' },
@@ -114,6 +126,10 @@ const PROTECTED: Record<string, RouteCase[]> = {
     { route: 'handlePresignDownload', method: 'GET', path: '/media/presign-download', query: 'objectKey=users/u/a.png' },
     { route: 'handleRegisterDevice', method: 'PUT', path: '/media/devices/device-1' },
     { route: 'handleDeleteDevice', method: 'DELETE', path: '/media/devices/device-1' },
+    { route: 'handleListAlbum', method: 'GET', path: '/media/teams/team-1/album' },
+    { route: 'handleAlbumUpload', method: 'POST', path: '/media/teams/team-1/album/uploads' },
+    { route: 'handleAddAlbumItem', method: 'POST', path: '/media/teams/team-1/album' },
+    { route: 'handleRemoveAlbumItem', method: 'DELETE', path: '/media/teams/team-1/album/item-1' },
   ],
   places: [
     { route: 'handleAutocomplete', method: 'GET', path: '/places/autocomplete', query: 'q=field' },
@@ -155,6 +171,10 @@ const PROTECTED: Record<string, RouteCase[]> = {
     { route: 'handleDeclineOrgInvite', method: 'POST', path: '/orgs/org-1/teams/team-1/decline' },
     { route: 'handleTeamOrgStatus', method: 'GET', path: '/orgs/teams/team-1' },
     { route: 'handleAnnounce', method: 'POST', path: '/orgs/org-1/announcements' },
+    { route: 'handleListWaiverTemplates', method: 'GET', path: '/orgs/org-1/waiver-templates' },
+    { route: 'handleCreateWaiverTemplate', method: 'POST', path: '/orgs/org-1/waiver-templates' },
+    { route: 'handleUpdateWaiverTemplate', method: 'PATCH', path: '/orgs/org-1/waiver-templates/t-1' },
+    { route: 'handleDeleteWaiverTemplate', method: 'DELETE', path: '/orgs/org-1/waiver-templates/t-1' },
   ],
 };
 
@@ -177,6 +197,7 @@ const PUBLIC: Record<string, string[]> = {
   media: ['handleLocalPutObject', 'handleLocalGetObject'],
   // Stripe redirects the browser here and signs webhooks; neither carries a session.
   // Calendar apps fetch the feed with only the token in its URL.
+  teams: ['handleGetWaiverPdf'],
   schedule: ['handleCalendarFeed'],
   payments: ['handlePaymentReturn', 'handleStripeWebhook'],
   billing: ['handleBillingReturn', 'handleBillingWebhook'],

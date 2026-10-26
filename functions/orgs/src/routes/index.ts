@@ -19,8 +19,18 @@ import {
   handleRemoveOrgTeam,
   handleTeamOrgStatus,
 } from './teams.js';
+import {
+  handleCreateWaiverTemplate,
+  handleDeleteWaiverTemplate,
+  handleListWaiverTemplates,
+  handleUpdateWaiverTemplate,
+} from './waiver-templates.js';
 
 export {
+  handleCreateWaiverTemplate,
+  handleDeleteWaiverTemplate,
+  handleListWaiverTemplates,
+  handleUpdateWaiverTemplate,
   handleAcceptOrgInvite,
   handleAddOrgAdmin,
   handleAnnounce,
@@ -49,4 +59,8 @@ export const httpRoutes: readonly HttpRoute[] = [
   handleAcceptOrgInvite,
   handleDeclineOrgInvite,
   handleAnnounce,
+  handleListWaiverTemplates,
+  handleCreateWaiverTemplate,
+  handleUpdateWaiverTemplate,
+  handleDeleteWaiverTemplate,
 ];

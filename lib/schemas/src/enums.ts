@@ -35,6 +35,7 @@ export const TEAM_PERMISSIONS = [
   "manage_events",
   "create_team_channels",
   "manage_payments",
+  "manage_waivers",
   "manage_billing",
   "view_medical_info",
 ] as const;

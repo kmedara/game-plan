@@ -20,6 +20,7 @@ import type {
   PaymentAccount,
 } from '@gameplan/types';
 import { loadMemberNames } from '../../lib/chat-member-names.js';
+import { addDays, reminderSchedule } from '../../lib/due-reminders.js';
 import {
   CHARGE_SK_PREFIX,
   TABLE_PK,
@@ -42,7 +43,6 @@ import {
   transactWrite,
   userDueSk,
   userPk,
-  type PaymentReminderKind,
 } from '../../lib/dynamo/index.js';
 import { TABLE_NAME } from '../../lib/names.js';
 import type { AccountState } from './stripe.js';
@@ -206,36 +206,8 @@ export const accountResponse = (teamId: string, item: StripeAccountItem | undefi
   detailsSubmitted: item?.detailsSubmitted ?? false,
 });
 
-/**
- * Adds days to a `YYYY-MM-DD` date.
- *
- * @param date - The calendar date.
- * @param days - Days to add; may be negative.
- * @returns The shifted calendar date.
- */
-export const addDays = (date: string, days: number): string => {
-  const shifted = new Date(`${date}T00:00:00.000Z`);
-  shifted.setUTCDate(shifted.getUTCDate() + days);
-  return shifted.toISOString().slice(0, 10);
-};
-
-/**
- * When to remind payers about a charge: three days before, on the day, then
- * weekly for four weeks. Dates already past are dropped.
- *
- * @param dueDate - The charge due date.
- * @param today - Today's date, `YYYY-MM-DD`.
- * @returns Dates and reminder kinds, earliest first.
- */
-export const reminderSchedule = (
-  dueDate: string,
-  today: string,
-): { sendOn: string; kind: PaymentReminderKind }[] =>
-  [
-    { sendOn: addDays(dueDate, -3), kind: 'upcoming' as const },
-    { sendOn: dueDate, kind: 'due' as const },
-    ...[7, 14, 21, 28].map((days) => ({ sendOn: addDays(dueDate, days), kind: 'overdue' as const })),
-  ].filter((entry) => entry.sendOn >= today);
+/** When to remind payers about a charge; waivers use the same schedule. */
+export { addDays, reminderSchedule };
 
 /**
  * Creates a charge and one due per member.

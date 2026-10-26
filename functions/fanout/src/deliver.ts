@@ -370,9 +370,11 @@ const publishPush = async (
           ? 'Reminder'
           : job.type === 'dues_reminder'
             ? 'Payment reminder'
-            : job.type === 'payment_received'
-              ? 'Payment received'
-              : job.title;
+            : job.type === 'waiver_reminder'
+              ? 'Waiver to sign'
+              : job.type === 'payment_received'
+                ? 'Payment received'
+                : job.title;
   const moved =
     job.type === 'event_moved'
       ? job.change === 'both'
@@ -392,7 +394,11 @@ const publishPush = async (
         }`
       : job.type === 'payment_received'
         ? `${job.memberDisplayName ?? 'A member'} paid ${money(job.amountCents, job.currency)} for ${job.title}`
-        : undefined;
+        : job.type === 'waiver_reminder'
+          ? `${job.title} ${
+              job.kind === 'upcoming' ? `needs a signature by ${job.dueDate}` : job.kind === 'due' ? 'is due today' : 'is overdue'
+            }`
+          : undefined;
   const body =
     job.type === 'chat_message'
       ? job.body.slice(0, 180)
@@ -423,6 +429,7 @@ export const deliverFanoutJob = async (job: FanoutJob): Promise<void> => {
     job.type === 'join_requested' ||
     job.type === 'event_reminder' ||
     job.type === 'dues_reminder' ||
+    job.type === 'waiver_reminder' ||
     job.type === 'payment_received';
 
   for (const userId of userIds) {

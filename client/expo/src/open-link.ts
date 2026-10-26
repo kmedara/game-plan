@@ -40,6 +40,22 @@ export const openInBrowser = async (url: string): Promise<void> => {
 };
 
 /**
+ * Opens a page the GamePlan API itself serves, such as a PDF, in the in-app browser.
+ *
+ * Only a URL under the configured API base is allowed. Local builds point at
+ * an `http` API, so the scheme follows that base rather than requiring `https`.
+ *
+ * @param url - The page.
+ * @param apiBaseUrl - The API base the app was built with.
+ * @throws `unsafe_link` when the link is not under the API base.
+ */
+export const openApiPage = async (url: string, apiBaseUrl: string): Promise<void> => {
+  assertSafe(url, ['https:', 'http:']);
+  if (!url.startsWith(`${apiBaseUrl}/`)) throw new Error(UNSAFE_LINK);
+  await WebBrowser.openBrowserAsync(url);
+};
+
+/**
  * Sends this tab to an `https` page, as the website does for Stripe.
  *
  * @param url - The page.

@@ -32,6 +32,8 @@ How GamePlan is put together, and the costs of those choices. Setup and deploy s
   - [Organizations](#organizations)
   - [Team dues](#team-dues)
   - [Plans and entitlements](#plans-and-entitlements)
+  - [Team album](#team-album)
+  - [Waivers](#waivers)
   - [Stripe (dues, subscriptions, Terraform)](stripe.md)
 - [HTTP API](api.md)
 - [Realtime](realtime.md)
@@ -233,6 +235,30 @@ A `past_due` plan keeps its tier for seven days after the paid period ends (`eff
 - **Cost:** team summaries read one more row per team. Copying an organization's plan means its webhook writes every member team's row.
 
 Premium and organization **subscriptions** (Checkout, portal, webhooks, app upgrade flow): [`stripe.md` — Subscriptions](stripe.md#subscriptions-product-behavior).
+
+### Team album
+
+Every member sees, adds to, and deletes from the album; it is not a staff permission, since parents and players take most of the photos. A file goes up like any other upload: `POST /media/teams/:teamId/album/uploads` checks the plan and signs a PUT under the uploader's own `uploads/<userId>/` prefix, then `POST /media/teams/:teamId/album` adds it. The add reads the stored object's real size and type from S3, so a file swapped after signing still counts at its true size. Each item is `ALBUM#<itemId>` on the team (ids start with the time, so a reverse query is newest first), plus `ALBUM_OBJECT#<key>`, which `presign-download` with `teamId` reads to let teammates fetch it. `ALBUM_USAGE` holds the bytes the album uses.
+
+`albumUploadProblem` in `lib/rules` decides, for the app and the API alike: video needs a plan with `video`, a clip stays within `maxVideoBytes` and `maxVideoSeconds`, and every file must fit in `albumBytes`. Photos keep the 15 MB upload cap and the app scales them to 2048 px like chat photos. Deleting an item frees its bytes and deletes the file.
+
+- **Why:** reusing the presigned upload keeps file bytes out of Lambda, and the CDN already serves `uploads/*`. Every add and remove rewrites `ALBUM_USAGE` in the same transaction as the item, conditional on its version, so two uploads at once cannot both squeeze under the limit; a lost race retries up to three times, then `album_busy`.
+- **Cost:** a video's length is what the app read from the file; the API cannot check it without processing the video. Videos have no thumbnail and play in the browser or system player rather than in the app. Downloads are the uploaded file on every plan; the compressed free path and `fullQualityDownloads` are not built. A team downgraded below its usage keeps its files but cannot add more. A file signed but never added stays in the bucket, like an unsent chat photo.
+
+### Waivers
+
+A waiver is a team artifact in the teams area. Staff with the `manage_waivers` permission write one (`POST /teams/:teamId/waivers`) and pick the roles that must sign, players by default. Who must sign is worked out from the roster on every read, so a member who joins later is asked without anyone resending it. Who may sign follows the dues rules (`canSignWaiver` in `lib/rules`): an adult signs their own, a linked guardian signs a minor's, and a guardian need not be on the team. `GET /teams/me/waivers` lists the caller's own waivers and their children's across every team.
+
+Rows on `TEAM#<teamId>`: `WAIVER#<id>` holds the current version; `WAIVERTEXT#<id>#<version>` holds each version's title, body, and SHA-256, written once; `WAIVERSIG#<id>#<memberId>#<version>` is one signature. A new title or body is a new version that everyone signs again; the due date, audience, and archive flag change in place. A signature sends the version the signer read, and the API refuses it (`waiver_changed`) if the text moved on meanwhile. Staff can record a paper form for anyone without an in-app signer, such as a minor with no linked guardian, and remove one recorded by mistake. A signature made in the app cannot be removed.
+
+Organization admins keep templates at `ORG#<orgId>` / `WAIVER_TEMPLATE#<id>` (organization plan). A member team copies one (`POST /teams/:teamId/waivers/from-template`). The copy records `orgId` and `templateId` but is the team's own from then on, so editing or deleting a template never changes what anyone signed.
+
+A due date gets the same reminders as dues (`reminderSchedule` in `functions/lib/due-reminders.ts`): three days before, on the day, then weekly for four weeks. Each is a dated row under `WAIVER_REMINDERS`, and a daily EventBridge rule (`WaiverReminderSweep`, 15:05 UTC) runs the sweep on the teams Lambda. The sweep sends a `waiver_reminder` push to everyone who can still sign for a member who has not signed the current version. A row whose waiver has since changed its due date or been archived is deleted without sending, so moving a date needs no cleanup.
+
+A signed copy downloads as a PDF. `POST …/signatures/:memberId/pdf-link` checks the caller may see the signature (the member, a guardian, or staff with `manage_waivers`) and writes a `TICKET#<id>` / `WAIVER_PDF` row that lasts five minutes. `GET /teams/waiver-pdf/:ticket` needs no sign-in and returns the PDF: the exact signed text, then the record (who, for whom, when, how, account, version, hash). The app opens that URL in the in-app browser, and the website downloads it. `functions/lib/pdf.ts` writes the file itself with the built-in Helvetica fonts, so nothing is bundled.
+
+- **Why:** storing every version's text, and a signature per version, means a signed record always shows exactly what was agreed, even after the waiver is edited. The audit record is the signed-in account, the typed name, the time, the version, and the text hash. Writing or editing needs `requireEntitlement('waivers')`; listing, signing, and paper forms do not, so a lapsed card never blocks a parent mid-season or hides signed records.
+- **Cost:** the client IP is not stored. Through CloudFront the Lambda sees CloudFront's address, and `X-Forwarded-For` can be set by the client. GamePlan stores the record, but the club is the contracting party and owns the wording; the screens say so, and nothing reviews the text. A ticket can be reused until it expires, because some browsers fetch a download twice; anyone holding the link in those five minutes can open that one PDF. The PDF is in English whatever the app language, and characters outside WinAnsi (emoji, non-Latin scripts) print as `?`. Reminders go only to signers; staff get no digest of who is missing. Signature rows stay on the team when an account is deleted, like dues. Counting who is missing reads every roster profile for a minor's guardians, which is fine at roster size but not for an org-wide report.
 
 ## Realtime
 

@@ -4,9 +4,9 @@
  * is in use.
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { MAX_UPLOAD_BYTES, type PresignUploadBody } from '@gameplan/schemas';
 import { readSecret } from '../../lib/parameters.js';
@@ -72,22 +72,23 @@ const localApiOrigin = (): string =>
   process.env.MEDIA_PUBLIC_ORIGIN ?? 'http://127.0.0.1:3000';
 
 /**
- * Issues a short-lived upload URL and object key.
+ * Signs a PUT for a new key under the uploader's prefix.
+ *
+ * The signature covers the type and length, so S3 refuses a different file.
  *
  * @param userId - The caller who will own the object key prefix.
  * @param body - Content type and length from the client.
- * @returns Upload URL, object key, and the size cap.
+ * @returns Upload URL and object key.
  */
-export const createUploadUrl = async (
+export const signUpload = async (
   userId: string,
-  body: PresignUploadBody,
-): Promise<{ uploadUrl: string; objectKey: string; maxBytes: typeof MAX_UPLOAD_BYTES }> => {
+  body: { contentType: string; contentLength: number },
+): Promise<{ uploadUrl: string; objectKey: string }> => {
   const objectKey = newUploadKey(userId);
   if (isLocalMedia()) {
     return {
       uploadUrl: `${localApiOrigin()}/media/local-objects/${encodeURIComponent(objectKey)}`,
       objectKey,
-      maxBytes: MAX_UPLOAD_BYTES,
     };
   }
 
@@ -99,8 +100,65 @@ export const createUploadUrl = async (
   });
   const uploadUrl = await getSignedUrl(getS3(), command, {
     expiresIn: PRESIGN_EXPIRES_SECONDS,
+    // The presigner leaves the type unsigned unless asked.
+    signableHeaders: new Set(['content-type']),
   });
-  return { uploadUrl, objectKey, maxBytes: MAX_UPLOAD_BYTES };
+  return { uploadUrl, objectKey };
+};
+
+/**
+ * Issues a short-lived upload URL and object key.
+ *
+ * @param userId - The caller who will own the object key prefix.
+ * @param body - Content type and length from the client.
+ * @returns Upload URL, object key, and the size cap.
+ */
+export const createUploadUrl = async (
+  userId: string,
+  body: PresignUploadBody,
+): Promise<{ uploadUrl: string; objectKey: string; maxBytes: typeof MAX_UPLOAD_BYTES }> => ({
+  ...(await signUpload(userId, body)),
+  maxBytes: MAX_UPLOAD_BYTES,
+});
+
+/**
+ * Size and type of a stored object, as S3 (or the local store) has them.
+ *
+ * @param objectKey - A validated object key.
+ * @returns The stored size and type, or `undefined` when nothing is stored there.
+ */
+export const objectInfo = async (
+  objectKey: string,
+): Promise<{ bytes: number; contentType: string } | undefined> => {
+  if (isLocalMedia()) {
+    const local = getLocalObject(objectKey);
+    return local === undefined ? undefined : { bytes: local.body.byteLength, contentType: local.contentType };
+  }
+  try {
+    const head = await getS3().send(new HeadObjectCommand({ Bucket: mediaBucket(), Key: objectKey }));
+    return { bytes: head.ContentLength ?? 0, contentType: head.ContentType ?? '' };
+  } catch (error) {
+    if (error instanceof Error && (error.name === 'NotFound' || error.name === 'NoSuchKey')) return undefined;
+    throw error;
+  }
+};
+
+/**
+ * Removes a stored object.
+ *
+ * @param objectKey - A validated object key.
+ */
+export const deleteObject = async (objectKey: string): Promise<void> => {
+  if (isLocalMedia()) {
+    localObjects.delete(objectKey);
+    const files = localFiles(objectKey);
+    if (files !== undefined) {
+      rmSync(files.bodyPath, { force: true });
+      rmSync(files.typePath, { force: true });
+    }
+    return;
+  }
+  await getS3().send(new DeleteObjectCommand({ Bucket: mediaBucket(), Key: objectKey }));
 };
 
 /**

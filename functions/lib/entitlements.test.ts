@@ -3,7 +3,15 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { effectivePlanTier, entitlementsFor, PLAN_GRACE_MS, showsAds, underLimit } from '@gameplan/rules';
+import {
+  albumUploadProblem,
+  effectivePlanTier,
+  entitlementsFor,
+  PLAN_GRACE_MS,
+  PLAN_LIMITS,
+  showsAds,
+  underLimit,
+} from '@gameplan/rules';
 
 const now = new Date('2026-10-19T12:00:00.000Z');
 
@@ -71,5 +79,25 @@ describe('underLimit', () => {
     expect(underLimit(4, 5)).toBe(true);
     expect(underLimit(5, 5)).toBe(false);
     expect(underLimit(500, undefined)).toBe(true);
+  });
+});
+
+describe('albumUploadProblem', () => {
+  const gib = 1024 * 1024 * 1024;
+
+  it('keeps video for paid plans, within the clip size and length', () => {
+    const clip = { contentType: 'video/mp4', bytes: 100, durationSeconds: 30 };
+    expect(albumUploadProblem(PLAN_LIMITS.free, 0, clip)).toBe('plan_required');
+    expect(albumUploadProblem(PLAN_LIMITS.premium, 0, clip)).toBeUndefined();
+    expect(albumUploadProblem(PLAN_LIMITS.premium, 0, { ...clip, bytes: gib + 1 })).toBe('video_too_large');
+    expect(albumUploadProblem(PLAN_LIMITS.premium, 0, { ...clip, durationSeconds: 10 * 60 + 1 })).toBe('video_too_long');
+    expect(albumUploadProblem(PLAN_LIMITS.premium, 0, { contentType: 'video/mp4', bytes: 100 })).toBe('video_too_long');
+  });
+
+  it('refuses a file that would take the album past its storage', () => {
+    const photo = { contentType: 'image/jpeg', bytes: 1000 };
+    expect(albumUploadProblem(PLAN_LIMITS.free, 2 * gib - 1000, photo)).toBeUndefined();
+    expect(albumUploadProblem(PLAN_LIMITS.free, 2 * gib - 999, photo)).toBe('plan_limit_reached');
+    expect(albumUploadProblem(PLAN_LIMITS.organization, 2 * gib, photo)).toBeUndefined();
   });
 });

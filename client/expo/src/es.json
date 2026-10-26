@@ -400,6 +400,67 @@
     "guardianPays": "Un padre, madre o tutor paga esto.",
     "paymentReceived": "Pago recibido. Puede tardar un momento en aparecer como pagado."
   },
+  "waivers": {
+    "title": "Exenciones",
+    "open": "Exenciones",
+    "openToSign": "Exenciones por firmar ({{count}})",
+    "allSigned": "Ya firmaste todo.",
+    "history": "Firmadas",
+    "readAndSign": "Leer y firmar",
+    "sign": "Firmar",
+    "signerName": "Tu nombre legal completo",
+    "agree": "He leído esta exención y la acepto.",
+    "agreeForChild": "He leído esta exención y la acepto en nombre de {{name}}, como su padre, madre o tutor.",
+    "legalNote": "Escribir tu nombre y tocar Firmar es tu firma electrónica. El equipo guarda quién firmó, cuándo y el texto exacto.",
+    "forMember": "Para {{name}}",
+    "guardianSigns": "Un padre, madre o tutor firma esto.",
+    "changedSinceSigned": "Esta exención cambió después de firmarse. Lee y firma la nueva versión.",
+    "signedOn": "Firmada el {{date}}",
+    "signedBy": "Firmada por {{name}} el {{date}}",
+    "signedOnPaper": "Formulario en papel firmado por {{name}}, registrado el {{date}}",
+    "signedCopy": "Copia firmada",
+    "viewSigned": "Ver copia firmada",
+    "downloadPdf": "Descargar PDF",
+    "view": "Ver",
+    "versionAndHash": "Versión {{version}} · registro {{hash}}",
+    "status": {
+      "signed": "Firmada",
+      "outdated": "Requiere nueva firma",
+      "missing": "Sin firmar"
+    },
+    "upgrade": "Mejora tu plan para enviar exenciones digitales que los padres firman en el teléfono.",
+    "new": "Nueva exención",
+    "none": "Todavía no hay exenciones.",
+    "edit": "Editar",
+    "archive": "Archivar",
+    "unarchive": "Restaurar",
+    "archived": "Archivada",
+    "signedCount": "{{signed}} de {{members}} firmadas",
+    "nobodyAsked": "Nadie en la plantilla tiene un rol al que se dirija esta exención.",
+    "noSignerInApp": "Ningún tutor vinculado puede firmar en la app. Recoge un formulario en papel.",
+    "recordPaper": "Registrar formulario en papel",
+    "undoPaper": "Deshacer formulario en papel",
+    "paperSignerName": "Nombre firmado en el formulario",
+    "fromTemplate": "Empezar con la plantilla de tu organización",
+    "fromTemplateHint": "El equipo recibe su propia copia. Los cambios posteriores a la plantilla no la modifican.",
+    "titleField": "Título",
+    "titleHint": "Exención de responsabilidad de la temporada",
+    "bodyField": "Texto de la exención",
+    "resignWarning": "Cambiar el texto crea una nueva versión. Todos firman de nuevo; las firmas anteriores quedan registradas.",
+    "audience": "Quién firma",
+    "hasDueDate": "Poner fecha límite",
+    "reminderHint": "Quien aún deba firmar recibe un recordatorio 3 días antes, el mismo día y cada semana durante un mes después.",
+    "legalStaffNote": "Tu club es responsable de la redacción. Haz que la revisen antes de enviarla.",
+    "send": "Enviar exención",
+    "templates": "Plantillas de exención",
+    "templatesHint": "Escribe una exención una vez. Cada equipo la copia desde su pantalla de exenciones.",
+    "templatesNeedPlan": "Las plantillas compartidas necesitan el plan de organización.",
+    "newTemplate": "Nueva plantilla",
+    "addTemplate": "Agregar plantilla",
+    "templateEditNote": "Los equipos que ya copiaron esta plantilla conservan su copia.",
+    "delete": "Eliminar",
+    "deleteConfirm": "Toca de nuevo para eliminar"
+  },
   "permissions": {
     "manage_permissions": "Administrar permisos",
     "manage_team_settings": "Editar la configuración del equipo",
@@ -409,6 +470,7 @@
     "manage_events": "Administrar eventos",
     "create_team_channels": "Crear canales del equipo",
     "manage_payments": "Administrar pagos",
+    "manage_waivers": "Administrar exenciones",
     "manage_billing": "Administrar la facturación",
     "view_medical_info": "Ver información de emergencia"
   },
@@ -474,6 +536,28 @@
       "ai1000": "Asistente de IA para entrenadores, 1,000 consultas al mes"
     },
     "setUpOrganization": "Crear una organización"
+  },
+  "album": {
+    "title": "Álbum",
+    "open": "Álbum",
+    "empty": "Todavía no hay fotos. Agrega las primeras desde tu galería.",
+    "add": "Agregar fotos",
+    "addWithVideo": "Agregar fotos y videos",
+    "adding": "Agregando {{current}} de {{total}}…",
+    "usage": "{{used}} de {{limit}} usados",
+    "loadMore": "Ver más",
+    "video": "Video",
+    "photo": "Foto",
+    "play": "Reproducir video",
+    "remove": "Eliminar",
+    "removeConfirm": "Toca otra vez para eliminar",
+    "removed": "Eliminado.",
+    "videoUpgrade": "Mejora tu plan para agregar videos de hasta 10 minutos y tener 50 GB de almacenamiento.",
+    "storageUpgrade": "El álbum está lleno. Mejora tu plan para tener 50 GB de fotos y video.",
+    "someFailed_one": "No se agregó {{count}} archivo.",
+    "someFailed_other": "No se agregaron {{count}} archivos.",
+    "addedCount_one": "Se agregó {{count}} archivo.",
+    "addedCount_other": "Se agregaron {{count}} archivos."
   },
   "reminders": {
     "title": "Recordatorios de eventos",
@@ -704,6 +788,22 @@
       "invalidAmount": "Escribe un monto como 45 o 45.50.",
       "noMembers": "Elige al menos un miembro."
     },
+    "waivers": {
+      "changed": "Esta exención acaba de cambiar. Lee la nueva versión y luego firma.",
+      "alreadySigned": "Esta exención ya está firmada.",
+      "archived": "Esta exención ya no recoge firmas.",
+      "notSigner": "Solo el miembro o su tutor puede firmar esto.",
+      "notAsked": "Esta exención no es para ese miembro.",
+      "tooMany": "Este equipo tiene el máximo de exenciones. Archiva o reutiliza una.",
+      "tooManyTemplates": "Esta organización tiene el máximo de plantillas.",
+      "templateNotFound": "Esa plantilla ya no está disponible.",
+      "signedInApp": "Esto se firmó en la app y no se puede quitar.",
+      "planRequired": "Las exenciones digitales necesitan un plan de pago.",
+      "signFailed": "No se pudo firmar. Inténtalo de nuevo.",
+      "titleRequired": "Ponle un título a la exención.",
+      "bodyRequired": "Agrega el texto de la exención.",
+      "pdfFailed": "No se pudo crear el PDF. Inténtalo de nuevo."
+    },
     "billing": {
       "alreadySubscribed": "Este equipo ya tiene un plan de pago. Usa Administrar la facturación para cambiarlo.",
       "managedByOrganization": "El plan de este equipo lo administra su organización.",
@@ -736,6 +836,15 @@
     },
     "account": {
       "deleteFailed": "No se pudo eliminar tu cuenta. Inténtalo de nuevo."
+    },
+    "album": {
+      "badType": "Ese tipo de archivo no se puede agregar. Usa una foto o un video MP4, MOV o WebM.",
+      "tooLarge": "Esa foto es demasiado grande.",
+      "uploadFailed": "No se pudo agregar ese archivo. Inténtalo de nuevo.",
+      "planRequired": "Los videos requieren un plan de pago.",
+      "storageFull": "El álbum no tiene más espacio.",
+      "videoTooLarge": "Los videos pueden pesar hasta 1 GB.",
+      "videoTooLong": "Los videos pueden durar hasta 10 minutos."
     }
   }
 }

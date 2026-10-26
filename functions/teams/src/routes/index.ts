@@ -25,6 +25,21 @@ import { handleAssignRole, handleGetMember, handleGetMemberMedical, handleListMe
 import { handleGetPermissions, handleUpdatePermissions } from './permissions.js';
 import { handleSetPositions } from './positions.js';
 import { handleUpdateTeam } from './update.js';
+import {
+  handleCreateWaiver,
+  handleCreateWaiverFromTemplate,
+  handleCreateWaiverPdfLink,
+  handleGetSignature,
+  handleGetWaiverPdf,
+  handleGetWaiver,
+  handleListMyWaivers,
+  handleListTeamWaiverTemplates,
+  handleListWaivers,
+  handleRecordPaperWaiver,
+  handleRemovePaperWaiver,
+  handleSignWaiver,
+  handleUpdateWaiver,
+} from './waivers.js';
 
 export {
   handleAcceptInvite,
@@ -49,6 +64,19 @@ export {
   handleSetPositions,
   handleUpdatePermissions,
   handleUpdateTeam,
+  handleCreateWaiver,
+  handleCreateWaiverFromTemplate,
+  handleCreateWaiverPdfLink,
+  handleGetSignature,
+  handleGetWaiver,
+  handleGetWaiverPdf,
+  handleListMyWaivers,
+  handleListTeamWaiverTemplates,
+  handleListWaivers,
+  handleRecordPaperWaiver,
+  handleRemovePaperWaiver,
+  handleSignWaiver,
+  handleUpdateWaiver,
 };
 
 /** Every teams HTTP route, matched by method and path. */
@@ -75,4 +103,17 @@ export const httpRoutes: readonly HttpRoute[] = [
   handleListJoinRequests,
   handleApproveJoinRequest,
   handleRejectJoinRequest,
+  handleListMyWaivers,
+  handleListWaivers,
+  handleCreateWaiver,
+  handleListTeamWaiverTemplates,
+  handleCreateWaiverFromTemplate,
+  handleGetWaiver,
+  handleUpdateWaiver,
+  handleSignWaiver,
+  handleGetSignature,
+  handleCreateWaiverPdfLink,
+  handleGetWaiverPdf,
+  handleRecordPaperWaiver,
+  handleRemovePaperWaiver,
 ];

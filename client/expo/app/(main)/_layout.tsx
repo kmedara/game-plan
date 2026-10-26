@@ -47,11 +47,14 @@ const titles: Record<string, string> = {
   '/invite': 'title.invite',
 };
 
-/** One level up. A member or the payments page returns to that team; dues return to the profile, orgs to teams. */
+/**
+ * One level up. A member, the album, the payments page, or the waivers page returns to that team;
+ * dues and waivers return to the profile, orgs to teams.
+ */
 const parentPath = (pathname: string): string => {
-  const teamPage = /^\/teams\/([^/]+)\/(members\/[^/]+|payments|plans)$/.exec(pathname);
+  const teamPage = /^\/teams\/([^/]+)\/(members\/[^/]+|payments|plans|album|waivers)$/.exec(pathname);
   if (teamPage !== null) return `/teams/${teamPage[1]}`;
-  if (pathname === '/dues') return '/profile';
+  if (pathname === '/dues' || pathname === '/waivers') return '/profile';
   if (pathname === '/orgs') return '/teams';
   if (pathname.startsWith('/orgs/')) return '/orgs';
   return Object.keys(titles).find((path) => pathname.startsWith(`${path}/`)) ?? '/teams';

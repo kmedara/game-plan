@@ -3,6 +3,7 @@
  */
 
 import { areaErrors } from "../../../lib/area-errors.js";
+import { mapPlanError } from "../../../lib/entitlements.js";
 import { badRequest, conflict, forbidden, json, notFound } from "../../../lib/http.js";
 import { withMappedErrors } from "../../../lib/pipeline.js";
 
@@ -13,7 +14,25 @@ import { withMappedErrors } from "../../../lib/pipeline.js";
  * @returns A proxy result when the error is known, otherwise `undefined`.
  */
 export const mapTeamsError = areaErrors((error) => {
+  const plan = mapPlanError(error);
+  if (plan !== undefined) return plan;
   switch (error.message) {
+    case "waiver_not_found":
+    case "template_not_found":
+    case "signature_not_found":
+      return notFound();
+    case "not_signer":
+      return forbidden(error.message);
+    case "member_not_asked":
+    case "too_many_waivers":
+      return badRequest(error.message);
+    case "waiver_archived":
+    case "waiver_changed":
+    case "already_signed":
+    case "signed_in_app":
+      return conflict(error.message);
+    case "pdf_link_expired":
+      return json(410, { error: error.message });
     case "invite_not_found":
     case "join_request_not_found":
     case "member_not_found":

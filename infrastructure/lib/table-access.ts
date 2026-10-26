@@ -51,6 +51,9 @@ export const FIXTURE_PREFIX = 'FIXTURE#*';
 /** `PAYMENT_REMINDERS` dated rows for dues reminders. */
 export const PAYMENT_REMINDERS_KEY = 'PAYMENT_REMINDERS';
 
+/** `WAIVER_REMINDERS` dated rows for waiver due-date reminders. */
+export const WAIVER_REMINDERS_KEY = 'WAIVER_REMINDERS';
+
 /** Which rows a function may read or write. */
 export type PartitionGrant = {
   /** Partition-key patterns for `GetItem` and `Query`. */

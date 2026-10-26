@@ -1,6 +1,6 @@
 /**
  * Profile photo, phone, positions, notifications, reminder times, calendar sync, emergency info,
- * dues link, theme note, and sign-out.
+ * dues and waivers links, theme note, and sign-out.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -20,6 +20,8 @@ import { EmergencyInfoSection } from '@/src/emergency-info';
 import { loadPushStatus, registerPush, type PushStatus } from '@/src/push';
 import { isOwed } from '@/src/payment-status';
 import { myDuesQuery } from '@/src/queries/payments';
+import { myWaiversQuery } from '@/src/queries/waivers';
+import { waiversToSign } from '@/src/waiver-rules';
 import { meQuery, updateProfileMutation } from '@/src/queries/profile';
 import { RefreshableScroll } from '@/src/pull-refresh';
 import { setPositionsMutation } from '@/src/queries/teams';
@@ -35,6 +37,8 @@ export default function ProfileScreen() {
   const me = useQuery(meQuery(api));
   const dues = useQuery(myDuesQuery(api));
   const duesToPay = (dues.data ?? []).filter((due) => due.canPay && isOwed(due.status)).length;
+  const waivers = useQuery(myWaiversQuery(api));
+  const toSign = waiversToSign(waivers.data ?? []);
   const saveProfile = useMutation(updateProfileMutation(api, queryClient));
   const savePositionsMutation = useMutation(setPositionsMutation(api, queryClient));
   const profile = me.data ?? api.user;
@@ -205,6 +209,15 @@ export default function ProfileScreen() {
             label={duesToPay > 0 ? t('dues.openOwed', { count: duesToPay }) : t('dues.open')}
             tone="secondary"
             onPress={() => router.push('/dues')}
+          />
+        </View>
+      ) : null}
+      {(waivers.data?.length ?? 0) > 0 ? (
+        <View className="mt-2">
+          <Button
+            label={toSign > 0 ? t('waivers.openToSign', { count: toSign }) : t('waivers.open')}
+            tone="secondary"
+            onPress={() => router.push('/waivers')}
           />
         </View>
       ) : null}

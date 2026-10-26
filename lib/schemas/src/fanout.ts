@@ -125,6 +125,18 @@ export const fanoutJobSchema = z.discriminatedUnion('type', [
     .strict(),
   z
     .object({
+      type: z.literal('waiver_reminder'),
+      teamId: z.string().min(1),
+      waiverId: z.string().min(1),
+      title: z.string().min(1).max(200),
+      dueDate: z.string().min(1),
+      kind: z.enum(['upcoming', 'due', 'overdue']),
+      userIds: userIdsSchema,
+      attempt: retryFields.attempt,
+    })
+    .strict(),
+  z
+    .object({
       type: z.literal('payment_received'),
       teamId: z.string().min(1),
       chargeId: z.string().min(1),

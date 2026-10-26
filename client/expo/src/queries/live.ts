@@ -54,6 +54,10 @@ export const applyLiveEvent = (queryClient: QueryClient, event: FanoutJob): void
     void queryClient.invalidateQueries({ queryKey: queryKeys.myDues });
     void queryClient.invalidateQueries({ queryKey: queryKeys.charges(event.teamId) });
     void queryClient.invalidateQueries({ queryKey: ['charge', event.teamId] });
+    return;
+  }
+  if (event.type === 'waiver_reminder') {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.myWaivers });
   }
 };
 
@@ -66,7 +70,7 @@ export const applyLiveEvent = (queryClient: QueryClient, event: FanoutJob): void
  * @param queryClient - The app client.
  */
 export const resyncAfterReconnect = (queryClient: QueryClient): void => {
-  for (const kind of ['chats', 'messages', 'schedule', 'fixtures', 'signups', 'joinRequests', 'myDues', 'charges', 'charge']) {
+  for (const kind of ['chats', 'messages', 'schedule', 'fixtures', 'signups', 'joinRequests', 'myDues', 'charges', 'charge', 'myWaivers']) {
     void queryClient.invalidateQueries({ queryKey: [kind] });
   }
 };

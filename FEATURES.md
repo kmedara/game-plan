@@ -24,7 +24,7 @@ Staff powers come from the team's permission matrix. A team admin can give any p
 | Create a team with sport, time zone, colors, logo, and chat wallpaper | 🛠️ | — | — | ✅ | Free |
 | Invite links per role, shareable as a link | 🛠️ | ✅ | ✅ | — | Free |
 | Team directory search and join requests with approval | 🛠️ | ✅ | ✅ | ✅ | Free |
-| Role permission matrix (10 permissions across admin, coach, player, parent) | 🛠️ | — | — | ✅ | Free |
+| Role permission matrix (11 permissions across admin, coach, player, parent) | 🛠️ | — | — | ✅ | Free |
 | Player positions | 🛠️ | ✅ | — | — | Free |
 
 ### Schedule
@@ -52,6 +52,25 @@ Staff powers come from the team's permission matrix. A team admin can give any p
 | Photo attachments | ✅ | ✅ | ✅ | — | Free |
 | Polls with multiple answers and a closing time | 🛠️ | ✅ | ✅ | — | Free |
 | Push notifications on web, iOS, and Android | ✅ | ✅ | ✅ | ✅ | Free |
+
+### Album
+
+| Feature | Admins and coaches | Players | Parents and guardians | Clubs and leagues | Plan |
+| --- | :---: | :---: | :---: | :---: | --- |
+| Team photo album (2 GB); every member adds and deletes | ✅ | ✅ | ✅ | — | Free |
+| Team videos up to 1 GB and 10 minutes each, 50 GB of storage | ✅ | ✅ | ✅ | — | Premium, Organization |
+
+### Waivers
+
+| Feature | Admins and coaches | Players | Parents and guardians | Clubs and leagues | Plan |
+| --- | :---: | :---: | :---: | :---: | --- |
+| Digital waivers signed on the phone, with a staff missing list | 🛠️ | ✅ | ✅ | — | Premium, Organization |
+| Guardians sign for a minor on every team the child is on | — | — | ✅ | — | Premium, Organization |
+| Record a paper form for anyone who cannot sign in the app | 🛠️ | — | — | — | Premium, Organization |
+| A text change asks everyone to sign again; earlier signatures stay on record | 🛠️ | ✅ | ✅ | — | Premium, Organization |
+| Due-date reminders to whoever still has to sign | — | ✅ | ✅ | — | Premium, Organization |
+| Download a signed copy as a PDF | ✅ | ✅ | ✅ | — | Premium, Organization |
+| Shared waiver templates that member teams copy | — | — | — | 🛠️ | Organization |
 
 ### Family and safety
 
@@ -99,7 +118,8 @@ Staff powers come from the team's permission matrix. A team admin can give any p
 | Everything above marked Free | ✅ | ✅ | ✅ on every team |
 | Ads for adults | Yes | No | No |
 | Photo storage | 2 GB | 50 GB with video | 50 GB with video |
-| Organization admins and announcements | — | — | ✅ |
+| Digital waivers with guardian signing | — | ✅ | ✅ |
+| Organization admins, announcements, and shared waiver templates | — | — | ✅ |
 
 ## Advertised but not built yet
 
@@ -107,12 +127,10 @@ The plans screen ([en.json](client/expo/src/en.json)) lists these, and limits fo
 
 | Feature | Tier | Main audience |
 | --- | --- | --- |
-| Team videos (up to 1 GB, 10 minutes each) | Premium, Organization | Coaches, players, parents |
-| Album storage limits (2 GB / 50 GB) are defined but not checked on upload | All | Everyone |
 | Practice plans (5 on Free, unlimited on paid) | All | Coaches |
-| Digital waivers | Premium, Organization | Admins, parents |
 | AI coach assistant (200 or 1,000 requests a month) | Premium, Organization | Coaches |
-| Shared practice library and waiver templates | Organization | Clubs and leagues |
+| Shared practice library | Organization | Clubs and leagues |
 | Organization dashboard | Organization | Clubs and leagues |
 | Parent add-on (no ads, full-quality downloads) through in-app purchase | Per person | Parents |
+| Compressed album downloads on Free, originals on paid plans or the add-on | Free | Everyone |
 | Ads for adults on free teams | Free | — |

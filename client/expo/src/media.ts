@@ -1,11 +1,22 @@
 /**
- * Image upload and download helpers shared by every screen that shows stored media.
+ * Image upload and download helpers shared by every screen that shows stored media,
+ * and the team album's photo and video upload.
  */
 
 import { useQuery } from '@tanstack/react-query';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
-import type { PresignDownloadQuery, PresignUploadBody } from '@gameplan/types';
+import { Platform } from 'react-native';
+import { albumUploadProblem, type AlbumUploadProblem, type PlanLimits } from '@gameplan/rules';
+import {
+  UPLOAD_VIDEO_TYPES,
+  type AlbumItem,
+  type AlbumUploadBody,
+  type AlbumUploadResponse,
+  type AddAlbumItemBody,
+  type PresignDownloadQuery,
+  type PresignUploadBody,
+} from '@gameplan/types';
 import { downloadQuery } from './queries/media';
 import { useApp } from './state';
 
@@ -124,6 +135,157 @@ export const pickAndUploadImage = async (
   } catch {
     return { error: 'upload_failed' };
   }
+};
+
+/** Most files one pick adds to the album. */
+export const ALBUM_PICK_LIMIT = 20;
+
+/** Why one album file was not added. */
+export type AlbumUploadFailure = ImageUploadFailure | AlbumUploadProblem;
+
+type AlbumUploader = {
+  presignAlbumUpload: (teamId: string, body: AlbumUploadBody) => Promise<AlbumUploadResponse>;
+  addAlbumItem: (teamId: string, body: AddAlbumItemBody) => Promise<AlbumItem>;
+};
+
+type VideoType = (typeof UPLOAD_VIDEO_TYPES)[number];
+
+const isVideoType = (type: string): type is VideoType => (UPLOAD_VIDEO_TYPES as readonly string[]).includes(type);
+
+/**
+ * A video's length in seconds, from the picker or, on the website, from the file itself.
+ *
+ * @param asset - The picked video.
+ * @returns The length, or `undefined` when it cannot be read.
+ */
+const videoSeconds = async (asset: ImagePicker.ImagePickerAsset): Promise<number | undefined> => {
+  if (typeof asset.duration === 'number' && asset.duration > 0) return asset.duration / 1000;
+  if (Platform.OS !== 'web') return undefined;
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => resolve(Number.isFinite(video.duration) ? video.duration : undefined);
+    video.onerror = () => resolve(undefined);
+    video.src = asset.uri;
+  });
+};
+
+/**
+ * Codes the API returns for an album file, as {@link AlbumUploadFailure}s.
+ *
+ * @param err - What the add or presign request threw.
+ * @returns The failure to show.
+ */
+const albumFailureOf = (err: unknown): AlbumUploadFailure => {
+  const code = err instanceof Error ? err.message : '';
+  if (
+    code === 'plan_required' ||
+    code === 'plan_limit_reached' ||
+    code === 'video_too_large' ||
+    code === 'video_too_long'
+  ) {
+    return code;
+  }
+  return 'upload_failed';
+};
+
+/**
+ * Uploads one picked photo or video and adds it to the team album.
+ *
+ * Photos are scaled like chat photos. Videos go up as recorded once the plan's
+ * size and length limits pass; the API checks the same limits again.
+ */
+const uploadAlbumAsset = async (
+  api: AlbumUploader,
+  teamId: string,
+  asset: ImagePicker.ImagePickerAsset,
+  limits: PlanLimits,
+  usedBytes: number,
+): Promise<AlbumItem | { error: AlbumUploadFailure }> => {
+  const video = asset.type === 'video' || (asset.mimeType ?? '').startsWith('video/');
+  let uri = asset.uri;
+  let contentType: AlbumUploadBody['contentType'];
+  let durationSeconds: number | undefined;
+  if (video) {
+    const type = asset.mimeType ?? 'video/mp4';
+    if (!isVideoType(type)) return { error: 'bad_type' };
+    contentType = type;
+    durationSeconds = await videoSeconds(asset);
+    if (durationSeconds === undefined) return { error: 'upload_failed' };
+  } else {
+    const image = await uploadableImage(asset, CONVERT_QUALITY, CHAT_PHOTO_MAX_DIMENSION);
+    uri = image.uri;
+    contentType = image.contentType;
+  }
+  const blob = await (await fetch(uri)).blob();
+  if (!video && blob.size > IMAGE_MAX_BYTES) return { error: 'too_large' };
+  const upload = { contentType, bytes: blob.size, ...(durationSeconds !== undefined ? { durationSeconds } : {}) };
+  const problem = albumUploadProblem(limits, usedBytes, upload);
+  if (problem !== undefined) return { error: problem };
+  try {
+    const presign = await api.presignAlbumUpload(teamId, {
+      contentType,
+      contentLength: blob.size,
+      ...(durationSeconds !== undefined ? { durationSeconds } : {}),
+    });
+    const response = await fetch(presign.uploadUrl, {
+      method: 'PUT',
+      headers: { 'content-type': contentType },
+      body: blob,
+    });
+    if (!response.ok) return { error: 'upload_failed' };
+    return await api.addAlbumItem(teamId, {
+      objectKey: presign.objectKey,
+      ...(durationSeconds !== undefined ? { durationSeconds } : {}),
+      ...(asset.width > 0 ? { width: Math.round(asset.width) } : {}),
+      ...(asset.height > 0 ? { height: Math.round(asset.height) } : {}),
+    });
+  } catch (err) {
+    return { error: albumFailureOf(err) };
+  }
+};
+
+/**
+ * Opens the library and adds the picked photos, and videos when the plan has them, to the team album.
+ *
+ * Files go up one at a time so each counts against the storage the last one left.
+ *
+ * @param api - Anything that can sign and add album uploads.
+ * @param teamId - The team whose album gets the files.
+ * @param options - The team's plan limits and the bytes the album already holds.
+ * @param onProgress - Called before each file with its position and the total.
+ * @returns What was added and why the rest were not, or `undefined` when the picker is canceled.
+ */
+export const pickAndUploadAlbumFiles = async (
+  api: AlbumUploader,
+  teamId: string,
+  options: { limits: PlanLimits; usedBytes: number },
+  onProgress?: (done: number, total: number) => void,
+): Promise<{ added: AlbumItem[]; failures: AlbumUploadFailure[] } | undefined> => {
+  const picked = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: options.limits.video ? ['images', 'videos'] : ['images'],
+    allowsMultipleSelection: true,
+    selectionLimit: ALBUM_PICK_LIMIT,
+  });
+  if (picked.canceled || picked.assets.length === 0) return undefined;
+  const added: AlbumItem[] = [];
+  const failures: AlbumUploadFailure[] = [];
+  let usedBytes = options.usedBytes;
+  for (const [index, asset] of picked.assets.entries()) {
+    onProgress?.(index, picked.assets.length);
+    try {
+      const result = await uploadAlbumAsset(api, teamId, asset, options.limits, usedBytes);
+      if ('error' in result) {
+        failures.push(result.error);
+      } else {
+        added.push(result);
+        usedBytes += result.bytes;
+      }
+    } catch {
+      failures.push('upload_failed');
+    }
+  }
+  return { added, failures };
 };
 
 /** Where a stored object is shown. The media API checks the caller's access in that context. */

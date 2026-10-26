@@ -20,6 +20,7 @@ export const mapOrgsError = areaErrors((error) => {
     case 'org_not_found':
     case 'user_not_found':
     case 'invite_not_found':
+    case 'template_not_found':
       return notFound();
     case 'minor_cannot_own_organization':
     case 'org_admin_must_be_adult':
@@ -27,6 +28,7 @@ export const mapOrgsError = areaErrors((error) => {
     case 'owner_cannot_leave':
     case 'too_many_admins':
     case 'too_many_teams':
+    case 'too_many_templates':
       return badRequest(error.message);
     case 'already_in_organization':
     case 'team_in_another_organization':

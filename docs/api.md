@@ -20,14 +20,14 @@ Canonical list: `config/resources.json` and `infrastructure/lib/names.ts`. Areas
 | Area | CloudFront `/api` | Role |
 | --- | --- | --- |
 | `identity` | Yes | Auth, profile, OAuth BFF, socket tickets |
-| `teams` | Yes | Teams, roster, invites, join requests |
+| `teams` | Yes | Teams, roster, invites, join requests, waivers |
 | `schedule` | Yes | Events, RSVP, fixtures, feeds, reminders |
 | `chat` | Yes | Chats, messages, polls |
-| `media` | Yes | Presigns, devices (push tokens) |
+| `media` | Yes | Presigns, team album, devices (push tokens) |
 | `places` | Yes | Geocoding (Google Maps server key) |
 | `payments` | Yes | Connect, dues, charges |
 | `billing` | Yes | Subscriptions, Checkout, portal |
-| `orgs` | Yes | Organizations, org billing |
+| `orgs` | Yes | Organizations, org billing, waiver templates |
 | `socket` | No (WebSocket API) | `$connect` authorizer, keepalive |
 | `fanout` | No | SQS consumer; local `POST /fanout/deliver` |
 

@@ -1,5 +1,5 @@
 /**
- * One organization: plan and billing, teams, admins, and announcements.
+ * One organization: plan and billing, teams, admins, waiver templates, and announcements.
  */
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { effectivePlanTier } from '@gameplan/rules';
 import { ORG_INCLUDED_TEAMS, type BillingInterval, type OrgDetail } from '@gameplan/types';
 import { errorMessageKey, queryError } from '@/src/errors';
+import { OrgWaiverTemplates } from '@/src/org-waiver-templates';
 import { canBuyPlansHere, planNameKey } from '@/src/plan';
 import { RefreshableScroll } from '@/src/pull-refresh';
 import { orgQuery, refreshOrg } from '@/src/queries/orgs';
@@ -26,6 +27,8 @@ const ORG_ERRORS = {
   team_in_another_organization: 'errors.orgs.otherOrg',
   already_in_organization: 'errors.orgs.alreadyIn',
   plan_required: 'errors.orgs.planRequired',
+  too_many_templates: 'errors.waivers.tooManyTemplates',
+  template_not_found: 'errors.waivers.templateNotFound',
   already_subscribed: 'errors.billing.alreadySubscribed',
   billing_not_configured: 'errors.billing.notConfigured',
 } as const;
@@ -51,6 +54,7 @@ export default function OrgScreen() {
           <PlanSection org={data} message={message} />
           <TeamsSection org={data} refresh={refresh} message={message} />
           <AdminsSection org={data} refresh={refresh} message={message} />
+          <OrgWaiverTemplates org={data} message={message} />
           <AnnounceSection org={data} message={message} />
         </>
       )}

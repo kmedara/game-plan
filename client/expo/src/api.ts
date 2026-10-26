@@ -12,6 +12,11 @@ import {
 } from '@gameplan/client-session';
 import type {
   AcceptedInvite,
+  AddAlbumItemBody,
+  AlbumItem,
+  AlbumPage,
+  AlbumUploadBody,
+  AlbumUploadResponse,
   ApprovedJoinRequest,
   BillingInterval,
   OauthProviders,
@@ -39,6 +44,20 @@ import type {
   CreateChargeBody,
   Due,
   MyDues,
+  CreateWaiverBody,
+  CreateWaiverFromTemplateBody,
+  CreateWaiverTemplateBody,
+  MyWaivers,
+  SignWaiverBody,
+  UpdateWaiverBody,
+  UpdateWaiverTemplateBody,
+  Waiver,
+  WaiverDetail,
+  WaiverList,
+  WaiverPdfLink,
+  WaiverSignature,
+  WaiverTemplate,
+  WaiverTemplateList,
   PaymentAccount,
   PaymentRedirect,
   UpdateDueBody,
@@ -263,6 +282,23 @@ export class ApiClient {
     if (context.userId !== undefined) params.set('userId', context.userId);
     if (context.teamId !== undefined) params.set('teamId', context.teamId);
     return this.request('GET', `/media/presign-download?${params}`);
+  }
+
+  async listAlbum(teamId: string, cursor?: string): Promise<AlbumPage> {
+    const params = cursor !== undefined ? `?${new URLSearchParams({ cursor })}` : '';
+    return this.request('GET', `/media/teams/${teamId}/album${params}`);
+  }
+
+  async presignAlbumUpload(teamId: string, body: AlbumUploadBody): Promise<AlbumUploadResponse> {
+    return this.request('POST', `/media/teams/${teamId}/album/uploads`, body);
+  }
+
+  async addAlbumItem(teamId: string, body: AddAlbumItemBody): Promise<AlbumItem> {
+    return this.request('POST', `/media/teams/${teamId}/album`, body);
+  }
+
+  async removeAlbumItem(teamId: string, itemId: string): Promise<void> {
+    await this.request('DELETE', `/media/teams/${teamId}/album/${itemId}`);
   }
 
   async completeProfile(input: CompleteProfileBody): Promise<void> {
@@ -723,6 +759,72 @@ export class ApiClient {
   async listMyDues(): Promise<MyDues['dues']> {
     const data = await this.request<MyDues>('GET', '/payments/me/dues');
     return data.dues;
+  }
+
+  async listMyWaivers(): Promise<MyWaivers['waivers']> {
+    const data = await this.request<MyWaivers>('GET', '/teams/me/waivers');
+    return data.waivers;
+  }
+
+  async listWaivers(teamId: string): Promise<WaiverList['waivers']> {
+    const data = await this.request<WaiverList>('GET', `/teams/${teamId}/waivers`);
+    return data.waivers;
+  }
+
+  async createWaiver(teamId: string, body: CreateWaiverBody): Promise<Waiver> {
+    return this.request('POST', `/teams/${teamId}/waivers`, body);
+  }
+
+  async createWaiverFromTemplate(teamId: string, body: CreateWaiverFromTemplateBody): Promise<Waiver> {
+    return this.request('POST', `/teams/${teamId}/waivers/from-template`, body);
+  }
+
+  async listTeamWaiverTemplates(teamId: string): Promise<WaiverTemplateList> {
+    return this.request('GET', `/teams/${teamId}/waiver-templates`);
+  }
+
+  async getWaiver(teamId: string, waiverId: string): Promise<WaiverDetail> {
+    return this.request('GET', `/teams/${teamId}/waivers/${waiverId}`);
+  }
+
+  async updateWaiver(teamId: string, waiverId: string, body: UpdateWaiverBody): Promise<Waiver> {
+    return this.request('PATCH', `/teams/${teamId}/waivers/${waiverId}`, body);
+  }
+
+  async signWaiver(teamId: string, waiverId: string, memberId: string, body: SignWaiverBody): Promise<WaiverSignature> {
+    return this.request('POST', `/teams/${teamId}/waivers/${waiverId}/signatures/${memberId}`, body);
+  }
+
+  async getWaiverSignature(teamId: string, waiverId: string, memberId: string): Promise<WaiverSignature> {
+    return this.request('GET', `/teams/${teamId}/waivers/${waiverId}/signatures/${memberId}`);
+  }
+
+  async createWaiverPdfLink(teamId: string, waiverId: string, memberId: string): Promise<WaiverPdfLink> {
+    return this.request('POST', `/teams/${teamId}/waivers/${waiverId}/signatures/${memberId}/pdf-link`);
+  }
+
+  async recordPaperWaiver(teamId: string, waiverId: string, memberId: string, signerName: string): Promise<WaiverSignature> {
+    return this.request('PUT', `/teams/${teamId}/waivers/${waiverId}/signatures/${memberId}/paper`, { signerName });
+  }
+
+  async removePaperWaiver(teamId: string, waiverId: string, memberId: string): Promise<void> {
+    await this.request('DELETE', `/teams/${teamId}/waivers/${waiverId}/signatures/${memberId}/paper`);
+  }
+
+  async listOrgWaiverTemplates(orgId: string): Promise<WaiverTemplateList> {
+    return this.request('GET', `/orgs/${orgId}/waiver-templates`);
+  }
+
+  async createOrgWaiverTemplate(orgId: string, body: CreateWaiverTemplateBody): Promise<WaiverTemplate> {
+    return this.request('POST', `/orgs/${orgId}/waiver-templates`, body);
+  }
+
+  async updateOrgWaiverTemplate(orgId: string, templateId: string, body: UpdateWaiverTemplateBody): Promise<WaiverTemplate> {
+    return this.request('PATCH', `/orgs/${orgId}/waiver-templates/${templateId}`, body);
+  }
+
+  async deleteOrgWaiverTemplate(orgId: string, templateId: string): Promise<void> {
+    await this.request('DELETE', `/orgs/${orgId}/waiver-templates/${templateId}`);
   }
 
   async createCheckout(teamId: string, chargeId: string, memberId: string): Promise<PaymentRedirect> {

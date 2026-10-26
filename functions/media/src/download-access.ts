@@ -4,7 +4,7 @@
  * Own uploads are allowed from the key prefix. A profile photo needs the
  * subject user id and a shared team. A chat attachment needs the chat id,
  * membership, and the chat's index row for the key. A team logo needs
- * membership and the key stored on that team's theme.
+ * membership and the key stored on that team's theme or in its album.
  */
 
 import { getProfile } from '../../lib/auth/index.js';
@@ -12,6 +12,7 @@ import { isOwnedUploadKey } from '../../lib/upload-keys.js';
 import type { PresignDownloadQuery } from '@gameplan/types';
 import {
   USER_TEAM_SK_PREFIX,
+  albumObjectSk,
   chatAttachmentSk,
   chatMemberSk,
   chatPk,
@@ -120,6 +121,7 @@ export const assertCanDownload = async (
       teamMetaSk(),
     );
     if (team?.theme?.logoKey === objectKey || team?.theme?.chatBackgroundKey === objectKey) return;
+    if ((await getItem(teamPk(context.teamId), albumObjectSk(objectKey))) !== undefined) return;
     throw new Error('forbidden');
   }
 

@@ -98,6 +98,14 @@ import {
   registerDeviceBodySchema,
 } from './media.js';
 import {
+  addAlbumItemBodySchema,
+  albumItemSchema,
+  albumListQuerySchema,
+  albumPageSchema,
+  albumUploadBodySchema,
+  albumUploadResponseSchema,
+} from './album.js';
+import {
   placeDetailsSchema,
   placesAutocompleteQuerySchema,
   placesAutocompleteResponseSchema,
@@ -137,6 +145,23 @@ import {
   teamOrgStatusSchema,
   updateOrgBodySchema,
 } from './orgs.js';
+import {
+  createWaiverBodySchema,
+  createWaiverFromTemplateBodySchema,
+  createWaiverTemplateBodySchema,
+  myWaiversSchema,
+  recordPaperWaiverBodySchema,
+  signWaiverBodySchema,
+  updateWaiverBodySchema,
+  updateWaiverTemplateBodySchema,
+  waiverDetailSchema,
+  waiverListSchema,
+  waiverPdfLinkSchema,
+  waiverSchema,
+  waiverSignatureSchema,
+  waiverTemplateListSchema,
+  waiverTemplateSchema,
+} from './waivers.js';
 import { claimSignupBodySchema, putSignupsBodySchema, signupsQuerySchema, signupsResponseSchema } from './signups.js';
 import { medicalInfoBodySchema, medicalInfoSchema, medicalPeopleSchema, memberMedicalSchema } from './medical.js';
 import { z, type ZodType } from './zod.js';
@@ -418,6 +443,63 @@ const AREAS: Record<string, AreaSpec> = {
       '/teams/{teamId}/join-requests/{requestId}/reject': {
         post: { summary: 'Reject a join request' },
       },
+      '/teams/me/waivers': {
+        get: { summary: 'Waivers the caller signs for themselves or a child, on every team', response: myWaiversSchema },
+      },
+      '/teams/{teamId}/waivers': {
+        get: { summary: 'Every waiver with signed and missing counts (manage_waivers)', response: waiverListSchema },
+        post: {
+          summary: 'Write a waiver (manage_waivers, plan with waivers)',
+          body: createWaiverBodySchema,
+          response: waiverSchema,
+        },
+      },
+      '/teams/{teamId}/waiver-templates': {
+        get: { summary: "The team's organization's waiver templates (manage_waivers)", response: waiverTemplateListSchema },
+      },
+      '/teams/{teamId}/waivers/from-template': {
+        post: {
+          summary: "Copy one of the organization's templates onto the team (manage_waivers, plan with waivers)",
+          body: createWaiverFromTemplateBodySchema,
+          response: waiverSchema,
+        },
+      },
+      '/teams/{teamId}/waivers/{waiverId}': {
+        get: { summary: 'A waiver and where each member stands (manage_waivers)', response: waiverDetailSchema },
+        patch: {
+          summary: 'Change a waiver; a new title or body is a new version everyone signs again',
+          body: updateWaiverBodySchema,
+          response: waiverSchema,
+        },
+      },
+      '/teams/{teamId}/waivers/{waiverId}/signatures/{memberId}': {
+        get: {
+          summary: "A member's latest signature and the text it covers (the member, a guardian, or staff)",
+          response: waiverSignatureSchema,
+        },
+        post: {
+          summary: 'Sign for oneself (adult) or a child (guardian)',
+          body: signWaiverBodySchema,
+          response: waiverSignatureSchema,
+        },
+      },
+      '/teams/{teamId}/waivers/{waiverId}/signatures/{memberId}/pdf-link': {
+        post: {
+          summary: 'A five-minute ticket for the signed copy as a PDF (the member, a guardian, or staff)',
+          response: waiverPdfLinkSchema,
+        },
+      },
+      '/teams/waiver-pdf/{ticket}': {
+        get: { summary: 'The signed copy as a PDF; the ticket stands in for sign-in' },
+      },
+      '/teams/{teamId}/waivers/{waiverId}/signatures/{memberId}/paper': {
+        put: {
+          summary: 'Record a paper form (manage_waivers)',
+          body: recordPaperWaiverBodySchema,
+          response: waiverSignatureSchema,
+        },
+        delete: { summary: 'Remove a paper form recorded by mistake (manage_waivers)' },
+      },
     },
   },
   schedule: {
@@ -598,6 +680,28 @@ const AREAS: Record<string, AreaSpec> = {
         },
         delete: { summary: 'Remove a device' },
       },
+      '/media/teams/{teamId}/album': {
+        get: {
+          summary: "A page of the team's album, newest first, and the storage it uses",
+          query: albumListQuerySchema,
+          response: albumPageSchema,
+        },
+        post: {
+          summary: 'Add an uploaded photo or video to the album (checks the plan)',
+          body: addAlbumItemBodySchema,
+          response: albumItemSchema,
+        },
+      },
+      '/media/teams/{teamId}/album/uploads': {
+        post: {
+          summary: 'Get a signed upload URL for an album photo or video (checks the plan)',
+          body: albumUploadBodySchema,
+          response: albumUploadResponseSchema,
+        },
+      },
+      '/media/teams/{teamId}/album/{itemId}': {
+        delete: { summary: 'Remove a photo or video from the album' },
+      },
     },
   },
   places: {
@@ -762,6 +866,22 @@ const AREAS: Record<string, AreaSpec> = {
       },
       '/orgs/teams/{teamId}': {
         get: { summary: "The team's organization and invitations", response: teamOrgStatusSchema },
+      },
+      '/orgs/{orgId}/waiver-templates': {
+        get: { summary: 'Waiver templates member teams can copy', response: waiverTemplateListSchema },
+        post: {
+          summary: 'Add a waiver template (organization plan)',
+          body: createWaiverTemplateBodySchema,
+          response: waiverTemplateSchema,
+        },
+      },
+      '/orgs/{orgId}/waiver-templates/{templateId}': {
+        patch: {
+          summary: "Change a template; teams' copies stay as they are",
+          body: updateWaiverTemplateBodySchema,
+          response: waiverTemplateSchema,
+        },
+        delete: { summary: 'Delete a template' },
       },
       '/orgs/{orgId}/announcements': {
         post: { summary: "Post to every team's main chat (organization plan)", body: orgAnnouncementBodySchema },

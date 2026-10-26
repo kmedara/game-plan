@@ -36,6 +36,7 @@ import {
   TEAM_PREFIX,
   TICKET_PREFIX,
   USER_PREFIX,
+  WAIVER_REMINDERS_KEY,
   grantPartitions,
 } from './table-access';
 import { areaEntry, createAreaFunctions, createFunction } from './functions';
@@ -544,6 +545,15 @@ export class Api extends Construct {
       ],
     });
 
+    new events.Rule(this, 'WaiverReminderSweep', {
+      schedule: events.Schedule.cron({ minute: '5', hour: '15' }),
+      targets: [
+        new targets.LambdaFunction(functions.teams, {
+          event: events.RuleTargetInput.fromObject({ source: 'gameplan.waiver-reminders' }),
+        }),
+      ],
+    });
+
     grantPartitions(props.table, functions.identity, {
       // Account deletion reads the teams, chats, and organizations a person is in,
       // rewrites private chat names, and removes their rows from those partitions.
@@ -565,8 +575,11 @@ export class Api extends Construct {
     });
     grantPartitions(props.table, functions.teams, {
       // ORG# lets the membership guard recognize organization admins, here and below.
-      read: [TEAM_PREFIX, USER_PREFIX, CHAT_PREFIX, INVITE_PREFIX, DIRECTORY_KEY, ORG_PREFIX],
-      write: [TEAM_PREFIX, USER_PREFIX, CHAT_PREFIX, INVITE_PREFIX, DIRECTORY_KEY],
+      // Teams also read the organization's waiver templates from ORG# to copy one; waivers
+      // and their signatures live on TEAM#. WAIVER_REMINDERS holds dated reminder rows, and
+      // TICKET# the short-lived links to a signed waiver's PDF.
+      read: [TEAM_PREFIX, USER_PREFIX, CHAT_PREFIX, INVITE_PREFIX, DIRECTORY_KEY, ORG_PREFIX, WAIVER_REMINDERS_KEY, TICKET_PREFIX],
+      write: [TEAM_PREFIX, USER_PREFIX, CHAT_PREFIX, INVITE_PREFIX, DIRECTORY_KEY, WAIVER_REMINDERS_KEY, TICKET_PREFIX],
       transact: true,
     });
     grantPartitions(props.table, functions.schedule, {
@@ -584,9 +597,12 @@ export class Api extends Construct {
     grantPartitions(props.table, functions.media, {
       // Team metadata stores the shared logo and chat background. A teammate
       // download has to read that row; the uploader is allowed from the key
-      // prefix and never reaches it.
-      read: [USER_PREFIX, CHAT_PREFIX, TEAM_PREFIX],
-      write: [USER_PREFIX],
+      // prefix and never reaches it. The team album lives on TEAM#: an add or
+      // remove writes the item, its object row, and the usage row together.
+      // ORG# lets the membership guard recognize organization admins.
+      read: [USER_PREFIX, CHAT_PREFIX, TEAM_PREFIX, ORG_PREFIX],
+      write: [USER_PREFIX, TEAM_PREFIX],
+      transact: true,
     });
     grantPartitions(props.table, functions.socket, {
       read: [USER_PREFIX, TICKET_PREFIX],
@@ -639,6 +655,8 @@ export class Api extends Construct {
     props.mediaBucket.grantDelete(functions.identity, 'uploads/*');
     props.mediaBucket.grantRead(functions.media);
     props.mediaBucket.grantPut(functions.media);
+    // Removing an album item deletes its file.
+    props.mediaBucket.grantDelete(functions.media, 'uploads/*');
 
     // Teams sends invites only from the verified website host and the one registered number.
     const stack = cdk.Stack.of(this);

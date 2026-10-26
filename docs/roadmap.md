@@ -13,10 +13,10 @@ todos:
     status: pending
   - id: album-video
     content: Team album and paid video behind existing PLAN_LIMITS
-    status: pending
+    status: completed
   - id: waivers
     content: Team waivers plus org templates, guardian signing for minors
-    status: pending
+    status: completed
   - id: practice-plans
     content: Practice plans with free cap of 5 and org shared library
     status: pending
@@ -82,7 +82,7 @@ Out of this phase: MFA, PITR backups, ads, AI. Those are later unless a club dea
 
 ## Next: album and video (first paid surface)
 
-Goal: the coaching staff has one place for photos and (on paid) clips. Free stays useful at 2 GB stills; Premium/Org unlock 50 GB and video (1 GB / 10 minutes per clip per `PLAN_LIMITS`). Any coach (or other role with the grant) can upload; the album is the team's.
+Goal: the coaching staff has one place for photos and (on paid) clips. Free stays useful at 2 GB stills; Premium/Org unlock 50 GB and video (1 GB / 10 minutes per clip per `PLAN_LIMITS`). Every member can add and delete; the album is the team's.
 
 - Team album on the team screen, using the existing media presign and download-access checks.
 - Enforce `albumBytes` and `video` / `maxVideoSeconds` at upload. `UpgradeCard` already stands in when a plan lacks a feature.
@@ -99,6 +99,7 @@ Goal: a travel club can send one packet, parents sign on the phone, and staff ca
 - Per-member (or per-child) signature, due date, and a staff missing-list. Guardians sign for minors; the same payer/guardian rules as dues.
 - **Org waiver templates** — this is the "Shared … waiver templates" line already sold on the org plan. An org admin authors once; member teams attach a copy. Do not make templates a separate SKU.
 - Legal review is part of the feature: what GamePlan stores, who is the contracting party (the club, not GamePlan), and what happens if a template changes after someone signed.
+- **Built** ([ARCHITECTURE.md](ARCHITECTURE.md#waivers)): versioned text, signatures per version, guardian signing, paper forms, the missing list, and org templates copied onto teams. Due-date reminders and a PDF of each signed copy followed. Still open: a lawyer's review of the stored record and the in-app wording.
 
 Without this, club sales stall even if billing and announcements work.
 
