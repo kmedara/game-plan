@@ -71,8 +71,18 @@ describe('signed-in menu', () => {
     render(<MainLayout />);
     expect(await screen.findByText('nav.schedule')).toBeTruthy();
     expect(screen.getByText('nav.chats')).toBeTruthy();
-    expect(screen.getByText('nav.teams')).toBeTruthy();
+    expect(screen.getByText('nav.team')).toBeTruthy();
     expect(screen.getByText('nav.profile')).toBeTruthy();
+  });
+
+  it('names the teams tab in the plural once there is more than one team', async () => {
+    mockApp.teams = [
+      { teamId: 't1', name: 'Pigs' },
+      { teamId: 't2', name: 'Hawks' },
+    ];
+    render(<MainLayout />);
+    expect(await screen.findByText('nav.teams')).toBeTruthy();
+    expect(screen.queryByText('nav.team')).toBeNull();
   });
 
   it('keeps schedule and chats off the menu when the athlete has no teams', async () => {
