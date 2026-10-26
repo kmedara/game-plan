@@ -154,16 +154,17 @@ export const assignRoleBodySchema = z
   });
 
 /**
- * A playing position on one team, such as `Fly-half` or `No. 8`.
+ * A playing position on one team, such as `Fly-half`, `No. 8`, or `Pívot`.
  *
- * Letters, numbers, and internal spaces, hyphens, apostrophes, periods, or slashes.
+ * Letters in any script, with their accents, numbers, and internal spaces,
+ * hyphens, apostrophes, periods, slashes, or plus signs.
  */
 export const teamPositionSchema = z
   .string()
   .trim()
   .min(1)
   .max(40)
-  .regex(/^[A-Za-z0-9](?:[A-Za-z0-9 .'/+-]*[A-Za-z0-9])?$/);
+  .regex(/^[\p{L}\p{N}](?:[\p{L}\p{M}\p{N} .'/+-]*[\p{L}\p{M}\p{N}])?$/u);
 
 /** Body for replacing the caller's positions on one team. */
 export const updatePositionsBodySchema = z

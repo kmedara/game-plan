@@ -51,7 +51,12 @@ describe('isPosition', () => {
     expect(isPosition(' No. 8 ')).toBe(true);
     expect(isPosition('')).toBe(false);
     expect(isPosition('Wing-')).toBe(false);
-    expect(isPosition('Pívot')).toBe(false);
+    expect(isPosition('Pívot')).toBe(true);
+    expect(isPosition('Défenseur central')).toBe(true);
+    // An accent typed as its own mark after the letter.
+    expect(isPosition('Pi\u0301vot')).toBe(true);
+    expect(isPosition('-Wing')).toBe(false);
+    expect(isPosition('Wing!')).toBe(false);
     expect(isPosition('x'.repeat(41))).toBe(false);
   });
 });

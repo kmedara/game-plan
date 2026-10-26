@@ -42,7 +42,7 @@ const ROW_GAP = 12;
 const TYPING_SAVE_MS = 800;
 
 /** Same rule as `teamPositionSchema` in `lib/schemas/src/teams.ts`, which the save checks. */
-const POSITION = /^[A-Za-z0-9](?:[A-Za-z0-9 .'/+-]*[A-Za-z0-9])?$/;
+const POSITION = /^[\p{L}\p{N}](?:[\p{L}\p{M}\p{N} .'/+-]*[\p{L}\p{M}\p{N}])?$/u;
 
 /**
  * Whether the server will take a position.

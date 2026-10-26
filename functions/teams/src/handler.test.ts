@@ -541,6 +541,34 @@ describe('teams handler (in-memory)', () => {
     ]);
   });
 
+  it('takes positions with accents and refuses other symbols', async () => {
+    const admin = seedUser('adult', 'Ada');
+    const created = await handler(
+      httpEvent('POST', '/teams', {
+        headers: { authorization: admin.authorization },
+        body: { name: 'U12 Hawks', timeZone: 'America/New_York' },
+      }),
+    );
+    const teamId = bodyOf(created).teamId;
+
+    const accented = await handler(
+      httpEvent('PUT', `/teams/${teamId}/positions`, {
+        headers: { authorization: admin.authorization },
+        body: { positions: ['Pívot', 'Défenseur central', 'Ala-pívot'] },
+      }),
+    );
+    expect(accented.statusCode).toBe(200);
+    expect(bodyOf(accented).positions).toEqual(['Pívot', 'Défenseur central', 'Ala-pívot']);
+
+    const symbol = await handler(
+      httpEvent('PUT', `/teams/${teamId}/positions`, {
+        headers: { authorization: admin.authorization },
+        body: { positions: ['Wing!'] },
+      }),
+    );
+    expect(symbol.statusCode).toBe(400);
+  });
+
   it('returns health for the teams area', async () => {
     const result = await handler(httpEvent('GET', '/teams/health'));
     expect(result.statusCode).toBe(200);
