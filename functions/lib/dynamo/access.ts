@@ -113,7 +113,10 @@ export const updateFields = async <T extends Record<string, unknown>>(
   options: FieldUpdateOptions = {},
 ): Promise<T> => {
   const result = await getDocClient().send(
-    new UpdateCommand({ ...fieldUpdate(pk, sk, fields, options), ReturnValues: "ALL_NEW" }),
+    new UpdateCommand({
+      ...fieldUpdate(pk, sk, fields, options),
+      ReturnValues: "ALL_NEW",
+    }),
   );
   return result.Attributes as T;
 };

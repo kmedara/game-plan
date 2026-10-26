@@ -25,5 +25,20 @@ describe('stateful resources', () => {
       }
     }
     expect(Object.keys(template.findResources('Custom::S3AutoDeleteObjects'))).toEqual([]);
+
+    const tables = Object.values(template.findResources('AWS::DynamoDB::Table'));
+    expect(tables).toHaveLength(1);
+    const table = tables[0]?.Properties as {
+      ContributorInsightsSpecification?: { Enabled: boolean; Mode: string };
+      GlobalSecondaryIndexes?: Array<{
+        ContributorInsightsSpecification?: { Enabled: boolean; Mode: string };
+      }>;
+    };
+    const insights = { Enabled: true, Mode: 'ACCESSED_AND_THROTTLED_KEYS' };
+    expect(table.ContributorInsightsSpecification).toEqual(insights);
+    expect(table.GlobalSecondaryIndexes).toHaveLength(2);
+    for (const index of table.GlobalSecondaryIndexes ?? []) {
+      expect(index.ContributorInsightsSpecification).toEqual(insights);
+    }
   });
 });

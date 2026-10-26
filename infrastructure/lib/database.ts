@@ -27,6 +27,12 @@ export class Database extends Construct {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
+    // Ranks the hottest and throttled keys. Each index is its own key space.
+    const contributorInsights: dynamodb.ContributorInsightsSpecification = {
+      enabled: true,
+      mode: dynamodb.ContributorInsightsMode.ACCESSED_AND_THROTTLED_KEYS,
+    };
+
     this.table = new dynamodb.Table(this, 'Table', {
       tableName: TABLE_NAME,
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
@@ -35,18 +41,21 @@ export class Database extends Construct {
       // All product data; a stack delete or replacement leaves the table in place.
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       timeToLiveAttribute: 'ttl',
+      contributorInsightsSpecification: contributorInsights,
     });
 
     this.table.addGlobalSecondaryIndex({
       indexName: EMAIL_INDEX,
       partitionKey: { name: 'email', type: dynamodb.AttributeType.STRING },
       projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+      contributorInsightsSpecification: contributorInsights,
     });
 
     this.table.addGlobalSecondaryIndex({
       indexName: CONNECTION_INDEX,
       partitionKey: { name: 'connectionId', type: dynamodb.AttributeType.STRING },
       projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+      contributorInsightsSpecification: contributorInsights,
     });
 
     new cdk.CfnOutput(this, 'TableName', {
