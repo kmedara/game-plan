@@ -1,4 +1,4 @@
-import { dropIndex, moveSlot } from './lineup-editor';
+import { dropIndex, isPosition, moveSlot, positionChoices } from './lineup-editor';
 
 const rows = [
   { y: 0, height: 100 },
@@ -27,5 +27,31 @@ describe('dropIndex', () => {
   it('passes several rows in one drag', () => {
     expect(dropIndex(rows, 0, 300)).toBe(2);
     expect(dropIndex(rows, 2, -300)).toBe(0);
+  });
+});
+
+describe('positionChoices', () => {
+  it("offers the player's own positions first, then the rest of the lineup's", () => {
+    expect(positionChoices(['Wing', 'Centre'], ['Fly-half', 'Centre', 'No. 8'])).toEqual([
+      'Wing',
+      'Centre',
+      'Fly-half',
+      'No. 8',
+    ]);
+  });
+
+  it('offers each position once, ignoring case, spaces, and blanks', () => {
+    expect(positionChoices(undefined, ['GK', ' gk ', '', 'Defender'])).toEqual(['GK', 'Defender']);
+  });
+});
+
+describe('isPosition', () => {
+  it('takes what the server takes', () => {
+    expect(isPosition('Fly-half')).toBe(true);
+    expect(isPosition(' No. 8 ')).toBe(true);
+    expect(isPosition('')).toBe(false);
+    expect(isPosition('Wing-')).toBe(false);
+    expect(isPosition('Pívot')).toBe(false);
+    expect(isPosition('x'.repeat(41))).toBe(false);
   });
 });
