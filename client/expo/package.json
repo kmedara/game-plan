@@ -35,7 +35,7 @@
     "expo-splash-screen": "~58.0.11",
     "expo-status-bar": "~58.0.3",
     "expo-web-browser": "~58.0.6",
-    "i18next": "^25.6.0",
+    "i18next": "^26.3.4",
     "libphonenumber-js": "^1.13.15",
     "lucide-react-native": "^1.57.0",
     "nativewind": "^4.2.1",
